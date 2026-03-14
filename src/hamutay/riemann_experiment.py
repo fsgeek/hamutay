@@ -277,6 +277,51 @@ def prepare_raw_context(
     return "\n\n".join(parts)
 
 
+def prepare_prose_context(
+    session_path: Path,
+    target_tokens: int,
+    batch_size: int = 3,
+    max_turns: int | None = None,
+    compressor_model: str = "claude-haiku-4-5-20251001",
+) -> str:
+    """Prepare an unstructured prose summary sized to match the tensor.
+
+    This is the control for the structure-vs-size question: same model,
+    same content, same approximate token budget, but prose instead of
+    structured tensor. If the tensor still wins, it's the structure.
+    """
+    turns = read_session_jsonl(session_path)
+    if max_turns:
+        turns = turns[:max_turns]
+
+    client = anthropic.Anthropic()
+
+    # Combine all turns into one big prompt and ask for a prose summary
+    # at approximately the target size
+    all_content = "\n\n".join(
+        f"[{t.role} turn {t.turn_number}] {t.content}" for t in turns
+    )
+
+    # Chunk if too large for one call
+    # Haiku has ~200K input context, so most conversations fit
+    prompt = (
+        f"Write a detailed prose summary of the following conversation. "
+        f"Aim for approximately {target_tokens} tokens of output. "
+        f"Include key technical details, decisions, findings, and "
+        f"unresolved questions. Do not use structured formats like JSON "
+        f"or bullet points — write flowing prose paragraphs.\n\n"
+        f"## Conversation\n\n{all_content}"
+    )
+
+    response = client.messages.create(
+        model=compressor_model,
+        max_tokens=16384,
+        messages=[{"role": "user", "content": prompt}],
+    )
+
+    return response.content[0].text
+
+
 def _generate_blinded_grading(
     results: list[ConditionResult],
     output_dir: Path,

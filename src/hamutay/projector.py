@@ -251,11 +251,16 @@ class Projector:
         self,
         client: anthropic.Anthropic | None = None,
         model: str = "claude-haiku-4-5-20251001",
+        collapse_threshold: float = 0.3,
+        max_retries: int = 2,
     ):
         self.client = client or anthropic.Anthropic()
         self.model = model
         self._cycle = 0
         self._current_tensor: Tensor | None = None
+        self._last_good_tensor: Tensor | None = None
+        self._collapse_threshold = collapse_threshold
+        self._max_retries = max_retries
 
     @property
     def current_tensor(self) -> Tensor | None:
@@ -265,13 +270,34 @@ class Projector:
     def cycle(self) -> int:
         return self._cycle
 
-    def project(self, new_content: str) -> Tensor:
-        """Project new content into the tensor, returning the updated tensor.
+    def _is_collapsed(self, tensor: Tensor) -> bool:
+        """Detect catastrophic tensor collapse.
 
-        This is one tick of the memory controller's clock.
+        A collapse is when the tensor drops to a fraction of the prior
+        tensor's size — the projector lost its grip and produced near-nothing.
+        This is the equivalent of a page fault that returns garbage.
         """
-        self._cycle += 1
+        if self._current_tensor is None:
+            return False
 
+        prior_tokens = self._current_tensor.token_estimate()
+        new_tokens = tensor.token_estimate()
+
+        if prior_tokens == 0:
+            return False
+
+        ratio = new_tokens / prior_tokens
+        if ratio < self._collapse_threshold:
+            return True
+
+        # Also detect structural collapse: zero strands is always bad
+        if len(tensor.strands) == 0 and len(self._current_tensor.strands) > 0:
+            return True
+
+        return False
+
+    def _do_projection(self, new_content: str) -> Tensor:
+        """Execute one projection call against the API."""
         prompt = _build_projection_prompt(
             self._current_tensor, new_content, self._cycle
         )
@@ -298,10 +324,48 @@ class Projector:
         # Extract the tool use result
         for block in response.content:
             if block.type == "tool_use" and block.name == "emit_tensor":
-                tensor = _parse_projection(block.input, self._cycle)
-                self._current_tensor = tensor
-                return tensor
+                return _parse_projection(block.input, self._cycle)
 
         raise RuntimeError(
             f"Projector model did not emit tensor on cycle {self._cycle}"
         )
+
+    def project(self, new_content: str) -> Tensor:
+        """Project new content into the tensor, returning the updated tensor.
+
+        This is one tick of the memory controller's clock. If the projection
+        collapses (output drops below collapse_threshold of prior size),
+        we retry from the last known good tensor — checkpoint and recover,
+        same as any fault-tolerant system.
+        """
+        self._cycle += 1
+
+        tensor = self._do_projection(new_content)
+
+        if self._is_collapsed(tensor):
+            print(f"    COLLAPSE detected at cycle {self._cycle}: "
+                  f"{tensor.token_estimate()} tokens "
+                  f"(prior: {self._current_tensor.token_estimate()})")
+
+            # Retry from last good checkpoint
+            for attempt in range(self._max_retries):
+                if self._last_good_tensor is not None:
+                    self._current_tensor = self._last_good_tensor
+                    print(f"    RETRY {attempt + 1}/{self._max_retries}: "
+                          f"recovering from checkpoint "
+                          f"(cycle {self._last_good_tensor.cycle})")
+
+                tensor = self._do_projection(new_content)
+                if not self._is_collapsed(tensor):
+                    print(f"    RECOVERED: {tensor.token_estimate()} tokens")
+                    break
+            else:
+                print(f"    RECOVERY FAILED after {self._max_retries} retries — "
+                      f"accepting collapsed tensor")
+
+        # Update state — checkpoint the good tensor before replacing
+        if not self._is_collapsed(tensor):
+            self._last_good_tensor = self._current_tensor
+
+        self._current_tensor = tensor
+        return tensor
