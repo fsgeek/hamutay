@@ -278,7 +278,7 @@ class Projector:
 
         response = self.client.messages.create(
             model=self.model,
-            max_tokens=4096,
+            max_tokens=16384,  # Haiku 4.5 supports up to 64K; no artificial constraint
             messages=[{"role": "user", "content": prompt}],
             tools=[
                 {
@@ -289,6 +289,11 @@ class Projector:
             ],
             tool_choice={"type": "tool", "name": "emit_tensor"},
         )
+
+        # Check for truncation
+        if response.stop_reason == "max_tokens":
+            print(f"    WARNING: cycle {self._cycle} hit max_tokens — "
+                  f"tensor may be truncated")
 
         # Extract the tool use result
         for block in response.content:

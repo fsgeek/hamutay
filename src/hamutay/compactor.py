@@ -104,7 +104,7 @@ class Compactor:
 
         response = self.client.messages.create(
             model=self.model,
-            max_tokens=4096,
+            max_tokens=16384,  # Haiku 4.5 supports up to 64K; no artificial constraint
             messages=[{"role": "user", "content": prompt}],
         )
 
