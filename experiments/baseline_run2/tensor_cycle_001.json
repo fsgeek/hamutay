@@ -1,0 +1,187 @@
+{
+  "id": "2eeb0237-cadc-452d-a944-de667234bf3e",
+  "cycle": 1,
+  "strands": [
+    {
+      "title": "System Prompt Waste Analysis Project Scope",
+      "content": "A system prompt analyzer module (src/pichay/analyzer.py) is being planned to measure waste and inefficiency in API calls across logged sessions. The core premise: system prompts are often reused verbatim, contain unused components, and have duplicated content—all representing wasted context tokens. The project focuses on instrumenting existing proxy JSONL logs (which store system_prompt_full in request records) to decompose prompts and measure waste quantitatively. This integrates into a larger pichay system that already has proxy.py (log capture) and eval.py (evaluation framework) as reference models for code style and data structures. The analyzer should produce structured results with dataclasses and expose functionality via CLI.",
+      "key_claims": [
+        {
+          "claim_id": "c2374533-7691-40b5-93ba-342161f02e59",
+          "text": "System prompts in API logs contain multiple distinct semantic components (tool defs, skill defs, CLAUDE.md, MEMORY.md, git status, IDE context, conversation instructions) that can be pattern-matched and decomposed",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.05,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "e2077c69-f3ae-43ac-b2b0-db7d14fa9466",
+          "text": "Most tool definitions are static across turns, while components like git status are dynamic; re-sending identical static components wastes tokens",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.1,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "411f33f8-0baa-41f1-b177-b546f8af26fa",
+          "text": "A significant portion of tool definitions in system prompts are never invoked in actual tool_use blocks in messages",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "113a0e1a-f5c6-487c-a2ce-37991e135adf",
+          "text": "Skills and other semantic components appear multiple times (often tripled) within a single system prompt, representing duplicate waste",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.15,
+            "falsity": 0.1
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Functional Requirements & Decomposition Strategy",
+      "content": "The analyzer must implement five core analyses: (1) COMPONENT DECOMPOSITION—parse system prompt text and segment it by semantic block (tool defs, skill defs, CLAUDE.md, MEMORY.md, git status, IDE context, conversation instructions) using pattern matching on text boundaries. (2) STATIC vs DYNAMIC ANALYSIS—track whether each component changes across turns within a session; measure bytes of static content re-sent unnecessarily. (3) TOOL USAGE TRACKING—extract tool definitions from system prompt, cross-reference against actual tool_use blocks in message records, identify defined-but-unused tools, and sum their byte cost. (4) DUPLICATE DETECTION—find identical or near-identical semantic blocks appearing multiple times in a single prompt; report byte counts. (5) PER-SESSION SUMMARY—aggregate metrics as absolute bytes and percentages: total system prompt bytes, static bytes, dynamic bytes, unused tool bytes, duplicate bytes. The module must use dataclasses to structure results (matching style from pager.py and eval.py), expose a CLI entry point (python -m pichay.analyzer <proxy-logs> [--json]), and require careful study of proxy.py and eval.py before implementation.",
+      "key_claims": [
+        {
+          "claim_id": "f48c37be-055d-4656-8960-faace5fda7ca",
+          "text": "Component decomposition must rely on pattern matching over heuristic text segmentation to identify tool definitions, skill blocks, and metadata sections",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.1,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "8dff3dfc-5615-42b9-b335-886c33fed762",
+          "text": "Static vs dynamic analysis requires tracking component state across multiple turns within a session to measure re-transmission waste",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.05,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "eecc68e6-5ce5-460c-8879-c1354e9700fd",
+          "text": "Tool usage tracking depends on correctly parsing tool_use blocks in message JSON and matching their names against tool definitions in the system prompt",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.1,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "379c77ce-d8b1-4409-906f-38456d14805e",
+          "text": "Duplicate detection should quantify byte cost of repeated semantic blocks, likely to reveal skills being tripled or other structural redundancy",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "605e4c49-75f2-48ff-8fef-1b5375984aad",
+          "text": "Per-session summary metrics should report both absolute byte counts and percentages to allow comparative analysis across sessions and cost models",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.08,
+            "falsity": 0.04
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Implementation Dependencies & Code Style Integration",
+      "content": "The analyzer module must integrate with the existing pichay codebase by following patterns established in proxy.py and eval.py, particularly their dataclass usage and result structures. Before any code is written, proxy.py must be read to understand: (1) the JSONL log format, (2) how system_prompt_full is stored in request records, (3) the structure of tool_use and message data, and (4) how sessions are organized. Similarly, eval.py must be studied to understand: (1) the dataclass patterns used for results, (2) the CLI entry point design (argparse integration), (3) output formatting (JSON serialization), and (4) naming conventions. The analyzer will need to parse JSONL records line by line, extract system_prompt_full and message content from each request, perform decomposition and analysis on the fly or in memory, aggregate results per session, and serialize output as JSON or human-readable format. This dependency chain means implementation cannot proceed safely until those source files are thoroughly understood.",
+      "key_claims": [
+        {
+          "claim_id": "90d69255-59e5-4118-ac67-50dc403f3db8",
+          "text": "proxy.py contains the authoritative log format specification and parsing logic that the analyzer must be compatible with",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.03,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "22047b34-b250-4a16-9705-9856b4bcf922",
+          "text": "eval.py establishes the code style and dataclass patterns that analyzer.py should follow for consistency",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.07,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "7cdbb036-0b18-408a-8371-0f6fd789efad",
+          "text": "system_prompt_full field in request records is the data source for system prompt analysis across all API calls",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.1,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "4df2ecff-fb9c-4884-a0eb-1304742779c5",
+          "text": "Tool definitions in system prompts can be reliably matched against tool_use blocks in messages to determine usage",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Specific regex patterns or heuristics for component segmentation (e.g., what text markers denote tool definitions vs skill definitions vs CLAUDE.md boundaries)",
+      "why": "The request does not provide concrete pattern examples, only names for component types. Implementation will require reverse-engineering from actual log data.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Details on duplicate detection algorithm (string matching, fuzzy matching, hash-based, token-level comparison)",
+      "why": "The request mentions duplicate detection but not the algorithm or tolerance. Implementation choice deferred.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Specification of output JSON schema or human-readable format details",
+      "why": "The request specifies [--json] flag but not the exact output structure or field names. Must be inferred from dataclass design and eval.py patterns.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Error handling strategy (missing fields, malformed JSONL, incomplete system prompts)",
+      "why": "Real proxy logs may have anomalies. Strategy not specified; will be a design decision during implementation.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Performance considerations (streaming vs. in-memory, session size limits, time complexity constraints)",
+      "why": "Large log files may have memory/time implications. Not addressed in the request.",
+      "category": "context_pressure"
+    }
+  ],
+  "open_questions": [
+    "What are the exact regex or text patterns that identify component boundaries (tool definitions, skill definitions, CLAUDE.md, MEMORY.md, git status, IDE context, conversation instructions)?",
+    "How should the analyzer handle system prompts that don't conform to the expected component structure?",
+    "Should duplicate detection use exact string matching, fuzzy matching, or semantic deduplication?",
+    "What constitutes a 'turn' or session boundary in the JSONL logs (is it per-request, per-conversation-id, per-file)?",
+    "How should the CLI handle multiple input files or directory input?",
+    "What is the expected structure of tool definitions in the system prompt (JSON blocks, markdown tables, plain text)?",
+    "Should the per-session summary be emitted once per file, once per conversation, or both?",
+    "How should the analyzer distinguish between tool definitions that are intentionally present for context vs. truly unused?"
+  ],
+  "instructions_for_next": "[\n  \"PRIORITY 1: Read proxy.py to understand the JSONL log format, particularly the structure of request records, the location and format of system_prompt_full, and how tool_use blocks appear in messages.\",\n  \"PRIORITY 2: Read eval.py to understand the dataclass design patterns, CLI argument parsing (argparse integration), and output serialization (JSON and human-readable).\",\n  \"PRIORITY 3: Based on proxy.py and eval.py, propose concrete dataclass definitions for: SystemPromptComponent, ComponentAnalysis, ToolUsageReport, DuplicateReport, PerSessionSummary. Provide these before implementing parsing logic.\",\n  \"PRIORITY 4: Define and document the component identification strategy—what are the concrete text patterns or heuristics that will segment system prompts into tool defs, skill defs, CLAUDE.md, MEMORY.md, git status, IDE context, and conversation instructions?\",\n  \"PRIORITY 5: Implement step-by-step: (a) JSONL parser, (b) component decomposer, (c) static/dynamic tracker, (d) tool usage cross-referencer, (e) duplicate detector, (f) session aggregator, (g) result dataclasses, (h) CLI integration. Test each stage.\",\n  \"PRIORITY 6: Consider memory/performance implications if proxy logs are large. Implement streaming aggregation if needed.\"\n]",
+  "epistemic": {
+    "truth": 0.82,
+    "indeterminacy": 0.12,
+    "falsity": 0.06
+  }
+}
