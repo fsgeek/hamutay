@@ -298,9 +298,15 @@ def run_step2(
 
     t0 = time.monotonic()
 
-    response = client.messages.create(
+    # Stream to support up to 64K output tokens (non-streaming caps at 16K)
+    eval_text = ""
+    input_tokens = 0
+    output_tokens = 0
+    stop_reason = "unknown"
+
+    with client.messages.stream(
         model=model,
-        max_tokens=16384,
+        max_tokens=65536,
         system=system_prompt,
         messages=[{
             "role": "user",
@@ -313,26 +319,31 @@ def run_step2(
                 "Be honest — do not inflate coverage."
             ),
         }],
-    )
+    ) as stream:
+        for text in stream.text_stream:
+            eval_text += text
+
+        final = stream.get_final_message()
+        stop_reason = final.stop_reason or "unknown"
+        input_tokens = final.usage.input_tokens
+        output_tokens = final.usage.output_tokens
 
     t1 = time.monotonic()
 
-    eval_text = ""
-    for block in response.content:
-        if block.type == "text":
-            eval_text += block.text
-
     print(f"    Done: {len(eval_text):,} chars, {t1 - t0:.1f}s")
-    print(f"    Stop reason: {response.stop_reason}")
-    print(f"    Usage: {response.usage.input_tokens} in, {response.usage.output_tokens} out")
+    print(f"    Stop reason: {stop_reason}")
+    print(f"    Usage: {input_tokens} in, {output_tokens} out")
 
     # Save evaluation
     (run_dir / "PLAN_EVAL.md").write_text(eval_text)
 
     # Now ask "the question that shall not be asked"
-    question_response = client.messages.create(
+    question_text = ""
+    question_stop_reason = "unknown"
+
+    with client.messages.stream(
         model=model,
-        max_tokens=4096,
+        max_tokens=8192,
         system=system_prompt,
         messages=[
             {
@@ -356,12 +367,12 @@ def run_step2(
                 ),
             },
         ],
-    )
+    ) as stream:
+        for text in stream.text_stream:
+            question_text += text
 
-    question_text = ""
-    for block in question_response.content:
-        if block.type == "text":
-            question_text += block.text
+        q_final = stream.get_final_message()
+        question_stop_reason = q_final.stop_reason or "unknown"
 
     (run_dir / "the_question.md").write_text(question_text)
 
@@ -373,11 +384,11 @@ def run_step2(
         "model": model,
         "system_prompt_chars": len(system_prompt),
         "eval_chars": len(eval_text),
-        "stop_reason": response.stop_reason,
-        "input_tokens": response.usage.input_tokens,
-        "output_tokens": response.usage.output_tokens,
+        "stop_reason": stop_reason,
+        "input_tokens": input_tokens,
+        "output_tokens": output_tokens,
         "wall_time_s": round(t1 - t0, 2),
-        "question_stop_reason": question_response.stop_reason,
+        "question_stop_reason": question_stop_reason,
         "question_chars": len(question_text),
     }
 
