@@ -239,12 +239,110 @@ def _parse_projection(raw: dict, cycle: int) -> Tensor:
     )
 
 
+class EscalationPolicy:
+    """Decides when to escalate from the base model to a stronger one.
+
+    Subclass and override should_escalate() to implement different
+    policies. The projector calls this before each projection and
+    uses the returned model.
+    """
+
+    def __init__(self, base_model: str, escalation_model: str):
+        self.base_model = base_model
+        self.escalation_model = escalation_model
+
+    def should_escalate(
+        self,
+        cycle: int,
+        current_tensor: Tensor | None,
+        precursor_detected: bool,
+    ) -> bool:
+        """Return True to use escalation_model for this cycle."""
+        return False
+
+    def select_model(
+        self,
+        cycle: int,
+        current_tensor: Tensor | None,
+        precursor_detected: bool,
+    ) -> str:
+        if self.should_escalate(cycle, current_tensor, precursor_detected):
+            return self.escalation_model
+        return self.base_model
+
+
+class NeverEscalate(EscalationPolicy):
+    """Control: always use the base model."""
+
+    def should_escalate(self, cycle, current_tensor, precursor_detected):
+        return False
+
+
+class AlwaysEscalate(EscalationPolicy):
+    """Upper bound: always use the escalation model."""
+
+    def should_escalate(self, cycle, current_tensor, precursor_detected):
+        return True
+
+
+class EscalateOnPrecursor(EscalationPolicy):
+    """Escalate when a precursor event is detected on the prior cycle.
+
+    Precursor = declared_losses empty or instructions_for_next empty
+    on a tensor that previously had them.
+    """
+
+    def should_escalate(self, cycle, current_tensor, precursor_detected):
+        return precursor_detected
+
+
+class EscalateOnSize(EscalationPolicy):
+    """Escalate when the current tensor exceeds a token threshold."""
+
+    def __init__(
+        self,
+        base_model: str,
+        escalation_model: str,
+        token_threshold: int = 8000,
+    ):
+        super().__init__(base_model, escalation_model)
+        self.token_threshold = token_threshold
+
+    def should_escalate(self, cycle, current_tensor, precursor_detected):
+        if current_tensor is None:
+            return False
+        return current_tensor.token_estimate() > self.token_threshold
+
+
+class EscalateOnPrecursorOrSize(EscalationPolicy):
+    """Escalate on precursor OR size — defense in depth."""
+
+    def __init__(
+        self,
+        base_model: str,
+        escalation_model: str,
+        token_threshold: int = 8000,
+    ):
+        super().__init__(base_model, escalation_model)
+        self.token_threshold = token_threshold
+
+    def should_escalate(self, cycle, current_tensor, precursor_detected):
+        if precursor_detected:
+            return True
+        if current_tensor is not None and current_tensor.token_estimate() > self.token_threshold:
+            return True
+        return False
+
+
 class Projector:
     """Projects conversation state into tensors.
 
     Uses a cheap, fast model (Haiku) as the memory controller.
     The projector is separate from the reasoning model — the ALU
     doesn't manage its own cache.
+
+    Optionally accepts an EscalationPolicy to swap models under load —
+    L1 cache miss falls through to L2.
     """
 
     def __init__(
@@ -253,6 +351,7 @@ class Projector:
         model: str = "claude-haiku-4-5-20251001",
         collapse_threshold: float = 0.3,
         max_retries: int = 2,
+        escalation_policy: EscalationPolicy | None = None,
     ):
         self.client = client or anthropic.Anthropic()
         self.model = model
@@ -261,6 +360,10 @@ class Projector:
         self._last_good_tensor: Tensor | None = None
         self._collapse_threshold = collapse_threshold
         self._max_retries = max_retries
+        self._escalation_policy = escalation_policy
+        self._precursor_detected = False
+        self.escalation_log: list[dict] = []
+        self.last_stop_reason: str = ""
 
     @property
     def current_tensor(self) -> Tensor | None:
@@ -296,15 +399,38 @@ class Projector:
 
         return False
 
-    def _do_projection(self, new_content: str) -> Tensor:
-        """Execute one projection call against the API."""
+    def _detect_precursor(self, tensor: Tensor) -> bool:
+        """Detect precursor events — the meta-cognition failing.
+
+        A precursor is when declared_losses or instructions_for_next
+        go empty on a tensor that previously had them. This pattern
+        precedes collapses in the growth curve data.
+        """
+        if self._current_tensor is None:
+            return False
+
+        had_losses = len(self._current_tensor.declared_losses) > 0
+        had_ifn = bool(self._current_tensor.instructions_for_next)
+        now_no_losses = len(tensor.declared_losses) == 0
+        now_no_ifn = not tensor.instructions_for_next
+
+        return (had_losses and now_no_losses) or (had_ifn and now_no_ifn)
+
+    def _do_projection(
+        self, new_content: str, model_override: str | None = None
+    ) -> tuple[Tensor, str]:
+        """Execute one projection call against the API.
+
+        Returns (tensor, stop_reason) so callers can detect truncation.
+        """
+        model = model_override or self.model
         prompt = _build_projection_prompt(
             self._current_tensor, new_content, self._cycle
         )
 
         response = self.client.messages.create(
-            model=self.model,
-            max_tokens=16384,  # Haiku 4.5 supports up to 64K; no artificial constraint
+            model=model,
+            max_tokens=16384,
             messages=[{"role": "user", "content": prompt}],
             tools=[
                 {
@@ -316,15 +442,17 @@ class Projector:
             tool_choice={"type": "tool", "name": "emit_tensor"},
         )
 
+        stop_reason = response.stop_reason or "unknown"
+
         # Check for truncation
-        if response.stop_reason == "max_tokens":
+        if stop_reason == "max_tokens":
             print(f"    WARNING: cycle {self._cycle} hit max_tokens — "
                   f"tensor may be truncated")
 
         # Extract the tool use result
         for block in response.content:
             if block.type == "tool_use" and block.name == "emit_tensor":
-                return _parse_projection(block.input, self._cycle)
+                return _parse_projection(block.input, self._cycle), stop_reason
 
         raise RuntimeError(
             f"Projector model did not emit tensor on cycle {self._cycle}"
@@ -337,31 +465,75 @@ class Projector:
         collapses (output drops below collapse_threshold of prior size),
         we retry from the last known good tensor — checkpoint and recover,
         same as any fault-tolerant system.
+
+        If an escalation policy is set, it selects the model for each cycle
+        based on tensor state and precursor detection.
         """
         self._cycle += 1
 
-        tensor = self._do_projection(new_content)
+        # Select model via escalation policy
+        model = self.model
+        escalated = False
+        if self._escalation_policy is not None:
+            model = self._escalation_policy.select_model(
+                self._cycle, self._current_tensor, self._precursor_detected
+            )
+            escalated = model != self._escalation_policy.base_model
+
+        if escalated:
+            print(f"    ESCALATED to {model} at cycle {self._cycle}")
+
+        tensor, stop_reason = self._do_projection(new_content, model_override=model)
+        self.last_stop_reason = stop_reason
+
+        # Log escalation decision
+        self.escalation_log.append({
+            "cycle": self._cycle,
+            "model": model,
+            "escalated": escalated,
+            "precursor_prior": self._precursor_detected,
+            "tensor_tokens": tensor.token_estimate(),
+            "n_strands": len(tensor.strands),
+            "n_losses": len(tensor.declared_losses),
+            "has_ifn": bool(tensor.instructions_for_next),
+            "stop_reason": stop_reason,
+        })
 
         if self._is_collapsed(tensor):
             print(f"    COLLAPSE detected at cycle {self._cycle}: "
                   f"{tensor.token_estimate()} tokens "
                   f"(prior: {self._current_tensor.token_estimate()})")
 
-            # Retry from last good checkpoint
+            # Retry from last good checkpoint — always escalate on recovery
+            recovery_model = model
+            if self._escalation_policy is not None:
+                recovery_model = self._escalation_policy.escalation_model
+
             for attempt in range(self._max_retries):
                 if self._last_good_tensor is not None:
                     self._current_tensor = self._last_good_tensor
                     print(f"    RETRY {attempt + 1}/{self._max_retries}: "
                           f"recovering from checkpoint "
-                          f"(cycle {self._last_good_tensor.cycle})")
+                          f"(cycle {self._last_good_tensor.cycle}) "
+                          f"using {recovery_model}")
 
-                tensor = self._do_projection(new_content)
+                tensor, stop_reason = self._do_projection(
+                    new_content, model_override=recovery_model
+                )
+                self.last_stop_reason = stop_reason
                 if not self._is_collapsed(tensor):
                     print(f"    RECOVERED: {tensor.token_estimate()} tokens")
                     break
             else:
                 print(f"    RECOVERY FAILED after {self._max_retries} retries — "
                       f"accepting collapsed tensor")
+
+        # Detect precursor for next cycle's escalation decision
+        self._precursor_detected = self._detect_precursor(tensor)
+        if self._precursor_detected:
+            print(f"    PRECURSOR at cycle {self._cycle}: "
+                  f"losses={len(tensor.declared_losses)}, "
+                  f"ifn={bool(tensor.instructions_for_next)}")
 
         # Update state — checkpoint the good tensor before replacing
         if not self._is_collapsed(tensor):

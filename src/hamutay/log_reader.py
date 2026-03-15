@@ -92,12 +92,19 @@ def _extract_text(content) -> str:
                 if block.get("type") == "text":
                     text_parts.append(block["text"])
                 elif block.get("type") == "tool_use":
+                    name = block.get("name", "unknown")
+                    tool_input = block.get("input", {})
+                    input_str = json.dumps(tool_input) if tool_input else ""
                     text_parts.append(
-                        f"[tool_use: {block.get('name', 'unknown')}]"
+                        f"[tool_use: {name}] {input_str}"
                     )
                 elif block.get("type") == "tool_result":
+                    result_content = block.get("content", "")
+                    if isinstance(result_content, list):
+                        # tool_result content can itself be a list of blocks
+                        result_content = _extract_text(result_content)
                     text_parts.append(
-                        f"[tool_result: {str(block.get('content', ''))[:200]}]"
+                        f"[tool_result] {result_content}"
                     )
             elif isinstance(block, str):
                 text_parts.append(block)
