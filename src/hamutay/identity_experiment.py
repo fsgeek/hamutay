@@ -406,29 +406,42 @@ def run_experiment(
     model: str = "claude-haiku-4-5-20251001",
     n_replicates: int = 5,
     skip_step1: bool = False,
+    step1_source: Path | None = None,
 ) -> None:
     """Run the full identity preservation experiment.
 
-    If skip_step1 is True, reuses existing plan and conversation from
-    a prior run (for re-running Step 2 conditions without redoing planning).
+    If skip_step1 is True, reuses existing plan and conversation.
+    If step1_source is provided, copies Step 1 artifacts from that directory;
+    otherwise looks for them in output_dir.
     """
     client = anthropic.Anthropic()
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Step 1: Generate the plan
     if skip_step1:
-        print("Reusing existing Step 1 outputs...")
-        plan_text = (output_dir / "PLAN.md").read_text()
-        conv_data = json.loads((output_dir / "step1_conversation.json").read_text())
+        source = step1_source or output_dir
+        print(f"Reusing Step 1 outputs from {source}...")
+        plan_text = (source / "PLAN.md").read_text()
+        conv_data = json.loads((source / "step1_conversation.json").read_text())
         conversation_log = conv_data["conversation"]
+
+        # Copy artifacts to output_dir if sourced from elsewhere
+        if source != output_dir:
+            (output_dir / "PLAN.md").write_text(plan_text)
+            (output_dir / "step1_conversation.json").write_text(
+                json.dumps(conv_data, indent=2)
+            )
     else:
         plan_text, conversation_log = run_step1(client, output_dir, model)
 
     # Step 1.5: Project the tensor
-    tensor_path = output_dir / "tensor.json"
+    source = step1_source or output_dir
+    tensor_path = source / "tensor.json"
     if skip_step1 and tensor_path.exists():
-        print("Reusing existing tensor...")
+        print(f"Reusing existing tensor from {source}...")
         tensor_json = tensor_path.read_text()
+        if source != output_dir:
+            (output_dir / "tensor.json").write_text(tensor_json)
     else:
         tensor_json = project_tensor(client, conversation_log, output_dir, model)
 
@@ -523,7 +536,7 @@ if __name__ == "__main__":
     if len(sys.argv) < 2:
         print(
             "Usage: python -m hamutay.identity_experiment <output_dir> "
-            "[model] [n_replicates] [--skip-step1]"
+            "[model] [n_replicates] [--skip-step1] [--step1-source <dir>]"
         )
         sys.exit(1)
 
@@ -532,9 +545,14 @@ if __name__ == "__main__":
     n_replicates = 5
 
     skip = False
-    for arg in sys.argv:
+    step1_source = None
+    args = sys.argv[1:]
+    for i, arg in enumerate(args):
         if arg == "--skip-step1":
             skip = True
+        elif arg == "--step1-source" and i + 1 < len(args):
+            step1_source = Path(args[i + 1])
+            skip = True  # implied
         elif arg.isdigit() and int(arg) <= 50:
             n_replicates = int(arg)
 
@@ -543,4 +561,5 @@ if __name__ == "__main__":
         model=model,
         n_replicates=n_replicates,
         skip_step1=skip,
+        step1_source=step1_source,
     )
