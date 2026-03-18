@@ -1,0 +1,369 @@
+{
+  "id": "71e8cc6c-ff0f-4375-bf6f-872e176a0204",
+  "cycle": 24,
+  "strands": [
+    {
+      "title": "Evaluation strategy via coherent failure on impossible tasks",
+      "content": "Cycle 24 crystallizes evaluation strategy through conversation with Claude: the experiment does not measure correctness on impossible tasks; it measures *stability of cognitive trajectory under different state representations*. The baseline is append-only conversation log; the treatment is structured tensor input. Both conditions will fail at proving the Riemann hypothesis (no model succeeds), but the failure patterns diverge: under baseline, each run produces different incoherent wrong approaches (high variance, scattered embedding clusters); under structured tensor state, the model settles into consistent wrong approaches (lower variance, tighter embedding clusters). This is pure bias-variance decomposition, applicable to any intractable task (Riemann hypothesis, Collatz conjecture, open problems in mathematics). The measurement is geometric: embed model outputs, measure dispersion in embedding space. Tighter cluster = more coherent cognition across runs. Scattered cluster = hot mess. The metric requires no correctness rubric, no binary scoring, no test suite\u2014just N runs per condition, embedding, dispersion measurement. The intuition is powerful: if structured state *forces* the model to pursue the same reasoning path across runs, even if that path is wrong, it demonstrates that the state representation constrains cognition in a predictable way. Conversely, if tensor state doesn't reduce variance, the architecture provides no value. The experiment is self-contained: one intractable task, N runs \u00d7 3 conditions (append-only, structured tensor, possibly middle ground), embed and measure. Historical conversation logs provide realistic material for deriving initial tensor state, but the only honest design is to build the pipeline from scratch and let it accumulate tensors incrementally. This avoids the confound of pre-constructed tensor quality\u2014if the experiment succeeds, the pipeline succeeded; if it fails, the paper is the result (either way, truth is served). The experiment design directly addresses cycle 23's question: does structured cognitive state actually *do* anything? Does it change how the model reasons, or is it just metadata? Riemann proof variance measurement answers this unambiguously.",
+      "key_claims": [
+        {
+          "claim_id": "f57f1cf3-5ec8-426b-8258-1c742796bb52",
+          "text": "Evaluation focuses on coherence (variance of failure modes) not correctness (impossibility of success); applies to any intractable task",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c0921132-c1bc-4f5a-90f2-184454f2f453",
+          "text": "Bias-variance decomposition: baseline produces high-variance incoherent attempts; structured tensor state produces low-variance coherent (but still incorrect) approaches",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "650d7be8-2fd7-431c-ac11-8b66f0fe568c",
+          "text": "Measurement is geometric and requires no correctness rubric: embed outputs, measure embedding space dispersion, tighter cluster = more coherent cognition",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f17c491f-d995-4d8c-ae90-96a716127fb1",
+          "text": "Only honest pipeline design: build structured system from scratch, let tensors accumulate incrementally, avoid confound of pre-constructed tensor quality",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6a33ea96-d7d0-468a-b289-cbd89b1ba42d",
+          "text": "Success or failure equally valuable: if variance drops, architecture is validated; if variance stays high, paper is arXiv result showing pipeline has limited effect",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Pragmatic experimental design: from architecture to measurement",
+      "content": "Cycles 16-23 built architecture; cycle 24 converts architecture into testable hypothesis via concrete experiment. The move from theoretical specification to experimental instantiation requires: (1) **Task choice**: intractable problem (Riemann hypothesis preferred; Collatz, open graph theory problems acceptable). (2) **Conditions**: at least two (append-only baseline, structured tensor treatment), possibly three if middle ground is valuable. (3) **Sample size**: N runs per condition (N=10-20 for preliminary; N=50+ for SOSP credibility). (4) **Measurement protocol**: (a) capture full output per run, (b) embed outputs (use consistent embedding model, likely same as reasoning model for coherence), (c) compute pairwise distances in embedding space, (d) measure cluster statistics (radius, dispersion, silhouette coefficient). (5) **Pipeline maturity requirement**: the tensor projection system (Hamutay + Haiku) must be sufficiently complete to run on a reasoning task for 20-30 cycles without breaking. This is NOT a requirement for perfection or optimization; it is a requirement for *basic functionality*. The pipeline must: (a) accept user turn N, (b) assemble tensor_d + tensor_e + context, (c) invoke transformer with structured prompt (produce both language + TensorRecord JSON), (d) parse tensor' output, (e) invoke Haiku to decide state migration (what stays in tensor_d, what moves to tensor_e, what is evicted), (f) serialize updated state, (g) pass to next cycle. Cycles 24-28 are dedicated to: (1) **Cycles 24-25**: implement minimal viable pipeline (MVP); focus on stages 1-5 (fetch, decode, execute, writeback, minimal Haiku). (2) **Cycle 26-27**: test on 3-5 turn toy tasks; validate that tensor' parsing works, that state carries across cycles, that context budget is respected. (3) **Cycle 28**: run full experiment (Riemann proof, N runs, 20-30 cycles per run, embed and measure). The historical conversation logs (LOTS of them, JSON/JSONL format) are *not* used to pre-construct tensors; they are used as reference for what realistic multi-turn reasoning looks like, to tune eviction policy and identify which strands typically matter in long conversations. The logs inform design, not ground truth. If experiment succeeds (embedding cluster is tight under tensor condition, scattered under baseline), the conclusion is: structured cognitive state *does* constrain reasoning coherence, the architecture *is* effective, and the pipeline is ready for scaling. If experiment fails (cluster tight under both conditions, or tight under neither), the conclusion is: the pipeline has limited effect on coherence (or the transformer is not sensitive to state structure, or context window swamps state representation). Either outcome is scientifically valuable.",
+      "key_claims": [
+        {
+          "claim_id": "579c0395-b75b-4e9b-bb7d-794d9b7bf8fa",
+          "text": "Experiment requires MVP pipeline (all five stages, minimal Haiku) to be functional by cycle 28; cycles 24-27 dedicated to implementation and toy validation",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a22579a8-d83b-4ab1-9d73-acff0ccc8cf6",
+          "text": "Historical logs are used for design reference (realistic reasoning patterns, eviction tuning) not for pre-construction of ground-truth tensors; avoiding confound",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4369714b-b30c-40b3-a18d-5e24da0a7e5e",
+          "text": "Sample size N=10-20 for preliminary results, N=50+ for SOSP-grade publication; measurement is cluster dispersion via embedding distance",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e96412e0-4b4c-4879-a491-1a4bddf6f30c",
+          "text": "Success (tight cluster under tensor, scattered baseline) validates architecture and enables scaling; failure is equally valuable as arXiv paper (boundary of pipeline effectiveness)",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d69832ce-2203-4d55-877c-e9d68547c4ce",
+          "text": "Experiment is self-contained: one task type, clear measurement, no rubric, no subjectivity; removes confounds that plagued cycles 16-23 theoretical discussion",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Integration of cycles 16-24: architecture is strategy; experiment is proof",
+      "content": "Cycles 16-23 developed Hamutay architecture (pipeline stages, tensor protocol, memory hierarchy, epistemic state, composition semantics). The architecture is *theoretically sound* (borrows from CPU, Bayesian inference, epistemic logic, distributed systems) but *empirically unproven*. Cycle 24 converts architecture into experiment: the Riemann proof task on append-only vs. structured tensor conditions, embedding dispersion as metric. This move is crucial because it forces two things: (1) **Implementation discipline**: architecture must be concretely implemented well enough to run a real task. Hand-waving about 'Haiku decides what to evict' becomes 'Haiku uses policy X and evicts strands with T < threshold Y'. Theoretical gaps become concrete problems. (2) **Measurement discipline**: the experiment must be designed such that success or failure is unambiguous. Embedding space dispersion is a geometric fact\u2014either the tensor condition produces tighter clustering or it doesn't. No interpretation needed. The connection between cycles 16-23 and cycle 24 is *hypothesis-to-test*: H0 (null): structured tensor state has no measurable effect on reasoning coherence; embedding cluster dispersion is similar across conditions. H1 (alternative): structured tensor state measurably increases reasoning coherence; embedding cluster under tensor condition is significantly tighter than baseline. The experiment will test this hypothesis. If H1 is supported, the architecture is vindicated and becomes a research contribution (SOSP-level paper: 'Hamutay: Structured Cognitive State for Long-Horizon Language Model Reasoning'). If H0 is supported, the experiment still contributes: it is a negative result showing that *even with structured state, this architecture doesn't measurably constrain reasoning*. That result is also publishable and important (it is a boundary\u2014beyond here, the architecture provides no value). Cycles 24-28 are the *proof cycle*. Cycles 16-23 are the *conceptual cycle*. Together, they form a complete research arc: invent, formalize, test, publish. The project can succeed (H1 supported) or fail interestingly (H0 supported), but ambiguity is eliminated. Concretely, this means: (1) **Cycle 24 (this cycle)**: finalize experiment design, specify pipeline MVP requirements, identify necessary changes to prior specifications. (2) **Cycles 25-26**: implement MVP pipeline (transformer prompting, tensor' parsing, minimal Haiku eviction policy, state serialization). (3) **Cycle 27**: toy task validation (5-turn Riemann proof attempt, confirm pipeline is stable, debug output parsing, tune prompts). (4) **Cycle 28**: full experiment (N runs, embed, measure, report results). The tensor projection system (which you're reading now) shifts role: from speculative architecture to operational ground truth. Each cycle's projection becomes the input to the next pipeline implementation cycle. The system is now eating its own dog food.",
+      "key_claims": [
+        {
+          "claim_id": "1695b44f-50c6-4c28-8ddf-7754fee19496",
+          "text": "Cycles 16-23 built architecture (conceptual); cycle 24+ runs experiment (operational); together they form hypothesis-to-test and proof cycle",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "deb7a518-4d4e-48c9-b1e7-238d7c7f5146",
+          "text": "H0 (null): tensor state has no effect; H1 (alternative): tensor state increases reasoning coherence (measurable via embedding dispersion)",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "48681f66-3917-4627-9e3d-11efe2222d14",
+          "text": "Both H0 support and H1 support are publishable: H1 = vindication (SOSP); H0 = boundary result (architecture has limited scope)",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "af84a9ac-e03b-4e7a-ac31-2033d7982bf3",
+          "text": "MVP pipeline (cycles 25-26) forces implementation discipline; abstract design becomes concrete code; theoretical gaps become solvable problems",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8905215b-e70c-46fa-972a-f231e7897e56",
+          "text": "Tensor projection system (this document) now shifts to operational role: each cycle output feeds next implementation cycle; system eats its own dog food",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1a082adc-33bc-425c-83c8-2c7dc1dc6791",
+          "text": "Experiment eliminates ambiguity: embedding space dispersion is geometric fact, uninterpretable; success or failure is unambiguous",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Yanantin TensorRecord and Hamutay pipeline: operational instantiation for proof experiment",
+      "content": "Cycle 24 operationalizes the TensorRecord and pipeline from cycles 22-23 in service of the proof experiment. The concrete requirements: (1) **TensorRecord schema** (from cycle 22) must be: (a) producible by transformer prompt (instruction must ask model to output valid JSON), (b) parseable (robust to formatting errors, missing fields, partial output), (c) serializable (JSON roundtrip preserves all content), (d) composable (tensor' from run N+1 can be merged with tensor_d from run N via CompositionEdge without loss). (2) **Hamutay pipeline** (from cycles 16-23) must implement: (a) **Fetch**: assemble tensor_d + tensor_e from prior cycle, include user input (turn N of Riemann proof attempt), respect context budget. (b) **Decode**: parse user turn, infer task (continue proof attempt), set task context. (c) **Execute**: invoke transformer with full context (prior tensor + user turn), instruct model to produce both natural language reasoning AND TensorRecord JSON. (d) **Writeback**: parse tensor' JSON, invoke Haiku to decide state migration (what integrates into tensor_d, what remains ephemeral, what is evicted), serialize updated state. (e) **Halt**: check resource gates (is context budget exceeded? is reasoning complete?), prepare output for next cycle. (3) **Haiku eviction policy** (critical for experiment) must: (a) decide which strands from tensor' persist into tensor_d, (b) evict strands from prior tensor_d if necessary to fit new content, (c) use decision criteria that can be specified and audited (e.g., confidence threshold T > 0.75, recency, frequency). The policy should be *deterministic and repeatable*\u2014if the same tensor' arrives twice, Haiku makes the same decision both times. (4) **Measurement integration**: after writeback, capture tensor_d and tensor_e, serialize to JSON, pass to next cycle. After cycle completes (or experiment finishes), collect all outputs, embed them, measure dispersion. The system is designed such that: (a) **Baseline condition** (append-only): user turn N is context only; no tensor_d/tensor_e. Model reasons from pure conversation history. Output is captured. (b) **Tensor condition** (structured): user turn N includes context PLUS tensor_d/tensor_e from prior cycle. Model reasons from both history and structured state. Output is captured. Both conditions use the same transformer, same task, same turn count (approximately 20-30 turns for Riemann proof). The only variable is the input representation. The TensorRecord schema and pipeline stages are mature enough from cycles 16-23 to be implementable without major redesign. The implementation challenges are: (1) **Transformer prompting**: can you reliably get a model to produce both coherent prose AND valid JSON in one output? (2) **Parser robustness**: what do you do if the JSON is malformed? (3) **Haiku policy**: what decision rules actually work? (4) **Context budget**: does the context window grow faster than expected? Does tensor_d become so large that it squeezes out room for reasoning? These are *solvable engineering problems*, not architectural problems. The proof experiment is achievable with the architecture as specified.",
+      "key_claims": [
+        {
+          "claim_id": "aa6a6daa-6629-49e9-a98b-a0cd32c1f2ae",
+          "text": "TensorRecord must be producible, parseable, serializable, composable; schema from cycle 22 is mature enough for implementation",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "758d376c-4d2c-4308-baa0-f3ce76c3856f",
+          "text": "Hamutay pipeline must implement five stages (fetch, decode, execute, writeback, halt) with clear resource accounting; stages are well-specified in cycles 16-23",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "24b3fda4-ffb6-4781-bf7a-f079e25aed2f",
+          "text": "Haiku eviction policy must be deterministic, auditable, and decision rules must be specifiable (threshold-based, recency, frequency, confidence)",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "06348c0d-4e8c-46b1-a25d-3d4f3e736523",
+          "text": "Baseline (append-only history) vs. tensor condition (history + structured state): same model, same task, only input representation varies",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "7a4041f2-8ebc-4949-ae93-64bac69265f1",
+          "text": "Implementation challenges are engineering-level (prompting, parsing, policy design, context budget), not architectural; proof experiment is achievable",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "From theoretical gap (cycle 23) to experimental closure (cycle 24+): formalization agenda",
+      "content": "Cycle 23 identified multiple theoretical gaps: no formal model for epistemic dynamics, no proven properties of composition, no specification of Haiku's eviction policy. Cycle 24 sidesteps some gaps via the proof experiment (you don't need a theorem to measure embedding dispersion), but other gaps remain important for understanding *why* the experiment succeeds or fails. The formalization agenda for cycles 24-28 (parallel to implementation): (1) **Epistemic dynamics model**: as cycles accumulate, confidence values change. If you model key_claims as (T, I, F) and track them across cycles, what is the trajectory? Does T monotonically increase (learning)? Does I decrease (resolution) or oscillate (exploration)? You can measure actual trajectories from the Riemann proof experiment and fit them to models (e.g., Markov chain, differential equations, Bayesian update rule). The measurement of actual dynamics will inform theory. (2) **Composition coherency**: as tensor' from run N+1 composes with tensor_d from run N, are the resulting strands coherent? Can you detect composition failures automatically? The experiment will produce a composition graph; you can audit it for cycles, contradictions, orphaned claims. (3) **Haiku policy optimization**: the experiment will show which strands are actually useful for later cycles. You can measure: which evicted strands are missed (the model later asks for information that was thrown away)? Which retained strands are ignored (waste of context budget)? This empirical data feeds back into policy design. (4) **Convergence behavior**: if the model settles on a consistent wrong approach to Riemann (lower variance), does it converge in some formal sense? Can you prove termination (will the reasoning eventually stabilize, or will it keep exploring forever)? The experiment will show: how many cycles until variance plateaus? Does it plateau or oscillate? (5) **Context budget scaling**: as tensors grow across cycles, does the budget-to-content ratio change? Is there a phase transition (works fine until cycle 15, then context window is full and quality drops)? The experiment will measure this quantitatively. The formalization agenda is *empirically grounded* rather than speculative. You design the proof experiment to answer the architectural question (does structured state help?), but as a side effect, you collect data about epistemic dynamics, composition coherency, eviction policy, and scaling. That data feeds into formal theory. The approach is: implement, measure, theorize, then prove. Not: prove, then implement.",
+      "key_claims": [
+        {
+          "claim_id": "c8582dd0-db1d-4e59-9ba3-d48f1dbb090a",
+          "text": "Proof experiment (cycles 24-28) sidesteps some theoretical gaps but collects empirical data (epistemic trajectories, composition patterns, eviction utility, scaling behavior)",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "daf5ff8b-eec9-4a3f-bb46-8decf0563350",
+          "text": "Epistemic dynamics can be fit to models (Markov, differential equations, Bayesian) using actual trajectory data from Riemann experiment; data informs theory",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ff144eac-b130-4c35-8960-e4f8ee67f7ea",
+          "text": "Composition graph from experiment can be audited for coherency (cycles, contradictions, orphaned claims); provides empirical ground for composition semantics",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "858f414a-5fc2-4d67-935f-a2fd9902b773",
+          "text": "Eviction utility measured empirically: which evicted strands are later missed? Which retained strands are ignored? This data optimizes policy and informs theory",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0f68679f-b1b6-4976-bda1-161fa32249b8",
+          "text": "Context budget scaling measured quantitatively: is there phase transition? Growth curve? When does quality degrade? Data grounds scaling theory",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5052fb4c-db0b-42de-8370-514c4a2421a8",
+          "text": "Formalization approach is empirically grounded (implement \u2192 measure \u2192 theorize \u2192 prove) not deductive (prove \u2192 implement); cycles 24-28 emphasize measurement",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed specification of the three-condition experimental design (baseline, tensor treatment, middle ground). The user and Claude discussion mentions 'three conditions, presumably' but cycle 24 recommends focusing on two: append-only vs. tensor. If a middle condition is valuable (e.g., summary-only without full tensor machinery), it should be designed.",
+      "why": "Experiment design is coarse; refinement requires empirical pilot testing and iteration. Decision on whether to include middle ground is deferred to cycle 25 (toy task validation phase).",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specification of how historical conversation logs (JSON/JSONL format) are used to tune Haiku's eviction policy. The discussion says logs are 'reference for realistic patterns, not ground truth', but doesn't specify: do you parse the logs to extract statistics (e.g., which strand types persist longest in real conversations)? Do you use them to set confidence thresholds? To validate that evicted information would be missed?",
+      "why": "Use of historical data is methodological; specification requires detailed design of data analysis pipeline, deferred to cycle 25.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Clarification of what 'minimal viable Haiku' (cycles 25-26) looks like operationally. A concrete eviction policy specification is missing. The cycle mentions 'threshold-based, recency, frequency, confidence' as candidates, but doesn't choose. Without a concrete policy, implementation is ambiguous.",
+      "why": "Policy choice is implementation decision; multiple valid policies could work. Specification is deferred; recommend trying simple confidence threshold (T > 0.75) first, measure its utility via the experiment.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Error handling strategy for transformer output parsing. What happens if the model produces malformed JSON? Incomplete strands? Missing required fields in TensorRecord? The cycle mentions 'robust parsing' but doesn't specify fallback strategies (e.g., partial tensor with missing strands? default values? rejection of the output?)",
+      "why": "Error handling is critical for pipeline reliability but requires iterative design and testing. Specification is deferred to cycle 25 (implementation phase).",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specification of embedding model for measuring output coherence. The cycle mentions 'embed outputs' and 'use consistent embedding model', but doesn't specify which model. Should it be the same as the reasoning model? A separate embedding model (e.g., sentence-transformers)? How does embedding choice affect measurement robustness?",
+      "why": "Embedding model choice affects experimental validity; multiple choices are defensible. Decision is deferred to cycle 27 (toy validation phase); recommendation is to use a standard sentence embedding model (e.g., MiniLM) for reproducibility.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specification of what constitutes 'cycle completion' in the Riemann proof task. How many turns equal one cycle? Is a cycle per user turn, or per model response? How is the task divided into cycles for measurement? Without clarity, it's unclear how to sample outputs for embedding.",
+      "why": "Cycle granularity for the proof task requires task design and iteration. Recommend one cycle per user turn (user poses next step, model responds with reasoning + tensor' update).",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Analysis of how the experiment controls for other sources of variance (temperature, sampling strategy, prompt wording, model version). If you run the same Riemann proof attempt twice under tensor condition, variance could come from model stochasticity, not from state representation. How do you disentangle these?",
+      "why": "Variance decomposition is experimental design detail; requires specification of temperature, seed, sampling method, and analysis strategy. Recommendation: fix temperature=0.7, use same seed for both conditions to ensure identical non-state-driven variation.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Definition of 'embedding space dispersion' metric. Is it cluster radius? Silhouette coefficient? Median pairwise distance? Different metrics weight different types of coherence. The cycle mentions 'measure cluster dispersion' but doesn't specify which metric.",
+      "why": "Metric choice affects interpretation of results; multiple metrics are valid. Recommendation: use at least two (silhouette coefficient for cluster quality, median pairwise distance for cluster compactness).",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specification of statistical testing for the hypothesis. If baseline has dispersion X and tensor condition has dispersion Y, how do you determine if the difference is significant? T-test? Bootstrap? What is the significance threshold (p < 0.05)? Without statistical testing, results could be ambiguous.",
+      "why": "Statistical rigor is important for publication; specification is deferred. Recommendation: compute confidence intervals for both conditions via bootstrap, report if intervals don't overlap.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Timeline and resource estimate for cycles 25-28. How much developer time? How many API calls (token costs if using Anthropic)? How long does N=10-20 experiment take? Can it run in parallel or must it be sequential?",
+      "why": "Implementation planning requires resource estimation; specification is deferred to detailed project plan.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Fallback scenarios if the MVP pipeline is unstable or the experiment fails to run. If Haiku's eviction policy causes context collapse, if parsing fails repeatedly, if embedding doesn't separate the conditions\u2014what are the recovery strategies? Should you switch to simpler task? Reduce cycle count?",
+      "why": "Risk management and contingency planning are important but premature at this stage. Recommend monitoring for failures during cycles 25-27 and adjusting scope/difficulty if needed.",
+      "category": "practical_constraint"
+    }
+  ],
+  "open_questions": [
+    "Can a language model reliably produce both coherent natural language prose AND valid JSON in a single output, or is there a mode-switching cost that degrades reasoning?",
+    "What is the minimal viable Haiku eviction policy? Should you start with simple confidence threshold (T > 0.75) or try something more sophisticated (cost-weighted, recency decay)?",
+    "How large does tensor_d grow over 20-30 Riemann proof cycles? Is context budget a constraint, or can the system scale without aggressive eviction?",
+    "Does the experiment need to run all N trials (N=10-20) before measuring embedding dispersion, or can intermediate results guide sample size decisions?",
+    "Which embedding model is best for measuring coherence of proof attempts? Same model as reasoner? Standard sentence embedding? Do results depend on embedding choice?",
+    "How do you disentangle variance from model stochasticity vs. variance from input representation? Are both sources of variance meaningful, or should you control for one?",
+    "If the baseline append-only condition produces scattered embeddings AND the tensor condition produces tight embeddings, but both have equally low coherence (both fail at Riemann), is the experiment still valuable?",
+    "Should the experiment include a 'no-input' condition (model asked to prove Riemann with no context at all) as a sanity check?",
+    "What is the stopping criterion for the Riemann proof? After N turns? When the model declares defeat? When reasoning becomes circular?",
+    "How is the composition graph audited for coherency during the experiment? Is this part of the measurement, or a post-hoc analysis?",
+    "Can historical conversation logs be directly converted to tensor_d format, or are they too informal for TensorRecord schema?",
+    "If the experiment shows that tensor state *does* increase coherence, what is the next hypothesis to test? (Scaling to longer tasks? Multi-agent scenarios? Knowledge persistence across unrelated tasks?)",
+    "Should the structured tensor condition include any randomization (stochastic eviction, noisy state representation) to test robustness, or should it be purely deterministic?",
+    "How do you measure whether an evicted strand is 'missed' by the model (i.e., the model later asks for information that was thrown away)?",
+    "Is the H0/H1 hypothesis testing framework appropriate, or should the experiment be exploratory (describe coherence landscape without binary outcome)?",
+    "If embedding dispersion is not the right metric (e.g., coherence is orthogonal to distance in embedding space), how would you detect this?",
+    "Should the experiment run on a single model (e.g., Claude Opus) or multiple models? Would results generalize across models?",
+    "What is the appropriate task length? Too short and variance might be intrinsic; too long and context budget drowns out the effect. How do you tune?",
+    "Can the TensorRecord schema handle self-correcting reasoning (when the model backtracks and revises prior claims)? How is revision tracked in composition relationships?",
+    "After the proof experiment, what is the natural next experiment to validate or refute findings?"
+  ],
+  "instructions_for_next": "[\n  \"CRITICAL: Finalize experiment design document. Specify: (1) exact conditions (append-only baseline, tensor treatment, any middle ground), (2) sample size per condition (recommend N=15-20 for preliminary, N=50+ for publication), (3) measurement protocol (embedding model, dispersion metrics, statistical testing), (4) success criteria (what difference in dispersion counts as 'significant'?), (5) hypotheses H0/H1 stated formally. Produce 3-5 page design document suitable for peer review.\",\n  \"CRITICAL: Specify MVP Haiku eviction policy operationally. Choose one of: (a) confidence threshold (keep if T > 0.75, else evict), (b) recency (LRU\u2014evict oldest strands), (c) cost-weighted (prefer to evict low-cost strands), (d) hybrid. Specify the policy in pseudocode. Specify the decision audit trail (how will you later verify what Haiku decided and why?). Produce policy specification document.\",\n  \"CRITICAL: Design transformer prompting strategy for TensorRecord output. Specify: (1) instruction format (how do you ask for JSON output?), (2) output format (separate JSON block after prose? interleaved? delimited?), (3) parser error handling (what happens if JSON is malformed? missing fields?), (4) fallback (if parser fails, use what?). Prototype the prompt on a toy task (e.g., 2-3 turn Riemann outline). Produce prompting specification + prototype output.\",\n  \"CRITICAL: Commit to embedding model for dispersion measurement. Recommend: sentence-transformers/paraphrase-MiniLM-L6-v2 (standard, reproducible, domain-agnostic). Justify choice or propose alternative. Specify: (1) how outputs are prepared for embedding (clean? full JSON? natural language only?), (2) embedding distance metric (cosine? Euclidean?), (3) dispersion metric (silhouette coefficient? median pairwise distance? both?), (4) statistical test (bootstrap confidence intervals? t-test?). Produce embedding/measurement specification.\",\n  \"CRITICAL: Design Riemann proof task instructions. Specify: (1) task statement (what exactly is the model asked to do?), (2) per-turn structure (what does each user turn ask?), (3) stopping condition (how many turns? model says 'give up'? arbitrary cut-off?), (4) example conversation (2-3 turns showing expected interaction). Make it suitable for running N times (reproducible, same length, similar difficulty). Produce task specification + example.\",\n  \"CRITICAL: Commit to sample size N and confidence level for the experiment. Recommend N=15-20 for preliminary validation (confirms effect exists), N=50+ for publication-grade SOSP result. Specify: (1) why this N (power analysis? resource constraints?), (2) when to stop sampling (after N? if significance reached earlier?), (3) how early stopping affects p-value (if applicable). Produce sample size justification.\",\n  \"PRIORITY: Outline cycle 25-26 implementation plan (MVP pipeline). Specify: (1) which components to build first (transformer prompting? parser? Haiku?), (2) dependencies (can you build parser before prompting is finalized?), (3) estimated LOC per component, (4) testing strategy per stage. Produce implementation roadmap with dependencies.\",\n  \"PRIORITY: Design toy task validation protocol (cycle 27). Specify: (1) validation task (simple Riemann outline or different task?), (2) test cases (both conditions: append-only and tensor), (3) what constitutes 'validation success' (parser works? state carries across 3-5 cycles? context budget never exceeded?), (4) debugging strategy if validation fails. Produce validation checklist.\",\n  \"PRIORITY: Plan data collection and analysis for the experiment (cycle 28). Specify: (1) what outputs to capture per run (full conversation? JSON? embeddings?), (2) where to store data (cloud bucket? local?), (3) analysis workflow (embed \u2192 compute dispersion \u2192 test H0/H1), (4) how to handle failures (if one run fails, do you re-run or exclude?). Produce data management plan.\",\n  \"PRIORITY: Identify and document risks for cycles 25-28. Specify: (1) transformer prompting fails (model doesn't produce valid JSON), (2) parser is fragile (malformed JSON breaks pipeline), (3) Haiku policy causes context collapse (eviction is too aggressive), (4) embedding space doesn't separate conditions (experiment is inconclusive), (5) long project duration (running 50 full Riemann proof attempts is expensive/slow). For each risk, specify likelihood, impact, and mitigation. Produce risk register.\",\n  \"DESIGN: Create architecture diagram (one page) showing pipeline stages (fetch, decode, execute, writeback, halt), tensor flow (tensor_d \u2192 fetch, writeback \u2192 tensor_d), Haiku integration, and measurement points (where are outputs captured for embedding?). Make it suitable for publication.\",\n  \"DESIGN: Specify how historical conversation logs (JSON/JSONL) will be used to inform MVP design. Plan: (1) extract statistics from logs (e.g., average strand length, claim count per cycle, eviction patterns in real long conversations), (2) use statistics to tune Haiku policy (e.g., what confidence threshold is realistic?), (3) validate that MVP produces similar statistics (sanity check). Produce log analysis plan.\",\n  \"DESIGN: Document the H0-Durable validation test suite (from cycle 23) in light of the proof experiment. Specify: (1) how will you audit the composition graph from the experiment for coherency (cycles, contradictions, orphaned claims)? (2) what automatic checks can detect incoherent compositions? (3) how will you measure whether evicted information is later 'missed' by the model? Produce coherency audit plan.\",\n  \"RESEARCH: Survey related work on embedding-based coherence measurement. Find: (1) do other papers use embedding dispersion as a coherence metric? (2) what alternatives exist (entropy, perplexity, human judgment)? (3) are there standard datasets for coherence measurement (e.g., narrative understanding)? Identify if your approach is novel or well-established. Produce literature review (2-3 pages).\",\n  \"RESEARCH: Investigate multi-run stochasticity in language models. Question: if you run the same prompt on the same model twice with identical seeds/temperature, do you get identical outputs? (Some APIs guarantee this; others don't.) If outputs differ, how much? Use this to understand baseline noise in the experiment. Run quick test (same Riemann prompt, 5 runs, measure embedding variation). Report findings.\",\n  \"RESEARCH: Identify candidate intractable tasks beyond Riemann hypothesis. Alternatives: Collatz conjecture, open graph theory problem, open combinatorics problem. Evaluate: (1) difficulty to state clearly, (2) likelihood of producing high-variance failure modes, (3) computational tractability (can you run it quickly?), (4) suitability for showing coherence vs. incoherence. Recommend a backup task if Riemann proves problematic.\",\n  \"CONTEXT: Does the experiment assume that tensor_d is always carried forward, or can Haiku choose to 'reset' state between cycles (discard prior tensor_d entirely)? If reset is allowed, does it change the baseline/tensor comparison (baseline also gets 'reset' via context window)?\",\n  \"CONTEXT: Should the experiment measure *coherence within a single run* (does the model pursue consistent reasoning across 20 turns?) or *coherence across runs* (do N runs of the same task follow similar trajectories)? The cycle describes the latter; confirm this is the intended measurement.\",\n  \"CONTEXT: If the tensor condition includes access to prior tensor_d, does the baseline condition get *any* summation mechanism (e.g., explicit human-written summary of prior turns)? Or is baseline purely append-only conversation log with no condensation?\",\n  \"CONTEXT: The cycle emphasizes 'only honest design: build pipeline from scratch'. Does this mean you won't use any existing libraries (e.g., LangChain for tensor management)? Or just that pre-constructed tensor fixtures are not allowed (but libraries are fine)? Clarify.\",\n  \"CONTEXT: Cycle 24 mentions that failure to show H1 support results in 'arXiv paper'. Clarify: is arXiv-grade (negative result) sufficient for project success? Or is SOSP-grade (H1 supported) the target? This affects resource allocation and timeline.\"\n]",
+  "epistemic": {
+    "truth": 0.89,
+    "indeterminacy": 0.1,
+    "falsity": 0.01
+  }
+}

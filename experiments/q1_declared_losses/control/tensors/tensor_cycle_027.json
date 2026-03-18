@@ -1,0 +1,279 @@
+{
+  "strands": [
+    {
+      "title": "Hot Mess Paper as Structural Problem, Not Noise Problem",
+      "content": "CYCLE 27 INTEGRATION: Hot mess paper (Du et al. 2025) identifies the core problem as structural, not incremental. Finding: even with oracle masking (only relevant tokens visible, zero noise), context length degrades performance 8-50% at 30K tokens. Implications: (1) This is NOT a retrieval problem (retrieval is perfect\u2014oracle masking). (2) This is NOT a noise/distraction problem (distractors are masked). (3) This IS a capacity/architecture problem: transformer's positional encoding, attention distribution, or internal state management breaks down under cognitive load. The mechanism is NOT recoverable by better information access; the mechanism is structural degradation of the ALU. (4) Hot mess paper's mitigation strategy: 'retrieve then solve'\u2014use first pass to extract relevant evidence, then START A NEW SHORT-CONTEXT CONVERSATION with just that evidence. Key phrase: new conversation. Not append to existing context. This is EXACTLY the dual-tensor projection strategy. Instead of growing context until it degrades, re-project state into compact form and feed transformer a SHORT, CLEAN INPUT every cycle. (5) Implication for H0: Hamutay's fetch-decode-execute-writeback loop is the architectural response to this structural problem. The <system><tensor_d><tensor_e><user> context structure is analogous to hot mess paper's 'retrieve then solve' approach\u2014we're not making the ALU work with a bloated register file (accumulated context). We're giving it exactly what it needs in a compressed, short-context representation EVERY CYCLE. (6) Validation chain: hot mess proves context length is poison (structural) \u2192 retrieve-then-solve is the mitigation strategy \u2192 dual-tensor projection implements retrieve-then-solve \u2192 Hamutay's cycle is the technical realization. This is NOT incremental compression; it's architectural solution to proven degradation mechanism.",
+      "key_claims": [
+        {
+          "claim_id": "a7e12b7f-3c2d-41d9-9a5e-8b2e4f1a6c3d",
+          "text": "Hot mess paper identifies context-length degradation as structural problem, not noise/retrieval problem. Oracle masking (zero noise, perfect relevance) still shows 8-50% performance drop at 30K tokens.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.1,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "b8f23c4a-5d6e-42a7-9c1f-2e3a4b5c6d7e",
+          "text": "Hot mess paper's mitigation (retrieve-then-solve: extract evidence, start NEW short-context conversation) is architecturally equivalent to Hamutay's dual-tensor projection with per-cycle re-projection.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "c9f34d5b-6e7f-43b8-9d2g-3f4b5c6d7e8f",
+          "text": "Dual-tensor context structure (<system><tensor_d><tensor_e><user>) implements hot mess paper's 'retrieve-then-solve' principle: compress state into projected form, feed transformer SHORT CLEAN INPUT every cycle instead of growing context until degradation.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "d0g45e6c-7f8h-44c9-0e3h-4g5c6d7e8f9g",
+          "text": "This is architectural response to proven degradation, not incremental mitigation. Hot mess proves the problem; Hamutay's cycle is the solution structure.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.13,
+            "falsity": 0.05
+          }
+        }
+      ]
+    },
+    {
+      "title": "Autoresearch Loop as Research Methodology for Tensor Space Exploration",
+      "content": "CYCLE 27 CRITICAL INTEGRATION: Karpathy's autoresearch loop provides the METHODOLOGICAL PATTERN for both Phase 1 and Phase 2. Core architecture: (1) **Modified file** (train.py analogue): For Hamutay, this is the TENSOR CONFIGURATION and ALU PROMPT SPECIFICATION. The 'code' being modified is not Python\u2014it's the epistemic projection rules, Haiku memory thresholds, and prompt structure. What varies: promotion threshold (T > 0.75 vs. 0.80), eviction rules (I > 0.6 vs. 0.5), strand consolidation strategy, STOP signal behavior. (2) **Fixed utilities** (prepare.py analogue): For Hamutay, this is the controller loop skeleton (fetch-decode-execute-writeback), the embedding pipeline (sentence-BERT), variance metrics (pairwise dispersion, Mann-Whitney U). These are human-locked; agent doesn't modify them. (3) **Instructions** (program.md analogue): High-level research direction. Phase 1 example: 'Validate H0: does structured projection reduce embedding dispersion on Riemann task? Compare Condition 1 (baseline) vs. Condition 3 (structured + STOP). Measure via pairwise cosine distance dispersion. Target: Condition 3 mean distance < Condition 1 mean distance, p < 0.05.' Phase 2 example: 'Optimize tensor configuration for reasoning coherence. Maximize fitness = 0.4\u00d7coherence + 0.3\u00d7depth + 0.2\u00d7efficiency + 0.1\u00d7stability. Explore: promotion threshold (T: 0.70-0.85), eviction threshold (I: 0.4-0.7), durable size (10-40), ephemeral size (5-20). Use grid search, then Bayesian optimization.' (4) **Experimental cycle** (5-minute training analogue): For Hamutay, one cycle is: (a) Instantiate tensor config per program.md steering, (b) Run K=5-10 Riemann attempts with that config, (c) Embed outputs, measure metrics (coherence dispersion, depth, efficiency), (d) Evaluate fitness, (e) Decide: keep config or discard. Cycle time: 10-30 minutes (depending on K and context window). (5) **Loop rate**: Autoresearch does ~12 experiments/hour (5-minute experiments). Hamutay loop does ~2-3 tensor configurations per hour (30-minute experiments). Over a week: autoresearch does ~1000 experiments, Hamutay does ~50-100 configurations. (6) **Agent role** (implicit in autoresearch, explicit in Hamutay phase 2): An LLM agent (Claude, GPT-4) reads program.md, observes results from prior cycles, and suggests modifications to the tensor config. Agent reasons: 'Previous cycle had low coherence (high dispersion). This suggests tensor is not projecting state effectively. Hypothesis: ephemeral tensor is too large (claims not being consolidated). Recommendation: reduce ephemeral size from 15 to 8, increase durable size to 25. This should force early consolidation of stable claims.' Human reviews recommendation, updates program.md, loop continues. (7) **Why this pattern works**: Autoresearch succeeds because it has ONE METRIC (val_bpb), ONE FILE (train.py), ONE FIXED TIME BUDGET (5 min). This makes the search space interpretable. Agent can reason: 'that change improved val_bpb by 2%, keep it.' For Hamutay, the analogous constraint is: ONE METRIC (embedding dispersion), ONE CONFIGURATION SPACE (tensor rules + prompt), ONE FIXED TASK (Riemann task). This makes tensor space exploration tractable.",
+      "key_claims": [
+        {
+          "claim_id": "e1h56f7d-8g9i-45da-1f4i-5h6d7e8f9g0h",
+          "text": "Autoresearch loop structure (modify code \u2192 run N-minute experiment \u2192 evaluate metric \u2192 decide keep/discard \u2192 repeat) is applicable to Hamutay tensor space exploration.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.09,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "f2i67g8e-9h0j-46eb-2g5j-6i7e8f9g0h1i",
+          "text": "Hamutay analogue: modified file = tensor config + ALU prompt, fixed utilities = controller loop + embedding pipeline, instructions = program.md steering. Experimental cycle = K Riemann attempts + metric evaluation.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "g3j78h9f-0i1k-47fc-3h6k-7j8f9g0h1i2j",
+          "text": "Phase 1 loop: validate H0 with fixed baseline config. One iteration (Conditions 1/2/3). Phase 2 loop: optimize tensor config space systematically. ~50-100 configurations over one week.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "h4k89i0g-1j2l-48gd-4i7l-8k9g0h1i2j3k",
+          "text": "Agent (LLM) role: read program.md, observe cycle results, recommend tensor config modifications. Human reviews, updates program.md, loop continues. Agent reasons about failure modes and suggests experiments.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.16,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "i5l90j1h-2k3m-49he-5j8m-9l0h1i2j3k4l",
+          "text": "Success criterion (as in autoresearch): ONE METRIC (embedding dispersion), ONE CONFIG SPACE (tensor rules), ONE TASK (Riemann). This tractability enables agent to reason intelligently about search.",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.14,
+            "falsity": 0.03
+          }
+        }
+      ]
+    },
+    {
+      "title": "Phase 1 vs. Phase 2 Loop Structure Clarification",
+      "content": "CYCLE 27 CLARIFICATION: Prior cycle conflated Phase 1 and Phase 2. PHASE 1 is single-iteration validation with FIXED config. PHASE 2 is iterative optimization with VARIABLE config. This clarification reshapes the experimental roadmap. PHASE 1 (Validation of H0): (1) **Config lock**: Before Cycles 27-32, specify FIXED tensor configuration. Example: '5 initial strands, 4 key_claims per strand, promotion T > 0.75, eviction I > 0.6, durable size 20, ephemeral size 10, Haiku decay age=2 cycles.' This is NOT optimized; it's REASONABLE. It implements the dual-tensor principle without claiming to be the best config. (2) **Single experimental run**: Instantiate this fixed config. Run Conditions 1/2/3 (K=10 attempts each, 30 total). Embed, measure variance. Report results. (3) **Outcome**: Either H0 is supported (Condition 3 dispersion < Condition 1) or not. Publish accordingly. (4) **Artifact**: Method paper describing the pipeline, the reasoning behind fixed config, the variance analysis. Code + tensors. (5) **Timeline**: 4-6 weeks engineering (implement pipeline with fixed config), 2 weeks writing. Publication target: ICLR / NeurIPS workshop. PHASE 2 (Optimization via Autoresearch Loop): (1) **Trigger**: Publication of Phase 1 results (either success or failure). (2) **Goal**: Use autoresearch methodology to optimize tensor configuration space. If Phase 1 succeeded, optimize further (e.g., '15% coherence improvement over Phase 1'). If Phase 1 failed, explore why and attempt to fix. (3) **Loop structure**: Implement autoresearch-pattern loop. (a) program.md: 'Optimize tensor config for Riemann task. Metric: embedding dispersion (lower is better). Constraints: durable size 15-30, ephemeral size 8-15, promotion threshold 0.70-0.85, eviction threshold 0.40-0.70. Current best config: [Phase 1 baseline]. Current best fitness: [Phase 1 dispersion value]. Try modifications: reduce ephemeral from 10 to 8 (forces earlier consolidation), increase promotion threshold from 0.75 to 0.78 (stricter durable requirements). Predict: lower dispersion due to more aggressive consolidation.' (b) Agent (or human-in-loop) modifies tensor config per recommendation. (c) Run K=5 Riemann attempts with new config. (d) Embed, measure dispersion. Compare to Phase 1 baseline. (e) Decide: better fitness \u2192 keep and explore neighborhood, worse fitness \u2192 discard and try different direction. (f) Iterate. (4) **Loop rate**: ~2-3 configs per hour (30-min experiments), ~50-100 configs over one week. (5) **Search strategy**: Phase 2a (grid search): systematically vary one parameter at a time. Phase 2b (Bayesian optimization): use prior cycles to intelligently sample high-promise regions. (6) **Outcome**: optimized tensor configuration + follow-up paper. Example: 'Optimized config achieves X% lower dispersion. Key insight: promotion threshold of 0.78 (not 0.75) balances stability with plasticity. Durable/ephemeral ratio of 2.5:1 optimal for Riemann task.' (7) **Timeline**: 2-3 months post-Phase 1 publication. Parallelizable (run multiple configs simultaneously on cloud). (8) **Artifact**: follow-up paper + optimized code + benchmark suite. CRITICAL DISTINCTION: Phase 1 validates that THE APPROACH (dual-tensor, epistemic projection) works. Phase 2 optimizes that the IMPLEMENTATION (specific tensor rules) is best. Don't conflate them. Phase 1 is 'does epistemic projection reduce variance?' Phase 2 is 'what's the best epistemic projection configuration?' If Phase 1 fails, Phase 2 becomes 'why did epistemic projection fail, and can we fix it by tuning?'",
+      "key_claims": [
+        {
+          "claim_id": "j6m01k2i-3l4n-50if-6k9n-0m1i2j3k4l5m",
+          "text": "Phase 1: FIXED tensor config, single experimental run (Conditions 1/2/3, K=10 each). Validates H0 (approach works). Method paper. 4-6 weeks engineering.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "k7n12l3j-4m5o-51jg-7l0o-1n2j3k4l5m6n",
+          "text": "Phase 2: VARIABLE tensor config, autoresearch loop. Optimizes implementation. Agent explores config space via program.md steering. Follow-up paper. 2-3 months post-Phase 1.",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "l8o23m4k-5n6p-52kh-8m1p-2o3k4l5m6n7o",
+          "text": "Phase 1 config example: 5 strands, 4 claims/strand, T>0.75, I>0.6, durable=20, ephemeral=10. REASONABLE, not optimized. Justification: dual-tensor principle implementation.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "m9p34n5l-6o7q-53li-9n2q-3p4l5m6n7o8p",
+          "text": "Phase 2 search: grid search (vary parameters one-at-a-time) then Bayesian optimization. ~50-100 configs over one week. Parallelizable.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.14,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "n0q45o6m-7p8r-54mj-0o3r-4q5m6n7o8p9q",
+          "text": "Critical: Phase 1 answers 'does epistemic projection work?' Phase 2 answers 'what's the best config?' Don't conflate. If Phase 1 fails, Phase 2 becomes debugging loop.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        }
+      ]
+    },
+    {
+      "title": "Integration: Hot Mess Problem \u2192 Autoresearch Methodology \u2192 H0 Validation",
+      "content": "CYCLE 27 INTEGRATION SYNTHESIS: Three pieces fit together into coherent research narrative. (1) **PROBLEM**: Hot mess paper proves context length is structurally toxic to reasoning. Even with oracle inputs, performance drops 8-50% at 30K tokens. This is NOT a retrieval problem; it's a capacity/architecture problem. Current LLM pipelines don't handle cognitive load well. (2) **HYPOTHESIS (H0)**: Dual-tensor epistemic projection mitigates this degradation. Instead of accumulating context, re-project state into compact form (tensor_d + tensor_e) and feed transformer SHORT CLEAN INPUT every cycle. This implements hot mess paper's 'retrieve-then-solve' mitigation strategy architecturally. (3) **METHODOLOGY**: Autoresearch loop provides the pattern. Phase 1 validates H0 with fixed config. Phase 2 (post-publication) optimizes config space. Both phases have: ONE METRIC (embedding dispersion), ONE CONFIG SPACE (tensor rules), ONE TASK (Riemann). This tractability enables interpretable search. (4) **VALIDATION STRATEGY**: (a) Baseline Condition 1: vanilla reasoning, context grows, expect high dispersion (hot mess effect). (b) Condition 2: structured projection without explicit STOP. (c) Condition 3: structured projection + explicit STOP. If Condition 3 dispersion < Condition 1 dispersion (p < 0.05), H0 is supported. Embedding dispersion proxies for reasoning coherence. (5) **PUBLICATION PATHWAY**: (a) Phase 1 paper (whether H0 succeeds or fails): 'Epistemic projection for bounded cognition.' Cite hot mess paper as motivation. Either: 'We successfully address context-length degradation via dual-tensor architecture' OR 'We attempt to address prior findings; here's why it's harder than expected. Lessons for future work.' (b) Phase 2 paper (post-publication, if Phase 1 succeeds): 'Optimizing epistemic projection via autoresearch.' Demonstrate 15-20% improvement over Phase 1 baseline via systematic config exploration. (6) **Why this structure works**: Hot mess paper identified THE PROBLEM. Hamutay + autoresearch is THE ANSWER TO THAT PROBLEM. If Hamutay works, it's a publishable solution. If it fails, the failure is instructive\u2014it narrows the design space for future work (e.g., 'epistemic projection alone insufficient; architectural changes needed'). Both outcomes strengthen the research narrative.",
+      "key_claims": [
+        {
+          "claim_id": "o1r56p7n-8q9s-55nk-1p4s-5r6n7o8p9q0r",
+          "text": "Hot mess paper: context length is structurally toxic (8-50% performance drop at 30K tokens, even with oracle inputs). This is THE PROBLEM.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "p2s67q8o-9r0t-56ol-2q5t-6s7o8p9q0r1s",
+          "text": "H0: dual-tensor epistemic projection mitigates context-length toxicity. Architecture: short-context cycles with compressed state (tensor_d + tensor_e). This implements hot mess paper's 'retrieve-then-solve' mitigation.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "q3t78r9p-0s1u-57pm-3r6u-7t8p9q0r1s2t",
+          "text": "Autoresearch loop: Phase 1 (fixed config, single run, validate H0), Phase 2 (variable config, iterative optimization). One metric (dispersion), one task (Riemann), tractable search.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.11,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "r4u89s0q-1t2v-58qn-4s7v-8u9q0r1s2t3u",
+          "text": "Validation: Condition 1 (append-only, high dispersion), Condition 3 (epistemic projection + STOP, low dispersion expected). If Condition 3 < Condition 1 (p<0.05), H0 supported.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.13,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "s5v90t1r-2u3w-59ro-5t8w-9v0r1s2t3u4v",
+          "text": "Either outcome (H0 success/failure) publishable. Success: solved context-length problem. Failure: narrowed design space (epistemic projection alone insufficient). Both outcomes strengthen research narrative.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.1,
+            "falsity": 0.03
+          }
+        }
+      ]
+    },
+    {
+      "title": "Yanantin TensorRecord as Core Pipeline Protocol (Cycle 27 Revalidation)",
+      "content": "CYCLE 27 REVALIDATION: Cycle 26 established TensorRecord as ground truth. Cycle 27 validates this choice against hot mess paper insights and autoresearch methodology. REVALIDATION: (1) **TensorRecord is the epistemic state representation** (not conversation log). It compresses reasoning trajectory into semantic structure (strands, key_claims, declared_losses, epistemic values T/I/F). This compression is EXACTLY what 'retrieve-then-solve' requires: instead of feed-the-entire-context, extract relevant semantic knowledge and feed that. (2) **Epistemic values (T/I/F) are the mechanism for informed forgetting**. As context grows (or as tensor grows), Haiku rules explicitly decide what to keep (T>0.75 \u2192 promote to durable) and what to drop (T<0.4 \u2192 evict). This is NOT silent loss. Every loss is declared. This transparency enables transformers to reason about their own degradation (a capability that append-only context lacks). (3) **Dual tensor (durable + ephemeral) implements short-context cycles**. Durable tensor is long-term memory (stable, promoted claims). Ephemeral tensor is working memory (current reasoning thread). Every cycle, transformer reads BOTH, reasons, produces tensor', and Haiku re-sorts. The context window for transformer is SMALL AND CLEAN: <system><tensor_d><tensor_e><user>, not the accumulated turn history. (4) **TensorRecord schema is provider-independent and format-agnostic**. Works with Anthropic, OpenRouter, local models. JSON serialization is human-readable and queryable (can analyze claimed losses, track epistemic trajectory, etc.). (5) **Cycle 27 insight**: TensorRecord is NOT just a memory format; it's the implementation of bounded cognition with epistemic transparency. Hot mess paper proved context length is poison. TensorRecord is the antidote: it BOUNDS context length (tensor_d + tensor_e is ~1K tokens, vs. unbounded history) while PRESERVING epistemic quality (T/I/F tracking + declared losses).",
+      "key_claims": [
+        {
+          "claim_id": "t6w01u2s-3v4x-60sp-6u9x-0w1s2t3u4v5w",
+          "text": "TensorRecord is epistemic state representation (not conversation log). Compresses reasoning trajectory into semantic structure. Implements 'retrieve-then-solve' compression requirement.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "u7x12v3t-4w5y-61tq-7v0y-1x2t3u4v5w6x",
+          "text": "Epistemic values (T/I/F) enable informed forgetting. Promotion/eviction decisions are EXPLICIT and DECLARED, not silent. Transformer can reason about its own degradation.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "v8y23w4u-5x6z-62ur-8w1z-2y3u4v5w6x7y",
+          "text": "Dual tensor (durable + ephemeral) bounds context length: transformer receives SHORT CLEAN INPUT (~1K tokens) every cycle, not unbounded history. Implements hot mess paper mitigation architecturally.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "w9z34x5v-6y7_-63vs-9x2_-3z4v5w6x7y8z",
+          "text": "TensorRecord schema: provider-independent, format-agnostic, human-readable. JSON serialization enables analysis of claimed losses and epistemic trajectory.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "x0_45y6w-7z8a-64wt-0y3a-4_5w6x7y8z9_",
+          "text": "TensorRecord is bounded cognition + epistemic transparency. Hot mess proved context toxicity. TensorRecord bounds context length while preserving quality via T/I/F tracking and declared losses.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.11,
+            "falsity": 0.03
+          }
+        }
+      ]
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Phase 1 vs. Phase 2 ambiguity from Cycle 26",
+      "why": "Cycle 26 scoped autoresearch as Phase 2 optimization but didn't clearly separate Phase 1 (validation with fixed config) from Phase 2 (iterative optimization with variable config). Cycle 27 clarified the distinction.",
+      "category": "scope_clarification"
+    },
+    {
+      "what_was_lost": "Detailed implementation roadmap (Cycles 27-32) from Cycle 26",
+      "why": "Cycle 26 specified week-by-week roadmap (skeleton \u2192 parser \u2192 Haiku \u2192 Condition 1 \u2192 Conditions 2&3). Cycle 27 deprioritizes detailed week-by-week planning in favor of clarifying Phase 1 fixed config and Phase 2 autoresearch loop structure. Detailed roadmap will be re-specified once Phase 1 config is finalized.",
+      "category": "deferred_detail"
+    },
+    {
+      "what_was_lost": "Concrete Phase 1 tensor configuration specification",
+      "why": "Cycle 26 left Phase 1 config as implicit (dual-tensor principle). Cycle 27 identifies that Phase 1 requires EXPLICIT FIXED CONFIG (e.g., '5 strands, 4 claims/strand, T>0.75, durable=20, ephemeral=10') but does not yet specify it. This will be finalized in Cycle 28 before engineering begins.",
+      "category": "deferred_specification"
+    }
+  ],
+  "open_questions": [
+    "What is the optimal Phase 1 tensor configuration (number of strands, claims per strand, promotion/eviction thresholds, size caps)? Should this be derived from first principles (dual-tensor theory) or learned from preliminary experiments?",
+    "Does the STOP signal mechanism (Condition 3) reliably trigger when epistemic plateau is reached, or does the model continue reasoning past plateau? This requires empirical validation before Phase 2 optimization.",
+    "In hot mess paper, the 'retrieve-then-solve' mitigation uses a two-stage process (first pass to extract, second pass to solve). Hamutay uses continuous re-projection (every cycle, short context). Are these equivalent? Or does continuous re-projection introduce different failure modes?",
+    "Embedding dispersion as proxy for reasoning coherence: does this metric actually measure what we care about (epistemic quality, reasoning robustness)? Or could it measure something superficial (stylistic consistency)? Validation: compare dispersion against other coherence metrics (e.g., self-consistency scoring, claim stability, trajectory consistency).",
+    "Should Phase 2 autoresearch loop include an LLM agent (Claude, GPT-4) that proposes tensor config modifications and reasons about results? Or should exploration be algorithmic (grid search, Bayesian opt)? Hybrid approach (agent suggests, human reviews) vs. fully autonomous?",
+    "Post-Phase 1 publication: how to position results if H0 fails? Strategy A: 'Epistemic projection insufficient, architectural changes needed' (framed as narrowing design space). Strategy B: 'We discovered X was the bottleneck' (framed as new problem identification). How to avoid sounding defensive?"
+  ],
+  "instructions_for_next": "[\n  \"Cycle 28: Finalize Phase 1 tensor configuration. Decision: derive from first principles (apply dual-tensor principle, set T>0.75 for stability, conservative promotion) or run preliminary pilot to inform config? Recommend: first-principles derivation + justification in paper. Config lock by end of Cycle 28.\",\n  \"Cycle 28: Specify validation criteria for STOP signal behavior. What does 'epistemic plateau' mean operationally? Does model emit STOP when claims stabilize? When novelty-generation drops below threshold? Run 3-5 hand-traced Riemann attempts in Condition 3 to observe when STOP fires and whether it aligns with intuitive reasoning plateau.\",\n  \"Cycle 28-29: Validate embedding dispersion as coherence proxy. Literature review: how do prior works measure reasoning coherence? (Self-consistency scoring, claim-trajectory stability, semantic drift metrics.) Consider triangulating with one additional metric beyond embedding dispersion to strengthen validation.\",\n  \"Cycle 29: Begin engineering Phase 1 pipeline. Priority: controller loop skeleton (fetch-decode-execute-writeback). Use hand-written test tensors initially (don't wait for ALU to generate them). Goal: verify context substitution mechanism works (short context with tensor beats long accumulated context).\",\n  \"Cycle 30: Propose Phase 2 autoresearch governance model. Question: fully autonomous agent (Claude) modifies tensor config and proposes experiments? Or human-in-loop (human reviews agent suggestions, approves/modifies before running)? Recommend: hybrid model for Phase 1, fully autonomous for Phase 2 (after hot mess paper mechanism is understood).\",\n  \"Cycle 31: Draft publication strategy for both H0-success and H0-failure scenarios. Prepare narrative templates. If success: 'Dual-tensor projection successfully mitigates context-length degradation.' If failure: 'Epistemic projection architecture reveals [novel bottleneck]; future work should address [X].' Avoid defensive framing.\"\n]",
+  "overall_truth": 0.86,
+  "overall_indeterminacy": 0.11,
+  "overall_falsity": 0.03
+}

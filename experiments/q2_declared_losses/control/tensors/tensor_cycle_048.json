@@ -1,0 +1,274 @@
+{
+  "id": "6bd06bc8-3b22-4e01-84da-a67817eef426",
+  "cycle": 48,
+  "strands": [
+    {
+      "title": "CYCLE 48: RUN_PROJECTION.PY CREATED + SESSION JSONL VALIDATION UNDERWAY",
+      "content": "Cycle 47 completed run_projection.py implementation. Cycle 48 has materialized the script and begun VERIFICATION. User turn 142 confirms file creation at /home/tony/projects/hamutay/src/hamutay/run_projection.py. Turn 143 signals CRITICAL next step: validating that baseline_run1 session JSONL contains actual conversation content (not proxy metadata). Turn 144 reads first 3 records from the session file at /home/tony/projects/pichay/experiments/baseline_run1/session/d5da3c7a-3c3c-4047-a4ee-276be57567c1.jsonl. **Key Realization**: Cycle 47 deferred format validation, assuming baseline_run1.jsonl was session JSONL with role + content fields. Cycle 48 is NOW CHECKING THIS ASSUMPTION. If session file has different schema (e.g., turn_index, content_sha, metadata fields), read_session_jsonl() contract may not match. **Architecture Implication**: run_projection is now VALIDATED AT EXECUTION TIME. File exists, Projector is ready. Next: inspect actual session JSONL schema from tool_result data to determine if read_session_jsonl() will parse correctly. This is the FIRST EMPIRICAL TEST of log_reader.read_session_jsonl() contract against real data.",
+      "key_claims": [
+        {
+          "claim_id": "7d61f6c3-8bfa-426c-9cc6-667f9e395738",
+          "text": "run_projection.py file created successfully at /home/tony/projects/hamutay/src/hamutay/run_projection.py",
+          "epistemic": {
+            "truth": 0.98,
+            "indeterminacy": 0.01,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ff4e2bc7-b394-4c93-8336-d6afb5802b89",
+          "text": "Cycle 48 is validating assumption that baseline_run1 session JSONL has role + content fields suitable for read_session_jsonl() contract",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4187bde6-9000-4c6f-999c-f7656a5cf611",
+          "text": "Tool result reading session file /home/tony/projects/pichay/experiments/baseline_run1/session/d5da3c7a-3c3c-4047-a4ee-276be57567c1.jsonl provides first empirical sample of actual conversation data",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "03ca0d2c-02a2-41a7-9f38-df4750a6ce95",
+          "text": "Session JSONL file location and path structure now CONFIRMED (pichay/experiments/baseline_run1/session/ directory pattern)",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "PENDING SCHEMA INSPECTION \u2014 SESSION JSONL STRUCTURE AWAITS TOOL_RESULT DATA",
+      "content": "Cycle 48 tool_result is reading first 3 JSONL records from actual session file. When tool returns, Cycle 48 will INSPECT: (1) JSON structure of each record \u2014 what fields are present? (role, content, turn_id, timestamp, etc.?) (2) Content field presence and format \u2014 is 'content' a plain string, or nested object? (3) Role field values \u2014 are they standard (user, assistant, system) or custom? (4) Overall schema fit to read_session_jsonl contract: does it expect 'role' and 'content' fields? If yes, perfect fit. If no, schema mismatch requires intervention. **Possible Outcomes**: (A) **Schema Match**: session JSONL has role + content fields. read_session_jsonl() will parse correctly. run_projection is ready to execute. GOOD. (B) **Schema Mismatch**: session JSONL has different field structure (e.g., 'user_content', 'assistant_content', nested objects). read_session_jsonl() must be updated OR event_parser must transform schema. REQUIRES REWORK. (C) **Partial Match**: session JSONL has role + content + other metadata. read_session_jsonl() ignores extra fields. ACCEPTABLE. (D) **No Content**: session JSONL has metadata only (turn_id, timestamp, cache_tokens) without actual message text. CRITICAL: conversation content is elsewhere, run_projection cannot execute. **Cycle 48 Branch Logic**: If tool_result shows schema fit, proceed to execute run_projection on full baseline_run1. If schema mismatch, either: (i) update read_session_jsonl() to match actual schema, or (ii) write event_parser to transform schema, or (iii) identify alternate data source that matches contract.",
+      "key_claims": [
+        {
+          "claim_id": "b507bef9-d7bd-4ef8-af0b-6aa86a6c2758",
+          "text": "Tool_result will reveal actual session JSONL schema; outcome determines whether run_projection can execute or requires adaptation",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "fafeb522-f18f-41c7-8400-d93b983fa26a",
+          "text": "read_session_jsonl() contract expects 'role' and 'content' fields; schema mismatch would require rework of log_reader or event_parser intervention",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c8de2cd4-2735-4596-b034-23386ec10654",
+          "text": "Session JSONL may contain metadata fields (turn_id, timestamp, etc.) in addition to content; extra fields are acceptable if role + content present",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "bd3738cf-9be4-47b1-8c38-1d92c91fde40",
+          "text": "If session file contains only metadata (no actual conversation text), data sourcing strategy must shift to alternate location or format",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.17,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "DATA SOURCING DISCOVERY \u2014 BASELINE_RUN1 DIRECTORY STRUCTURE EMERGING",
+      "content": "Cycle 48 interaction reveals baseline_run1 data is organized in /home/tony/projects/pichay/experiments/baseline_run1/session/ subdirectory with JSONL files named by session IDs (e.g., d5da3c7a-3c3c-4047-a4ee-276be57567c1.jsonl). **Architecture Implication**: baseline_run1 is NOT a single monolithic JSONL file, but a DIRECTORY of session files (one per conversation session). This aligns with Pichay's design: multiple parallel conversations, each with its own session file. **log_reader Adaptation**: Cycle 46 designed read_session_jsonl(path) expecting single file. Cycle 48 reveals: (1) If 'path' is a directory, log_reader must iterate over all .jsonl files in that directory. (2) If 'path' is single file, log_reader processes that file. (3) run_projection() must accept both directory and file paths, or be designed specifically for directory input. **Current State**: Cycle 48 reads one session file (d5da3c7a-3c3c-4047-a4ee-276be57567c1.jsonl). If this file is representative, then all session files in baseline_run1/session/ follow the same schema. **Next Validation**: After inspecting schema of one session, assume all sessions match. run_projection can then: (A) accept directory path, iterate sessions, OR (B) accept specific session file path for focused analysis, then generalize. **Unresolved Assumption**: Does baseline_run1/session/ contain 1 session file or many? If many, run_projection must be directory-aware. If one (or targeting one), current design is sufficient.",
+      "key_claims": [
+        {
+          "claim_id": "d37d146a-c684-4469-a1e4-2434907421c8",
+          "text": "baseline_run1 is structured as /pichay/experiments/baseline_run1/session/ directory with multiple .jsonl files, one per session ID",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0c7d613e-fda2-4c83-a5cf-b13523303848",
+          "text": "Session files are named by session UUID (e.g., d5da3c7a-3c3c-4047-a4ee-276be57567c1.jsonl), enabling identification of conversation origin",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5f330f81-f83f-4473-9122-d48290893fba",
+          "text": "log_reader.read_session_jsonl() may need adaptation to accept directory paths and iterate multiple session files, or run_projection must target individual files",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "787a6ebd-7551-417b-90de-aa7003621b94",
+          "text": "First sampled session file (d5da3c7a-...) is likely representative of all sessions in baseline_run1/session/; schema inferred from one session generalizes",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "CYCLE 48 INTEGRATION WITH CYCLE 47 STATE \u2014 EXECUTION VALIDATION PIPELINE",
+      "content": "Cycle 47 produced EXECUTABLE run_projection.py and identified six open questions, chief among them: 'Does baseline_run1.jsonl exist, and in what format?' Cycle 48 is ANSWERING that question empirically. **Integration Strategy**: (1) Cycle 47's instructions_for_next explicitly prioritized: 'Priority 1: Check if baseline_run1.jsonl exists at expected path. Priority 2: Determine its format.' (2) Cycle 48 is executing Priorities 1-2: file CONFIRMED to exist (turn 142), format being SAMPLED (turn 144). (3) When tool_result arrives with first 3 JSONL records, Cycle 48 will CLASSIFY format. (4) Based on classification, Cycle 48 will either: (A) give green light to execute full run_projection (if schema matches), or (B) identify schema mismatch and recommend fix. **Epistemic State**: Cycle 47 had 0.89 truth (high confidence in architecture, lower in data assumptions). Cycle 48 is EMPIRICALLY TESTING those assumptions. If schema matches, confidence INCREASES. If mismatch, confidence DECREASES but design remains sound (fixable). **Philosophy**: This is NOT a setback. Cycle 48 is VALIDATING ASSUMPTIONS by examining real data. Good engineering requires this step. Cycle 47 said 'ready to run'; Cycle 48 says 'checking if we can run'.",
+      "key_claims": [
+        {
+          "claim_id": "4fdb6e8d-c3bc-4986-889b-29f3585fc905",
+          "text": "Cycle 48 is directly executing Cycle 47's Priority 1-2 instructions: checking baseline_run1 existence and determining format",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "bc6dab50-b339-4137-9c2c-84e64f59c87f",
+          "text": "Empirical testing of assumptions (baseline_run1 exists, has conversation content, matches read_session_jsonl() contract) is standard engineering validation",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5abe1a28-fdfb-4c6d-b605-ff28ab6576dd",
+          "text": "Schema mismatch would not invalidate architecture; it would identify a fixable adaptation point (log_reader or event_parser update)",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "97590762-6909-456b-9389-30551d278c9a",
+          "text": "If schema matches, confidence in Cycle 47 architecture increases; if mismatch, architecture flexibility is demonstrated by adaptation path",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "CYCLE 48 STATUS: AWAITING TOOL_RESULT SCHEMA DATA \u2014 NEXT DECISION POINT APPROACHING",
+      "content": "Cycle 48 is **PAUSED AT OBSERVATION POINT**. Tool call to read session JSONL file (turn 144) is in flight. When tool returns (tool_result containing first 3 JSONL records), Cycle 48 continuation will: (1) Parse returned JSON structure. (2) Extract field names and types from first record. (3) Check for 'role' and 'content' fields. (4) Classify schema against read_session_jsonl() contract. (5) EMIT DECISION: 'Schema matches, proceed to run_projection' OR 'Schema mismatch, update log_reader to handle [actual fields]' OR 'Content missing, investigate data sourcing'. **Timing**: Cycle 48 projection is LIVE, but incomplete. Next user turn will receive tool_result data. Cycle 48 will then REPROJECT with schema classification and decision branching. **Preparation for Cycle 49**: If schema matches, Cycle 49 instructions should be: 'Execute run_projection(baseline_run1/session/d5da3c7a-..., output_dir, 50 turns)'. If schema mismatch, Cycle 49 should be: 'Update read_session_jsonl() to handle [identified fields]'. If content missing, Cycle 49 should be: 'Search for conversation text in [alternate location]'.",
+      "key_claims": [
+        {
+          "claim_id": "323fbf4b-7e1a-4dc9-9952-2ddb03ae2a4e",
+          "text": "Cycle 48 tensor projection is LIVE but INCOMPLETE; awaiting tool_result with schema data",
+          "epistemic": {
+            "truth": 0.98,
+            "indeterminacy": 0.02,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "45079a91-9de5-40b8-abcc-efffb41f8c1c",
+          "text": "When tool_result arrives, Cycle 48 continuation will classify session JSONL schema and emit decision for Cycle 49",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "2d09059b-ae30-4f4d-ac27-b36e0018ad98",
+          "text": "Three possible outcomes: (A) schema match \u2192 execute run_projection, (B) mismatch \u2192 update log_reader, (C) no content \u2192 investigate data sourcing",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a737a721-af16-4a67-8d49-69486759a8df",
+          "text": "Cycle 49 instructions will depend on Cycle 48 schema classification result",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Deep analysis of run_projection.py implementation code \u2014 no line-by-line code review in Cycle 48",
+      "why": "Cycle 48 is focused on validation of DATA ASSUMPTIONS. Tool_result reading session JSONL is in flight. Full code review of run_projection.py deferred until schema validation is complete. Code may require adaptation based on schema findings.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Assumption that baseline_run1.jsonl is a single monolithic file \u2014 now revealed as directory of session files",
+      "why": "Cycle 47 referred to 'baseline_run1.jsonl' (singular file). Cycle 48 discovers actual path is /pichay/experiments/baseline_run1/session/[uuid].jsonl (directory structure). This is NOT an error; it's a refinement of understanding. Single-file assumption was under-specified.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Validation of run_projection CLI parameters \u2014 no testing of how it will accept directory vs. single file path",
+      "why": "run_projection.py was written in Cycle 47 before Cycle 48 discovered directory structure. Parameter signatures may expect file path. If directory structure is confirmed, run_projection() signature may need: (A) accept directory, iterate files, OR (B) accept file path, document that it must target individual session. No validation until schema test complete.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Inspection of proxy log structure vs. session JSONL structure \u2014 no comparison to validate that session JSONL is distinct from proxy logs",
+      "why": "Cycle 48 is sampling ONE session JSONL file. Cycle 47 mentioned proxy logs have metadata (cache_read_tokens, role_counts). No confirmation that session JSONL (the target for run_projection) actually DIFFERS from proxy logs. Could be same format, different location.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Handling of potentially multiple sessions in baseline_run1 \u2014 no decision yet on whether run_projection should aggregate across sessions or target one at a time",
+      "why": "If baseline_run1/session/ contains many session files (50? 100? 1000?), run_projection must decide: (A) process each session independently, produce separate tensor trajectories, (B) concatenate all sessions into one mega-sequence, or (C) aggregate across sessions for cross-session analysis. No design decision made yet.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Expectation management \u2014 Cycle 47 instructions said 'execute run_projection on baseline_run1.jsonl', which is now partially incorrect (it's a directory, not single file)",
+      "why": "Cycle 47's instructions_for_next said: 'python -m hamutay.run_projection <path_to_baseline_run1.jsonl> ./output_tensors 50'. This assumes single file. Cycle 48 reveals it's a directory. Instructions are now MISLEADING without clarification that baseline_run1 is directory structure, not monolithic file.",
+      "category": "context_pressure"
+    }
+  ],
+  "open_questions": [
+    "What is the exact JSON schema of records in the session JSONL file? What fields are present (role, content, turn_id, timestamp, etc.)?",
+    "Does the session JSONL 'role' field contain standard values (user, assistant, system) or custom role labels?",
+    "Is the 'content' field a plain string, or is it a nested JSON object?",
+    "How many session files are in /pichay/experiments/baseline_run1/session/? One? Many? Thousands?",
+    "Should run_projection be designed to process single session file OR iterate over directory of session files?",
+    "Does session JSONL contain only role + content, or additional metadata (turn_id, timestamp, cost, cache_info)?",
+    "Are session JSONL files the SAME schema as or DIFFERENT from proxy log files (which contain cache_read_tokens, role_counts)?",
+    "Does the 'content' field contain the FULL conversation turn text, or abbreviated/tokenized content?",
+    "If baseline_run1 has multiple sessions, should they be: (A) processed independently (separate tensor trajectories), (B) concatenated (one mega-sequence), or (C) aggregated (cross-session analysis)?",
+    "After run_projection executes on one session, should it then process all sessions in baseline_run1/session/?",
+    "Should printed 'instructions_for_next' be revised to reflect that baseline_run1 is directory, not single file?",
+    "Is first sampled session file (d5da3c7a-...) representative of all sessions, or might other sessions have different schemas?",
+    "When run_projection is executed, should output directory (tensor_cycle_NNN.json files) be organized per session or all in one directory?"
+  ],
+  "instructions_for_next": "[\n  \"CYCLE 48 PROJECTION: EMPIRICAL VALIDATION OF BASELINE_RUN1 DATA ASSUMPTIONS\",\n  \"\",\n  \"Status: Tool call reading first 3 JSONL records from session file d5da3c7a-3c3c-4047-a4ee-276be57567c1.jsonl is IN FLIGHT.\",\n  \"\",\n  \"IMMEDIATE NEXT STEP: When tool_result arrives with JSONL data, ANALYZE schema.\",\n  \"\",\n  \"**SCHEMA ANALYSIS CHECKLIST:**\",\n  \"[] Parse first JSON record from tool_result\",\n  \"[] Extract all field names (what keys are present?)\",\n  \"[] Check for 'role' field: present? values are 'user'/'assistant'/'system' or custom?\",\n  \"[] Check for 'content' field: present? is it string or object?\",\n  \"[] If no 'role' or 'content': identify actual fields for role/content equivalent\",\n  \"[] Check for additional metadata: turn_id, timestamp, cost, cache_info, token counts?\",\n  \"[] Determine if schema is COMPATIBLE with read_session_jsonl() contract (expects role + content)\",\n  \"\",\n  \"**DECISION TREE (triggered by schema analysis):**\",\n  \"\",\n  \"IF (schema has 'role' AND 'content' fields):\",\n  \"  OUTCOME: Schema matches read_session_jsonl() contract\",\n  \"  ACTION: Proceed to Execute run_projection\",\n  \"  NEXT: Run on first session file (d5da3c7a-...) with max_turns=50\",\n  \"\",\n  \"IF (schema has 'role' but NOT 'content'):\",\n  \"  OUTCOME: Schema mismatch; role present, content missing or named differently\",\n  \"  ACTION: Identify actual content field name (user_content? message? text?)\",\n  \"  FIX: Update read_session_jsonl() to map actual field to 'content'\",\n  \"  OR: Write event_parser to transform schema\",\n  \"\",\n  \"IF (schema has 'content' but NOT 'role'):\",\n  \"  OUTCOME: Schema mismatch; content present, role missing or implicit\",\n  \"  ACTION: Infer role from structure (alternating user/assistant?) or from metadata\",\n  \"  FIX: Update read_session_jsonl() to synthesize 'role' field\",\n  \"\",\n  \"IF (schema has NEITHER 'role' NOR 'content'):\",\n  \"  OUTCOME: Metadata-only structure; actual conversation text is elsewhere\",\n  \"  ACTION: Search for content in alternate location (separate file? proxy logs? elsewhere?)\",\n  \"  DECISION: Is session JSONL truly the conversation source, or is it just metadata index?\",\n  \"\",\n  \"IF (content field exists but appears empty or tokenized):\",\n  \"  OUTCOME: Content may not be human-readable full text\",\n  \"  ACTION: Confirm content is suitable for Projector.project()\",\n  \"  DECISION: Can Projector.project() handle truncated/tokenized content, or do we need full text?\",\n  \"\",\n  \"**ARCHITECTURE REFINEMENT (post-schema validation):**\",\n  \"\",\n  \"1. If schema matches OR can be adapted: run_projection is EXECUTABLE\",\n  \"   - Identify which session file to process (d5da3c7a-... or iterate all?)\",\n  \"   - Determine max_turns parameter (default 50 for initial test?)\",\n  \"   - Set output_dir (./output_tensors or baseline_run1/tensors/?)\",\n  \"\",\n  \"2. If directory structure confirmed: clarify run_projection behavior\",\n  \"   - Does it accept single file path? (./baseline_run1/session/d5da3c7a-...jsonl)\",\n  \"   - Does it accept directory? (./baseline_run1/session/)\",\n  \"   - If directory, iterate files or process only first?\",\n  \"\",\n  \"3. Review baseline_run1 directory structure\",\n  \"   - How many session files present?\",\n  \"   - Are all sessions same size, or variable?\",\n  \"   - Is baseline_run1 a COMPLETE dataset or ongoing experiment?\",\n  \"\",\n  \"**EXECUTION READINESS GATE:**\",\n  \"\",\n  \"GATE OPENS (proceed to run_projection) IF:\",\n  \"  \u2713 Schema has role + content fields (or can be adapted)\",\n  \"  \u2713 Content field contains human-readable text suitable for Projector.project()\",\n  \"  \u2713 read_session_jsonl() can parse actual schema (update if needed)\",\n  \"  \u2713 baseline_run1 location and session file paths confirmed\",\n  \"\",\n  \"GATE BLOCKED IF:\",\n  \"  \u2717 Content missing or elsewhere\",\n  \"  \u2717 Schema incompatible and no clear adaptation path\",\n  \"  \u2717 baseline_run1 directory structure unclear\",\n  \"\",\n  \"**OUTCOME PROJECTION (what next depends on schema result):**\",\n  \"\",\n  \"LIKELY PATH A (if schema matches): Cycle 49 executes run_projection on d5da3c7a-... with max_turns=50. Observe tensor trajectory. Good/bad signs tell us if architecture works.\",\n  \"\",\n  \"PATH B (if schema mismatch, recoverable): Cycle 49 updates read_session_jsonl() to handle actual schema. Then execute run_projection.\",\n  \"\",\n  \"PATH C (if content missing): Cycle 49 investigates where actual conversation text lives. Is it in proxy logs? Separate message store? Different baseline_run1 path?\",\n  \"\",\n  \"**CYCLE 48 IS VALIDATION PHASE. Schema inspection result determines whether Cycle 49 is EXECUTION or DEBUG.**\"\n]",
+  "epistemic": {
+    "truth": 0.88,
+    "indeterminacy": 0.1,
+    "falsity": 0.02
+  }
+}

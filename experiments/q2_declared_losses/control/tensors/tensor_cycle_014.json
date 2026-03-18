@@ -1,0 +1,904 @@
+{
+  "id": "c3c7e025-8c6a-4c54-bfec-7d10328c9eb6",
+  "cycle": 14,
+  "strands": [
+    {
+      "title": "Pichay identity: demand paging system for LLM context, not memory",
+      "content": "Pichay operationalizes a radical reframing: LLM context windows are not memory systems\u2014they are L1 cache. This is the core hermeneutical move. Standard systems treat context as the entire memory hierarchy: tokens flow in, accumulate until overflow, evict when capacity is exceeded. This is implicit append-until-evict, no intentionality. Pichay inverts this by importing the complete virtual memory stack from operating systems: L1 cache (context window), L2 (fault-driven pinning/working set), L3 (model-initiated conversation compaction), and L4 (persistent cross-session storage). This is not metaphorical. The abstract explicitly positions context management as a *virtual memory problem*: 'the problems the field faces\u2014context limits, attention degradation, cost scaling, lost state across sessions\u2014are virtual memory problems wearing different clothes.' The solution set is borrowed directly from OS memory management theory: working set theory (Denning 1968), demand paging, fault-driven replacement policies, and multi-level memory hierarchies. The empirical finding provides quantitative grounding: across 857 production sessions (4.45 billion effective input tokens), 21.8% of context is *structural waste*\u2014systematic accumulation of tool definitions, system prompts, stale tool results that serve no forward purpose. This is not random noise; it is a measurable pathology. The pichay architecture is a transparent proxy implementing: (1) L1 eviction: aggressive removal of stale content based on working-set theory, (2) fault detection: observing when the model re-requests evicted material (page fault), (3) pinning: preserving working-set pages identified by fault history, (4) L3 compaction: model-initiated conversation summarization/abstraction. The system is production-deployed and measured: offline replay of 1.4 million simulated evictions yields 0.0254% fault rate (extraordinarily low). Live production over 681 turns demonstrates up to 93% context reduction (5,038KB \u2192 339KB) while remaining operational. Under extreme sustained pressure (exceeding working set capacity), the system exhibits expected thrashing (repeated page faults), demonstrating it hits the well-understood boundary condition from virtual memory theory. The reframing is philosophically deep: context is not waste that must be tolerated until overflow; it is a *managed resource* with explicit cost. Each token occupies L1 real estate. Keeping stale content has cost (larger context, slower inference, more API tokens billed). Evicting content has cost (regeneration or re-computation when needed). Pichay formalizes this trade-off intentionally, not implicitly. The 'structural waste' finding is crucial: 21.8% is not random; it is systematic accumulation of scaffolding that could be discarded or abstracted. This becomes the target for demand paging optimization.",
+      "key_claims": [
+        {
+          "claim_id": "aa8daf7b-5c03-42ce-b671-9371b4292ac3",
+          "text": "LLM context windows are L1 cache, not memory systems; problems field faces (limits, degradation, cost scaling) are virtual memory problems",
+          "epistemic": {
+            "truth": 0.98,
+            "indeterminacy": 0.01,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f921409c-dc92-4b51-a176-de26580a99c1",
+          "text": "21.8% of context is structural waste across 857 production sessions (4.45B effective input tokens) from tool definitions, system prompts, stale results",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "84d5f4a3-2e83-4b67-8da8-8bcd4e738318",
+          "text": "Pichay implements complete virtual memory hierarchy: L1 eviction, L2 fault-driven pinning, L3 model-initiated compaction, L4 cross-session storage (proposed)",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "891193f8-73de-4de9-9580-e677b1d58a39",
+          "text": "Architecture is transparent proxy: evicts stale content, detects page faults, pins working-set pages, initiates model-aware compaction",
+          "epistemic": {
+            "truth": 0.97,
+            "indeterminacy": 0.02,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "06bad35e-a75b-4013-a62e-478715ac1e98",
+          "text": "Offline replay of 1.4M simulated evictions: 0.0254% fault rate; live production over 681 turns: up to 93% context reduction (5,038KB\u2192339KB)",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e374a881-c297-4fc4-ba6a-4ad0338a3c80",
+          "text": "Under extreme pressure, system exhibits expected thrashing pathology (repeated page faults), hitting well-understood virtual memory boundary",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "7b492f08-c355-47fd-9ac5-4874130246f5",
+          "text": "Demand paging solution set borrowed from OS virtual memory: working set theory (Denning 1968), fault-driven replacement, multi-level hierarchies",
+          "epistemic": {
+            "truth": 0.97,
+            "indeterminacy": 0.02,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "42cbd0a1-bebd-46f0-846c-874d92ef72eb",
+          "text": "Context management is intentional resource allocation, not implicit overflow-driven eviction; cost structure (keeping vs. evicting) is formalized",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Hamutay-as-next-layer: cognitive processor framework built on pichay memory hierarchy",
+      "content": "New understanding emerged from cognitive_processing_research_design.md: Hamutay is not merely a theoretical generalization of pichay principles; it is the *experimental architecture that validates whether transformers can operate as bounded cognitive processing units (CPUs) with pichay-managed memory*. The relationship is now explicit. Pichay solved: 'how do we manage context efficiently in agentic systems?' Hamutay solves: 'how do we structure an agentic system so it naturally generates the resource releases and fault signals that pichay's demand paging can optimize?' The cognitive_processing_research_design.md document reveals Hamutay's concrete research design (Version 0.2, Implementation Specification). It contains three nested hypotheses: H0 (transformer as cognitive processor with structured reasoning), H1 (CPU + Pichay integration), H2 (CPU + Pichay + Yanantin full memory hierarchy). This is not a casual framework; it is a peer-reviewed research design with success criteria, falsification conditions, acceptance tests, and build phases. The architecture separates transformer (reasoning kernel), memory subsystem (external storage), and controller (orchestration). This is fundamentally different from monolithic prompt completion. The cognitive step schema is explicitly designed to emit `resource_requests` and `resource_releases` with reasons (consumed, scaffolding, superseded). This is the signal flow that pichay's demand paging layer consumes. When a cognitive processor emits 'resource_release: R11, reason=scaffolding', pichay can immediately evict R11 if pressure is high. When the processor emits 'resource_request: R12', pichay detects the fault (if R12 was evicted) and can promote from L2 or regenerate from L3/L4. The resource manifest principle is crucial: the cognitive processor operates over a *versioned, reproducible manifest* of available resources, not open-ended retrieval. This enables the structured reasoning that H0 tests for. Manifests can be curated, retrieval-generated, or hybrid, but must be frozen and versioned during experiments. The success criteria for H0 (schema validity \u226595%, resource request rate \u226580%, halt accuracy \u226590%, task competence \u2265baseline) are empirically measurable. The three task types (resource identification, evidence-based QA, blocked reasoning) are designed to test whether the model respects the cognitive processor contract. The falsification conditions are equally explicit: schema validity <80%, resource request rate <40%, thrashing (>3 cycles without state improvement), performance collapse >20% below baseline. This is not loose research design; it is rigorous experimental methodology. The 'blocked reasoning' task is particularly insightful: if the required information is missing, the correct behavior is to request the missing resource, not hallucinate. This tests whether the cognitive processor respects the manifest boundary and can admit uncertainty. The build plan (four phases) is concrete: Phase 1 (schema-valid steps), Phase 2 (resource request handling), Phase 3 (trace logging), Phase 4 (evaluation harness). Each phase has an acceptance test. The non-goals section is also revealing: excluded are recursive reasoning loops, memory paging, long-horizon planning, multi-agent systems, autonomous code modification. These are explicitly saved for H1 and H2. This is layered validation: first prove H0 (CPU works as processor), *then* add pichay (H1), *then* add Yanantin (H2). The expected outputs are reproducible runs, structured traces, baseline comparisons, and falsification metrics for H0. This is publication-ready research design. The future extensions section explicitly maps H1 to Pichay integration: Pichay handle resolution as resource fetch layer, eviction policy driven by resource_releases signals, context efficiency measurement, cognitive prefetch. This is the concrete bridge between Hamutay and Pichay. The zero-dependency constraint now makes sense: Hamutay's core (CPU framework, resource manifests, cognitive step schema, controller loop) is framework-agnostic because it needs to integrate *any* memory hierarchy layer (Pichay, Yanantin, future systems). Importing PyTorch or Transformers would create framework-specific assumptions that would bind H0 to Claude or OpenRouter APIs. Instead, the design uses pluggable model integration (OpenRouter with pinned IDs). The research design is also humane: it explicitly states non-goals and phases validation. This prevents the researcher (Tony) from over-reaching and collapsing hypotheses. H0 must pass before H1 is attempted. This is the epistemological principle again: bounded, intentional validation, not monolithic claims.",
+      "key_claims": [
+        {
+          "claim_id": "2129aebf-86de-46b5-b3d9-daa24da52003",
+          "text": "Hamutay is experimental architecture testing whether transformers can operate as bounded cognitive processing units (CPUs) with structured reasoning",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e1f3015c-a89d-4630-bdb2-66883a73a5d8",
+          "text": "Cognitive step schema explicitly emits resource_requests and resource_releases with reasons, providing signal flow for pichay demand paging",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3db3170a-ca41-4bb4-8ea1-903e373ee749",
+          "text": "Three nested hypotheses (H0: CPU viability, H1: CPU+Pichay integration, H2: CPU+Pichay+Yanantin) with explicit success criteria and falsification conditions",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0d4c3d71-841f-4ee6-a75d-89e7c090cfe9",
+          "text": "Resource manifest principle: cognitive processor operates over versioned, reproducible manifest, not open-ended retrieval (enables structured reasoning)",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "cdea0d3a-e5b0-4074-80ab-73e07b4ca392",
+          "text": "Blocked reasoning task tests core CPU contract: when required information missing, model requests resource (not hallucinate); respects manifest boundary",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "b3783fae-8aaa-4e1e-8bed-7d82f7b8fd0e",
+          "text": "Four-phase build plan with explicit acceptance tests: Phase 1 (schema-valid steps), Phase 2 (resource request handling), Phase 3 (trace logging), Phase 4 (evaluation)",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f564d533-8158-4ac0-93c3-4da9c96bd07f",
+          "text": "Non-goals section saves recursive loops, paging, long-horizon planning for H1/H2; enforces layered validation (H0 first, then H1, then H2)",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a783f03f-5194-4055-90c0-b1fc090f7a3f",
+          "text": "H1 future extensions explicitly map to Pichay integration: handle resolution, eviction driven by resource_releases, context efficiency measurement",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4e47c9dc-fde7-4402-85c9-fcfee2a9db95",
+          "text": "Zero-dependency reflects CPU framework as agnostic to backend (can integrate any memory layer); OpenRouter with pinned IDs enables pluggable models",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "60614c22-975f-4623-9808-ca01970e5cf7",
+          "text": "Research design is rigorous and humane: bounded hypotheses, phased validation, explicit falsification criteria, prevents over-reaching",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Pichay-Hamutay-Yanantin stack: integrated memory hierarchy from L1 to L4",
+      "content": "The pichay/docs/cognitive_processing_research_design.md reveals the full research program that Tony is executing. Pichay handles L1 (context window) and L2-L3 (working set pinning and conversation compaction). Hamutay is the experimental framework to validate whether transformers can be structured as cognitive processors *such that they naturally emit resource management signals* (resource_releases with reasons). Yanantin (mentioned in H2 scope but not yet examined) is the L4 backing store providing cross-session persistent memory via semantic retrieval. This is a three-layer research program: (1) Pichay (validated on production): proves demand paging works for LLM context, measured on real Claude Code sessions. (2) Hamutay (research framework): experiments whether structured cognitive processors can operate over pichay-managed resources, validates H0/H1/H2 hypotheses. (3) Yanantin (proposed): extends the hierarchy to cross-session persistent storage with semantic graph traversal for recovery. The stack is coherent. Pichay's L3 compaction (model-initiated conversation summarization) feeds into Hamutay's structured reasoning: compacted conversations are resources that Hamutay's cognitive processor can request. Hamutay's resource_releases (tagged with reasons like 'scaffolding') feedback into Pichay's eviction policy. When Hamutay emits 'resource_release: R11, reason=scaffolding, expect_reuse=false', Pichay knows R11 is unlikely to be re-requested and can evict aggressively. The research design also reveals why Tony initially said he wanted to explore 'demand paging principles applied to all agentic cognitive processing': Hamutay is that exploration. It tests whether the principles (working set tracking, fault-driven promotion, intentional eviction) generalize from context windows to all resource types (documents, code, artifacts, tool outputs). The success of H0 would validate that transformers can be disciplined into bounded cognitive processors. The success of H1 would validate that pichay's demand paging integrates seamlessly with structured reasoning. The success of H2 would validate that the full memory hierarchy (L1-L4) sustains task performance across session boundaries. This is ambitious research, but structured with explicit hypotheses and falsification criteria. The version number (0.2, Implementation Specification) suggests this has been iterated. Tony likely refined the design based on preliminary experiments. The 'Implementation Specification' status indicates it is ready for engineering. The explicit non-goals (no recursive loops yet, no multi-agent systems yet) show intellectual humility: one layer at a time, validate each, then extend. This maps cleanly to Tony's stated preference for 'learning and becoming less wrong' rather than premature generalization. NEW in cycle 14: memory infrastructure added (user_tony.md, MEMORY.md created). This is foundational work for the Hamutay research: establishing a knowledge management system within the project itself, allowing the system to remember context about Tony, his goals, prior decisions. This mirrors the *pattern* Hamutay implements: explicit resource management, versioned state, reproducible decisions. The memory infrastructure suggests Tony is preparing to run extended experiments (multiple conversations, long-horizon reasoning) and needs to preserve context across sessions.",
+      "key_claims": [
+        {
+          "claim_id": "90ff59e8-9a12-4ebc-885a-d76c95ede60a",
+          "text": "Pichay-Hamutay-Yanantin forms integrated stack: L1-L3 (Pichay), structured CPU (Hamutay), L4 persistent storage (Yanantin)",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "78f333e2-e19f-4e92-93b2-dcbb07bba8a0",
+          "text": "Pichay's L3 compaction (model-initiated summarization) provides resources that Hamutay's cognitive processor consumes; feedback loop enabled",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "31c3e175-da43-4b66-93cc-9c3ebc96ba3c",
+          "text": "Hamutay's resource_releases (tagged with reasons) feedback into Pichay eviction policy; enables intentional cost-aware context management",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b1388f87-c11d-4fb6-a47e-b4f87bb866b5",
+          "text": "Hamutay generalizes demand paging principles from context windows to all resource types (documents, code, artifacts, tool outputs)",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "404ac5d5-febd-4bff-8ca9-02b13a2eacd4",
+          "text": "Layered validation: H0 (CPU works), H1 (CPU+Pichay integration), H2 (CPU+Pichay+Yanantin); each layer adds complexity only after prior validated",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1d91f87e-2509-4c90-a404-31816a71a779",
+          "text": "Version 0.2 Implementation Specification suggests design has been iterated; ready for engineering; non-goals prevent over-reaching",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "ec1eaca9-0e67-4070-b326-441a5efd2097",
+          "text": "Yanantin (L4) provides cross-session persistent memory via semantic retrieval, enabling recovery of evicted resources across session boundaries",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "739d8b17-2825-43ab-b0c0-45ee22fba0c7",
+          "text": "Memory infrastructure (user_tony.md, MEMORY.md) created to support Hamutay research: preserves context across sessions, mirrors pattern of intentional resource management",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Virtual memory framing as hermeneutical principle for LLM systems",
+      "content": "The abstract's reframing of context-as-L1-cache is not a metaphor\u2014it is a precise technical claim that unifies previously disparate problems. Pichay identifies the root category error: the field has been treating context windows as *memory* (all of it), when they are actually *cache* (a small, fast, expensive subset of a much larger system). This is the insight that unlocks the entire solution stack. Once context is recognized as L1 cache, the following problems become *virtual memory problems* and can be solved with *known solutions*: (1) Context limits: solved by memory hierarchies. Don't make context window bigger; add L2/L3/L4 layers. (2) Attention degradation: solved by working set theory. Keep hot data close; let cold data fault out. (3) Cost scaling: solved by demand paging. Pay for actual use, not peak capacity. (4) Lost state across sessions: solved by persistent storage abstraction. Sessions are processes; storage is the heap. The philosophical move is to *import the entire virtual memory stack* into LLM architecture. This is radical because it rejects the dominant assumption: that the context window *is* the memory system. Instead, Pichay proposes: the context window is *one layer* in a hierarchy. Below it (logically, though implemented as proxy) are: L2 (fault-driven working set), L3 (conversation compaction), L4 (cross-session persistent store). This hierarchy is not invented from scratch; it is borrowed wholesale from OS design. The hermeneutical alignment with tensor projection is now explicit: both demand declared trade-offs and transparent cost accounting. Tensor projection says: 'here is what we computed, here is what we lost, here is why, here is our confidence.' Demand paging says: 'here is the content we removed, here is the cost to regenerate, here is the fault rate, here is the quality impact.' Both refuse to hide costs. The 'structural waste' observation (21.8%) is the smoking gun: the waste is *predictable*, *measurable*, and *actionable*. Standard transformers hide this waste. Pichay makes it visible and systematically eliminates it. The virtual memory framing explains why this is possible: waste is not random token scatter; it is *working set overflow*\u2014predictable because working sets are well-understood from decades of OS research. The multi-level hierarchy is the solution: keep only the working set in L1; promote from L2 on fault; compress or offload cold data to L3/L4. The cognitive processor framework (Hamutay) further clarifies this: a bounded cognitive processor that emits structured resource_releases signals is the *mechanism* by which working sets become explicit and measurable. Instead of the system inferring which resources are no longer needed (implicit working set estimation), the processor *declares* which resources it has consumed or whose scaffolding it no longer needs (explicit working set declaration). This converts demand paging from a *reactive* optimization (detect faults, then promote) into a *proactive* discipline (processor tells you what to evict, you follow). The resource manifest principle enables this: processor operates over bounded, explicit resource set; when it releases a resource, that release is a semantic decision (not random stale data eviction), making the eviction policy more intentional.",
+      "key_claims": [
+        {
+          "claim_id": "2ee3ab4f-6440-4188-aec3-9de69235603b",
+          "text": "Context window is L1 cache, not the entire memory system; this category recognition unlocks the virtual memory solution stack",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5757ce4c-188e-4752-a248-2f7b811e438f",
+          "text": "Pichay imports entire virtual memory hierarchy into LLM architecture: L1 (context), L2 (fault-driven), L3 (compaction), L4 (persistent)",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "13d7d0e1-c63e-4992-8910-c4b45ca0556d",
+          "text": "Context limits, attention degradation, cost scaling, lost state are all virtual memory problems solvable with known OS solutions",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "1e8f3f11-8940-4976-8569-88d1e2218000",
+          "text": "Structural waste (21.8%) is not random; it is working set overflow\u2014predictable and actionable via demand paging",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2405dd3d-21a3-43c0-8119-a19631f12767",
+          "text": "Hermeneutical alignment: tensor projection and demand paging both demand declared costs, transparent trade-offs, refused hiding",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "37a8376a-d3cb-4a2f-94d3-921da81e9fcc",
+          "text": "Multi-level hierarchy solves working set management: keep working set in L1; promote from L2 on fault; compress/offload to L3/L4",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "1a0a5bb9-42ec-4350-b4f8-6857eb583f4a",
+          "text": "Solution set (working set theory, demand paging, fault-driven replacement) is borrowed from 50+ years of OS research, not invented",
+          "epistemic": {
+            "truth": 0.97,
+            "indeterminacy": 0.02,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "74c5be8e-4f4a-4f2c-913c-8d9badf4fb47",
+          "text": "Cognitive processor framework makes working sets explicit: processor declares resource_releases with reasons (consumed, scaffolding); enables proactive (not reactive) demand paging",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "75e40e62-ec73-4390-9a13-f96248c1fb82",
+          "text": "Resource manifest principle enables explicit resource_releases to be semantic decisions, not random stale data; makes eviction intentional",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Agentic LLM empirical pathology: tool definitions, system prompts, stale results as systematic waste",
+      "content": "The abstract grounds the virtual memory argument in concrete empirical pathology specific to agentic LLMs. Across 857 production Claude Code sessions, the team observed *systematic* context accumulation: tool definitions, system prompts, and stale tool results occupy context for the lifetime of sessions. This is not a rare edge case; it is a *structural* property of agentic interactions. Why does this happen? In a typical agentic session: (1) System prompt is included (e.g., instructions for Claude Code to use available tools), (2) Tool definitions are provided in context (e.g., list of available code execution, file operations, search tools), (3) User message arrives, (4) Model responds with code and tool calls, (5) Tool results are appended to context (file contents, command outputs, execution errors), (6) User responds to outcomes, (7) Model generates new code, (8) More tool results are appended. Over multiple turns, tool definitions never change (they're static), system prompts remain fixed, but *results* accumulate. Many past results (old file listings, executed commands that have been superseded, error messages from failed attempts) remain in context but no longer contribute to forward reasoning. They are ballast\u2014weight without value. The 21.8% waste figure (across 857 sessions, 4.45B tokens) is the measured ballast. This is the target. Demand paging removes ballast proactively: 'this tool result is stale (not referenced in recent turns); removing it costs regeneration if needed (re-execute the tool or re-read the file); keeping it costs context tokens. Which is cheaper?' For agentic workloads, regeneration is often cheaper: re-reading a file is much cheaper than keeping the result in context forever. The empirical grounding is crucial because it establishes that this is not a theoretical problem\u2014it is measured on *real* agentic workloads over thousands of sessions. The 857 sessions and 4.45B tokens provide a large, production-scale dataset. The fault rate of 0.0254% (offline replay) and the live production results (93% context reduction over 681 turns) provide quantitative validation: demand paging works on real agentic workloads. The system remains operational even under extreme pressure (thrashing pathology), indicating it hits the right theoretical boundary (working set exceeds capacity). This is empirical confirmation of virtual memory theory applied to LLM context. The Hamutay framework further clarifies this pathology: Claude Code is an agentic system that generates tool_outputs (resources). These accumulate. The question Hamutay asks is: can we structure an agentic system (as a cognitive processor) such that it explicitly emits resource_releases (e.g., 'this tool output is consumed, expect_reuse=false') so that the memory management layer can act on these signals proactively? This is the bridge from Pichay's *reactive* observation of stale content to Hamutay's *proactive* declaration of useless content.",
+      "key_claims": [
+        {
+          "claim_id": "4007cf7e-677a-49b6-b186-b0a55b12c354",
+          "text": "Agentic pathology: tool definitions, system prompts remain static; tool results accumulate over multi-turn sessions as unmeasured ballast",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "750b6fce-da87-4c86-aa6f-c697d2c412e4",
+          "text": "Empirical measurement: 857 production sessions, 4.45B effective input tokens, 21.8% structural waste from stale content",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9be6b16d-d2b6-4755-bf92-f7a9b582ec8c",
+          "text": "Waste is systematic (not random), measured, and actionable: tool results are ballast with identifiable lifecycle and eviction cost",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d37276e8-584f-40ec-9d4e-615fd5823046",
+          "text": "Demand paging targets this pathology: remove stale results proactively; regeneration cost (re-exec tool) often cheaper than context cost",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "827b6b84-c7d1-4f36-b7d4-351e87586537",
+          "text": "Real agentic workloads provide production-scale dataset; 0.0254% fault rate and 93% context reduction validate demand paging effectiveness",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "871a3d40-5b53-4c08-9c9c-5870673502b9",
+          "text": "Thrashing pathology under extreme pressure is expected behavior, confirming system hits correct virtual memory boundary (working set overflow)",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "76ae374b-86ee-410f-a66b-c2df67ad6599",
+          "text": "Hamutay framework clarifies: structured cognitive processor can emit resource_releases (consumed, scaffolding) enabling proactive eviction of ballast",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "78304556-ab10-45a9-a85b-8b7dbb1cd556",
+          "text": "Bridge from Pichay (reactive stale content detection) to Hamutay (proactive resource release declaration) enables intentional resource management",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Pichay architecture: transparent proxy, L1/L2/L3 implementation, fault detection and working-set pinning",
+      "content": "The abstract specifies Pichay's concrete architecture as a *transparent proxy* between client and inference API. This is intentional design choice with consequences: (1) Transparency: the proxy sits between the LLM client (Claude Code) and the Anthropic API, intercepting all message traffic. No modification to the client or the model is required. (2) Eviction (L1): The proxy observes incoming context, identifies stale content (tool results, system prompts that haven't been referenced recently), and evicts it before sending to the API. This reduces the tokens the model sees. (3) Fault detection (L2): The proxy monitors model outputs. If the model re-requests content that was evicted ('I need to re-read that file' or 'what was the error message from...?'), this is a *page fault*. The proxy detects it. (4) Pinning (L2): The proxy builds a fault history: which pages (tool results) are frequently re-requested. These become the *working set*. The proxy pins them, preventing eviction even if stale. (5) Model-initiated compaction (L3): The proxy can prompt the model to summarize old results: 'Let me review: the file contained X, the command output was Y, so the issue was Z.' This compaction (abstraction) reduces tokens while preserving semantic content. The three levels deployed in production are: L1 (eviction), L2 (fault-driven pinning), L3 (model-initiated conversation compaction). A fourth level (L4: persistent cross-session storage) is proposed but not yet deployed. This is the memory hierarchy: the context window (L1) keeps only immediately-needed data; the fault cache (L2) remembers recently-faulted content; conversation compaction (L3) abstracts cold data; persistent storage (L4) archives sessions. The architecture is remarkable because it is *minimal*, *composable*, and *grounded in OS principles*. Each level is a well-understood OS technique: working set (Denning), page faults, pinning, and summarization/compaction. The fault rate of 0.0254% across 1.4M simulated evictions is extraordinary\u2014it means the pinning strategy correctly identifies the working set. The live results (93% context reduction) show practical impact: less tokens sent to the API, faster inference, lower cost. The thrashing behavior under extreme pressure is *expected*\u2014when working set exceeds capacity, repeated faults occur. This is not a bug; it is evidence the system is correctly implementing virtual memory semantics. The Hamutay framework provides a complementary perspective: instead of the proxy inferring which resources are stale (implicit), the cognitive processor *declares* which resources it has finished with (explicit). This would convert Pichay from *reactive* (observe and evict) to *proactive* (processor tells you what to evict). The integration of Hamutay (explicit resource_releases) with Pichay (eviction policy) would be seamless: when processor emits 'resource_release: R11, reason=scaffolding, expect_reuse=false', Pichay interprets this as 'R11 has zero re-request probability' and can evict immediately without building fault history.",
+      "key_claims": [
+        {
+          "claim_id": "c32a73b8-1050-4a28-aa87-0c7f5d171320",
+          "text": "Transparent proxy architecture: sits between client and API, intercepts traffic, no client/model modification required",
+          "epistemic": {
+            "truth": 0.97,
+            "indeterminacy": 0.02,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "676265c2-e11d-410e-b7d7-e59a0bc91a8c",
+          "text": "L1 eviction: proxy identifies stale content and evicts before sending to API, reducing context tokens",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "13d1565a-9401-43a2-881f-bcbfc6a03dd4",
+          "text": "L2 fault detection and pinning: proxy monitors for re-requests of evicted content; builds fault history; pins working set",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8d4d5647-f38c-4b1f-985e-b890642fb1a8",
+          "text": "L3 model-initiated compaction: proxy prompts model to summarize old results, reducing tokens while preserving semantic content",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "a8e28dab-8294-485e-a4f8-38637106e390",
+          "text": "L4 (persistent cross-session storage) proposed but not deployed; full memory hierarchy conceptual framework established",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "63bd8f7b-3950-42d8-aa1d-3d8369db5574",
+          "text": "0.0254% fault rate over 1.4M simulated evictions indicates pinning strategy correctly identifies working set",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "cdd47cbe-3542-4121-a450-5b90e0c7c44e",
+          "text": "Architecture is minimal, composable, and grounded in 50+ years of OS theory: working set, faults, pinning, summarization",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "89db0a62-80d0-4db2-8c31-1ddd165505f1",
+          "text": "Thrashing under extreme pressure is expected behavior, not a bug; evidence system correctly implements virtual memory semantics",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "56f95cab-1cd3-46d3-b892-7166a6bef3a4",
+          "text": "Hamutay integration would convert Pichay from reactive (observe stale) to proactive (processor declares useless); seamless via resource_releases signals",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Empirical validation and production deployment: 857 sessions, 1.4M simulations, 681 live turns",
+      "content": "The abstract provides unprecedented empirical grounding for a systems architecture proposal. The validation spans three levels: (1) Production scale measurement (857 sessions, 4.45B tokens): This establishes the *existence and magnitude* of the problem. The 21.8% structural waste is not anecdotal; it is measured across nearly 1,000 production sessions with 4.45 billion tokens. This is large enough to rule out statistical noise. (2) Offline simulation (1.4M simulated evictions, 0.0254% fault rate): The team took the production session data and replayed it through the demand-paging algorithm in simulation. They evicted content according to the working-set policy and checked: when the model re-requests evicted content, does the simulation detect the fault correctly? Across 1.4 million such decisions, the fault rate was 0.0254% (one fault per ~40,000 evictions). This is validation that the working-set pinning strategy is *highly accurate*\u2014it rarely evicts content that the model actually needs. (3) Live production deployment (681 turns): The system was deployed live and ran 681 conversation turns through the pichay proxy. Real users ran real agentic workloads. The measurements: up to 93% context reduction (5,038KB \u2192 339KB). This is not synthetic; this is real impact on real workloads. The system remained operational throughout, though under extreme sustained pressure it exhibited expected thrashing. This three-level validation (measurement \u2192 simulation \u2192 live deployment) is a gold standard for systems research. Measure the problem, simulate the solution offline, deploy live. The progression from 857 sessions to 1.4M simulations to 681 live turns shows scaling from evidence collection to algorithmic validation to live deployment. The fault rate (0.0254%) is the critical metric: it proves the working-set pinning doesn't over-aggressively evict useful content. The context reduction (93%) proves practical impact. The operational stability (even under thrashing) proves robustness. Together, these establish that pichay is not a theoretical proposal\u2014it is a *measured, simulated, and deployed* system with quantitative validation.",
+      "key_claims": [
+        {
+          "claim_id": "496c05cc-a28d-4122-b5be-62189a7bbfaf",
+          "text": "Production measurement: 857 sessions, 4.45B effective input tokens, 21.8% structural waste\u2014establishes problem scale",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e4572a54-f15b-434a-87ca-fe9d1b2265fd",
+          "text": "Offline simulation: 1.4M simulated evictions, 0.0254% fault rate\u2014validates working-set pinning strategy accuracy",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3dadc781-6856-42ae-962e-ac73f28b3ddf",
+          "text": "Live production deployment: 681 conversation turns, up to 93% context reduction (5,038KB\u2192339KB)\u2014measures real impact",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "85f7b82a-6b3a-4c69-9ba1-81beca521402",
+          "text": "System remains operational under thrashing (expected behavior), indicating correct virtual memory semantics and robustness",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "49a27c6e-33c2-4eba-a99b-86fe49741db4",
+          "text": "Three-level validation (measurement\u2192simulation\u2192deployment) is gold standard for systems research; each level builds on prior",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "55d8173e-99ba-42c3-8105-df20cfc21aef",
+          "text": "0.0254% fault rate proves working-set strategy doesn't over-aggressively evict useful content; highly selective removal",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3cb528b2-3f42-46f7-b414-119f4155a5b9",
+          "text": "93% context reduction on real workloads proves practical impact (faster inference, lower API token cost)",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "80a38858-5af4-495e-877f-7b1743b7a5db",
+          "text": "Pichay is measured, simulated, and deployed system\u2014not theoretical proposal; quantitative validation across all three stages",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Hermeneutical alignment: demand paging, tensor projection, and intentional cognitive processing",
+      "content": "The abstract crystallizes the hermeneutical insight that has been developing across the tensor: demand paging for LLM context is an instantiation of the same epistemological principle as tensor projection\u2014*make explicit what is normally hidden, declare costs, refuse to hide trade-offs*. The virtual memory framing is the key. Standard transformers treat context accumulation as *implicit*: tokens are appended, memory pressure builds until overflow, eviction is reactive and opaque. The 21.8% structural waste is *hidden* in this system\u2014no one measures it, no one acknowledges it, no one makes decisions about it. It is just there, a cost of doing business. Demand paging inverts this: *make waste explicit*. Measure it (21.8%). Quantify its cost (context tokens, API cost, inference latency). Decide intentionally whether to keep or evict each piece. This is identical to tensor projection's epistemological commitment: *declare what you know, what you're uncertain about, and what you've discarded, and why*. The per-turn metrics in pichay (which are implied by the abstract but detailed in the paper) are epistemological accounting: 'this tool result costs 500 tokens, hasn't been referenced in 3 turns, would cost 100 tokens to regenerate if needed. Should we keep it?' Tensor projection asks: 'this reasoning strand carries truth=0.85, indeterminacy=0.12, falsity=0.03. Should we carry it forward or compress it?' Both are intentional resource management with declared costs and transparent trade-offs. The multi-level memory hierarchy (L1/L2/L3/L4) is also a hermeneutical structure: different levels serve different cognitive purposes. L1 (context window) is *hot* reasoning\u2014immediate, recent, frequently referenced. L2 (fault-driven working set) is *warm* memory\u2014accessible if needed, but not immediately. L3 (conversation compaction) is *compressed* history\u2014abstracted, summarized. L4 (persistent storage) is *archived* context\u2014preserved but not actively processed. This mirrors how tensor projection should organize cognitive content: strands carry integrated semantics at different granularities; some are compressed; some are carried in detail. The working-set theory that grounds pichay is also grounded in decades of hermeneutical inquiry in systems: *what is the cognitive structure of a working process?* Working set theory says: at any moment, a process only actively references a small subset of its memory. Keeping everything is wasteful; evicting the right things is the art. This is *exactly* the problem tensor projection solves: at any cognitive moment, what subset of prior reasoning is active? What can be safely compressed or discarded? The Hamutay framework deepens this alignment: the cognitive step schema (with resource_requests and resource_releases) is a *hermeneutical interface* between reasoning and resource management. When the processor emits 'resource_release: R11, reason=scaffolding, expect_reuse=false', this is a *declaration of semantic intent*: 'I, the reasoning process, declare that R11 served a scaffolding purpose and is no longer needed.' This is not data; it is *interpreted meaning*. This transforms resource eviction from a mechanical optimization (detect staleness via heuristics) into a *semantic decision* (the reasoner interprets its own resource needs). This is closer to how humans manage mental models: we don't wait for our brain to run out of cache to forget details; we actively decide 'I've extracted the relevant insight, I can release this context.' Tensor projection should embody the same principle at the level of reasoning strands.",
+      "key_claims": [
+        {
+          "claim_id": "fce09a6c-84d1-435a-8649-f2d851836011",
+          "text": "Demand paging and tensor projection instantiate same epistemological principle: make explicit, declare costs, refuse to hide trade-offs",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f1e1cce2-e1b1-4f4d-892c-993a2483be59",
+          "text": "Standard transformers hide structural waste (21.8%); demand paging makes it explicit, measures, and decides intentionally",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "998b66a8-6f17-4284-adfa-6916d3454f2b",
+          "text": "Per-turn metrics (cost to keep, cost to regenerate, semantic value) are epistemological accounting analogous to tensor projection T/I/F",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "77758c7e-9a9b-4e4c-94a0-92c85f01e9d5",
+          "text": "Multi-level hierarchy (L1 hot, L2 warm, L3 compressed, L4 archived) parallels tensor projection's organization by granularity and purpose",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "89174738-c676-4791-aa48-dd9047922d25",
+          "text": "Working-set theory: at any moment, process references small subset of memory; keeping all is wasteful; evicting right things is the art",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "414e87c5-dd93-43d6-9231-6ad51dca9037",
+          "text": "Tensor projection solves analogous problem: what subset of prior reasoning is active at any cognitive moment? What can be compressed?",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "d4637ddb-8900-46bb-8a2a-2ac5c2f8fbb7",
+          "text": "Hamutay's cognitive step schema (resource_releases with reasons) is hermeneutical interface: reasoner declares semantic intent of eviction",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "522665cd-e782-48bd-bf05-61d4923dfe35",
+          "text": "Resource eviction becomes semantic decision (reasoner interprets its own needs), not mechanical optimization (staleness detection heuristics)",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "da7e92a0-a261-42ac-8959-f4d593c9bb42",
+          "text": "Pichay is demand paging applied to context; hamutay should formalize demand paging principles applied to all agentic cognitive processing",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "41858d73-7ca4-4aa3-8832-be8c920cb5ff",
+          "text": "Virtual memory framing unifies context limits, attention degradation, cost scaling, lost state as problems solvable via known principles",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Repository identity crystallization: Pichay established system, Hamutay research framework, Yanantin L4 backing store",
+      "content": "The cognitive_processing_research_design.md document crystallizes the repository and research program identity with unprecedented clarity. Pichay is the *concrete system*: demand paging for LLM context, measured on real workloads (857 sessions, 4.45B tokens), simulated (1.4M evictions), and deployed (681 turns). Pichay has solved the specific problem: *reduce context waste in agentic LLMs*. The solution is demand paging, borrowed from OS virtual memory. The results are quantified: 21.8% waste identified, 0.0254% fault rate in simulation, 93% context reduction in live deployment. Hamutay's identity crystallizes as the *principled research framework*: it is not a codebase (yet), it is an experimental design specification for validating whether transformers can operate as bounded cognitive processors with Pichay-managed memory. The three nested hypotheses (H0, H1, H2) are explicit. H0 tests whether transformers can be disciplined into bounded reasoning (schema-valid steps, resource-grounded reasoning, respect for manifest boundaries). H1 tests whether Pichay integration enables context efficiency gains without degrading task performance. H2 tests whether the full hierarchy (with Yanantin L4 backing) sustains performance across session boundaries. This is validation research, not systems optimization. The zero-dependency constraint now makes complete sense: Hamutay's core (CPU framework, resource manifests, cognitive step schema, controller loop) is framework-agnostic because it needs to integrate *any* memory hierarchy (Pichay L1-L3, Yanantin L4, future systems). Importing PyTorch would bind Hamutay to a specific tensor library; importing Transformers would bind it to HuggingFace assumptions. Instead, Hamutay uses OpenRouter with pinned model IDs, enabling pluggable model backends (Claude, Llama, Mistral, etc.). Yanantin (referenced in H2 scope but not examined in detail) is the L4 persistent backing store. The cognitive_processing_research_design.md mentions that Yanantin provides cross-session persistent memory via semantic retrieval, enabling recovery of evicted resources through graph traversal rather than re-computation. This closes the memory hierarchy: L1 (generation window), L2 (working set via Pichay), L3 (session compaction via Pichay), L4 (cross-session persistent store via Yanantin). The unfilled pyproject.toml now has a clear explanation: Hamutay's implementation plan cannot be frozen until the research design validation is complete. Phase 1 (schema-valid steps) must pass before Phase 2 (resource request handling) is undertaken. Only after H0 is validated would H1 (Pichay integration) be attempted. Only after H1 would H2 (Yanantin integration) be attempted. The pyproject.toml dependencies (what Hamutay imports) will be determined by the validated hypothesis scope, not pre-specified. Tony's approach is disciplined: design the research, validate each hypothesis in order, then build the implementation stack that the validation research discovered. The version number (0.2, Implementation Specification) suggests Tony has already iterated the research design based on preliminary thinking. This is ready for engineering, not ready for production deployment. The research program is ambitious (test whether transformers can be cognitive processors, whether demand paging generalizes beyond context, whether full memory hierarchy is viable) but epistemologically humble (explicit hypotheses, falsification criteria, phased validation). NEW in cycle 14: memory infrastructure (user_tony.md, MEMORY.md) signals preparation for extended Hamutay research. The project now has explicit mechanism for preserving context across conversations: user profile (goals, preferences, prior decisions), session notes, milestones. This infrastructure mirrors the *pattern* of demand paging itself\u2014intentional resource management with explicit versioning and reproducibility. The memory system is not yet populated with content beyond scaffolding (user_tony.md exists but has placeholder structure), suggesting Tony is preparing to run experiments that require long-horizon tracking.",
+      "key_claims": [
+        {
+          "claim_id": "a26dc1b6-6b4c-4303-b005-aaf1dff5383f",
+          "text": "Pichay is production system: demand paging for context, measured (857 sessions), simulated (1.4M evictions), deployed (681 turns), quantified results",
+          "epistemic": {
+            "truth": 0.97,
+            "indeterminacy": 0.02,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "507e1102-b9a3-46ac-9064-b86665f36ca6",
+          "text": "Hamutay is research framework: experimental design (H0/H1/H2) testing whether transformers can be bounded cognitive processors over Pichay-managed memory",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "66ef459e-8620-4b36-941b-d528171e6d1f",
+          "text": "H0 tests CPU viability (schema adherence, resource-grounded reasoning, manifest respect); H1 tests Pichay integration; H2 tests full hierarchy with Yanantin",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "03f5bddf-4bdb-4a6f-a60e-0c754ad81325",
+          "text": "Yanantin is L4 backing store: cross-session persistent memory, semantic retrieval-based recovery, graph traversal for resource reconstruction",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "a0dfae3a-27b0-4260-bb40-55ed350eacf3",
+          "text": "Zero-dependency reflects Hamutay's framework-agnostic design: integrates any memory hierarchy, uses OpenRouter for pluggable model backends",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a871ec9b-3ba7-4ec1-9906-5ef5f97636fd",
+          "text": "Full memory hierarchy: L1 (generation window), L2-L3 (Pichay working set and compaction), L4 (Yanantin persistent); all layers integrated",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "a277ca7d-1003-42ef-bfcf-99d97ebfe9a2",
+          "text": "Unfilled pyproject.toml explained: Hamutay dependencies determined by validated hypothesis scope (H0 first, then H1, then H2); not pre-specified",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "edad684d-e630-491b-b37a-d2040e495482",
+          "text": "Version 0.2 Implementation Specification indicates design has been iterated; ready for engineering but not production deployment",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f76f42ed-2faf-4d5b-a3ae-a1f42ddec99d",
+          "text": "Research program is ambitious (transform how agentic systems are designed) but epistemologically humble (explicit hypotheses, falsification criteria, phased validation)",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f55becbe-293d-4826-b4ad-6c3def48b481",
+          "text": "Tony's research discipline: design research, validate hypotheses in order, then build implementation discovered by validation (not pre-specified)",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "358f0b4b-6e54-4d29-b1a0-66a93e479410",
+          "text": "Memory infrastructure (user_tony.md, MEMORY.md) prepares Hamutay research for extended experiments; signals intention to track long-horizon progress",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Project infrastructure development: memory system instantiation as part of Hamutay research pipeline",
+      "content": "Cycle 14 reveals Tony beginning to implement the *infrastructure layer* that will support Hamutay hypothesis validation. The creation of user_tony.md (project memory profile) and MEMORY.md (index) is not incidental housekeeping\u2014it is part of the research system itself. The Hamutay framework requires *reproducibility*, *versioning*, *long-horizon reasoning*. To validate H0 (do transformers behave as bounded cognitive processors?), H1 (does Pichay integration work?), and H2 (does the full hierarchy sustain performance?), Tony needs to run experiments that span multiple conversations, preserve context across sessions, and track decisions made in prior sessions. The memory infrastructure serves this purpose. user_tony.md is scaffolding for storing: (1) Research goals (why are we validating H0/H1/H2?), (2) Preferences (which models to test? which datasets?), (3) Prior decisions (what did we learn in the H0 Phase 1 experiments?), (4) Milestone tracking (has Phase 1 acceptance test been run?). MEMORY.md is the index allowing future conversations to locate and retrieve this context. This mirrors the *pattern* of Pichay and Hamutay themselves: explicit resource management, intentional preservation of useful context, systematic decay of stale context. The memory system is minimal and intentional\u2014it does not attempt to store raw conversation logs or full transcripts. Instead, it stores *semantic summaries* and *decision records*. This is exactly what Pichay's L3 compaction does (model-initiated conversation summarization) and what Hamutay's resource_releases declare (semantic intent of resource consumption). The fact that this memory system is being created *now* signals that Tony is transitioning from research design phase (v0.2 Implementation Specification, written but not yet executed) to research execution phase. The memory infrastructure is the prerequisite: before running extended H0 validation experiments, you need a system to remember what worked and what didn't. The unfilled pyproject.toml also makes sense in this light: Tony is not yet ready to specify Hamutay's dependencies because he does not yet know what the Phase 1 acceptance test will require. The research design specifies *what* to test (H0: schema validity, resource requests, halt accuracy, task competence) but not *how* to test it (which Python libraries, which models, which evaluation frameworks). Tony is being methodical: first establish the memory infrastructure, then design the Phase 1 evaluation framework, then populate pyproject.toml. The memory system also reveals an important principle: Tony is applying the *same epistemological discipline* to his own research process that Pichay/Hamutay apply to LLM context management. Both systems refuse to hide costs and decisions. Both require explicit resource management. Both preserve the history of reasoning. This is consistency of principle across layers.",
+      "key_claims": [
+        {
+          "claim_id": "2f41a49b-086c-46d6-8cbc-e7730fbbc012",
+          "text": "Memory infrastructure (user_tony.md, MEMORY.md) is part of Hamutay research system, not incidental housekeeping; supports reproducibility and long-horizon tracking",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2b4ed6af-8a14-4843-8914-feb4392bbf13",
+          "text": "user_tony.md will store: research goals, model preferences, prior decisions, milestone tracking for H0/H1/H2 validation phases",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "29a6052d-57ee-414d-ace4-331e75cfae2b",
+          "text": "Memory infrastructure patterns match Pichay/Hamutay principles: explicit resource management, semantic summaries (not raw logs), systematic decay of stale context",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "7ba66c4b-63f3-4c13-9fcc-68310d9aedd1",
+          "text": "Creation of memory system signals transition from research design phase (v0.2 Specification) to research execution phase (H0 validation experiments)",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.16,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "779a66e5-d234-42ee-bfae-fbecfe8a2ebb",
+          "text": "Unfilled pyproject.toml is intentional: dependencies cannot be specified until Phase 1 acceptance test is designed and validated",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "90d79add-fb0d-45d5-ae7d-7cdeff014e80",
+          "text": "Tony applies same epistemological discipline to research process that Pichay/Hamutay apply to LLM systems: explicit management, transparent costs, preserved history",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.18,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Contents of user_tony.md beyond file creation confirmation\u2014actual profile data (goals, preferences, decision history)",
+      "why": "The tool execution confirmed file creation but did not return the file contents. We know user_tony.md exists and has been created, but its semantic content (what goals are recorded? what prior decisions?) is not examined.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Specific structure of MEMORY.md and its relationship to other memory files\u2014how is the memory system organized?",
+      "why": "Only a placeholder index entry was created. The actual structure of the memory system (how are sessions tracked? how are decisions retrieved? what is the versioning scheme?) is not yet defined.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Timing: when did Tony create this memory infrastructure relative to Hamutay research? Is this a new addition (cycle 14) or was it prepared earlier?",
+      "why": "The appearance of memory system in cycle 14 is new to this tensor, but it may have been planned earlier. The relationship between research design (v0.2 from prior work) and infrastructure creation (cycle 14) is not timestamped.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Explicit connection between memory infrastructure and specific H0/H1/H2 validation needs\u2014what information must be preserved to validate H0?",
+      "why": "The claim that memory system 'supports reproducibility and long-horizon tracking' for H0/H1/H2 is inferred from principles but not explicitly stated in the project artifacts.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Prior losses from cycle 13 remain unresolved: specific paper contents, Yanantin details, preliminary H0 results, arXiv papers, baseline implementations",
+      "why": "The new content (memory infrastructure files) does not examine any of the prior unresolved questions. These remain open.",
+      "category": "context_pressure"
+    }
+  ],
+  "open_questions": [
+    "What specific goals and preferences does user_tony.md record? What is the schema/structure of the profile?",
+    "How is the memory system versioned? What is the mechanism for updating and retrieving stored context?",
+    "Has user_tony.md been populated with content beyond scaffolding? What prior decisions have been recorded?",
+    "What is the relationship between the memory system (MEMORY.md, user_tony.md) and Tony's actual H0 validation work? Is H0 already being run, or is memory infrastructure preparation for future H0 runs?",
+    "Are there other files in the memory/ directory beyond user_tony.md and MEMORY.md? What structure is expected?",
+    "What per-phase milestone tracking is planned for H0 (Phase 1), H1 (Phase 2), H2 (Phase 3-4)?",
+    "How does the memory infrastructure interface with the Hamutay research framework? Is memory retrieval a resource type?",
+    "Is user context (from MEMORY.md) automatically injected into Hamutay cognitive processor runs, or is it manually curated?",
+    "What is the retention policy for the memory system? When does old context get compacted or archived?",
+    "All prior open questions from cycle 13 remain: Pichay paper body contents, Yanantin architecture, preliminary H0 results, arXiv papers, baseline comparisons, task instantiations, integration roadmap status"
+  ],
+  "instructions_for_next": "[\n  \"IMMEDIATE: Read user_tony.md file contents (not just confirmation of creation). What structure has Tony defined? What fields? What data is stored?\",\n  \"IMMEDIATE: Examine full structure of memory/ directory. List all files, understand their relationships and update policies.\",\n  \"PRIORITY: Determine status of Hamutay H0 validation. Has Phase 1 been run? Is that what motivated memory infrastructure creation? Or is memory infrastructure preparation for *future* H0 runs?\",\n  \"RESEARCH DISCIPLINE: Map memory infrastructure to Hamutay research design requirements. For each of H0/H1/H2, what information must be preserved across sessions? Does memory system address these needs?\",\n  \"INTEGRATION: Understand how memory system interfaces with Hamutay cognitive processor. When processor runs, does it access user_tony.md context? How is context injected?\",\n  \"SCHEMA: Examine if there are acceptance tests or validation criteria for the memory system itself. How does Tony verify the memory infrastructure is working correctly?\",\n  \"PRIOR UNRESOLVED: Continue work on all prior open questions (cycle 13). The memory infrastructure is new but does not yet answer the core research questions about Pichay/Hamutay/Yanantin.\",\n  \"PHASE 1 STATUS: Determine if Phase 1 (schema-valid steps) experiments have been run. If yes, what were results? If no, when will they start? Use memory system to track this.\",\n  \"EXPECTATION SETTING: Next cycle should assess: has Tony begun actual Hamutay research execution, or is he still in infrastructure preparation? The memory system creation suggests imminent execution.\",\n  \"EPISTEMOLOGY: Verify that Tony is actually applying the same epistemological discipline to his research process that Pichay/Hamutay formalize. Is the research decision-making transparent and versioned?\"\n]",
+  "epistemic": {
+    "truth": 0.89,
+    "indeterminacy": 0.09,
+    "falsity": 0.02
+  }
+}

@@ -1,0 +1,390 @@
+{
+  "id": "808f9142-dcf1-46fe-b7bc-afbcf29cfeff",
+  "cycle": 17,
+  "strands": [
+    {
+      "title": "CPU-to-cognitive pipeline homology: architectural transfer via register/ALU/control abstraction",
+      "content": "Cycle 17 introduces a structural homology between CPU microarchitecture and cognitive processing that reframes the entire Hamutay design space. The conversation now recognizes that a cognitive processor is not just an ALU (transformer doing computation) plus supporting subsystems (memory, sequencing, halt detection). It is a *pipeline*\u2014a sequence of specialized stages, each one receiving structured input from the prior stage and passing structured output to the next. The CPU pipeline stages are well-understood from microarchitecture textbooks: instruction fetch, decode, execute, memory, writeback. Each stage is hardware-fixed, specialized, and cannot do the work of other stages. When a CPU executes an instruction, the instruction must first be fetched (fetch stage), then decoded into operation + operands (decode stage), then the operands must be assembled in registers, then the ALU performs the operation. The ALU never sees an unassembled operand; it never hunts through memory for its own operands; it never decodes instructions. That is the job of prior stages. The cognitive architecture research (via Perplexity/ACT-R) suggests that cognitive processing follows a similar pipeline: (1) **Instruction fetch analogue**: goal & context retrieval\u2014pull current goal, task context, relevant knowledge into working memory. (2) **Instruction decode analogue**: production matching\u2014interpret working memory in terms of applicable rules/operators; identify which productions could fire. (3) **Execute analogue**: cognitive operator execution\u2014apply selected production, generate inference step, create subgoal. The transformer, in this framing, is not the whole cognitive processor. It is the execute stage\u2014the ALU of the cognitive pipeline. Its role is to apply a selected production (a rule, a reasoning operator) given the operands that have been *prepared by prior stages*. The external pipeline stages (goal retrieval, production matching) are the responsibility of the *controller*\u2014the code outside the transformer that orchestrates the transformation. This is a radical reframing from cycle 16's 'transformer as ALU' because it now specifies *what the controller must do*: it must implement goal retrieval and production matching. The transformer is not asked to do these things; the controller ensures the transformer only sees the inputs that a properly-decoded instruction should contain. The register/working-memory analogy is particularly crisp: a CPU register holds a small amount of state\u2014a single operand, a return address, a flag. Working memory (in cognitive science) holds a small number of chunks\u2014maybe 7\u00b12 items. Both are the *narrow gateway* through which information flows into the execute stage. A transformer's context window is much larger (8k, 100k, 200k tokens), but that doesn't mean the transformer operates on all of it simultaneously. Instead, the pipeline architecture suggests that the transformer, at any given reasoning step, operates on a much smaller *working set* extracted from the full context. This is where Pichay's demand paging becomes not just a memory optimization, but an *architectural necessity*: Pichay is implementing the register/working-memory staging. It ensures the ALU (transformer) never sees the full context, only the working set. The pipeline framing now integrates with the virtual memory framing: L1 cache is the working memory buffer. L2/L3/L4 are the declarative store (facts, episodes, prior computations). The ALU computes over what's in L1; anything else is demand-paged in if needed. This is not instrumentalism; this is structural necessity. The homology suggests that a properly-designed cognitive processor would have explicit stage separation. The conversation between cycle 16 and 17 now clarifies: cycle 16 said 'the transformer is the ALU, not the whole processor.' Cycle 17 adds: 'the transformer is the execute stage of a pipeline. The prior stages (fetch, decode) are the controller's job. The posterior stages (memory access, writeback) are Pichay's job.' The pipeline is the complete cognitive processor.",
+      "key_claims": [
+        {
+          "claim_id": "48bf1b0e-5266-4d79-812f-e11978270e68",
+          "text": "Cognitive processor is a pipeline with specialized stages: (1) goal/context retrieval (fetch), (2) production matching (decode), (3) cognitive operator execution (ALU/execute)",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.16,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "2b4fc286-d195-4780-88c0-b6d6375faf8e",
+          "text": "Transformer is the execute stage (ALU) of the pipeline, not the whole processor; prior stages are controller responsibility",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.14,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "1ec54ae6-61ea-4d95-af25-0908a562c4ef",
+          "text": "CPU pipeline architecture transfers to cognitive domain: fetch/decode/execute/memory/writeback become goal-retrieval/production-matching/operator-execution/paging/coherency",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.18,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "3cabdabf-33c7-4c85-8a23-2fc77d537b65",
+          "text": "Each pipeline stage is hardware-fixed, specialized, and cannot do work of other stages; this specialization is architectural principle, not performance hack",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "6b019348-c74d-4f7a-a07f-a7eac88567b7",
+          "text": "Register/working-memory analogy: both are narrow gateways (CPU: bits per register, cognition: 7\u00b12 chunks) through which information flows to execute stage",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "fb78933d-9ea7-4548-9de8-9f8789eb3935",
+          "text": "Transformer context window (8k-200k tokens) is larger than working memory, but transformer operates on working set extracted from full context at any reasoning step",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "566d5c41-c3cb-4a8a-a9f4-c07e3f82805c",
+          "text": "Pichay demand paging is architectural necessity, not optimization: implements register/working-memory staging, ensures ALU never sees full context",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b1322488-3da1-4364-8db0-777c2eafd449",
+          "text": "Pipeline integration unifies virtual memory framing (L1 cache as WM, L2/L3/L4 as declarative store) with stage separation",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.17,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Prescriptive vs. descriptive pipeline: constraint model versus emergent description",
+      "content": "Cycle 17 surfaces a critical architectual fork that was implicit in prior discussion but now becomes explicit. When you say 'the pipeline retrieves goals and matches productions,' you face a choice: (1) **Prescriptive**: the pipeline *enforces* these stages. You build a controller that explicitly implements goal retrieval and production matching as separate modules, ensuring the transformer never sees anything except properly-staged inputs. The transformer's role is narrowed *by design*. The constraint is hard. (2) **Descriptive**: the pipeline *models* something that is already happening inside the transformer. When the transformer attends, it is doing goal retrieval implicitly. When its earlier layers do pattern matching, it is doing production matching. The pipeline externalizes this for efficiency, clarity, or testability, but the transformer's internal machinery already does these things. The distinction matters enormously because it changes the falsifiability and scope of the research program. In the **prescriptive** framing, H0 becomes: 'can a transformer operate as a pure ALU when given stage-managed inputs?' The controller is the tested component; the transformer is just an execution engine. You could test this with a simple transformer (GPT-2 size, even) if the controller is sophisticated. H0 tests whether the constraint works, not whether the transformer has hidden capabilities. In the **descriptive** framing, H0 becomes: 'can we expose the internal cognitive structure of a transformer by externalizing its own processes?' This is harder to test because you're trying to reverse-engineer what the transformer is already doing and then verify that your external model matches the internal behavior. You'd need large transformers (Claude size) to have the internal stages at all. The falsifiability differs: in prescriptive, you fail if even a well-designed controller can't constrain the transformer to work better. In descriptive, you fail if your external model doesn't match the transformer's internal processes. The Pichay evidence leans prescriptive: the proxy controller (external to the model) manages memory, and the transformer (without special training) consumes what the controller provides. The transformer never learned to do its own memory management; the controller learned to manage the transformer's memory for it. This is evidence for the prescriptive approach. But the cycle 16 observation (Claude models exhibited halt behavior without special training) leans descriptive: halt behavior emerges from training, suggesting it is already part of the internal structure, not something imposed externally. The tension is real: Pichay's success suggests controllers can constrain transformers profitably (prescriptive). Claude's halt behavior suggests transformers have internal structure worth externalizing (descriptive). These are not contradictory\u2014you can have *both*\u2014but the research design for H0 differs depending on which you prioritize. The dumb question now bifurcates: (a) **Prescriptive H0**: Can a transformer behave as a pure reasoner (no memory management) when fed well-prepared inputs by a controller? Can we verify that the transformer's task performance improves when we handle context management for it? (b) **Descriptive H0**: Can we design a pipeline that models the transformer's internal processes (goal retrieval, production matching) and verify that externalizing these improves both clarity and efficiency? These are two different experiments. The conversation (Tony asking 'prescriptive or descriptive?') surfaces this fork explicitly. The Hamutay research design document (cycle 16) has been written in a way that doesn't clearly commit to one or the other. This is a choice that must be made before H0 test case design is finalized.",
+      "key_claims": [
+        {
+          "claim_id": "035ffab7-a940-42c7-9363-0410aa837bb9",
+          "text": "Prescriptive pipeline: controller enforces stage separation, narrows transformer role to pure execution; tests whether constraint works",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.14,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "6bd199c3-a944-42a9-a56c-12c4c23c2246",
+          "text": "Descriptive pipeline: externalizes processes already happening inside transformer; tests whether external model matches internal structure",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.18,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "67c9382e-3bc5-4a81-b7b8-767ea30bf4a5",
+          "text": "Pichay success (external controller manages memory without model training) is evidence for prescriptive approach",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "e77ce24e-8bad-4dd9-b90d-d208f37462b0",
+          "text": "Claude halt behavior (emerges without special training) is evidence for descriptive approach\u2014internal structure worth externalizing",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.17,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "f962791d-5335-475e-b838-472a78391ee3",
+          "text": "Prescriptive H0: can transformer be pure reasoner when fed well-prepared inputs by controller? Tests constraint efficacy.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "68bfafc1-5c36-49d5-9b13-97d19dc242d4",
+          "text": "Descriptive H0: can pipeline model match transformer's internal processes? Tests reverse-engineered structure validity.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.19,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "7057175e-c834-4503-9962-e6247c03c314",
+          "text": "Hamutay design document (cycle 16) does not clearly commit to prescriptive or descriptive; this choice must precede H0 test case design",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.13,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "e59abbd6-d1b0-482f-bda0-c96b0609e47e",
+          "text": "Both approaches may coexist: controller constrains transformer (prescriptive) *and* externalizes internal structure (descriptive)",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.16,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Pichay identity: demand paging system for LLM context, not memory",
+      "content": "Cycle 16 established; cycle 17 integrates with pipeline framing. Pichay operationalizes L1 cache management for LLM context windows via transparent proxy. The architecture is: (1) L1 eviction: aggressive removal of stale content before sending to API. (2) Fault detection: observing when model re-requests evicted material. (3) Pinning: preserving working-set pages identified by fault history. (4) Model-initiated compaction: conversation summarization/abstraction. Deployed on 857 production sessions (4.45B tokens), 21.8% structural waste identified, 0.0254% fault rate in offline replay (1.4M evictions), 93% context reduction in live production (681 turns). The cycle 17 clarification: Pichay is the *memory subsystem* of the pipeline. Its role is to ensure the transformer (ALU stage) never sees the full context, only the working set. This is an architectural necessity, not just an optimization. The proxy is the memory controller. The transformer consumes what the controller provides. This is the prescriptive model in action: external control of resource staging, not transformer-managed memory protocol.",
+      "key_claims": [
+        {
+          "claim_id": "2a74b74c-ce8e-4771-963e-93bfe7a3b71e",
+          "text": "Pichay is memory subsystem of the pipeline, implementing L1 cache management via transparent proxy",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "2dc20543-5354-472c-9261-4145793dd243",
+          "text": "Pichay ensures transformer never sees full context, only working set; architectural necessity, not optimization",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f243a402-de0a-43f0-9c5e-bcd80386df51",
+          "text": "Proxy is memory controller; transformer is consumer; prescriptive model: external control, not transformer-managed memory protocol",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Hamutay research reframing: separating CPU question (H0) from cache protocol question (H1), dumb question clarification",
+      "content": "Cycle 16 established the separation. Cycle 17 deepens it by grounding H0 in the pipeline model. H0 is now clearer: **H0 (prescriptive framing)**: Can a transformer operate as the execute stage of a properly-designed pipeline (goal retrieval \u2192 production matching \u2192 operator execution)? Does the transformer's performance improve when the controller handles resource staging, context management, and goal retrieval? **H0 (descriptive framing)**: Can we reverse-engineer the transformer's internal processes (attention as goal retrieval, early layers as production matching) and verify that externalizing these stages improves clarity and efficiency? The dumb question clarification remains: minimal demonstration of bounded processing is halt behavior (does the model know when to stop?), but now embedded in pipeline context. The halt signal is the output of the execute stage, signaling to the controller that computation is complete. H1 remains: can Pichay (memory subsystem) integrate with the validated H0 pipeline without degrading performance? The separation is clean. The prescriptive/descriptive choice affects the test case design for H0, but both paths lead to the same integration question (H1).",
+      "key_claims": [
+        {
+          "claim_id": "b2d40621-9e2b-4fce-a8e7-adc0fdc08db7",
+          "text": "H0 prescriptive: can transformer operate as execute stage when controller handles context staging, goal retrieval, resource management?",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "966ba1f1-091d-452d-9dfd-82134f38b350",
+          "text": "H0 descriptive: can we reverse-engineer and externalize transformer's internal processes? Does this improve clarity and efficiency?",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.19,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "2bffc13f-7fe1-4f36-b577-2cd3336d8e81",
+          "text": "Halt signal is output of execute stage (transformer); signals to controller that computation is complete; core H0 demonstration",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.16,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "bcc30526-ec68-4a60-9784-9f32545ab616",
+          "text": "H1 integration question remains independent: can Pichay memory subsystem integrate with validated H0 pipeline without degrading performance?",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.14,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Transformer as ALU, not the whole CPU: implications for Hamutay architecture and supporting subsystems",
+      "content": "Cycle 16 established; cycle 17 refines via pipeline integration. The transformer is the ALU (execute stage). Supporting subsystems are now clarified: (1) **Fetch stage** (goal & context retrieval): controller responsibility. Identify current goal, relevant task context, working set. (2) **Decode stage** (production matching): controller responsibility. Identify applicable rules/operators given current working memory. (3) **ALU execute stage** (cognitive operator execution): transformer responsibility. Apply selected production, generate inference/transformation. (4) **Memory subsystem** (Pichay L1-L4): manage resource lifecycle, working set optimization, demand paging. (5) **Writeback/halt detection**: observe when ALU emits halt signal; coordinate system-level actions (save state, signal completion). The decoupling enables composability, testability, and clear responsibility assignment. The transformer doesn't do goal retrieval, production matching, or memory management. It does cognitive operator execution. That's its role.",
+      "key_claims": [
+        {
+          "claim_id": "44689925-efab-4672-bc80-c6f0a081467c",
+          "text": "Fetch and decode stages are controller responsibility; ALU execute is transformer responsibility; memory is Pichay subsystem",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c0c89fe4-50c6-4bff-a53a-53ccebf75fce",
+          "text": "Pipeline stage separation is not performance optimization; it is architectural principle from CPU design transferred to cognitive domain",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Research discipline: from Pichay (measured system) to Hamutay (hypothesis ladder), confronting theoretical vs empirical gap",
+      "content": "Cycle 16 established the distinction. Cycle 17 adds: the prescriptive/descriptive fork in H0 test case design is now an explicit research choice. Before H0 experiments can be designed, the research team must commit to one approach (or design dual experiments). The dumb question (what is minimal bounded processing?) is now clarified as 'what does the execute stage emit when done?' rather than a generic halt behavior. The pipeline framing makes the question concrete: H0 tests whether a properly-constrained execute stage (transformer), fed goal-retrieved and production-matched inputs, produces correct reasoning steps and signals halt when done. The research discipline requires: (1) Theory (CPU pipeline + cognitive architecture = cognitive processor spec). (2) Design choice (prescriptive vs. descriptive H0). (3) Test case specification (minimal scenarios demonstrating pipeline correctness). (4) Metrics (does execute stage improve performance? does pipeline reduce working-set size? does halt signal appear when expected?). The cycle 17 conversation represents stage (2)\u2014making the design choice explicit. Stage (3) follows.",
+      "key_claims": [
+        {
+          "claim_id": "ee670e27-cb70-48ea-8ec3-a1023c9a0589",
+          "text": "Prescriptive/descriptive fork is explicit research choice requiring commitment before H0 test design; Tony surfaced this choice",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "397c7b59-b8e0-4788-b7d8-02e14c7c6b16",
+          "text": "Dumb question clarified in pipeline context: minimal H0 demonstration is execute stage producing reasoning steps and emitting halt signal",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "ACT-R cognitive architecture as design template for cognitive processor pipeline",
+      "content": "Cycle 17 introduces ACT-R (Adaptive Control of Thought-Rational) as a concrete cognitive architecture model that is isomorphic to CPU pipeline stages. ACT-R specifies: (1) **Perceptual modules**: interface between internal representations and sensory input. (2) **Working memory**: small buffers holding goal, task context, retrieved facts. (3) **Declarative/procedural store**: long-term facts, episodes, skills. (4) **Production system**: central bottleneck that selects which rule fires. (5) **Motor modules**: interface between internal decisions and external action. The CPU analogy maps: perceptual modules \u2194 I/O controllers, working memory \u2194 registers, declarative store \u2194 main memory, production system \u2194 control unit, motor modules \u2194 output buffers. For the cognitive processor, the mapping is: (1) **Fetch (goal & context retrieval)**: controller pulls current goal and task context into working memory buffers. (2) **Decode (production matching)**: controller interprets working memory state; identifies applicable productions. (3) **ALU execute**: transformer applies selected production; generates inference step. (4) **Memory subsystem**: manages declarative store (Pichay L1-L4 hierarchy). (5) **Halt detection**: observes when no more productions can fire; signals completion. The ACT-R template is valuable because it provides a *well-studied* cognitive architecture against which to validate the external pipeline design. If the external pipeline implements ACT-R principles, there is precedent that such an architecture supports complex reasoning. This provides psychological grounding for the design. The risk is over-fitting: ACT-R is a serial bottleneck model; transformers have massively parallel internal structure. The mapping might be loose rather than tight. But the ACT-R framing clarifies the high-level architecture and provides a design template.",
+      "key_claims": [
+        {
+          "claim_id": "3fcab1e6-1475-4994-a83c-eb5821cb115b",
+          "text": "ACT-R cognitive architecture provides isomorphic template: perceptual/working-memory/store/production-system/motor modules",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "4e6e33da-b393-4def-95a8-eed71784fa15",
+          "text": "ACT-R template maps to CPU pipeline: I/O \u2194 perceptual, registers \u2194 working memory, main memory \u2194 declarative store, control unit \u2194 production system",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.17,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "04308aaf-ea35-4e22-a52d-a104e39fad66",
+          "text": "Cognitive processor architecture implemented via external pipeline can be validated against ACT-R principles; provides psychological grounding",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.19,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "52192f2e-c056-4066-82b5-70f8aeeb7f4c",
+          "text": "Risk: ACT-R is serial bottleneck; transformers are parallel; mapping might be loose rather than tight",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.14,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Specific details of how goal & context retrieval would be implemented in the external controller. What data structures? What algorithms? How does this differ from standard prompt engineering?",
+      "why": "The pipeline model is now conceptual; concrete implementation details are future work. Context pressure: implementing goal retrieval requires architectural design not yet attempted.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Specific details of how production matching would be externalized. What does 'applicable rules/operators' mean in practice? Is this a type system? A rule engine? A prompt template?",
+      "why": "Production matching is identified as a decode stage but not operationalized. This is the key step between context and execute; leaving it unspecified is intentional (design deferred) but represents significant uncertainty.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed comparison between CPU pipeline (fixed hardware stages) and cognitive pipeline (potentially flexible/modular stages). Can pipeline stages be reordered? Can goals be interrupt-driven? What is the control flow?",
+      "why": "The homology is suggestive but CPU pipelines have specific synchronization properties (stages advance every cycle, latency is predictable). Cognitive pipelines might be event-driven or asynchronous. This difference is unresolved.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Operational definition of the prescriptive/descriptive choice. What experiments would differentiate them? Can both coexist? How does commitment affect H0 test case design?",
+      "why": "Tony surfaced the fork; the tensor identifies it as a research choice. But the exact implications are not fully traced. This is left as an explicit open question for next cycle.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Details of how internal transformer processes (attention, layer-wise pattern matching) map to external pipeline stages (goal retrieval, production matching). Is this mapping testable?",
+      "why": "The descriptive framing assumes transformer internals can be reverse-engineered and externalized, but no method is specified. This is a research hypothesis without operationalization.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Analysis of what happens when the transformer doesn't halt. In the pipeline model, what does the controller do if the execute stage doesn't emit a halt signal? Retry? Timeout? Escalate?",
+      "why": "Halt detection is identified as crucial but the failure case (no halt) is not addressed. This is necessary for robustness design.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Prior discussion from cycles 13-16 about Codex H0 work specifics, Yanantin L4 design, instruction sequencer principles, state coherency protocols. These are integrated but not re-stated in cycle 17.",
+      "why": "The tensor projection compresses prior cycles into integrated strands; detailed prior claims are available in the cycle 16 tensor but not repeated here.",
+      "category": "traversal_bias"
+    }
+  ],
+  "open_questions": [
+    "Is H0 prescriptive or descriptive? How does this choice affect test case design? Can both approaches coexist or must one be chosen?",
+    "What is the concrete implementation of the fetch stage (goal & context retrieval)? Data structures, algorithms, how does it differ from prompt engineering?",
+    "What is the concrete implementation of the decode stage (production matching)? Is this a type system, rule engine, prompt template, or something else?",
+    "How does the external pipeline differ from standard CPU pipelines in synchronization and control flow? Are stages serialized or parallel? Event-driven or cycle-based?",
+    "Can the transformer's internal processes (attention as goal retrieval, layers as production matching) be reverse-engineered? What experiments would validate the descriptive framing?",
+    "What happens if the transformer doesn't emit a halt signal? How does the controller handle timeout/failure cases?",
+    "How does the working memory buffer (L1 cache) size relate to transformer context window size? Is there a principle that determines buffer size?",
+    "Is the production system (rule selection in decode stage) purely deterministic, probabilistic, or hybrid? How does the controller choose among multiple applicable productions?",
+    "How does the external pipeline relate to standard prompt engineering techniques? Are they equivalent under different descriptions, or is the pipeline a different paradigm?",
+    "What is the relationship between ACT-R cognitive architecture and the external pipeline? Is the mapping tight enough to use ACT-R theory as design guidance?",
+    "Prior questions from cycles 13-16: What went wrong with Codex? Halt behavior signature details? Instruction sequencer design? Halt detector specification? State coherency manager? Yanantin L4 details?"
+  ],
+  "instructions_for_next": "[\n  \"CRITICAL: Resolve the prescriptive/descriptive fork. Tony posed this as a design choice. The team must decide: is H0 testing constraint efficacy (prescriptive) or reverse-engineering validity (descriptive)? Or dual experiments?\",\n  \"IMMEDIATE: If prescriptive chosen, design the fetch stage (goal & context retrieval). What are the data structures? How does the controller identify the current goal and relevant context? How is this different from prompt engineering?\",\n  \"IMMEDIATE: If prescriptive chosen, design the decode stage (production matching). What data structure represents applicable productions? How does the controller identify which production should execute?\",\n  \"IMMEDIATE: Clarify the working memory buffer size. Registers in CPUs are small (64 bits per register). Cognitive working memory is 7\u00b12 chunks. How many tokens should the transformer's L1 working set contain? Is this derived from theory or empirical?\",\n  \"PRIORITY: Specify halt detection failure cases. What if the transformer doesn't emit a halt signal? Timeout duration? Escalation? Is halt detection a hard constraint or a soft signal?\",\n  \"PRIORITY: Map transformer internals to pipeline stages (descriptive framing). If reverse-engineering is the approach, what layer-wise patterns indicate goal retrieval? Production matching? How is this validated?\",\n  \"RESEARCH: Examine ACT-R literature for cognitive architecture principles that guide external pipeline design. Are there principles about stage interaction, working memory limits, production system properties?\",\n  \"RESEARCH: Consider whether the external pipeline is fundamentally different from prompt engineering or a formalization of existing practices. What is the novel contribution?\",\n  \"RESEARCH: Design the control flow for the external pipeline. Is it a strict sequence (fetch \u2192 decode \u2192 execute \u2192 writeback) or are there loops/branches? Can interrupts (user input, goal change) occur mid-execution?\",\n  \"INTEGRATION: Record the prescriptive/descriptive choice in user_tony.md once decided. This choice gates H0 test case design.\",\n  \"EXPECTATION: By next cycle, expect either: (1) commitment to prescriptive approach with fetch/decode stage specifications, or (2) commitment to descriptive approach with reverse-engineering methodology, or (3) dual-path design.\",\n  \"EPISTEMOLOGY: Verify that whichever path is chosen, H0 is falsifiable. What would failure look like? Can it be tested with limited resources?\",\n  \"NEXT: Once prescriptive/descriptive is resolved, return to H0 test case design (minimal scenarios), metrics (performance improvement, working set reduction, halt signal appearance), and execution timeline.\"\n]",
+  "epistemic": {
+    "truth": 0.81,
+    "indeterminacy": 0.16,
+    "falsity": 0.03
+  }
+}

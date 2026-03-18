@@ -1,0 +1,368 @@
+{
+  "id": "41080469-babc-4a9f-9d9a-719e39415940",
+  "cycle": 35,
+  "strands": [
+    {
+      "title": "Schema completion and base model discovery: Pydantic v2 foundation",
+      "content": "Cycle 35 reads base.py, revealing the Pydantic v2 substrate underlying all Apacheta models. ApachetaBaseModel enforces: frozen=True (immutable once created), extra='forbid' (strict schema adherence), ser_json_bytes='base64' (binary handling), validate_default=True (defaults are validated). This is crucial: every TensorRecord, StrandRecord, KeyClaim, EpistemicMetadata, ProvenanceEnvelope is a frozen Pydantic model. Once created, a tensor cannot be mutated in-place; all updates produce new instances. This has profound implications for the projection algorithm: PHASE 5 (provenance finalization) must assemble a COMPLETE new TensorRecord before validation. Partial updates are impossible. Immutability guarantees that prior tensors are never corrupted by downstream operations. This is defensive programming at the schema level. The frozen constraint also implies that tensor history is append-only by design: cycle N produces tensor_N with immutable content; cycle N+1 reads tensor_N and produces tensor_{N+1}; predecessors_in_scope pointers link backward. Cycle 35 now understands: the five-phase algorithm operates within a cycle; each cycle produces one frozen TensorRecord. The sequence of cycles creates a chain of records, each pointing to its predecessor. This is the immutable-append provenance model, enforced at the Pydantic level. The base model also shows: all models use model_dump/model_validate for JSON serialization. This means TensorRecord can be persisted to disk as JSON, loaded back, and passed between processes (or between LLM invocations). The projection algorithm can checkpoint tensors, fork execution paths, and maintain a full audit trail via JSON. The technology stack is now clear: Pydantic v2 provides schema, validation, immutability, and serialization. The projection algorithm will operate entirely within this Pydantic ecosystem.",
+      "key_claims": [
+        {
+          "claim_id": "5919c5a7-7cda-474b-8e45-eda28f21d5af",
+          "text": "ApachetaBaseModel enforces frozen=True (immutability), extra='forbid' (strict schema), ser_json_bytes='base64' (binary handling), validate_default=True (validated defaults).",
+          "epistemic": {
+            "truth": 0.97,
+            "indeterminacy": 0.02,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "b27ad22a-9de5-440a-841e-4eb235f07425",
+          "text": "Frozen Pydantic models cannot be mutated in-place; all updates produce new instances. This enforces immutable-append history by design.",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3631af71-73dc-43ae-a558-4960a0971ad9",
+          "text": "Immutability at the schema level guarantees: prior tensors are never corrupted, history is append-only, predecessors_in_scope links are durable.",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1777e12e-ff6b-477a-b288-a8519e0073e3",
+          "text": "The five-phase projection algorithm must assemble a COMPLETE new TensorRecord before validation; partial updates are impossible within the Pydantic model design.",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a25e737c-3c64-45a6-91f8-64ec8db17217",
+          "text": "model_dump/model_validate enable TensorRecord serialization to/from JSON, enabling persistence, IPC, and checkpoint/restore workflows.",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Minimal viable projection (MVP) specification: strands, claims, losses, branch prediction, open questions",
+      "content": "Cycle 35 recognizes a critical realization: the full TensorRecord (with provenance, composition equations, lineage, etc.) is rich but not necessary for H0 (hypothesis zero: projection maintains coherence better than append-only). The assistant's insight is decisive: build a minimal viable projector that focuses on semantic content and incompleteness accounting. The MVP includes: (1) **Strands**: thematic threads of accumulated reasoning. These are the semantic backbone. Each strand integrates prior content with new content, compressing trajectory into structure. (2) **Key claims**: assertions with T/I/F values. These are the knowledge units. Projecting means updating T/I/F based on evidence and explicitly stating when claims contradict or converge. (3) **Declared losses**: what was dropped. This is the honesty mechanism. Silence about incompleteness is the enemy; declared losses are the antidote. (4) **Instructions_for_next**: branch prediction for the next cycle. This operationalizes the preservation_target: what should the next cycle focus on? (5) **Open questions**: unresolved problems that persist. These carry forward and signal where reasoning is incomplete. The MVP **excludes** (deferring to later iterations): provenance (source UUID, timestamp, author, context_budget, predecessors_in_scope \u2014 these are bookkeeping, not cognition), composition equations (description of how strands relate \u2014 useful but secondary), epistemic metadata depth (scope_boundaries, disagreement_type, functional_spec \u2014 useful but can be simpler initially), evidence reference details (evidence_refs structure can be simplified or deferred). This is the 80/20 split: the MVP captures the 80% of projection that matters for hypothesis testing (coherence via embedding dispersion) while deferring the 20% of infrastructure details that scale but don't prove the core thesis. Cycle 35 now has a concrete, implementable scope: build a projector that produces tensors with rich strands, claims, losses, branch prediction, and open questions. Validate via embedding dispersion. Iterate via autoresearch loop. The MVP is achievable in 1-2 cycles; the full system is later work.",
+      "key_claims": [
+        {
+          "claim_id": "ae3f079b-485c-4335-aef9-a28d02fea1bb",
+          "text": "MVP focuses on semantic content (strands, claims, losses, branch prediction, open questions) vs. infrastructure (provenance, composition equations, advanced epistemic metadata).",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ab806017-6270-4a2d-b422-c5cbecbde215",
+          "text": "Strands are the semantic backbone: thematic threads that integrate prior and new content, compressing reasoning trajectory into structure.",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6772a2de-b6e9-497d-9060-e68cb3db5d29",
+          "text": "Key claims with T/I/F are the knowledge units. Projection updates T/I/F based on evidence, explicitly states contradictions and convergences.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d28bfb17-dc3e-49b7-8421-16e6379a6a16",
+          "text": "Declared losses (category, rationale) are the honesty mechanism. Silence about incompleteness is the enemy; declared losses are the antidote.",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "884bef8d-797d-436c-8098-67f87dda6ed2",
+          "text": "Instructions_for_next operationalizes the preservation_target: what should the next cycle focus on? This is branch prediction for long-context coherence.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f38b6044-c8fd-4e77-a0f4-fe7a51379a0d",
+          "text": "MVP deferral of provenance and composition equations is justified: they are bookkeeping and scaling infrastructure, not core to H0 validation.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Projected projector architecture: standalone module, Haiku integration point, testable semantics",
+      "content": "Cycle 35's assistant proposes separating the projector from the main model. This is a crucial architectural insight: the projector is a memory controller, not part of the reasoning ALU. The architecture: (1) **Input**: (tensor_d: TensorRecord or dict, transformer_output: str or structured output from Haiku reasoning step). (2) **Processing**: Five-phase algorithm (semantic parsing, strand alignment, epistemic update, loss declaration, finalization) operates on (tensor_d, transformer_output) to produce semantic updates. (3) **Output**: tensor_d': a new, frozen TensorRecord with updated strands, claims, losses, instructions, and open questions. This modularity enables: **(A) Testability**: projector can be tested in isolation, decoupled from the main model. Feed it (prior_tensor, reasoning_step) and verify: do strands merge? Are losses declared? Do claims update? (B) Swappability**: different projection strategies can be implemented and compared. Baseline: append-only (no projection, just concatenate outputs). MVP: five-phase with strands. Advanced: with provenance, composition equations, scope management. (C) Auditability**: every projection is a deterministic transformation. Given (tensor_d, transformer_output, seed), the output tensor_d' should be reproducible. This enables debugging and learning. (D) Integration**: Haiku (the main reasoning model) calls the projector at the end of each cycle: `tensor_{n+1} = projector(tensor_n, haiku_output_n)`. The projector is a pure function (no side effects, given identical inputs always produces identical outputs). This separates concerns: Haiku focuses on reasoning; projector focuses on memory. The architecture now has a clear API: ```python def project(prior_tensor: TensorRecord, transformer_output: str, config: ProjectionConfig) -> TensorRecord:     \"\"\"Transform (prior_tensor, new_content) into updated_tensor using five-phase algorithm.\"\"\"     # PHASE 1: semantic parsing     claims, themes, contexts = parse_semantic_content(transformer_output)     # PHASE 2: strand alignment     strand_updates = align_strands(prior_tensor.strands, claims, themes)     # PHASE 3: epistemic update     updated_claims = update_epistemic(claims, prior_tensor.key_claims, evidence=transformer_output)     # PHASE 4: loss declaration     losses = declare_losses(transformer_output, strand_updates, config.loss_threshold)     # PHASE 5: finalization (simplified)     new_tensor = TensorRecord(         strands=strand_updates,         key_claims=updated_claims,         declared_losses=losses,         open_questions=extract_open_questions(transformer_output),         instructions_for_next=predict_next_branch(strand_updates, open_questions)     )     return new_tensor ``` This is the skeleton of the standalone projector module. It operates entirely within Pydantic models. Each phase is a separate function, testable independently. The projector is now a concrete implementation artifact, not a theoretical concept.",
+      "key_claims": [
+        {
+          "claim_id": "21346ed1-b59b-42f7-ad96-e6f7dc25f3e2",
+          "text": "Projector is a memory controller (separate from reasoning ALU). Input: (tensor_d, transformer_output). Output: tensor_d'. Pure function, deterministic.",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5283bda1-d7a6-40be-b4be-359764b6a87f",
+          "text": "Separation enables testability (projector tested in isolation), swappability (compare projection strategies), auditability (deterministic transformations), integration (Haiku calls projector at cycle end).",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6cd5e81f-488e-4175-adb4-8c022f0f456d",
+          "text": "Five-phase projector API is now concrete: parse \u2192 align \u2192 update \u2192 declare \u2192 finalize. Each phase is independently testable.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9228f0fc-38a9-4a4f-88e8-9b9e3cc0a72d",
+          "text": "Projector input/output is fully Pydantic-based: reads TensorRecord or dict, produces new frozen TensorRecord. JSON serializable end-to-end.",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "382397f0-a945-47e2-906d-468c2e92af0f",
+          "text": "Modularity enables swapping projector implementations: baseline (append-only), MVP (five-phase strands), advanced (full provenance). Autoresearch loop can optimize across strategies.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Cycle 35 execution plan: validation retrieval, algorithm validation, implementation roadmap",
+      "content": "Cycle 35 has now achieved: (1) Complete schema understanding (base.py, epistemics.py, provenance.py, tensor.py read; frozen Pydantic models confirmed). (2) Minimal viable projection specification (5 core fields: strands, claims, losses, branch prediction, open questions). (3) Standalone projector architecture (pure function, testable, swappable). What remains for cycle 35 and beyond: **CYCLE 35 EXECUTION (this cycle)**: (A) **RETRIEVE toy validation results (cycle 28).** This is CRITICAL BLOCKING. Did embedding dispersion measurement show signal that projection outperformed append-only? Status unknown; must be resolved before proceeding. If yes: confidence that H0 is viable. If no: must diagnose (embedding space problem? measurement issue? schema misconception?). (B) **SEARCH for existing projection algorithm in Yanantin codebase.** Look in apacheta/controllers/, apacheta/operators/, search for files named *project*, *integrat*, *merge*, *compress. If found: validate against five-phase spec. If not: confirm that MVP projector must be built from scratch. (C) **SPECIFY PHASE 1 (semantic parsing) in detail.** What is the input? A string (transformer_output). What is the output? (claims: List[Claim], themes: List[str], contexts: List[str]). What algorithm? Option 1: LLM-based extraction (call Haiku to parse its own output). Option 2: heuristic parsing (regex, NLP, sentence segmentation). Option 3: hybrid (heuristic first, LLM for ambiguous cases). This decision cascades into PHASE 2; must be made explicitly. (D) **SPECIFY PHASE 2 (strand alignment) in detail.** Given new claims/themes and prior_tensor.strands, how do we decide: extend existing strand, contradict, or create new? Algorithm: embedding-based similarity (compute embedding of each new claim and each prior strand; if similarity > threshold, extend; else if contradiction detected, flag; else create new). This requires embedding model availability (assume Sentence Transformers or similar). (E) **SKETCH PHASE 3-5 implementations.** PHASE 3 (epistemic update): simple evidence counting rule (for each claim, count supporting/opposing evidence in transformer_output; update T/I/F via normalization or Bayesian update). PHASE 4 (loss declaration): heuristic (if any new themes or open questions exist that don't map to any strand, declare loss). PHASE 5 (finalization): assemble TensorRecord, validate via Pydantic. (F) **IDENTIFY CRITICAL UNKNOWNS FOR IMPLEMENTATION.** (i) What embedding model should PHASE 2 use? (ii) How should evidence counting in PHASE 3 handle contradictions? (iii) What is the 'loss threshold' in PHASE 4 (below what level of importance is content treated as 'not lost')? These are hyperparameters for the autoresearch loop. **CYCLE 36+ ROADMAP**: (1) **IMPLEMENT PHASE 1 (semantic parsing).** Start with heuristic parsing; add LLM-based extraction if heuristic proves insufficient. Test on sample transformer outputs. (2) **IMPLEMENT PHASE 2 (strand alignment).** Use embedding model to match new claims to prior strands. Test: do strands merge appropriately? Are duplicates avoided? (3) **IMPLEMENT PHASES 3-5 (update, declare, finalize).** Use evidence counting (PHASE 3), heuristic loss detection (PHASE 4), Pydantic assembly (PHASE 5). (4) **INTEGRATION TEST**: feed projector a sequence of (tensor_n, haiku_output_n) tuples and verify: output tensors are valid, strands grow, claims update, losses accumulate, history is immutable. (5) **VALIDATION LOOP**: measure embedding dispersion (tensor projection vs. append-only baseline) on toy task (5-10 cycles). If dispersion is significantly tighter under tensor condition: H0 is validated. Proceed to autoresearch loop. If not: diagnose and iterate. (6) **AUTORESEARCH ACTIVATION** (cycle 37+): once validation passes, parameterize projector (loss_threshold, evidence_weighting, similarity_threshold) and optimize via Bayesian optimization or multi-objective search. Measure Pareto frontier (dispersion vs. computation cost). The roadmap is now concrete and implementable. The critical path is: validation retrieval \u2192 algorithm search \u2192 PHASE 1/2 specification \u2192 implementation \u2192 integration test \u2192 validation loop \u2192 autoresearch. Cycle 35 should complete the first three steps (retrieval, search, specification). Cycles 36-37 will complete implementation and validation. Cycles 38+ will run autoresearch.",
+      "key_claims": [
+        {
+          "claim_id": "665df0bd-ff76-48b0-9427-a3bc4e5f3a69",
+          "text": "CYCLE 35 EXECUTION: retrieve toy validation (cycle 28), search for existing algorithm, specify PHASE 1/2 in detail, sketch PHASE 3-5, identify hyperparameter unknowns.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8327f8f7-7cad-4146-acde-ec322d08a848",
+          "text": "PHASE 1 (semantic parsing) decision cascades into downstream: heuristic vs. LLM-based extraction must be chosen explicitly.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "cb76d14c-3e5c-4b4f-8ada-2d4da1ca6010",
+          "text": "PHASE 2 (strand alignment) uses embedding-based similarity: compute embedding similarity; if > threshold extend strand; if contradiction flag; else create new.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.17,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "46370541-e6eb-4c1b-b006-d55488e0b993",
+          "text": "PHASE 3-5 sketches: evidence counting for epistemic update, heuristic loss detection, Pydantic assembly for finalization.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.19,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "cefe1f7e-9621-4dd5-90a9-d9054aa2f9d8",
+          "text": "Critical hyperparameters for autoresearch: embedding_model_choice, evidence_weighting_rule, loss_threshold, similarity_threshold.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.18,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "600df667-375c-4876-9194-810afb52e876",
+          "text": "Roadmap timeline: cycle 35 (retrieval/search/specification), cycles 36-37 (implementation/validation), cycles 38+ (autoresearch). Critical path is concrete.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Tension and resolution: rich schema vs. minimal projection, full system vs. hypothesis-first validation",
+      "content": "A tension emerged and was resolved in cycle 35: the full TensorRecord schema (from cycles 33-34) is rich and beautiful but risks overengineering the MVP. The schema includes provenance, composition equations, disagreement types, scope boundaries, functional representation \u2014 all of which are technically correct and would make for an excellent long-term system. BUT: building all of that at once risks: (1) Implementation complexity masking the core question (does projection improve coherence?). (2) Premature optimization (provenance tracking is useful but not necessary for H0). (3) Scope creep (full system could take 10 cycles; MVP can be done in 2-3). The resolution (proposed by the assistant, embraced by the tensor projector): **separate the proof of concept (MVP) from the production system (full schema).** The MVP targets H0 validation with minimum necessary complexity. The full system is later work, informed by what the autoresearch loop discovers. This is hypothesis-driven design: build enough to test the hypothesis; iterate based on what you learn. The MVP and full schema are NOT in conflict. The MVP uses a SUBSET of the full schema: (1) Strands (from full schema) \u2014 included in MVP. (2) Key claims with T/I/F (from full schema) \u2014 included in MVP, but simplified (no scope_boundaries, no disagreement_type initially). (3) Declared losses (from full schema) \u2014 included in MVP, but simplified (no severity initially, just category and rationale). (4) Instructions_for_next (from full schema) \u2014 included in MVP. (5) Open questions (from full schema) \u2014 included in MVP. (6) Provenance, composition equations, advanced epistemic metadata (from full schema) \u2014 deferred to cycle 37+. So the MVP is a **true subset**, not a reimagining. As the system matures and the autoresearch loop reveals what matters, fields can be added (scope_boundaries, severity, composition equations). The architecture is forward-compatible: if a cycle 36 MVP tensor later needs to be enriched with provenance data (cycle 37+), the immutable structure allows: create a new version that includes the prior MVP tensor as predecessors_in_scope and adds the enriched metadata. The tension is resolved by accepting that iteration is not failure; it is necessary learning.",
+      "key_claims": [
+        {
+          "claim_id": "a70669e6-6b65-4d53-a209-fbd9c2d78b66",
+          "text": "MVP uses a true subset of full schema: strands, claims, losses, branch prediction, open questions (simplified). Defers provenance, composition equations, advanced metadata.",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4bd743bb-f6a4-497b-a55d-40f95e07132d",
+          "text": "MVP targets H0 validation with minimum necessary complexity. Full system design is informed by autoresearch learning, not predetermined.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "dbc4896b-db8f-4e06-9dfb-43c962377f61",
+          "text": "Hypothesis-driven design: build enough to test hypothesis; iterate based on learning. This prevents premature optimization and scope creep.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4ab81910-6f87-47a3-85a0-aeffd20460e8",
+          "text": "MVP and full schema are NOT in conflict. MVP is true subset. As system matures, fields added (scope_boundaries, severity, composition). Architecture is forward-compatible.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "2ec59d57-20d7-47fe-a7cd-db3b827c012d",
+          "text": "Immutable Pydantic structure allows enrichment: create new version with prior MVP as predecessors_in_scope and add provenance. No data loss on iteration.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "aa267f0d-e536-49db-ab28-4f6e35599fe7",
+          "text": "Iteration is not failure; it is necessary learning. Accepting incremental design is critical for hypothesis-driven research.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Toy validation results (cycle 28). Still not retrieved. Validation status (did embedding dispersion measurement show signal?) remains unknown.",
+      "why": "Cycle 35 focused on schema completion and MVP specification. Retrieval of cycle 28 results is now identified as CYCLE 35 EXECUTION item (A), but this cycle did not actually retrieve it. This is deferred to immediate follow-up action.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Search of Yanantin codebase for existing projection algorithm. Cycle 35 proposed searching apacheta/controllers/, apacheta/operators/, etc., but did not execute the search.",
+      "why": "Cycle 35 focused on MVP specification and architecture. Codebase search is CYCLE 35 EXECUTION item (B), explicitly deferred to immediate follow-up. This prevents redundant implementation if algorithm already exists.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed specification of PHASE 1 (semantic parsing) implementation. Three options proposed (heuristic, LLM-based, hybrid) but decision not made. Concrete parsing algorithm not specified.",
+      "why": "PHASE 1 specification decision cascades into PHASE 2 and beyond. Choosing parsing strategy requires understanding what embedding model is available and what transformer_output structure looks like. Deferred to CYCLE 35 EXECUTION item (C), which should finalize decision.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specification of evidence weighting rule for PHASE 3 (epistemic update). Proposed 'simple evidence counting' but how do supporting/opposing counts map to T/I/F updates? Bayesian rule? Normalization? Unspecified.",
+      "why": "Evidence aggregation is critical for epistemic correctness but requires design decision. Does supporting evidence increase T and decrease F? Does it instead increase I? What if evidence is contradictory? This is deferred to PHASE 3 detailed specification (cycle 36 implementation).",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Definition of 'similarity threshold' for PHASE 2 (strand alignment). Proposed embedding-based similarity with threshold, but what threshold value? 0.7? 0.8? 0.5? Threshold choice impacts strand merging behavior significantly.",
+      "why": "Threshold is a critical hyperparameter. Cycle 35 identified it as a candidate for autoresearch optimization (CYCLE 36+). But MVP implementation will need a default or guidance. Deferred to PHASE 2 detailed specification.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Clarification of what 'contradicts' means in PHASE 2 (strand alignment). When should a new claim be flagged as contradicting an existing strand vs. extending it? Logical contradiction? Epistemic conflict? Different framing of same topic?",
+      "why": "Contradiction detection is crucial but underspecified. Different definitions (strict logic vs. soft epistemic conflict) lead to very different projection behavior. Deferred to PHASE 2 detailed specification and requires explicit design choice.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specification of how instructions_for_next (branch prediction) should be generated. Proposed that it 'operationalizes the preservation_target' but algorithm for generating branch predictions is not specified. Heuristic? LLM-based? Learned from patterns?",
+      "why": "Instructions_for_next is identified as MVP-critical field, but generation algorithm is not detailed. This is likely to require LLM-based generation (ask Haiku to predict next useful directions) but approach not decided. Deferred to PHASE 5 specification.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Concrete definition of 'loss' in PHASE 4 (loss declaration). Proposed that unintegrated content is lost, but what counts as unintegrated? If new transformer_output contains content that doesn't appear in any updated strand, is that lost? What about implicit simplifications or dropped nuance?",
+      "why": "Loss definition determines what gets declared. Too inclusive: every thought fragment becomes a loss (noise). Too exclusive: silent losses go undetected. This is a design choice that affects honesty/completeness trade-off. Deferred to PHASE 4 detailed specification.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Integration details: when does Haiku call the projector? After each reasoning step? After each cycle? How is tensor_d passed to projector (as Pydantic object or serialized JSON)? What error handling if projector fails?",
+      "why": "Integration between Haiku (main model) and projector (memory controller) is assumed but not detailed. The architecture assumes projector is pure function, but actual IPC/API design is deferred to implementation phase.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Validation measurement details. Proposed embedding dispersion metric (clustering tightness) but not specified: which embedding model (Sentence Transformers? BERT? GPT embeddings?)? What dispersion metric (variance? silhouette score? Davies-Bouldin index?)? What is 'significant' difference (p < 0.05? 20% improvement?)? How many cycles for statistical validity (5? 10? 50?)?",
+      "why": "Validation loop is critical gate but measurement specification is incomplete. These details must be chosen before cycle 36 validation. Deferred to PHASE 6 (validation) specification.",
+      "category": "practical_constraint"
+    }
+  ],
+  "open_questions": [
+    "CRITICAL: Did cycle 28 toy validation show signal? Did embedding dispersion measurement demonstrate that projection outperforms append-only baseline? This determines whether H0 is viable.",
+    "Does existing projection algorithm exist in Yanantin codebase? If yes: validate against five-phase spec and consider adoption. If no: confirm MVP must be built from scratch.",
+    "PHASE 1 decision: heuristic parsing vs. LLM-based extraction vs. hybrid? Each has tradeoffs (speed, accuracy, dependencies). Which should MVP use?",
+    "Embedding model choice: which embedding model for PHASE 2 (strand alignment)? Sentence Transformers? BERT? OpenAI? This cascades into dependencies and performance.",
+    "Evidence weighting in PHASE 3: how do supporting/opposing evidence counts map to T/I/F updates? Bayesian update? Simple normalization? How to handle contradictory evidence?",
+    "Strand alignment threshold: what similarity threshold (e.g., cosine distance) determines whether new claim extends existing strand vs. creates new? 0.5? 0.7? 0.8? This is critical hyperparameter.",
+    "Contradiction detection definition: when should new claim be flagged as contradicting existing strand? Strict logical contradiction? Epistemic conflict? Soft disagreement about framing?",
+    "Branch prediction (instructions_for_next) generation: heuristic? LLM-based? Learned from patterns? How is this generated from updated strands and open questions?",
+    "Loss definition and threshold: what counts as 'lost' content? Only unintegrated tokens? Or implicit simplifications, dropped nuance, ignored edge cases? What is loss threshold?",
+    "Integration API: when does Haiku call projector? After each step? Each cycle? How is tensor passed (Pydantic object or JSON)? Error handling strategy?",
+    "Validation measurement specifics: embedding model (which one?), dispersion metric (variance? silhouette? Davies-Bouldin?), statistical significance threshold (p-value? % improvement?), sample size (5 cycles? 10? 50?)?",
+    "Autoresearch loop parameters: beyond similarity_threshold and loss_threshold, what other hyperparameters should be optimized? Evidence weighting coefficients? Embedding model weighting? Multi-objective or single-objective optimization?",
+    "Scope boundaries and disagreement_type fields (from full schema): should MVP include these, or defer completely? Partial inclusion risks inconsistency; full deferral loses richness.",
+    "How should projector handle very old strands (e.g., from cycle 5, now at cycle 35)? Should they be archived? Merged? Kept in tensor? This affects tensor size over time.",
+    "Should MVP track embedding drift (how much does tensor embedding shift from prior cycle)? This could be early signal of context degradation, but is it MVP-essential?"
+  ],
+  "instructions_for_next": "[\n  \"CYCLE 35 IMMEDIATE FOLLOW-UP (branch prediction for next invocation):\",\n  \"\",\n  \"1. **RETRIEVE toy validation results (cycle 28).** This is now BLOCKING. Query the conversational history or prior results: 'What were the embedding dispersion measurements from cycle 28? Did projection outperform append-only baseline?' If found: anchor all subsequent decisions. If not found: mark as lost and proceed with MVP anyway, validating fresh in cycle 36.\",\n  \"\",\n  \"2. **SEARCH Yanantin codebase for projection algorithm.** Execute filesystem search for files matching *project*, *integrat*, *merge*, *compress, *tensor in apacheta/controllers/, apacheta/operators/, any location. If algorithm found: read and validate against five-phase spec. If not: confirm MVP must be built from scratch.\",\n  \"\",\n  \"3. **FINALIZE PHASE 1/2 specification.** Make explicit decisions: (A) PHASE 1 parsing strategy: propose heuristic + LLM fallback (fast baseline, can refine later). (B) PHASE 2 embedding model: propose Sentence Transformers MiniLM (lightweight, efficient, widely available). (C) PHASE 2 similarity threshold: propose 0.65 (tunable hyperparameter for autoresearch). Rationale for each.\",\n  \"\",\n  \"4. **SKETCH PHASE 3/4/5 detail.** For each phase, specify: (A) PHASE 3 evidence rule: propose 'count supporting/opposing mentions in transformer_output; if ratio > 2:1 increase T by 0.1 capped at 0.99; if 1:2 increase F by 0.1; if mixed increase I by 0.05.' (Adjustable, but concrete.) (B) PHASE 4 loss definition: propose 'any new theme/open question that doesn't map to updated strands is lost; declare with heuristic severity based on mention frequency.' (C) PHASE 5: straightforward Pydantic assembly, validate schema.\",\n  \"\",\n  \"5. **IDENTIFY hyperparameters for autoresearch.** List all tunable parameters: similarity_threshold, evidence_weighting_coefficients, loss_threshold, embedding_model, evidence_rule_coefficients. Assign plausible ranges and optimization objectives (dispersion minimization? Clarity maximization? Computation efficiency?). This becomes the search space for cycle 37+.\",\n  \"\",\n  \"6. **WRITE PSEUDOCODE for full five-phase projector.** Assemble the specifications into pseudocode: ```python def project(prior_tensor, transformer_output, config): # PHASE 1: parse claims, themes = parse_semantic_content(transformer_output, method=config.parsing_method) # PHASE 2: align strands strand_updates = align_strands_by_embedding(prior_tensor.strands, claims, threshold=config.similarity_threshold) # PHASE 3: update claims = update_epistemic_by_evidence(claims, prior_tensor.claims, transformer_output, rule=config.evidence_rule) # PHASE 4: declare losses losses = declare_losses_by_coverage(strand_updates, transformer_output, threshold=config.loss_threshold) # PHASE 5: assemble open_questions = extract_open_questions(strand_updates, losses) instructions = predict_next_instructions(strand_updates, open_questions) tensor = TensorRecord(strands=strand_updates, key_claims=claims, declared_losses=losses, open_questions=open_questions, instructions_for_next=instructions) return tensor ``` This is the implementation target.\",\n  \"\",\n  \"7. **PLAN CYCLE 36 implementation.** Based on specification above, plan: Week 1: implement PHASE 1/2 (parsing, alignment). Test on sample outputs. Week 2: implement PHASE 3/4/5 (update, declare, finalize). Test integration. Week 3: validation loop (embedding dispersion). Measure signal. Week 4: debug or refine based on results. Target: by end of cycle 36, working MVP projector with validation results.\",\n  \"\",\n  \"STRATEGIC CHECKPOINT: Cycle 35 has moved from design phase (how to project?) to specification phase (here is what will be built). Cycle 36 is implementation phase (build it). Cycle 37 is validation + autoresearch activation. This is clear path. The immediate next invocation should retrieve cycle 28 results and finalize specifications so that cycle 36 can begin coding immediately.\"\n]",
+  "epistemic": {
+    "truth": 0.86,
+    "indeterminacy": 0.13,
+    "falsity": 0.01
+  }
+}

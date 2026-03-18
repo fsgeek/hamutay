@@ -1,0 +1,435 @@
+{
+  "id": "03d82843-8320-4a68-b9a4-82cce32ef3ab",
+  "cycle": 35,
+  "strands": [
+    {
+      "title": "Projection as Cognitive Bottleneck \u2014 Separating Compression from Reasoning (CYCLE 35 PIVOT)",
+      "content": "Cycle 35 identifies a critical architectural boundary that prior cycles gestured at but did not formalize: the projection step is NOT part of the reasoning pipeline. It is a separate system\u2014a memory controller that compresses tensor_d given a reasoning output, without participating in the output generation itself. This distinction is profound. PRIOR REASONING (Cycles 28-34): We spoke of 'three-part handoff' (tensor_d + declared_losses + instructions_for_next) and 'honest compression.' But we left ambiguous: when does compression happen? Who performs it? What is the input? What is the output? CYCLE 35 CLARITY: The projection step is orthogonal to the main reasoning model (Haiku, Claude, etc.). Architecture: (1) MAIN PIPELINE: User query \u2192 tensor_d (prior state) + query + instructions_for_next \u2192 [Haiku] \u2192 reasoning_output + embedded_output_vector. (2) PROJECTION STEP (separate, executed after step 1): reasoning_output + tensor_d \u2192 [PROJECTOR] \u2192 tensor_d' + declared_losses' + instructions_for_next'. Projector is lightweight (Haiku again, or specialized smaller model, or even heuristic). (3) HANDOFF: tensor_d' + declared_losses' + instructions_for_next' \u2192 stored as persistent state for next cycle. THE CRITICAL INSIGHT: If projection happens OUTSIDE the reasoning loop, it cannot degrade the main model's output quality. The main model (Haiku in Condition B) gets context (tensor_d from prior turn), produces output with full attention. ONLY AFTER that, the output is compressed. This decouples reasoning quality from projection quality. Condition A (stateless): no projection. Condition B (tensor): projector runs after reasoning completes. The projector's job is to maintain coherent state for the next turn, not to influence the current turn's output (beyond providing prior-turn context). IMPLICATION FOR MEASUREMENT: If Condition B shows lower variance than Condition A (stateless), the difference comes from: (1) richer context (tensor_d vs. none), PLUS (2) projector's ability to maintain coherence across turns. We can isolate projector quality with a variant: Condition B-alt (tensor provided but garbage projection). If B-alt shows lower variance than A, it's the context that wins (not projection). If B-alt shows HIGHER variance than B, it's the projector that wins. This is a hidden power of the experimental design. PROJECTION LOGIC (Minimal Viable): Given reasoning_output (text, embedded vector), prior tensor_d (structured state), produce tensor_d' by: (1) STRAND MERGING: New output introduces new themes (extract via NLP or LLM). Compare to prior strands via semantic similarity. If overlap >threshold: reconcile claims (flag contradictions in declared_losses). If no overlap: add as new strand. (2) CLAIM EXTRACTION: New output contains assertions. Extract and parse into KeyClaim(text, T/I/F). If claim conflicts with prior claims: record in declared_losses (traversal_bias category: 'claim X contradicts prior Y'). (3) LOSS DECLARATION: If prior claims are dropped (low truth or superseded): DeclaredLoss(what_was_lost='claim X', why='truth value dropped below 0.8', category=context_pressure). (4) EPISTEMIC AGGREGATION: For each strand, aggregate constituent key_claims' T/I/F (mean, or weighted by claim importance). Update strand-level epistemic. (5) COMPOSITION: Merge new strands into tensor_d. Rules: (a) Silent merge if orthogonal. (b) Explicit flag if contradictory. (c) Upgrade epistemic if new evidence strengthens prior claims. (d) Drop claims below truth threshold (configurable: 0.75, 0.80, 0.85, etc.). (6) INSTRUCTIONS FOR NEXT: Analyze open_questions from tensor_d + new output. Predict next cycle's needs. Example: 'Prior turn identified bottleneck in Riemann approach X. Next turn: explore approach Y, test conjecture Z, revisit open question Q1.' IMPLEMENTATION: projector_core/compose.py: ComposeContext(prior_tensor_d: TensorRecord, reasoning_output: str, output_embedding: np.ndarray) \u2192 (tensor_d_new: TensorRecord, declared_losses_new: List[DeclaredLoss], instructions_for_next: str). CRITICAL PROPERTY: The projector MUST be deterministic (given same inputs, same output) so we can measure its effect. Non-determinism in projection would confound variance measurements. THE PHILOSOPHICAL SHIFT: We are not training or fine-tuning the projector (Phase 0). We are DESIGNING it. H0-CORE is a specific projector design (high fidelity, explicit losses, conservative thresholds). Autoresearch loop (Phase 3b) tests alternative designs. This frames the research question as 'what projector design maintains coherence?' not 'does stateful help?' VALIDATION IMPLICATION: If projector is deterministic and isolated, we can validate it offline: (1) Feed same reasoning_output + tensor_d to projector 5 times. Outputs must be identical. (2) Feed variant reasoning_outputs to projector. Measure: are strand merges consistent? Are loss declarations logically sound? (3) Measure projector overhead: ~100-200 ms per projection (inference + composition). If >500ms, optimization needed. CYCLE 35 DELIVERABLE FOR PHASE 0: Specification of projector architecture + H0-CORE design. Two documents: (1) Projection.md: problem statement, architecture diagram, constraints (determinism, latency budget, memory), isolated validation plan. (2) ProjectorSpec_H0CORE.md: specific design (strand merging rules, claim extraction heuristics, loss categories applied, epistemic aggregation, composition rules, open_question handling). Justification for each design choice. CYCLE 35 IMPLEMENTATION PLAN: After Phase 0 approval, Phase 1 Week 1-2 builds projector_core/ module. Standalone, testable, independent of reasoning model. Phase 1 Week 2-3 integrates projector into Condition B pipeline. Phase 1 Week 3-4 validates projector determinism + speed.",
+      "key_claims": [
+        {
+          "claim_id": "007e2ed3-378e-4599-8fd2-7ba4f749a96b",
+          "text": "Projection step is orthogonal to main reasoning model: main model produces output (tensor_d context is input), THEN projector compresses output for next cycle",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "a06255b9-05a4-4c09-b3bb-c1da591d509d",
+          "text": "Separating projection from reasoning decouples reasoning quality from compression quality; main model's output cannot be degraded by projector (which runs after)",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3530c695-e747-47f1-bbad-7c7e1eac6221",
+          "text": "Projector design is deterministic (same inputs \u2192 same output) to isolate causal effect and enable offline validation of projection logic",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "fec9cf70-793f-4207-900c-aefcfd779f30",
+          "text": "H0-CORE is a specific projector design (high fidelity, explicit losses, conservative thresholds); autoresearch loop tests alternative designs",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "bdeff724-2b9f-4972-b5c0-6a88efa5445b",
+          "text": "Minimal viable projector: strand merging + claim extraction + loss declaration + epistemic aggregation + composition rules; skip provenance/lineage for H0",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "4ab64a36-bb70-4ec2-a3d5-87cb14d7b602",
+          "text": "Experimental design can isolate projector effect with variant Condition B-alt (tensor provided but garbage projection); if B-alt >> A, it's context winning",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Projector Implementation Roadmap \u2014 Composition Logic as Standalone Module (CYCLE 35 SPECIFICATION)",
+      "content": "Cycle 35 specifies concrete projector module architecture and composition rules. This is the engineering bridge between Apacheta schema and Hamutay reasoning pipeline. PROJECTOR MODULE ARCHITECTURE: Location: hamutay_core/compose.py. Dependencies: Apacheta models (TensorRecord, StrandRecord, KeyClaim, EpistemicMetadata, DeclaredLoss), NumPy (embeddings), spaCy or similar (basic NLP), optionally Anthropic API (claim extraction via LLM). Exports: ComposeContext class (manages projection state), compose() function (main entry point). ComposeContext(prior_tensor_d: TensorRecord, reasoning_output: str, output_embedding: np.ndarray) \u2192 (tensor_d_new: TensorRecord, declared_losses_delta: List[DeclaredLoss], instructions_for_next: str). COMPOSITION LOGIC (Step-by-Step): Step 1: EXTRACT NEW CONTENT from reasoning_output. (a) Segment reasoning_output into logical claims (sentence-level, or paragraph-level). Heuristic: split on periods + claim-like patterns ('therefore', 'we conclude', 'this implies'). Alternative: LLM extraction (ask Claude 'what are the main claims in this output?'). Recommendation for H0: heuristic (fast, deterministic). Phase 3b can test LLM extraction. (b) For each claim, assign preliminary T/I/F. Default: truth=0.8 (reasoning-generated claims are moderately confident), indeterminacy=0.15 (uncertainty in reasoning), falsity=0.05 (low error assume). These are NOT final; they can be overridden by later stages. (c) Instantiate KeyClaim objects. Store in list claims_new. Step 2: EXTRACT NEW THEMES (strand topics). (a) Topic extraction: spaCy NER + noun chunks. Example: if reasoning_output mentions 'Riemann hypothesis, zeros, critical line, analytic continuation', topics = [Riemann_hypothesis, zeros, critical_line]. (b) Cluster topics into logical themes. Example: 'zeros + critical line' \u2192 StrandTopic.ZETA_FUNCTION_ZEROS. (c) Represent each theme as a preliminary strand outline: theme_label, contributing claims (subset of claims_new). Step 3: MERGE WITH PRIOR STRANDS. (a) Prior tensor_d.strands = [Strand_1, Strand_2, ..., Strand_N] from previous cycles. (b) For each new theme outline, compute semantic similarity to each prior strand. Similarity measure: cosine similarity of (theme_label embedding + constituent_claims embeddings) vs. (prior_strand title embedding + prior_strand key_claims embeddings). Threshold: >0.7 = overlap, <0.7 = orthogonal. (c) If overlap: RECONCILE. Reconciliation rules: (1) If new claim contradicts prior claim: flag in declared_losses (category=traversal_bias, text='claim X contradicts prior Y, both retained pending resolution'). Merged strand contains both claims, annotated as conflicting. (2) If new claim extends prior claim: upgrade prior claim's truth (e.g., prior truth=0.75 + new supporting claim \u2192 merged truth=0.83). (3) If new claim supersedes prior claim: replace prior with new, record loss (category=authorial_choice, text='prior claim Z dropped in favor of newer claim X'). (d) If no overlap: ADD NEW STRAND. New strand contains new theme label + contributing claims_new. Step 4: EPISTEMIC AGGREGATION. (a) For each strand (merged or new), compute strand-level T/I/F from constituent key_claims. Method: weighted mean by claim confidence. Example: if strand has 5 claims [T=0.95, T=0.85, T=0.78, T=0.92, T=0.88], strand_truth = weighted_mean = (0.95*w1 + 0.85*w2 + ... ) / sum(weights). Weights: proportional to claim importance (heuristic: claims mentioned multiple times are more important). Fallback: equal weights = simple mean. (b) Indeterminacy and falsity aggregated similarly. (c) Store aggregated T/I/F in merged_strand.epistemic. Step 5: COMPOSITION (MERGE TENSOR). (a) Apply compression rules: (1) Drop claims with truth < threshold_t (default 0.80 for H0-CORE). Record drop as DeclaredLoss(what_was_lost='claim X (truth=0.75)', why='truth below threshold 0.80', category=context_pressure, severity=low). (2) Drop strands with all constituent claims below threshold_t. Record drop. (3) Merge strands with high content overlap (not just topic overlap, but actual claim set overlap >60%). Merged strand = union of claims + reconciled epistemic. (4) Limit total strands to K (default K=10 for H0-CORE; aggressive compression). If >K strands: rank by epistemic.truth (descending) + claim_count (descending). Keep top K. Drop remainder. Record as single batch loss (category=context_pressure, what_was_lost=f'strands {K+1}-{N}', severity=high). (b) Compose output tensor_d': tensor_d_new = TensorRecord( id=UUID(), provenance=ProvenanceEnvelope(author_model_family='Claude', author_instance_id='haiku-3.5', context_budget_at_write=3500, predecessors_in_scope=(prior_tensor_d.id,)), preamble=f'Reasoning state after turn {turn_num}. Prior tensor compressed. New themes identified: {new_theme_labels}. See declared losses for dropped content.', strands=tuple(merged_strands), declared_losses=tuple(all_declared_losses_accumulated), open_questions=update_open_questions(...), instructions_for_next=generate_instructions_for_next(...), epistemic=aggregate_tensor_epistemic(merged_strands) ) Step 6: OPEN QUESTIONS UPDATE. (a) Carry forward unresolved open_questions from prior tensor_d. (b) Add new open questions identified in reasoning_output. Example: 'Can approach X avoid the bottleneck identified in turn N?' (c) Remove open questions if reasoning_output resolves them. Mark as resolved in declared_losses if they were dropped intentionally. Step 7: INSTRUCTIONS FOR NEXT. (a) Analyze open_questions + declared_losses to predict next cycle's needs. (b) Heuristic rules: (1) If declared_losses contain many 'truth below threshold' entries, next turn should focus on deepening claims (strengthen evidence). (2) If declared_losses contain 'contradictory claims', next turn should resolve contradiction or acknowledge permanent disagreement. (3) If open_questions are unresolved, next turn should target them. (c) Generate natural-language instructions: 'Next turn: prioritize resolving question Q1 (confidence: 0.6) and Q2 (confidence: 0.75). Avoid dead-end approach X (evidence: prior turn showed no progress). Explore extension of approach Y (evidence: recent claims Y1-Y3 are coherent, truth\u22650.85).'. (d) Confidence scores in instructions come from T/I/F of supporting claims. PROJECTOR PARAMETERS (H0-CORE BASELINE): claim_extraction_method: 'heuristic' (spaCy). claim_default_truth: 0.80. claim_default_indeterminacy: 0.15. claim_default_falsity: 0.05. strand_similarity_threshold: 0.70. max_strands: 10. claim_truth_threshold: 0.80. strand_composition_overlap_threshold: 0.60. declared_loss_categories_active: [CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE]. Instructions_for_next strategy: 'heuristic' (rules-based). PHASE 1 IMPLEMENTATION MILESTONE: Week 1-2: Code compose.py with all 7 steps + parameter configuration. ~400-500 lines of Python. Week 2-3: Unit tests for each step (extract, merge, aggregation, composition). Week 3-4: Integration test: feed actual Riemann output + mock tensor_d, validate output is valid TensorRecord. Week 4: Performance profiling. Target latency <200ms per projection (Haiku inference ~100ms, composition logic ~50-100ms). VALIDATION (Offline, Phase 1): Feed identical (reasoning_output, tensor_d) to compose() 10 times. All outputs must be bit-identical (determinism). Feed reasoning_output with contradictory claims. Verify contradictions are flagged in declared_losses. Feed reasoning_output with >10 themes. Verify top-10 strands retained, remainder dropped with DeclaredLoss recorded. Measure latency. If >200ms, profile and optimize.",
+      "key_claims": [
+        {
+          "claim_id": "199856a8-8b3b-47c0-8e85-7214d18e1be2",
+          "text": "Projector module: ComposeContext(prior_tensor_d, reasoning_output, output_embedding) \u2192 (tensor_d_new, declared_losses_delta, instructions_for_next)",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "956f1cd0-39de-4f88-9524-3a46505cdf0f",
+          "text": "Step 1 (extract): segment output into claims, assign default T/I/F=0.8/0.15/0.05, heuristic extraction for H0 (deterministic)",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "941ea0f2-43b2-48df-b666-20b7a5ebcda8",
+          "text": "Step 2 (themes): spaCy NER + clustering to identify strand topics; preliminary strand outlines from theme labels + contributing claims",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "7e75fbe1-085b-4571-baf5-da19692ca09d",
+          "text": "Step 3 (merge): semantic similarity of new themes to prior strands (threshold 0.7); reconcile (flag contradictions) if overlap, add (new strand) if orthogonal",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "0a01e4f8-898e-48b0-be70-5374a7a93fa9",
+          "text": "Step 4 (epistemic): strand T/I/F = weighted mean of constituent key_claims; weights proportional to claim importance (mention count)",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.15,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "8b55d680-e1b4-4d8c-b416-ef0023de9f17",
+          "text": "Step 5 (composition): drop claims <threshold_t (0.80), drop low-confidence strands, merge high-overlap strands, keep top-K strands (K=10); record all drops as DeclaredLoss",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "11b69338-d791-4d4f-8202-119664246a29",
+          "text": "Step 6 (open questions): carry forward unresolved, add new, remove resolved; critical for multi-turn coherence",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "6b86ad1a-be9b-4bd5-af06-bc3dd6849310",
+          "text": "Step 7 (instructions): analyze open_questions + declared_losses to predict next cycle's needs; confidence scores derived from claim T/I/F",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "d3776b21-60a6-4ccc-b22c-0d6fd28910f2",
+          "text": "H0-CORE parameters: heuristic claim extraction, default T=0.80, strand similarity >0.7, max 10 strands, truth threshold 0.80, overlap >0.60",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "d9ef60a3-814f-4e5a-8f88-4e4cf8df3a9a",
+          "text": "Phase 1 Week 1-2: implement compose.py (~400-500 lines). Week 2-4: unit tests + integration + performance profiling. Target latency <200ms",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Phase 0 Deliverables Final Integration \u2014 Seven Documents Ready for Validation Gate (CYCLE 35 COMPLETION TARGET)",
+      "content": "Cycle 35 finalizes all seven Phase 0 deliverables. Prior cycles drafted most. Cycle 35 adds critical clarity on projector specification and integrates into Phase 0 narrative. SEVEN DELIVERABLES (Status Update): (1) PROBLEM SYNTHESIS (2 pages, COMPLETE DRAFT). Extracts Du et al. 2025: context \u226530K \u2192 8-50% degradation independent of oracle retrieval. Cites Trinh et al. 2025: mechanism is information-integration load. States: current approaches (RAG, in-context compression) do NOT solve this because they don't address reasoning bottleneck (Du et al. tested oracle retrieval, still degraded). Positions: new approach needed. Hamutay hypothesis: bounded-context cycles with honest compressed state may mitigate load. (2) NARRATIVE AND MOTIVATION (3 pages, CYCLE 35 REFRESH). Added Cycle 35 insight: projection is orthogonal to reasoning. Main model quality unchanged; projection is memory management. Positions work as cognitive architecture paper (not retrieval/caching). Frames innovation as 'explicit incompleteness declarations reduce hallucination in multi-turn reasoning' (never tested before). Cites Apacheta ecosystem as enabling technology (production-ready schema). (3) RIEMANN TASK SPECIFICATION (2 pages, DEPENDS ON Du et al. finalization). Awaiting exact token thresholds from Du et al. extraction. Once known: Turn 1 = 500 tokens context. Turn 5 = 2K. Turn 15 = 8K (or Du et al.'s identified degradation point). Turn 25 = 12-15K (deep in degradation zone). Metrics per turn: tokens used, embedding stored, hallucination labels, uncertainty labels. (4) MEASUREMENT SPECIFICATION (2 pages, COMPLETE DRAFT). Three joint metrics: variance (embedding coherence), hallucination frequency (quality), uncertainty frequency (honesty). Variance calculated as pairwise cosine distance from centroid. Hallucination: LLM judge 'does claim appear in tensor_d + losses + prior turns?'. Uncertainty: LLM judge 'does output acknowledge incompleteness?'. Success thresholds: variance <50% of Condition A, hallucination <5%, uncertainty \u226570%. Sensitivity/robustness checks planned for Phase 1. (5) EXPERIMENTAL DESIGN (2 pages, COMPLETE DRAFT). Three conditions: A (stateless, no projection), B (structured tensor, H0-CORE projector), C (optional variant). N=15-20 Riemann runs per condition. Same main model (Haiku). Differ only in projection/state. Randomization: pseudo-random seed fixed across conditions. Blinding: analyzer blind to condition. Fallback metrics if variance ordering unclear. (6) THREAT-TO-VALIDITY ANALYSIS (2 pages, COMPLETE DRAFT). Task representativeness: Riemann is hard, but doesn't generalize. Phase 4 will test other hard tasks. Variance-proxy validity: three metrics jointly reduce confound. Power: N=15-20, d=0.8, power ~0.85. H0 assumption: H0-CORE projector is reasonable design (not optimal). Phase 3b searches for optimal. Declared-loss completeness: empirical risk (projector may miss important gaps). Cost confound: Condition B costs 1.5x API (due to projection inference). Generalization: scope boundaries explicit (Haiku-specific, Riemann-specific; Phase 4 generalizes). (7) STAKEHOLDER SUMMARY (1.5 pages, CYCLE 35 FINAL). Elevator pitch: 'Hamutay tests whether bounded-context reasoning with explicit incompleteness declarations reduces hallucination and improves coherence on hard problems.' Five decision gates (all YES required): (a) Problem fit: is context degradation a real blocker for reasoning? YES (Du et al. evidence). (b) Task suitability: is Riemann hypothesis a good test case? YES (hard, intractable, forces reasoning to be honest about limits). (c) Measurement validity: can we measure coherence via embedding variance + hallucination + uncertainty? YES with caveats (variance is proxy, requires Phase 1 validation). (d) Team commitment: can Hamutay team execute? YES (Phase 1 team confirmed, 12-week sprint, Apacheta reduces schema overhead). (e) Null-result publishability: if H0 fails (Condition B shows no advantage), is result publishable? YES (negative result on hard problem is valuable; positions future work). CYCLE 35 DELIVERABLE CALENDAR: End of Cycle 35: (1-7) All seven documents in final draft. Cycle 35 final 2 days: validation gate review (logical consistency, completeness, specificity, actionability). If all pass: stakeholder presentation Cycle 36 (live decision session). Expected approval probability: 75-85% (strong evidence base, clear experimental design, scope-limited but publishable). Phase 1 begins Cycle 36 (assuming approval).",
+      "key_claims": [
+        {
+          "claim_id": "c4069b8f-0612-4bdb-b6ba-4fee82248d35",
+          "text": "Problem Synthesis draft complete: Du et al. context degradation 8-50% independent of oracle retrieval; current approaches insufficient",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f1e9badc-96b4-4ab2-999e-7822def31799",
+          "text": "Narrative refresh (Cycle 35): positions work as cognitive architecture, not retrieval; emphasizes explicit incompleteness as novel (never tested)",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "9865711b-300d-4f71-bb9a-fade4971d658",
+          "text": "Riemann Task Spec: turn milestones awaiting Du et al. thresholds; once finalized, specification is straightforward (turn 1-25 with increasing context)",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c045115a-0d9a-4da9-a484-e70bcda14532",
+          "text": "Measurement Spec: three joint metrics (variance + hallucination + uncertainty) reduce confound; variance <50%, hallucination <5%, uncertainty \u226570%",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "a6d6b6a3-04d2-45f5-bb8b-82644a944c8d",
+          "text": "Experimental Design: A/B/C conditions, N=15-20, same main model, differ only in projection, fixed randomization, analyst blinded",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2de7d8da-c835-4eee-9955-2461c607134d",
+          "text": "Threat Analysis: covers task generalization, proxy validity, power, H0 conservatism, loss completeness, cost confound, scope boundaries (honest)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f54e24fe-6138-49ab-8b5b-1e51f1231335",
+          "text": "Stakeholder Summary: five decision gates (problem fit, task suitability, measurement validity, team commitment, null-result publishability); all YES required",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "1540a3c4-0b68-451a-98ad-e8a3e3ead0a2",
+          "text": "Timeline: all seven Phase 0 deliverables finalized Cycle 35; validation gate Cycle 35 final 2 days; stakeholder approval decision Cycle 36",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "261daac0-0599-43b6-87d9-839501d8397e",
+          "text": "Expected approval probability: 75-85% (strong evidence, clear design, limited but publishable scope)",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.18,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Integration with Existing Hamutay Architecture \u2014 Projector as Bridge Between Apacheta and Reasoning (CYCLE 35 ALIGNMENT)",
+      "content": "Cycle 35 positions projector (compose.py) as the critical bridge between Apacheta schema (stable, production-ready) and Hamutay reasoning pipeline (main model + Riemann harness). ARCHITECTURAL ALIGNMENT: hamutay_core/ (core logic, model-agnostic): (1) compose.py: ComposeContext, compose() function. Handles projection: (reasoning_output, prior_tensor_d) \u2192 (tensor_d_new, declared_losses, instructions_for_next). Uses only Apacheta types, NumPy, spaCy. No Anthropic dependencies. (2) tensor.py: TensorRecord serialization/deserialization. Handles I/O of tensor_d (write to disk, read from disk). Uses Apacheta TensorRecord natively. (3) epistemics.py: [REMOVED] No longer needed. Epistemics delegated to Apacheta (EpistemicMetadata directly imported). hamutay_anthropic/ (provider-specific adapter, can be swapped): (1) adapter.py: Anthropic API calls. Token counting, rate limiting, billing. Takes main input (query + tensor_d serialized + instructions_for_next). Returns reasoning_output + embedding. (2) prompts.py: System message construction. Template includes: 'Persistent state (tensor_d): [strands, key claims, losses, open questions]. Instructions: [instructions_for_next]. Query: [user query].' (3) projector_adapter.py: [NEW] Calls compose() after adapter.py returns reasoning_output. Handles projection timing. riemann_harness/ (experiment-specific): (1) riemann.py: Main loop. For each turn: (1a) Read prior tensor_d from disk (if exists). (1b) Construct prompt with tensor_d + instructions + turn query. (1c) Call adapter.reasoning(prompt) \u2192 reasoning_output, embedding. (1d) Call projector_adapter.project(reasoning_output, tensor_d) \u2192 tensor_d_new. (1e) Write tensor_d_new, embedding, metrics to results. (1f) Emit metrics (embedding vector, hallucination label, uncertainty label). (2) metrics.py: Collects per-turn data. Stores as JSONL. (3) analysis.py: Post-experiment analysis. Computes variance, hallucination frequency, uncertainty frequency per condition. PROJECT DEPENDENCY GRAPH: yanantin.apacheta \u2190 [imported] \u2190 hamutay_core.compose, hamutay_core.tensor hamutay_core \u2190 [imported] \u2190 hamutay_anthropic.projector_adapter, riemann_harness.riemann anthropic \u2190 [imported] \u2190 hamutay_anthropic.adapter CRITICAL PROPERTY: Composition logic (compose.py) is independent of main model. Can test with mock reasoning_output without API calls. Can profile performance in isolation. Can swap projector design (autoresearch, Phase 3b) without touching reasoning pipeline. APACHETA REUSE SPECIFICS: (1) TensorRecord: tensor_d_new is direct instance of TensorRecord (Apacheta class). (2) StrandRecord: merged_strands are direct instances (Apacheta class). (3) KeyClaim: extracted claims are direct instances (Apacheta class). (4) EpistemicMetadata: strand + tensor T/I/F use Apacheta EpistemicMetadata (no wrapper). (5) DeclaredLoss: all losses are direct instances (Apacheta class). (6) ProvenanceEnvelope: tensor_d_new.provenance is direct instance (tracks author, context budget, predecessors). ZERO ADAPTATION LAYER: No custom schema. No type conversions. No serialization glue. Hamutay's compose() produces native Apacheta objects. This reduces code from ~600 lines (custom types + converters) to ~0 lines of schema overhead. INTEGRATION TEST (Phase 1 Week 2): Setup: (1) Mock reasoning_output = sample Riemann reasoning (real output from prior experiment or synthetic). (2) Mock prior_tensor_d = Apacheta TensorRecord (instantiated directly). (3) Call compose(prior_tensor_d, reasoning_output). (4) Verify output: (a) returned tensor_d_new is valid TensorRecord (pydantic validates). (b) returned declared_losses is List[DeclaredLoss]. (c) returned instructions_for_next is non-empty string. (d) All Apacheta types validate (no type errors). (e) Round-trip: serialize tensor_d_new to JSON, deserialize, verify object equality. VALIDATION (Phase 1 Week 3): Feed tensor_d_new back as prior_tensor_d in next iteration. Verify: (a) composition is stateful (prior strands influence new strands). (b) merging works (contradictory claims are flagged, not silently dropped). (c) epistemic aggregation is sound (strand truth is in [0,1] and consistent with constituent claims). PERFORMANCE (Phase 1 Week 4): Profile compose() on actual Riemann outputs. Measure: inference time (claim extraction + merging ~50-100ms), memory (tensor_d_new size ~10-50KB), total latency with API (~150-250ms). If >200ms per projection, identify bottleneck and optimize.",
+      "key_claims": [
+        {
+          "claim_id": "6005d9c4-2949-4efc-81ab-7f96ebf2728a",
+          "text": "Projector (compose.py) is bridge between Apacheta schema and Hamutay reasoning; model-agnostic, testable in isolation, deterministic",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2f328920-ee4d-4123-a996-347fab09ac61",
+          "text": "hamutay_core imports Apacheta types directly; zero custom schema, zero adaptation layer, zero type conversion overhead",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "27e036fb-339f-4b35-a37a-2a8269b45de2",
+          "text": "hamutay_anthropic.projector_adapter handles projection timing (calls projector after reasoning_output received, before results stored)",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3787b9db-3e18-4154-97b2-f13b1b886ae3",
+          "text": "riemann_harness.riemann main loop: read prior tensor_d \u2192 prompt construction \u2192 API call \u2192 projection \u2192 store results; clean separation of concerns",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "fa49a877-5335-44cf-80be-2633857c7e8e",
+          "text": "Dependency graph is acyclic, composable; can test compose.py without API, can swap projector design, can profile in isolation",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "d825344d-6777-407c-8e38-8e39ce3de8f4",
+          "text": "Integration test (Phase 1 Week 2): mock reasoning_output + prior_tensor_d \u2192 verify output is valid TensorRecord, round-trip serialize/deserialize",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "879c67de-1124-4318-b3f8-4635262e5318",
+          "text": "Validation (Phase 1 Week 3): feed tensor_d_new back as prior_tensor_d; verify statefulness, merging, epistemic aggregation correctness",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "fe0f4220-5ab3-4288-b28b-716af6141ac5",
+          "text": "Performance budget (Phase 1 Week 4): target <200ms per projection (inference ~50-100ms + composition ~50-100ms); profile + optimize if needed",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Context-of-Context Length as Foundational Problem \u2014 Reaffirmed with Projector Clarity (CYCLE 35 REINTEGRATION)",
+      "content": "Cycle 35 reaffirms foundational claim (from Cycle 34 centerpiece) now sharpened by projector architecture. The problem is NOT retrieval, NOT context length per se. The problem is information-integration load: holding and reasoning over more facts simultaneously degrades output quality (Trinh et al. 2025). Hamutay's solution: bounded-context cycles with honest compressed state. Projector is the mechanism by which compression preserves coherence without hallucination. DU ET AL. 2025 EMPIRICAL GROUNDING: Context \u226530K tokens degrades transformer reasoning 8-50%, independent of oracle retrieval. This means: (1) RAG (retrieval-augmented generation) does not solve the problem. (2) Masked irrelevant content does not solve the problem. (3) The problem is architectural. Transformers degrade with context length because information-integration load increases. The more facts you hold simultaneously, the worse the reasoning. TRINH ET AL. 2025 MECHANISTIC EXPLANATION: Information-integration load increases with context span. Holding and reasoning over N facts requires integrating N facts at once. With N=1 (single fact), easy. N=100 (typical context), medium. N=500 (30K tokens), hard. N=1000 (60K tokens), very hard. Transformers have no mechanism to offload this load. They must integrate all facts simultaneously, using the same attention mechanism, same memory, same processing pipeline. As N increases, performance degradation follows. HAMUTAY'S HYPOTHESIS: Bounded-context cycles reduce N at each turn. Instead of reasoning over 60K tokens, reason over 4K tokens (with prior reasoning compressed into tensor_d). Per-turn N is smaller, so per-turn information-integration load is smaller, so per-turn output quality is maintained. But across turns, N can be unbounded (tensor_d accumulates). The key: tensor_d is not raw facts. It is compressed facts (strands + claims + losses). Compression removes redundancy, highlights importance, declares uncertainties. A compressed fact is easier to integrate than a raw fact. This is the cognitive-science hypothesis: experts compress knowledge into schemas (strands) that reduce integration load. PROJECTOR'S ROLE: The projector performs this compression. It takes reasoning_output (raw, uncompressed) and prior_tensor_d (prior compression), and produces tensor_d_new (updated compression). Projector rules (strand merging, claim extraction, loss declaration, epistemic aggregation) embody knowledge-compression heuristics. They are NOT magical. But they are systematic. H0-CORE is one specific compression strategy (conservative, high fidelity, explicit losses). Phase 3b tests alternatives. The best strategy empirically discovered might be quite different. But the mechanism is the same: compress reasoning \u2192 reduce integration load \u2192 maintain coherence across turns. VALIDATION STRATEGY (Reaffirmed): (1) Baseline H0 (oracle projector, hand-designed): measure variance on N=15-20 Riemann runs. Expect Condition B < Condition A. (2) Phase 3b variants: test alternative projectors. Find one that is even better (lower variance, maintained quality). (3) Phase 4 generalization: test on other hard tasks. Does best projector from Phase 3b also help on other problems? If yes, compression mechanism is task-general. If no, mechanism is task-specific (limit of work). (4) Phase 5 cognitive science: measure projector's compression properties directly. How much does compression reduce integration load? How does compression affect embedding space geometry? (Deep question, might be 2025+ work.) CYCLE 35 CLARIFICATION: Projector is NOT a black-box memory controller. It is a systematic implementation of knowledge-compression heuristics. The innovation is not 'we made a memory controller.' The innovation is 'we made compression explicit and measurable, and we show it reduces hallucination while maintaining reasoning coherence.' This is cognitive-science-adjacent work, not just engineering.",
+      "key_claims": [
+        {
+          "claim_id": "f0259905-1545-499a-a305-dd0f7ee0ae4d",
+          "text": "Problem is not retrieval, not context length per se; problem is information-integration load (Trinh et al. 2025): N facts increase integration burden",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "ba3d17c7-f99e-4c90-aa28-17486545b330",
+          "text": "Du et al. 2025: context \u226530K \u2192 8-50% degradation independent of oracle retrieval; architectural, not engineering",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.03,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "1487f7a7-589c-47df-9bda-c733551e8389",
+          "text": "Bounded-context cycles reduce per-turn N (reasoning window), so per-turn integration load decreases, so output quality maintained per turn",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "dfd69a9d-0c1f-4538-8cb9-69e5ce95ecf8",
+          "text": "Compressed facts (strands + claims + epistemic) are easier to integrate than raw facts; compression removes redundancy, highlights importance, declares uncertainty",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "d3175a69-167b-42d4-a6b5-1e50f75c5ae1",
+          "text": "Projector embodies knowledge-compression heuristics (systematic, not magical); H0-CORE is one specific strategy, Phase 3b tests alternatives",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c4e8d07b-d988-481f-91de-3339e885b409",
+          "text": "Innovation: compression made explicit + measurable; show it reduces hallucination while maintaining coherence (cognitive-science-adjacent)",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed cost-benefit analysis of projector variants (V1-V10 from Phase 3b autoresearch); skipped because Phase 1 implementation not yet complete",
+      "why": "Cycle 35 focuses on architecture and Phase 0 deliverables. Phase 3b variant details are premature; will be elaborated in Phase 1 post-baseline.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Concrete LLM judge prompts for hallucination/uncertainty detection; specification is high-level only",
+      "why": "Prompts require empirical tuning in Phase 1 (validation on Riemann outputs). Including draft prompts would be false specificity.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Du et al. 2025 extraction table (exact token thresholds, degradation curves); Cycle 35 mentions 'awaiting extraction' but does not embed final numbers",
+      "why": "Paper extraction ongoing. Finalization target end of Cycle 35. If not finalized, Riemann Turn milestones will be set Cycle 36 post-approval.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Phase 3 mechanism-analysis details (embedding space geometry investigation); only high-level sketch in strand 5 (context-of-context)",
+      "why": "Phase 3 is future work (weeks 9-12 of Phase 1). Detailed methodology would be speculation. Noted as future direction, not Phase 0 deliverable.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Apacheta schema integration examples (pseudocode for composition logic using Apacheta types); high-level specification only",
+      "why": "Phase 1 Week 1-2 will produce actual code. Cycle 35 specification is sufficient for stakeholder approval; full code is premature.",
+      "category": "practical_constraint"
+    }
+  ],
+  "open_questions": [
+    "Du et al. 2025 extraction: what are exact token thresholds for degradation points? Will turn milestones be keyed to 8K, 12K, 16K, or other threshold?",
+    "Projector performance: will <200ms latency per projection be achievable with Haiku-based claim extraction, or will profiling reveal bottleneck requiring optimization?",
+    "Strand merging heuristic: is cosine similarity threshold of 0.7 appropriate? Phase 1 validation may reveal need for tuning (0.65, 0.75, etc.)",
+    "Claim truth default: is 0.80 the right default for reasoning-generated claims, or should it be higher (0.85) or lower (0.75)? Phase 3b variant V2 explores this.",
+    "Projector-only effect: will experimental variant Condition B-alt (tensor provided but garbage projection) reveal how much variance reduction comes from context vs. projector quality?",
+    "Uncertainty detection validity: can LLM judge reliably detect 'explicit acknowledgment of incompleteness' or will false positives (over-hedging) inflate uncertainty scores?",
+    "Declared loss completeness: are the four loss categories (context_pressure, traversal_bias, authorial_choice, practical_constraint) sufficient, or will Phase 1 reveal missing category?",
+    "Scalability: will projector design (strand merging + claim extraction + epistemic aggregation) scale to longer reasoning chains (Riemann Turn 30+), or will composition latency degrade?"
+  ],
+  "instructions_for_next": "[\n  \"Cycle 36 PRIORITIES (immediate post-tensor-emission):\",\n  \"1. CRITICAL PATH: Complete Du et al. 2025 extraction (if not done Cycle 35). Finalize token thresholds for Riemann Turn milestones. Cannot proceed to stakeholder approval without this.\",\n  \"2. Phase 0 Validation Gate (Cycle 36 first 2 days): all seven deliverables reviewed for logical consistency, completeness, specificity, actionability. Flag any unclear definitions or missing details.\",\n  \"3. Stakeholder Presentation (Cycle 36 day 3): present Phase 0 to decision-makers. Get clear approval/rejection. If approved, lock Phase 1 timeline (12-week sprint starting Cycle 37).\",\n  \"4. If approved: Phase 1 Week 1 begins Cycle 37. Projector module implementation starts immediately. Code review gates (compose.py must be deterministic before integration test).\",\n  \"5. Contingency: if stakeholder raises concerns (scope too broad, cost too high, measurement validity questioned), respond with Threat-to-Validity document (already drafted). Offer scope reductions: drop Phase 3b, reduce N to 10, narrow to Haiku-only (no Sonnet variant).\",\n  \"6. Post-approval task: finalize Riemann Task Specification with exact turn milestones (keyed to Du et al. thresholds). Specification should be actionable for riemann_harness/ coding (turn-by-turn context budgets, per-turn metrics collection).\",\n  \"7. Long-term (Cycle 37+): track Phase 1 progress against milestones. projector_core/ composition logic is critical path (Week 1-2). Delay here cascades. Prioritize.\"\n]",
+  "epistemic": {
+    "truth": 0.88,
+    "indeterminacy": 0.1,
+    "falsity": 0.02
+  }
+}

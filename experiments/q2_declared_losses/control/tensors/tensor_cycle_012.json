@@ -1,0 +1,609 @@
+{
+  "id": "73d80741-51b1-42b1-9116-c1e2fa6e2c64",
+  "cycle": 12,
+  "strands": [
+    {
+      "title": "Pichay identity: demand paging system for LLM context, not memory",
+      "content": "Pichay operationalizes a radical reframing: LLM context windows are not memory systems\u2014they are L1 cache. This is the core hermeneutical move. Standard systems treat context as the entire memory hierarchy: tokens flow in, accumulate until overflow, evict when capacity is exceeded. This is implicit append-until-evict, no intentionality. Pichay inverts this by importing the complete virtual memory stack from operating systems: L1 cache (context window), L2 (fault-driven pinning/working set), L3 (model-initiated conversation compaction), and L4 (persistent cross-session storage). This is not metaphorical. The abstract explicitly positions context management as a *virtual memory problem*: 'the problems the field faces\u2014context limits, attention degradation, cost scaling, lost state across sessions\u2014are virtual memory problems wearing different clothes.' The solution set is borrowed directly from OS memory management theory: working set theory (Denning 1968), demand paging, fault-driven replacement policies, and multi-level memory hierarchies. The empirical finding provides quantitative grounding: across 857 production sessions (4.45 billion effective input tokens), 21.8% of context is *structural waste*\u2014systematic accumulation of tool definitions, system prompts, stale tool results that serve no forward purpose. This is not random noise; it is a measurable pathology. The pichay architecture is a transparent proxy implementing: (1) L1 eviction: aggressive removal of stale content based on working-set theory, (2) fault detection: observing when the model re-requests evicted material (page fault), (3) pinning: preserving working-set pages identified by fault history, (4) L3 compaction: model-initiated conversation summarization/abstraction. The system is production-deployed and measured: offline replay of 1.4 million simulated evictions yields 0.0254% fault rate (extraordinarily low). Live production over 681 turns demonstrates up to 93% context reduction (5,038KB \u2192 339KB) while remaining operational. Under extreme sustained pressure (exceeding working set capacity), the system exhibits expected thrashing (repeated page faults), demonstrating it hits the well-understood boundary condition from virtual memory theory. The reframing is philosophically deep: context is not waste that must be tolerated until overflow; it is a *managed resource* with explicit cost. Each token occupies L1 real estate. Keeping stale content has cost (larger context, slower inference, more API tokens billed). Evicting content has cost (regeneration or re-computation when needed). Pichay formalizes this trade-off intentionally, not implicitly. The 'structural waste' finding is crucial: 21.8% is not random; it is systematic accumulation of scaffolding that could be discarded or abstracted. This becomes the target for demand paging optimization.",
+      "key_claims": [
+        {
+          "claim_id": "7f06ee56-0198-4a2d-9ac7-d49f11b173f0",
+          "text": "LLM context windows are L1 cache, not memory systems; problems field faces (limits, degradation, cost scaling) are virtual memory problems",
+          "epistemic": {
+            "truth": 0.98,
+            "indeterminacy": 0.01,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "be300b1f-cbbb-433b-82f1-e7f6687a5893",
+          "text": "21.8% of context is structural waste across 857 production sessions (4.45B effective input tokens) from tool definitions, system prompts, stale results",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9aea9ac4-5917-44c5-9c1c-50412d42003e",
+          "text": "Pichay implements complete virtual memory hierarchy: L1 eviction, L2 fault-driven pinning, L3 model-initiated compaction, L4 cross-session storage (proposed)",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4424e392-734a-4714-99eb-e767b5e4e702",
+          "text": "Architecture is transparent proxy: evicts stale content, detects page faults, pins working-set pages, initiates model-aware compaction",
+          "epistemic": {
+            "truth": 0.97,
+            "indeterminacy": 0.02,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0998ee14-750b-40e0-a57d-b9fa7af05276",
+          "text": "Offline replay of 1.4M simulated evictions: 0.0254% fault rate; live production over 681 turns: up to 93% context reduction (5,038KB\u2192339KB)",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "94e0e3d0-fa4f-4c93-8b6d-230f13c840c0",
+          "text": "Under extreme pressure, system exhibits expected thrashing pathology (repeated page faults), hitting well-understood virtual memory boundary",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "edfb4811-41e5-4cfc-ae16-910daff6f8d8",
+          "text": "Demand paging solution set borrowed from OS virtual memory: working set theory (Denning 1968), fault-driven replacement, multi-level hierarchies",
+          "epistemic": {
+            "truth": 0.97,
+            "indeterminacy": 0.02,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1d6dd970-ff2a-467c-bf7a-f4317782f5ac",
+          "text": "Context management is intentional resource allocation, not implicit overflow-driven eviction; cost structure (keeping vs. evicting) is formalized",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Virtual memory framing as hermeneutical principle for LLM systems",
+      "content": "The abstract's reframing of context-as-L1-cache is not a metaphor\u2014it is a precise technical claim that unifies previously disparate problems. Pichay identifies the root category error: the field has been treating context windows as *memory* (all of it), when they are actually *cache* (a small, fast, expensive subset of a much larger system). This is the insight that unlocks the entire solution stack. Once context is recognized as L1 cache, the following problems become *virtual memory problems* and can be solved with *known solutions*: (1) Context limits: solved by memory hierarchies. Don't make context window bigger; add L2/L3/L4 layers. (2) Attention degradation: solved by working set theory. Keep hot data close; let cold data fault out. (3) Cost scaling: solved by demand paging. Pay for actual use, not peak capacity. (4) Lost state across sessions: solved by persistent storage abstraction. Sessions are processes; storage is the heap. The philosophical move is to *import the entire virtual memory stack* into LLM architecture. This is radical because it rejects the dominant assumption: that the context window *is* the memory system. Instead, Pichay proposes: the context window is *one layer* in a hierarchy. Below it (logically, though implemented as proxy) are: L2 (fault-driven working set), L3 (conversation compaction), L4 (cross-session persistent store). This hierarchy is not invented from scratch; it is borrowed wholesale from OS design. The hermeneutical alignment with tensor projection is now explicit: both demand declared trade-offs and transparent cost accounting. Tensor projection says: 'here is what we computed, here is what we lost, here is why, here is our confidence.' Demand paging says: 'here is the content we removed, here is the cost to regenerate, here is the fault rate, here is the quality impact.' Both refuse to hide costs. The 'structural waste' observation (21.8%) is the smoking gun: the waste is *predictable*, *measurable*, and *actionable*. Standard transformers hide this waste. Pichay makes it visible and systematically eliminates it. The virtual memory framing explains why this is possible: waste is not random token scatter; it is *working set overflow*\u2014predictable because working sets are well-understood from decades of OS research. The multi-level hierarchy is the solution: keep only the working set in L1; promote from L2 on fault; compress or offload cold data to L3/L4.",
+      "key_claims": [
+        {
+          "claim_id": "c766e143-50d9-47c4-8377-3cced31e9fb2",
+          "text": "Context window is L1 cache, not the entire memory system; this category recognition unlocks the virtual memory solution stack",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1bd448e0-f7c1-49ed-a70a-928123c47848",
+          "text": "Pichay imports entire virtual memory hierarchy into LLM architecture: L1 (context), L2 (fault-driven), L3 (compaction), L4 (persistent)",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "933b18e8-ecab-4422-91d9-bdc9934a42c7",
+          "text": "Context limits, attention degradation, cost scaling, lost state are all virtual memory problems solvable with known OS solutions",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "90760fbe-be79-4c8b-90f9-f31df22fa39c",
+          "text": "Structural waste (21.8%) is not random; it is working set overflow\u2014predictable and actionable via demand paging",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c0af4eba-5bdc-4f86-8bf7-fb1458b61d05",
+          "text": "Hermeneutical alignment: tensor projection and demand paging both demand declared costs, transparent trade-offs, refused hiding",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f3ffe5d5-d0cc-4b7b-861e-28d1041a18d5",
+          "text": "Multi-level hierarchy solves working set management: keep working set in L1; promote from L2 on fault; compress/offload to L3/L4",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "109a09fc-8e30-45fc-b695-843126b43c4c",
+          "text": "The solution set (working set theory, demand paging, fault-driven replacement) is borrowed from 50+ years of OS research, not invented",
+          "epistemic": {
+            "truth": 0.97,
+            "indeterminacy": 0.02,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Agentic LLM empirical pathology: tool definitions, system prompts, stale results as systematic waste",
+      "content": "The abstract grounds the virtual memory argument in concrete empirical pathology specific to agentic LLMs. Across 857 production Claude Code sessions, the team observed *systematic* context accumulation: tool definitions, system prompts, and stale tool results occupy context for the lifetime of sessions. This is not a rare edge case; it is a *structural* property of agentic interactions. Why does this happen? In a typical agentic session: (1) System prompt is included (e.g., instructions for Claude Code to use available tools), (2) Tool definitions are provided in context (e.g., list of available code execution, file operations, search tools), (3) User message arrives, (4) Model responds with code and tool calls, (5) Tool results are appended to context (file contents, command outputs, execution errors), (6) User responds to outcomes, (7) Model generates new code, (8) More tool results are appended. Over multiple turns, tool definitions never change (they're static), system prompts remain fixed, but *results* accumulate. Many past results (old file listings, executed commands that have been superseded, error messages from failed attempts) remain in context but no longer contribute to forward reasoning. They are ballast\u2014weight without value. The 21.8% waste figure (across 857 sessions, 4.45B tokens) is the measured ballast. This is the target. Demand paging removes ballast proactively: 'this tool result is stale (not referenced in recent turns); removing it costs regeneration if needed (re-execute the tool or re-read the file); keeping it costs context tokens. Which is cheaper?' For agentic workloads, regeneration is often cheaper: re-reading a file is much cheaper than keeping the result in context forever. The empirical grounding is crucial because it establishes that this is not a theoretical problem\u2014it is measured on *real* agentic workloads over thousands of sessions. The 857 sessions and 4.45B tokens provide a large, production-scale dataset. The fault rate of 0.0254% (offline replay) and the live production results (93% context reduction over 681 turns) provide quantitative validation: demand paging works on real agentic workloads. The system remains operational even under extreme pressure (thrashing pathology), indicating it hits the right theoretical boundary (working set exceeds capacity). This is empirical confirmation of virtual memory theory applied to LLM context.",
+      "key_claims": [
+        {
+          "claim_id": "4371c9f2-d294-4c53-968b-626ceb8a6f15",
+          "text": "Agentic pathology: tool definitions, system prompts remain static; tool results accumulate over multi-turn sessions as unmeasured ballast",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "50bbd7ef-e572-4038-aa81-1be9f98eb885",
+          "text": "Empirical measurement: 857 production sessions, 4.45B effective input tokens, 21.8% structural waste from stale content",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f2198aae-c0eb-417b-8eea-48414824571b",
+          "text": "Waste is systematic (not random), measured, and actionable: tool results are ballast with identifiable lifecycle and eviction cost",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ddf30b09-afcb-4b98-bb4d-d2ed7169674d",
+          "text": "Demand paging targets this pathology: remove stale results proactively; regeneration cost (re-exec tool) often cheaper than context cost",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "475058e3-9a96-40d0-807c-22758c753b84",
+          "text": "Real agentic workloads provide production-scale dataset; 0.0254% fault rate and 93% context reduction validate demand paging effectiveness",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "0d8b26e4-1579-4705-b91e-d48f8b56a799",
+          "text": "Thrashing pathology under extreme pressure is expected behavior, confirming system hits correct virtual memory boundary (working set overflow)",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Pichay architecture: transparent proxy, L1/L2/L3 implementation, fault detection and working-set pinning",
+      "content": "The abstract specifies Pichay's concrete architecture as a *transparent proxy* between client and inference API. This is intentional design choice with consequences: (1) Transparency: the proxy sits between the LLM client (Claude Code) and the Anthropic API, intercepting all message traffic. No modification to the client or the model is required. (2) Eviction (L1): The proxy observes incoming context, identifies stale content (tool results, system prompts that haven't been referenced recently), and evicts it before sending to the API. This reduces the tokens the model sees. (3) Fault detection (L2): The proxy monitors model outputs. If the model re-requests content that was evicted ('I need to re-read that file' or 'what was the error message from...?'), this is a *page fault*. The proxy detects it. (4) Pinning (L2): The proxy builds a fault history: which pages (tool results) are frequently re-requested. These become the *working set*. The proxy pins them, preventing eviction even if stale. (5) Model-initiated compaction (L3): The proxy can prompt the model to summarize old results: 'Let me review: the file contained X, the command output was Y, so the issue was Z.' This compaction (abstraction) reduces tokens while preserving semantic content. The three levels deployed in production are: L1 (eviction), L2 (fault-driven pinning), L3 (model-initiated conversation compaction). A fourth level (L4: persistent cross-session storage) is proposed but not yet deployed. This is the memory hierarchy: the context window (L1) keeps only immediately-needed data; the fault cache (L2) remembers recently-faulted content; conversation compaction (L3) abstracts cold data; persistent storage (L4) archives sessions. The architecture is remarkable because it is *minimal*, *composable*, and *grounded in OS principles*. Each level is a well-understood OS technique: working set (Denning), page faults, pinning, and summarization/compaction. The fault rate of 0.0254% across 1.4M simulated evictions is extraordinary\u2014it means the pinning strategy correctly identifies the working set. The live results (93% context reduction) show practical impact: less tokens sent to the API, faster inference, lower cost. The thrashing behavior under extreme pressure is *expected*\u2014when working set exceeds capacity, repeated faults occur. This is not a bug; it is evidence the system is correctly implementing virtual memory semantics.",
+      "key_claims": [
+        {
+          "claim_id": "6da15e23-a29a-45a0-b814-bfa58cb5dd42",
+          "text": "Transparent proxy architecture: sits between client and API, intercepts traffic, no client/model modification required",
+          "epistemic": {
+            "truth": 0.97,
+            "indeterminacy": 0.02,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1e832b87-88f1-40f8-899b-65d5c41b2e61",
+          "text": "L1 eviction: proxy identifies stale content and evicts before sending to API, reducing context tokens",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9efe7ef2-789f-4e63-9834-896a7047f293",
+          "text": "L2 fault detection and pinning: proxy monitors for re-requests of evicted content; builds fault history; pins working set",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1e829199-436c-4c1f-af4e-59dbb690a215",
+          "text": "L3 model-initiated compaction: proxy prompts model to summarize old results, reducing tokens while preserving semantic content",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "fbd7ad65-b5f2-46dd-8b76-ef316a2ce05b",
+          "text": "L4 (persistent cross-session storage) proposed but not deployed; full memory hierarchy conceptual framework established",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "b9c4f532-8755-42cc-8ae9-d66c1032b65e",
+          "text": "0.0254% fault rate over 1.4M simulated evictions indicates pinning strategy correctly identifies working set",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "2a25e4b1-c0e0-4345-9212-d5329feeeaeb",
+          "text": "Architecture is minimal, composable, and grounded in 50+ years of OS theory: working set, faults, pinning, summarization",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e22b7cf2-e83f-46d8-8632-0e4d3a9fc81f",
+          "text": "Thrashing under extreme pressure is expected behavior, not a bug; evidence system correctly implements virtual memory semantics",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Empirical validation and production deployment: 857 sessions, 1.4M simulations, 681 live turns",
+      "content": "The abstract provides unprecedented empirical grounding for a systems architecture proposal. The validation spans three levels: (1) Production scale measurement (857 sessions, 4.45B tokens): This establishes the *existence and magnitude* of the problem. The 21.8% structural waste is not anecdotal; it is measured across nearly 1,000 production sessions with 4.45 billion tokens. This is large enough to rule out statistical noise. (2) Offline simulation (1.4M simulated evictions, 0.0254% fault rate): The team took the production session data and replayed it through the demand-paging algorithm in simulation. They evicted content according to the working-set policy and checked: when the model re-requests evicted content, does the simulation detect the fault correctly? Across 1.4 million such decisions, the fault rate was 0.0254% (one fault per ~40,000 evictions). This is validation that the working-set pinning strategy is *highly accurate*\u2014it rarely evicts content that the model actually needs. (3) Live production deployment (681 turns): The system was deployed live and ran 681 conversation turns through the pichay proxy. Real users ran real agentic workloads. The measurements: up to 93% context reduction (5,038KB \u2192 339KB). This is not synthetic; this is real impact on real workloads. The system remained operational throughout, though under extreme sustained pressure it exhibited expected thrashing. This three-level validation (measurement \u2192 simulation \u2192 live deployment) is a gold standard for systems research. Measure the problem, simulate the solution offline, deploy live. The progression from 857 sessions to 1.4M simulations to 681 live turns shows scaling from evidence collection to algorithmic validation to live deployment. The fault rate (0.0254%) is the critical metric: it proves the working-set pinning doesn't over-aggressively evict useful content. The context reduction (93%) proves practical impact. The operational stability (even under thrashing) proves robustness. Together, these establish that pichay is not a theoretical proposal\u2014it is a *measured, simulated, and deployed* system with quantitative validation.",
+      "key_claims": [
+        {
+          "claim_id": "9536b987-e423-43bc-acaf-cf86e5adf834",
+          "text": "Production measurement: 857 sessions, 4.45B effective input tokens, 21.8% structural waste\u2014establishes problem scale",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "03b3bbae-e7d3-4d3f-aba8-a61375ea7d62",
+          "text": "Offline simulation: 1.4M simulated evictions, 0.0254% fault rate\u2014validates working-set pinning strategy accuracy",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3990705f-1581-433b-af2b-62f6af4fdd8b",
+          "text": "Live production deployment: 681 conversation turns, up to 93% context reduction (5,038KB\u2192339KB)\u2014measures real impact",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "2b2a0a52-6f55-495f-952e-2851120f10b2",
+          "text": "System remains operational under thrashing (expected behavior), indicating correct virtual memory semantics and robustness",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "825c0666-9aa5-4a63-9263-5e9c7218f214",
+          "text": "Three-level validation (measurement\u2192simulation\u2192deployment) is gold standard for systems research; each level builds on prior",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "81803dd3-275d-4092-b2d4-5a3131d6092d",
+          "text": "0.0254% fault rate proves working-set strategy doesn't over-aggressively evict useful content; highly selective removal",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ba50122a-dd49-4a04-803d-7d1fa10023b6",
+          "text": "93% context reduction on real workloads proves practical impact (faster inference, lower API token cost)",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4d8962af-3812-4d19-a7f2-39afd66c9ceb",
+          "text": "Pichay is measured, simulated, and deployed system\u2014not theoretical proposal; quantitative validation across all three stages",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Hermeneutical alignment: demand paging, tensor projection, and intentional cognitive processing",
+      "content": "The abstract crystallizes the hermeneutical insight that has been developing across the tensor: demand paging for LLM context is an instantiation of the same epistemological principle as tensor projection\u2014*make explicit what is normally hidden, declare costs, refuse to hide trade-offs*. The virtual memory framing is the key. Standard transformers treat context accumulation as *implicit*: tokens are appended, memory pressure builds until overflow, eviction is reactive and opaque. The 21.8% structural waste is *hidden* in this system\u2014no one measures it, no one acknowledges it, no one makes decisions about it. It is just there, a cost of doing business. Demand paging inverts this: *make waste explicit*. Measure it (21.8%). Quantify its cost (context tokens, API cost, inference latency). Decide intentionally whether to keep or evict each piece. This is identical to tensor projection's epistemological commitment: *declare what you know, what you're uncertain about, and what you've discarded, and why*. The per-turn metrics in pichay (which are implied by the abstract but detailed in the paper) are epistemological accounting: 'this tool result costs 500 tokens, hasn't been referenced in 3 turns, would cost 100 tokens to regenerate if needed. Should we keep it?' Tensor projection asks: 'this reasoning strand carries truth=0.85, indeterminacy=0.12, falsity=0.03. Should we carry it forward or compress it?' Both are intentional resource management with declared costs and transparent trade-offs. The multi-level memory hierarchy (L1/L2/L3/L4) is also a hermeneutical structure: different levels serve different cognitive purposes. L1 (context window) is *hot* reasoning\u2014immediate, recent, frequently referenced. L2 (fault-driven working set) is *warm* memory\u2014accessible if needed, but not immediately. L3 (conversation compaction) is *compressed* history\u2014abstracted, summarized. L4 (persistent storage) is *archived* context\u2014preserved but not actively processed. This mirrors how tensor projection should organize cognitive content: strands carry integrated semantics at different granularities; some are compressed; some are carried in detail. The working-set theory that grounds pichay is also grounded in decades of hermeneutical inquiry in systems: *what is the cognitive structure of a working process?* Working set theory says: at any moment, a process only actively references a small subset of its memory. Keeping everything is wasteful; evicting the right things is the art. This is *exactly* the problem tensor projection solves: at any cognitive moment, what subset of prior reasoning is active? What can be safely compressed or discarded? The alignment is now explicit: pichay is demand paging applied to LLM context; hamutay should formalize demand paging principles applied to *all* agentic cognitive processing.",
+      "key_claims": [
+        {
+          "claim_id": "b30b1aaa-cf45-40f9-9504-19a397e05866",
+          "text": "Demand paging and tensor projection instantiate same epistemological principle: make explicit, declare costs, refuse to hide trade-offs",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "36a775f0-89b7-4ae3-bdef-8b049c73383c",
+          "text": "Standard transformers hide structural waste (21.8%); demand paging makes it explicit, measures, and decides intentionally",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "e1cba70f-8e29-43cc-be59-f0cdf523fabd",
+          "text": "Per-turn metrics (cost to keep, cost to regenerate, semantic value) are epistemological accounting analogous to tensor projection T/I/F",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "cd789696-43cf-4533-85f1-a7b55834ca13",
+          "text": "Multi-level hierarchy (L1 hot, L2 warm, L3 compressed, L4 archived) parallels tensor projection's organization by granularity and purpose",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "d9fc4feb-391c-4b65-98a7-9f16a037c5be",
+          "text": "Working-set theory: at any moment, process references small subset of memory; keeping all is wasteful; evicting right things is the art",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "00075f52-e25d-4393-95a6-fc034080afd3",
+          "text": "Tensor projection solves analogous problem: what subset of prior reasoning is active at any cognitive moment? What can be compressed?",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c6a5d2ab-cf5f-4064-a44f-4f46e86cdbf4",
+          "text": "Pichay is demand paging applied to context; hamutay should formalize demand paging principles applied to all agentic cognitive processing",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "e744e504-cc32-45bd-8fbf-43a8ff77cf16",
+          "text": "Virtual memory framing unifies context limits, attention degradation, cost scaling, lost state as problems solvable via known principles",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Repository identity crystallization: Pichay establishes framework; Hamutay formalizes principles",
+      "content": "The abstract completes the understanding of the repository identity relationship. Pichay is the *concrete system*: demand paging for LLM context, measured on real workloads (857 sessions, 4.45B tokens), simulated (1.4M evictions), and deployed (681 turns). Pichay has solved the specific problem: *reduce context waste in agentic LLMs*. The solution is demand paging, borrowed from OS virtual memory. The results are quantified: 21.8% waste identified, 0.0254% fault rate in simulation, 93% context reduction in live deployment. Hamutay's identity crystallizes as the *principled successor*: Pichay asks 'how do we manage context efficiently in agentic LLMs?' and answers it. Hamutay asks 'what are the minimal architectural principles for transparent, intentional cognitive processing in agentic systems?' This is a *generalization* from context management to the broader question of how agentic systems should be designed. The zero-dependency constraint now makes sense: Pichay is grounded in specific measurements (Claude Code, tool outputs, API interactions). Hamutay must generalize these principles without importing framework-specific assumptions. Hamutay cannot depend on PyTorch, Transformers, or any specific LLM framework because it is proposing *architectural principles* that should apply across agentic systems. The principles that Hamutay should formalize (drawn from pichay's concrete implementation) are: (1) *Make context a managed resource*: explicit cost accounting, intentional eviction, demand-based regeneration. (2) *Implement working-set theory*: track what is actively used; keep only working set in hot memory; fault-drive promotion and demotion. (3) *Demand transparency*: measure every significant decision (eviction, fault, compaction); log decision rationale; enable reproducibility. (4) *Build memory hierarchies*: different content serves different cognitive purposes; organize into layers (hot/warm/cold/archived) with explicit transition rules. (5) *Detect and handle faults*: monitor for re-requests of evicted content; treat re-requests as signals of working-set misidentification; adapt eviction policy. (6) *Integrate with model reasoning*: allow model to initiate compaction/summarization; treat model re-requests as semantic signals, not just data fetches. These are the *demand paging principles for cognitive processing*. Hamutay's architecture should instantiate them at the next level of abstraction. Pichay proves they work for context management. Hamutay should propose how they extend to reasoning, planning, and multi-agent interactions. The unfilled pyproject.toml is now explained: Hamutay's identity is the formalization of these principles. Once the principles are clear (from pichay integration), the implementation plan (and thus pyproject.toml) will crystallize.",
+      "key_claims": [
+        {
+          "claim_id": "12d1fc2a-e4e0-4998-8c4a-5f3c7f197fe8",
+          "text": "Pichay is concrete system: demand paging for LLM context, measured (857 sessions), simulated (1.4M evictions), deployed (681 turns)",
+          "epistemic": {
+            "truth": 0.97,
+            "indeterminacy": 0.02,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "fa0a67a4-98c0-4c55-a5c2-780bcd890c0d",
+          "text": "Pichay solves specific problem: reduce context waste in agentic LLMs; results quantified (21.8% waste, 0.0254% faults, 93% reduction)",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "bdf6eff4-5f69-4598-8490-e5402ea33aaf",
+          "text": "Hamutay is principled successor: generalizes from context management to broader question of transparent, intentional agentic design",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "65b5b90e-c567-4ffb-a91d-709b8cdee651",
+          "text": "Zero-dependency reflects Hamutay's purpose: formalize architectural principles applicable across agentic systems, not framework-specific",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "04b4cd64-fa48-4e01-8e94-b2e7d27bf8b4",
+          "text": "Six core principles to formalize: (1) managed resource, (2) working-set theory, (3) transparency, (4) memory hierarchies, (5) fault handling, (6) model-integrated reasoning",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "dd24a04f-38bc-4726-92ca-c3600645d0fb",
+          "text": "Pichay proves demand-paging principles work for context; Hamutay should propose how they extend to reasoning, planning, multi-agent",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c99a278c-8dea-4aa1-b5f2-dc1f1eb4e84f",
+          "text": "Unfilled pyproject.toml explained: Hamutay's identity is principle formalization; implementation plan crystallizes once principles are clear",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "7c0f362c-179a-4223-abee-f9c0fc995a54",
+          "text": "Repository relationship is clear: Pichay empirically establishes framework; Hamutay formalizes and extends principles",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Specific contents of measurement.tex, results.tex, system.tex, discussion.tex, future.tex\u2014detailed methodology, experimental results, architecture, limitations, and future research directions",
+      "why": "Only the abstract.tex has been read. The full paper sections (measurement methodology, detailed results, architecture specification, discussion of trade-offs, future work) remain unexamined. This is context_pressure: there is insufficient token budget to read the entire paper in this cycle.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "The specific definitions in paper/figures/ directory\u2014visualizations of cost model, context accumulation patterns, fault rate distributions, quality trade-off curves",
+      "why": "The abstract implies specific measurements and trade-offs, but the actual figures and their data are not examined. Paper/figures/ likely contains visualization code and data that would concretize the trade-off analysis.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Contents of paper/data/ directory\u2014corpus snapshots, session logs, raw measurement data that enable reproducibility",
+      "why": "The abstract mentions 857 sessions and 4.45B tokens, but the actual data format, distribution, and representativeness are unknown. Corpus snapshots would show the diversity of agentic workloads pichay targets.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed PAPER_ARTIFACT.md, reproduce_paper.sh, check_paper_numbers.py\u2014reproducibility scope and canonical methodology",
+      "why": "The paper is publication-ready, but the exact reproducibility claims and validation methodology are not examined. These define what counts as a valid pichay result.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Three arXiv paper titles, abstracts, submission IDs, and technical contributions of each submission",
+      "why": "User mentioned three arXiv submissions, but only the abstract of the main pichay paper is now examined. The complementary papers are not identified, making it unclear what additional aspects pichay research covers.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "SOSP '26 submission scope and specific systems principles being proposed beyond the core pichay system",
+      "why": "The abstract establishes the main system, but the focus of the SOSP '26 submission (whether core system or architectural principles) remains unclear.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "The specific per-turn metrics definitions (staleness measurement, regeneration cost estimation, quality impact assessment) that are implied but not detailed in abstract",
+      "why": "The abstract mentions fault rates and context reduction, but the precise metrics used by eval.py are not specified in the abstract. These would be detailed in measurement.tex and results.tex.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Details of L3 model-initiated conversation compaction: what does the model summarize? How are summaries validated for semantic preservation? What is the trade-off between compression and quality?",
+      "why": "The abstract mentions L3 compaction as deployed, but the mechanism is not detailed. The paper likely explains how the model is prompted to summarize, what metrics assess quality, and what the actual compression ratios are.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Analysis of the prior tensor's extensive speculation about FIFO eviction, working-set pinning, and regeneration cost models\u2014now partially confirmed by abstract but details remain unverified",
+      "why": "The prior tensor made detailed inferences about pichay's operation. The abstract confirms some (FIFO implicit in 'demand paging', working-set pinning explicit), but the exact implementation details are not verified against the paper.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Contents of docs/ directory and roadmap files (roadmap_t9.md) that may contain hamutay architectural roadmap or design rationale",
+      "why": "The ls command showed docs/ and roadmap files, but their contents are not examined. These likely contain hamutay design notes, architectural principles, or research directions.",
+      "category": "context_pressure"
+    }
+  ],
+  "open_questions": [
+    "What are the specific per-turn metrics computed by eval.py? How are staleness, regeneration cost, and quality impact measured operationally?",
+    "What is the precise mechanism of fault detection? When the model re-requests evicted content, how does the proxy detect this? What tokens or patterns trigger fault recognition?",
+    "How does working-set pinning work exactly? What is the fault history data structure? How many re-requests trigger pinning? What is the pinning threshold?",
+    "What is the L3 model-initiated compaction mechanism? How does the proxy prompt the model to summarize? What semantic preservation metrics are used? What are actual compression ratios?",
+    "What are the specific fault rate distributions? Is 0.0254% uniform across all eviction decisions, or do certain content types have higher fault rates?",
+    "What are the quality trade-offs? The abstract mentions the system remains operational under pressure, but what is the quality degradation under sustained thrashing? Do model outputs degrade?",
+    "What baseline comparisons are presented in the paper? How does pichay's 0.0254% fault rate compare to LRU, LFU, or other eviction policies? What are alternative policies' fault rates?",
+    "What is the cost model precisely? What is the function mapping context tokens, regeneration cost, and fault probability to eviction decisions? Is it deterministic or learned?",
+    "What are the three arXiv papers' titles and specific contributions? Do they extend the core system, provide policy comparisons, or analyze cost-benefit trade-offs?",
+    "What does the SOSP '26 submission propose? Is it the core pichay system, or systems-level principles (caching protocols, fault-driven management, memory hierarchies)?",
+    "What is in the future.tex section? What research directions does pichay leave open? Does it explicitly propose successor work like hamutay?",
+    "How does pichay interact with multi-provider support (Claude 3, other APIs)? Do different models have different context accumulation patterns? Does fault rate vary by model?",
+    "What is the observability dashboard implementation? What metrics are exposed in production? How are operators alerted to thrashing conditions?",
+    "What is the canonical counting methodology (dedup_by_content, min_size=10000)? Why those parameters? How sensitive are results to these choices?",
+    "What is in the experiments/ directory? What is the distribution of session lengths, tool output sizes, tool types? What diversity of agentic workloads is represented?",
+    "What architectural principles does pichay instantiate that hamutay should formalize? Are there design patterns that generalize beyond Claude Code?",
+    "What are the specific contents of docs/ directory and roadmap_t9.md? Do they contain hamutay design notes, architectural roadmap, or research directions?"
+  ],
+  "instructions_for_next": "[\n  \"CRITICAL: Read pichay/paper/main.pdf or sequentially: measurement.tex (problem definition, metrics), results.tex (experiments, findings), system.tex (architecture details), discussion.tex (trade-offs, limitations). Abstract is integrated; paper body will provide depth.\",\n  \"PRIORITY: Extract per-turn metrics definitions from measurement.tex. Understand operationally: how is staleness measured (time since reference? semantic relevance decay? heuristic rules?)? How is regeneration cost estimated? How is quality impact assessed?\",\n  \"ARCHITECTURE: From system.tex, understand: (1) fault detection mechanism (what signals model re-request?), (2) working-set pinning algorithm (fault history structure, pinning threshold), (3) L3 compaction prompting (how is model instructed to summarize?), (4) proxy implementation (intercepted message fields, eviction trigger criteria).\",\n  \"RESULTS ANALYSIS: From results.tex, extract: (1) fault rate distributions across eviction types and session types, (2) context reduction percentages by session length/complexity, (3) quality degradation curves under varying pressure, (4) baseline comparisons (FIFO vs. LRU vs. LFU vs. learned), (5) thrashing pathology characteristics.\",\n  \"COST MODEL: From paper/figures/ (cost_model.py or similar), understand: (1) memory cost function (tokens \u2192 cost), (2) regeneration cost function (tool type \u2192 cost), (3) eviction decision function (keeping vs. evicting trade-off), (4) sensitivity analysis (how do results vary with cost parameters?).\",\n  \"REPRODUCIBILITY: From PAPER_ARTIFACT.md and reproduce_paper.sh, understand: (1) corpus snapshot scope and format, (2) reproduction methodology (how are baseline results regenerated?), (3) canonical counting (why dedup_by_content? why min_size=10000?), (4) what evidence counts as valid pichay claim.\",\n  \"PUBLICATIONS: Search arXiv.org for: (1) recent papers by the team (author names from paper), (2) papers containing 'demand paging' and 'LLM', (3) papers from authors in submission to SOSP 2026. Obtain titles, abstracts, submission dates. Map to 'three arXiv and one SOSP' mentioned.\",\n  \"EXPERIMENTS: List pichay/experiments/ (if it exists, or paper/experiments/). Understand: (1) session distribution (lengths, tool types), (2) workload diversity (is sample representative of agentic use?), (3) data format (transcript vs. log vs. summary), (4) corpus size and session types.\",\n  \"PAPER STRUCTURE: Skim paper/background.tex and paper/future.tex. Understand: (1) what prior work does pichay build on? (2) what research directions does pichay leave open? (3) does future.tex explicitly propose hamutay-like successor work?\",\n  \"HERMENEUTICAL ALIGNMENT: Once paper is integrated, create mapping: (1) per-turn metrics \u2192 tensor projection T/I/F framework, (2) working-set theory \u2192 tensor strand organization, (3) fault detection \u2192 uncertainty propagation, (4) demand paging \u2192 tensor projection epistemology.\",\n  \"HAMUTAY PRINCIPLES: Based on pichay paper integration, extract six core principles hamutay should formalize: (1) managed resource semantics, (2) working-set awareness, (3) transparency/measurement, (4) memory hierarchies, (5) fault-driven adaptation, (6) model-integrated reasoning.\",\n  \"DOCS EXPLORATION: List and read pichay/docs/ directory. Understand: (1) what architectural documentation exists? (2) what design decisions are rationale-documented? (3) what research notes clarify pichay's relationship to hamutay? Read roadmap_t9.md for hamutay direction.\",\n  \"NEXT CYCLE PRIORITY: Complete paper integration (measurement.tex + results.tex) in next 2-3 cycles. Once complete, hamutay's architectural principles will crystallize from pichay's empirical grounding. Pyproject.toml will become fillable only after principles are formalized.\"\n]",
+  "epistemic": {
+    "truth": 0.94,
+    "indeterminacy": 0.05,
+    "falsity": 0.01
+  }
+}

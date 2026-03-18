@@ -1,0 +1,227 @@
+{
+  "id": "8b7b3b89-0a00-48d8-a5a4-0ea437479eae",
+  "cycle": 36,
+  "strands": [
+    {
+      "title": "Projector Applied to Real Conversation Logs \u2014 Drift Reduction via Explicit Incompleteness (CYCLE 36 NEW STRAND)",
+      "content": "Cycle 36 introduces a critical new application direction: running the projector against historical conversation logs to measure and reduce drift empirically. This emerges from user observation (Turn 106): 'declared losses could actually be helpful in reducing drift.' This is profound because it reframes declared losses from a transparency mechanism (Phase 0 narrative) into an active drift-correction mechanism (new hypothesis for exploration). HYPOTHESIS: Silent loss causes drift. When a model forgets or drops a thread without marking it, subsequent turns cannot recover it. The thread becomes 'unknown unknown'\u2014not just forgotten, but forgotten without awareness. If losses are explicit (DeclaredLoss objects), subsequent turns can reference them: 'Prior turn dropped thread X because reason Y. Re-examine if relevant?' This transforms dropped content from permanent sink into recoverable resource. EMPIRICAL TEST (Post-Phase-1): (1) Gather historical conversation logs (Hamutay or prior projects). Multi-turn sequences, ideally 10-25 turns. (2) Run projector on each turn (turn 1 \u2192 tensor_1, turn 2 + tensor_1 \u2192 tensor_2, etc.). Deterministic, offline. (3) Measure three properties per turn: (a) STRAND STABILITY: compare strands(tensor_t) to strands(tensor_t-1). Do strands persist (same ID, evolving content)? Or do they churn (new strands appear, old ones vanish)? Metric: Jaccard similarity of strand IDs. High stability (>0.8) = coherence. Low stability (<0.5) = drift. (b) DECLARED-LOSS RECOVERY: at turn t+k, does output reference or re-acquire content from declared_losses(tensor_t)? This requires semantic search: 'does turn t+k output semantically similar to dropped content in turn t's losses?' Metric: fraction of prior losses that are re-acquired. If >30%, losses are serving recovery function. If <10%, losses are silent sinks. (c) TENSOR COMPACTNESS: measure size of tensor_t (KB). Plot size over 25 turns. Expectation: linear growth (one new strand per turn) vs. bounded growth (strands stabilize, losses absorb new content). (4) HYPOTHESIS VALIDATION: (a) If Strand Stability > 0.8 AND Loss Recovery > 30%, hypothesis confirmed: declared losses reduce drift. (b) If Strand Stability > 0.8 BUT Loss Recovery < 10%, hypothesis partially confirmed: projection stabilizes output without using losses. (c) If Strand Stability < 0.5, projection is not maintaining coherence; projector design needs revision. (5) PUBLICATION ANGLE: If hypothesis confirmed, this is a novel finding: 'explicit incompleteness declarations reduce long-term drift in multi-turn reasoning.' Publishable beyond Hamutay main result. Positions projector as general-purpose multi-turn memory controller, applicable to other reasoning tasks. TIMING: This is Phase 4+ work (post-Phase-1, post-Phase-3 optimization). But Cycle 36 can scope it, design the offline measurement pipeline, and prepare conversation-log collection. Implementation could be completed in parallel with Phase 3b (autoresearch variant search). SYNERGY WITH PHASE 1: Phase 1 tests whether projector improves performance on Riemann (hard task, controlled setting). Phase 4-parallel tests whether projector improves coherence on real conversations (naturalistic setting, long-term). Together: hard task shows quality/variance improvement; real conversations show drift reduction. This is powerful story. ARCHITECTURE FOR CONVERSATION-LOG PROJECTION: New module: hamutay_postanalysis/drift_analyzer.py. Input: conversation log file (JSONL format, one turn per line). Each turn = {turn_num, user_query, assistant_response, embedding}. Output: drift_report = {turn_num, tensor_t, strands_t, losses_t, strand_stability_t, loss_recovery_t, size_t}. Exports: (1) DriftAnalyzer class: ingests log, runs projector on each turn, emits drift_report. (2) DriftMetrics class: computes strand_stability (Jaccard), loss_recovery (semantic search), size trends. (3) DriftVisualizer: plots strand evolution, loss recovery rate, tensor size over turns. DEPENDENCIES: compose.py (projector core), Apacheta TensorRecord, NumPy, spaCy (semantic search for loss recovery), Matplotlib (plotting). NO new Anthropic API calls (all offline). MEASUREMENT RIGOR (Phase 4 prep): (1) Sample: select 5-10 real conversation logs from existing projects. Vary: length (10-30 turns), domain (Riemann, other math, natural reasoning). (2) Baseline: run each log WITHOUT projector (no tensor_t, just raw turns). Measure: do strands drift? Establish baseline drift rate. (3) Projector variant: run same logs WITH projector. Measure drift again. Compare: is drift reduced? By how much? (4) Control: run projector with DISABLED loss declaration (losses = empty list). Measure drift. If drift reduction only happens when losses are enabled, it confirms losses are the active ingredient. (5) Sensitivity: vary projector parameters (threshold 0.75 vs. 0.80 vs. 0.85, max_strands 8 vs. 10 vs. 12, etc.). Measure: does parameter choice affect drift reduction rate? If robust across parameters, finding is strong. CYCLE 36 CONCRETE ACTION ITEMS: (1) Scope drift-analyzer module design (2-3 hours). (2) Draft DriftAnalyzer pseudocode + measurement specification (1-2 hours). (3) Identify and prepare conversation-log sample (1-2 hours). (4) Add to Phase 4 roadmap (explicitly named as 'Phase 4a: Drift Reduction Analysis'). (5) Prioritize in post-Phase-3 backlog (valuable publication angle, synergizes with main result).",
+      "key_claims": [
+        {
+          "claim_id": "0bdc43ae-1c91-4592-8dfe-ffe023758736",
+          "text": "Silent loss causes drift; explicit DeclaredLoss transforms dropped content from permanent sink into recoverable resource for future turns",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "fa56c70d-44b7-4c4d-af8a-3b1dbf167f91",
+          "text": "Drift measurement: three metrics (strand stability via Jaccard, loss recovery via semantic search, tensor size trend) jointly characterize coherence over turns",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.15,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "4592e087-d530-462e-aeec-23c998bab445",
+          "text": "Strand stability >0.8 + loss recovery >30% confirms hypothesis: declared losses reduce drift (novel finding, publishable independent of main result)",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.19,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "75dbcaac-06e1-414c-81e4-c691e36c32a0",
+          "text": "Phase 4 parallel work: test projector on real conversation logs (naturalistic, long-term) alongside Phase 1 Riemann test (controlled, performance-focused)",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.17,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "9d6d4558-33f4-4fc0-8351-16934ff39168",
+          "text": "hamutay_postanalysis/drift_analyzer module: deterministic, offline, independent of reasoning model; measures drift empirically against conversation logs",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "82d31ba9-00f7-4ddc-84cf-30b336b5df82",
+          "text": "Control: disable loss declaration to isolate whether drift reduction is caused by losses vs. other projector mechanisms (methodological rigor)",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Conversation-Log Trajectory and Practical Data Integration \u2014 File Organization, Format, and Projector Ingestion (CYCLE 36 IMPLEMENTATION)",
+      "content": "Cycle 36 grounds the conversation-log application in concrete file-system reality. User query (Turn 107-108) hints at examining project structure: 'Let me look at the conversation log format, then build the projector.' This requires understanding how logs are stored, structured, and accessible. CONVERSATION LOG FORMAT (Hamutay/Yanantin Convention): Assumed format (based on typical Anthropic + research workflows): (1) JSONL per conversation: one JSON object per line, one line per turn. (2) Turn structure: {turn_num: int, timestamp: ISO8601, user_query: str, assistant_response: str, embedding: [float], [optional] metadata}. (3) Storage: /home/tony/projects/pichay/experiments/ or similar parent. Subdirectories: experiment_runs/, conversation_logs/, results/. (4) Naming: conversation_logs/conv_{experiment_id}_{run_id}.jsonl or similar. FILE DISCOVERY (Cycle 36 Action): Bash command (Turn 108) lists experiment directories. From this: (1) Identify log files (*.jsonl, *.json, *.txt with conversation-like structure). (2) Sample 5-10 logs of varying length (10-30 turns). (3) Inspect format: are embeddings present? Are metadata fields present? Do all turns have required fields? (4) Document schema: create SCHEMA.md specifying expected format for drift_analyzer input. (5) Handle missing fields: if embedding absent, compute via spaCy or request from API (fallback, cost consideration). INGESTION PIPELINE (hamutay_postanalysis/drift_analyzer.py): Step 1: LOG PARSING. (a) Open JSONL file, line by line. (b) Parse JSON, validate fields. (c) If embedding absent, flag (warn user, or compute). (d) Store as Turn objects (lightweight dataclass). Step 2: TURN ITERATION. (a) For turn_1, initialize tensor_0 = empty TensorRecord (no prior state). (b) For turn_i (i > 1), extract user_query_i and assistant_response_i. (c) Call compose(tensor_{i-1}, response_i) \u2192 tensor_i. (d) Store tensor_i, strands_i, losses_i. Step 3: METRIC COMPUTATION (per turn). (a) Strand stability: Jaccard(strand_IDs(tensor_{i-1}), strand_IDs(tensor_i)). (b) Loss recovery: semantic_search(losses_i, responses_i...i+k). For each loss in tensor_i, scan ahead (responses from turn i+1 to i+k, k=5) for semantic similarity. If found, mark as recovered. (c) Tensor size: size_bytes(tensor_i) = len(json.dumps(tensor_i)). Step 4: AGGREGATION. (a) Compute per-experiment metrics: mean strand stability, mean loss recovery rate, tensor size trajectory. (b) Flag anomalies: sudden stability drops (drift spikes), rapid size growth (compression failing). Step 5: VISUALIZATION. (a) Plot 1: Strand Stability over turns (line plot, 0-1 y-axis). (b) Plot 2: Loss Recovery Rate over turns. (c) Plot 3: Tensor Size over turns (KB, log scale optional). (d) Plot 4 (optional): Strand evolution diagram (shows which strands persist, which vanish, which merge). CONFIDENCE IN DATA: (1) Log availability: high confidence (assumption: experiments store logs locally). If not, contingency: use synthetic logs (generated from known reasoning tasks). (2) Schema consistency: medium confidence. May need to inspect files and adapt parser. (3) Embedding availability: medium confidence. If absent, can compute post-hoc. (4) Projector determinism: high confidence (design property). PHASE 4a BUDGET: (1) Scoping + schema design: 2-3 hours. (2) drift_analyzer.py implementation: 4-6 hours. (3) DriftMetrics + visualization: 3-4 hours. (4) Log sample preparation + test run: 2-3 hours. Total: ~12-16 hours (2-day effort, post-Phase-3). (5) Full analysis (5-10 logs, compute + visualization): 8-12 hours (1-2 day effort). Total Phase 4a: ~20-30 hours (1 week, part-time). INTEGRATION WITH PHASE 1-3: (1) Phase 1: projector implementation (core logic frozen by Phase 1 end). (2) Phase 3b: variant search (alternative projector designs, H0 vs. V2 vs. V3). (3) Phase 4a: drift analyzer applied to best projector from Phase 3b. (4) Narrative: Phase 1 + Phase 3b = 'performance on hard task.' Phase 4a = 'drift reduction on natural conversations.' Two stories, one projector. HYPOTHESIS TRACKING: (1) Baseline hypothesis (Phase 0): bounded-context cycles + projection reduce variance on Riemann. (2) Drift hypothesis (Phase 4a): explicit losses reduce drift on real conversations. (3) If both confirmed: projector is multi-purpose memory controller (performance + coherence). (4) If only Phase 1 confirmed but Phase 4a fails: projector helps on structured tasks but not natural conversations (narrow scope, but still valuable). (5) If both fail: projector design needs rethinking (Phase 3b / Phase 5). CYCLE 36 DELIVERABLE: (1) drift_analyzer.py skeleton + pseudocode. (2) DriftMetrics specification document. (3) SCHEMA.md (expected conversation log format). (4) Phase 4a roadmap (detailed, with resource estimates). (5) Sample log identification + initial inspection report.",
+      "key_claims": [
+        {
+          "claim_id": "1e5ab66e-6e41-4280-8194-b7d3ee772f84",
+          "text": "Conversation logs stored as JSONL (one turn per line); per-turn structure: turn_num, timestamp, user_query, assistant_response, embedding, metadata",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.18,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3a83fa11-9bdf-4030-862d-87bff6c1c2c1",
+          "text": "Ingestion pipeline: parse logs, iterate turns, call compose() sequentially to build tensor_0 \u2192 tensor_1 \u2192 ... \u2192 tensor_N",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "6346a274-dd6b-4695-a94a-b3ada1478c2f",
+          "text": "Three metrics computed per turn: strand stability (Jaccard), loss recovery (semantic search ahead 5 turns), tensor size (bytes)",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "81b6f59a-aa20-45c8-86cc-9b64f6af2e61",
+          "text": "Phase 4a effort: ~20-30 hours (1 week part-time). Drift analyzer implementation + test run on 5-10 conversation logs",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.15,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "5f0e9d91-ae4d-4469-b036-644e69db45ab",
+          "text": "Contingency: if logs unavailable locally, generate synthetic logs from known reasoning tasks (deterministic, reproducible)",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.17,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "d8f1461d-7c5b-4912-ac72-0a64fe5651cb",
+          "text": "Phase 4a hypothesis: strand stability >0.8 + loss recovery >30% \u2192 declared losses actively reduce drift (publishable independent finding)",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.19,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Cycle 35 Projector Specification Maintained \u2014 H0-CORE Composition Logic Ready for Phase 1 Implementation (INTEGRATION)",
+      "content": "Cycle 36 confirms that Cycle 35's projector specification (H0-CORE, seven-step composition logic, Apacheta integration) remains the core architecture for Phases 1-3. The new conversation-log application (Phase 4a) does not alter Phases 1-3 timeline or design. PROJECTOR SPECIFICATION SUMMARY (From Cycle 35, Reaffirmed Cycle 36): (1) ComposeContext input: prior_tensor_d, reasoning_output, output_embedding. (2) Seven-step logic: Step 1 (extract claims) \u2192 Step 2 (themes) \u2192 Step 3 (merge) \u2192 Step 4 (epistemic aggregation) \u2192 Step 5 (composition/compression) \u2192 Step 6 (open questions) \u2192 Step 7 (instructions for next). (3) Parameters (H0-CORE): claim_extraction='heuristic', default_truth=0.80, strand_similarity=0.70, max_strands=10, truth_threshold=0.80, composition_overlap=0.60. (4) Output: tensor_d_new (Apacheta TensorRecord), declared_losses (List[DeclaredLoss]), instructions_for_next (str). (5) Properties: deterministic (same input \u2192 same output), model-agnostic (no knowledge of main model), fast (<200ms per projection), produces native Apacheta types (zero schema overhead). PHASE 1 CRITICAL PATH (Unchanged): Week 1-2: implement compose.py (~400-500 lines). Week 2-3: unit tests (extract, merge, epistemic, composition). Week 3-4: integration test (real Riemann output + mock tensor_d) + performance profiling. Deliverable: compose.py (deterministic, fast, validated). PHASE 3b AUTORESEARCH (Unchanged): Search space: claim_extraction (heuristic vs. LLM), default_truth (0.75 vs. 0.80 vs. 0.85), strand_similarity threshold (0.65 vs. 0.70 vs. 0.75), max_strands (8 vs. 10 vs. 12), loss categories (3 vs. 4 vs. 5), instructions strategy (heuristic vs. LLM). ~8-16 variants tested on Riemann (full 25-turn sequence). Winner = best performance on variance metric. Phase 3b output: projector variant V_best. PHASE 4a NEW (Parallel with Phase 3b or Sequential): Use projector variant V_best (from Phase 3b) to test drift reduction on real conversation logs. Measurement: strand stability, loss recovery, tensor size trend. Hypothesis: explicit losses reduce drift. Timeline: 1 week (post-Phase-3, or overlapping if team capacity). Output: drift_report + publication angle (if hypothesis confirmed). SYNERGY: Phase 1 = 'can projector improve reasoning quality on hard tasks?' Phase 3b = 'what projector design is optimal?' Phase 4a = 'can projector reduce drift on natural conversations?' Together: comprehensive story about projector as multi-purpose memory controller. NO CONFLICT: Phase 4a does not require new projector implementation. It reuses compose.py (core logic) + adds drift_analyzer.py (measurement module). Drift_analyzer is independent of main reasoning pipeline (offline analysis only). CYCLE 36 DECISION POINT: User observes (Turn 106) that declared losses might reduce drift. This is hypothesis-generative (very good science). Cycle 36 designs Phase 4a to test it rigorously. Decision: Is Phase 4a worth adding to roadmap? RECOMMENDATION: YES. Because: (1) Low additional cost (~20-30 hours, 1 week). (2) High novelty (explicit incompleteness as drift-reduction mechanism is novel). (3) Independent publication angle (if confirmed, publishable separate from main Riemann result). (4) Synergistic with Phase 1 (strengthens overall narrative). (5) Zero risk to main experiment (Phase 4a is offline, post-Phase-1).",
+      "key_claims": [
+        {
+          "claim_id": "a3e671fa-7f7b-40a9-aab6-0e595f832440",
+          "text": "Cycle 35 H0-CORE projector specification remains core architecture for Phases 1-3 (unchanged by Phase 4a addition)",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.04,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "220b95b7-b9d2-4f37-8f75-bf1d864d795f",
+          "text": "Phase 1 critical path: Week 1-2 compose.py implementation, Week 2-3 unit tests, Week 3-4 integration + performance profiling (12 weeks total)",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "41bbb854-f4b9-42dd-9693-b1245e399bff",
+          "text": "Phase 3b: autoresearch variant search (8-16 projector variants tested on Riemann). Winner = V_best used in Phase 4a",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "729fd1d4-4f5b-489f-83a5-cd3421b27fa4",
+          "text": "Phase 4a: parallel or sequential with Phase 3b. Use V_best to analyze real conversation logs for drift reduction. ~20-30 hours, 1 week",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "a32cf966-2b58-4efd-8d1c-14bc4473ddda",
+          "text": "Phase 4a hypothesis (explicit losses reduce drift) is novel, orthogonal to main Riemann result, publishable independently if confirmed",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "d303b438-b9b7-4273-bcce-e16ef30c8d40",
+          "text": "Zero risk to main experiment: Phase 4a is offline analysis (no API calls, no reasoning pipeline perturbation)",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Cycle 35's seven strands (detailed context of each projector design decision, phase timing rationale, architectural alignment specifics)",
+      "why": "Cycle 36 is shorter and focused on new application. Cycle 35's detail is integrated (not lost) into Strand 3 above as 'PHASE 1 CRITICAL PATH' summary. Full Cycle 35 reasoning is preserved in prior tensor and available for reference.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Explicit validation-gate procedures from Cycle 35 Phase 0 (detailed checklist for logical consistency, completeness, specificity, actionability)",
+      "why": "Cycle 36 assumes validation gate proceeds as planned (Cycle 36 first 2 days) but does not re-specify procedures (already defined in Cycle 35). If needed, procedures can be recovered from prior tensor.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed discussion of Threat-to-Validity categories (task representativeness, proxy validity, statistical power, etc.) from Cycle 35",
+      "why": "Cycle 36 focuses on forward motion (Phase 4a scoping). Threat analysis is stable (from Cycle 35) and does not need re-elaboration. Referenced in contingency (Cycle 36 instructions) if needed.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Specification of how Riemann Task Spec will be finalized with Du et al. thresholds (exact turn-by-turn context budgets)",
+      "why": "Cycle 36 assumes this finalizes in early Cycle 36 (before stakeholder approval). Not re-detailed here; assumed as prerequisite for Phase 1 start.",
+      "category": "practical_constraint"
+    }
+  ],
+  "open_questions": [
+    "Phase 4a conversation logs: are they stored locally in /home/tony/projects/pichay/experiments/? What is exact directory structure and file naming convention?",
+    "Phase 4a embedding availability: do stored conversation logs include embeddings for each turn, or will embeddings need to be computed (post-hoc via spaCy/API)?",
+    "Phase 4a semantic search (loss recovery): should we use spaCy cosine similarity (fast, baseline) or LLM-based semantic matching (slower, potentially more accurate)? Threshold?",
+    "Phase 4a sample size and domain: are there 5-10 conversation logs available? Do they span multiple domains/tasks, or are they primarily one type (e.g., Riemann-focused)?",
+    "Phase 4a control condition (disabled losses): how will we programmatically disable loss declaration? Modify compose() to suppress DeclaredLoss generation, or separate code path?",
+    "Phase 4a hypothesis threshold: is loss recovery >30% the right success threshold, or should it be higher (>50%) or lower (>15%)? Data-driven decision in Phase 1?",
+    "Phase 4a integration with Phase 3b: will Phase 3b variant search results (V_best) be available before Phase 4a starts? If Phase 3b extends, does Phase 4a wait or proceed with H0-CORE?",
+    "Phase 1 vs. Phase 4a sequencing: is Phase 4a dependent on Phase 1 results, or can it proceed in parallel once H0-CORE is implemented? (Answer: parallel; confirm.)"
+  ],
+  "instructions_for_next": "Cycle 36 IMMEDIATE ACTIONS (Days 1-3):\n(1) CRITICAL: File-system inspection (Turn 108 bash command). List /home/tony/projects/pichay/experiments/. Identify conversation log files. Inspect 2-3 files (format, fields, length). Document in SCHEMA.md.\n(2) Du et al. extraction completion (if not done Cycle 35). Exact token thresholds for Riemann degradation points. Finalize Riemann Task Spec (turn milestones).\n(3) Phase 0 Validation Gate (Cycle 36 days 1-2): all seven Phase 0 deliverables reviewed. Logical consistency, completeness, clarity checks. Flag gaps.\n(4) Stakeholder Presentation (Cycle 36 day 3): present to decision-makers. Get clear approval or rejection. If approved, lock Phase 1 timeline.\n\nCycle 36-37 BRIDGE (Phase 1 Pre-launch):\n(5) If approval: finalize Riemann Task Specification with Du et al. thresholds. Make turn-by-turn context budgets explicit for riemann_harness/ coding.\n(6) Begin Phase 1 Week 1: compose.py implementation starts. Determinism is critical property (must pass 10x identical-input test before integration).\n(7) Parallel: draft drift_analyzer.py skeleton (low priority, can wait until Phase 4a formal start).\n\nCycle 37+ (Phase 1 Launch):\n(8) Phase 1 Week 1-2: compose.py core logic (Steps 1-7 composition flow, all 7 steps unit-tested independently).\n(9) Phase 1 Week 2-3: integration test (Riemann mock output + tensor_d). Validate output is valid TensorRecord, round-trip serialize/deserialize.\n(10) Phase 1 Week 3-4: performance profiling. Target <200ms per projection. Profile bottleneck if exceeded.\n(11) Parallel (if team capacity): Phase 4a log sample preparation (identify, inspect, prepare 5-10 conversation logs for drift analysis).\n\nContingency Branches:\n(12) If stakeholder raises scope concerns: have Threat-to-Validity document ready. Offer scope reductions (drop Phase 3b, reduce N, narrow to Haiku).\n(13) If Du et al. thresholds unavailable: use conservative estimates (Turn 5 = 2K, Turn 15 = 8K, Turn 25 = 12K) and note as limitation.\n(14) If conversation logs unavailable: generate synthetic logs from Riemann task (deterministic, reproducible) for Phase 4a pilot.\n\nSuccess Criteria (Cycle 36 completion):\n- All seven Phase 0 deliverables passed validation gate.\n- Stakeholder approval obtained (or clear rejection + feedback).\n- Riemann Task Spec finalized with turn milestones.\n- Phase 1 implementation roadmap locked (12-week sprint timeline confirmed).\n- Phase 4a scoped (drift_analyzer pseudocode drafted, log sample identified).",
+  "epistemic": {
+    "truth": 0.87,
+    "indeterminacy": 0.11,
+    "falsity": 0.02
+  }
+}

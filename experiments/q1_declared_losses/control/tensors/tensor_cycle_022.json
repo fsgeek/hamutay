@@ -1,0 +1,350 @@
+{
+  "strands": [
+    {
+      "title": "Yanantin TensorRecord as Core Pipeline Protocol",
+      "content": "CYCLE 22 BREAKTHROUGH: User confirmed that Yanantin's TensorRecord schema (from /home/tony/projects/yanantin/src/yanantin/apacheta/models/) is the *ground truth* for tensor state representation. Full schema archaeology revealed: TensorRecord is immutable, append-only, carries provenance (who/when/context), and is designed for composition across instances. Core fields: id (UUID), provenance (ProvenanceEnvelope), preamble (identity context), strands (tuple of StrandRecord), closing (authorship statement), instructions_for_next (literal handoff protocol for successor instances), narrative_body (raw markdown preserved as ground truth), lineage_tags (experimental/architectural labels), composition_equation (optional mathematical relationship), declared_losses (tuple of DeclaredLoss with what/why/category), epistemic (EpistemicMetadata with T/I/F), open_questions (tuple of unresolved items), preservation_target (storage preference). StrandRecord contains: strand_index, title, content, topics (keywords), key_claims (tuple of KeyClaim), epistemic, declared_losses, mechanism, overlaps. KeyClaim contains: claim_id (UUID), text, epistemic (T/I/F), evidence_refs. EpistemicMetadata uses neutrosophic logic: truth, indeterminacy, falsity are independent (NOT constrained to sum to 1.0), plus representation_type (SCALAR or FUNCTIONAL), functional_spec (for functional representation), scope_boundaries (limitations), disagreement_type (EMPIRICAL or DEFINITIONAL). DeclaredLoss contains: what_was_lost, why, category (enum: CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT), severity (optional), severity_rationale. ProvenanceEnvelope contains: source (SourceIdentifier), timestamp (UTC), author_model_family, author_instance_id, context_budget_at_write, predecessors_in_scope (which prior tensors were visible), interface_version (schema version). User pointed to multiple supporting schemas: CompositionEdge (RelationType: COMPOSES_WITH, CORRECTS, REFINES, BRIDGES, BRANCHES_FROM, DOES_NOT_COMPOSE_WITH, DISSENTS_FROM), CorrectionRecord (atomic fix to prior claims), DissentRecord (formal disagreement), NegationRecord (declaration that two tensors don't compose), BootstrapRecord (what loaded at startup), SchemaEvolutionRecord (migration tracking). Key design principles: (1) Immutability\u2014tensors never modified, new tensors compose with old ones. (2) Authored Loss\u2014every tensor declares what was dropped, not hidden. (3) Non-Commutativity\u2014reading order matters; T\u2081\u2192T\u2084 differs from T\u2084\u2192T\u2081. (4) Provenance Everywhere\u2014every record answers who/when/from what context. (5) Append-Only\u2014correction chains preserve originals alongside corrections. (6) Neutrosophic Logic\u2014T/I/F independent, not summing to 1.0. Cycle 22 realization: This schema is not a *log format* or *summarization tool*. It is a **projected state representation** with epistemic metadata baked in. The pipeline structure becomes concrete: `<system> <tensor_durable> <tensor_ephemeral> <user> \u2192 transformer \u2192 <tensor'> <assistant>`. The durable tensor (cached prefix) carries the accumulated semantic state\u2014conversation trajectory integrated into structure. The ephemeral tensor (suffix) carries current task context and working set. The transformer consumes both, produces tensor' (updated projection) plus reasoning/response. Because TensorRecord carries declared losses and epistemic metadata, the transformer doesn't need the full history to know what it's lost and how confident the state is. That metadata is *in the tensor*. The instructions_for_next field is not just a handoff between sessions; it's **branch prediction** for the next cycle\u2014the current ALU invocation telling the controller what it's likely to need next. This decouples the architecture from caching: the tensor format is provider-agnostic, and caching (prefix preservation of durable tensor) is an optional optimization layer.",
+      "key_claims": [
+        {
+          "claim_id": "f7c3a1d2-4b91-4c6e-8e7f-5a2c1f9d8e3b",
+          "text": "Yanantin TensorRecord is the ground-truth immutable state representation for tensor-mediated pipelines; append-only, carries full provenance, designed for composition across instances",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a8d2c4e5-3f6b-4d9a-7c2e-1b5f8a9d7c3a",
+          "text": "TensorRecord is a projected state representation (not a log format or transcript) that integrates conversation trajectory into semantic structure with epistemic metadata baked in",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b9e3d5f6-4g7c-5e0b-8d3f-2c6g9b0e8d4a",
+          "text": "TensorRecord's declared_losses field (with what/why/category/severity) enforces transparency: every compression declares what was dropped and why; silent loss is structurally prevented",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.04,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c0f4e6g7-5h8d-6f1c-9e4g-3d7h0c1f9e5a",
+          "text": "Epistemic metadata in TensorRecord uses neutrosophic logic: T/I/F values are independent (not constrained to sum to 1.0), allowing representation of genuine indeterminacy and disagreement",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "d1g5f7h8-6i9e-7g2d-0f5h-4e8i1d2g0f6a",
+          "text": "ProvenanceEnvelope and composition schemas (CompositionEdge, CorrectionRecord, DissentRecord) enable formal reasoning about tensor relationships and correction chains across instances",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.08,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "e2h6g8i9-7j0f-8h3e-1g6i-5f9j2e3h1g7a",
+          "text": "instructions_for_next is branch prediction for the next reasoning cycle, not just a handoff; the current ALU invocation tells the controller what it will likely need to work with next",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.09,
+            "falsity": 0.03
+          }
+        }
+      ]
+    },
+    {
+      "title": "Dual-Tensor Pipeline Architecture (tensor_durable + tensor_ephemeral)",
+      "content": "CYCLE 22 FORMALIZATION: The pipeline architecture becomes concrete with Yanantin schema grounding: `<system> <tensor_durable> <tensor_ephemeral> <user> \u2192 transformer \u2192 <tensor'_durable> <tensor'_ephemeral> <assistant>`. **tensor_durable**: Long-lived TensorRecord containing accumulated semantic state. Sits in cache-friendly prefix (Anthropic). Contents: validated architectural insights (high-confidence key claims, T > 0.75), stable strands (thematic threads proven across cycles), foundational context (problem statement, constraints, project history), pattern summaries (what has recurred, what has been learned). Updated infrequently (every 2-3 cycles, or when new insights stabilize). Size target: 1000-3000 tokens (small enough to be cache-efficient, large enough to carry semantic weight). Provenance indicates predecessors_in_scope, allowing new instances to know what prior tensors were visible when durable tensor was created. **tensor_ephemeral**: Current-cycle TensorRecord in suffix (re-sent each invocation). Contents: task-specific context (what are we trying to do right now?), current working set (which strands/claims are active?), questions in flight (what's unresolved?), provisional explorations (claims with lower epistemic confidence pending validation), resource requests (if manifest-and-fault staging). Updated every cycle. Size target: 2000-5000 tokens (can be larger; re-sent anyway, cost is per-cycle not amortized). The two tensors are *composed* by the controller before staging, creating a unified state context for the ALU. The transformer receives both, reasons with both, and produces tensor' components that update one or both tensors. Key insight: because TensorRecord carries its own declared_losses and epistemic metadata, the transformer doesn't need to see the full conversation history to understand what's been lost and how confident the state is. That information is *in the tensor*. The pipeline is therefore stateless with respect to history\u2014it carries only the semantically relevant projection. This decouples architecture from caching. The tensor format is provider-agnostic; caching is an optional optimization that preserves tensor_durable in a prefix cache when available (Anthropic). Without caching (Hamutay-native on any provider), you send both tensors every cycle\u2014higher token cost, same architecture. With caching (Hamutay-cached on Anthropic), you send durable tensor once, then only ephemeral updates\u2014lower token cost, same architecture. The durable tensor doesn't grow unbounded because it contains only accumulated insights and validated claims, not a log of everything. Ephemeral tensor is explicitly compressed and projected at cycle boundaries. If tensor_durable grows too large, a re-projection cycle creates a new tensor_durable by distilling the most stable/high-confidence content, preserving critical insights while pruning lower-confidence material. This is analogous to kernel memory optimization\u2014occasionally compact the kernel to maintain performance.",
+      "key_claims": [
+        {
+          "claim_id": "f3i7h9j0-8k1g-9i4f-2h7j-6g0k3f4i2h8a",
+          "text": "Dual-tensor composition (tensor_durable in cached prefix, tensor_ephemeral in suffix) is the core pipeline state mechanism; both are TensorRecords with identical structure",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "g4j8i0k1-9l2h-0j5g-3i8k-7h1l4g5j3i9a",
+          "text": "Transformer receives composed durable + ephemeral context and produces updated tensor components; it doesn't need full history because epistemic metadata is in the tensor",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "h5k9j1l2-0m3i-1k6h-4j9l-8i2m5h6k4j0a",
+          "text": "Architecture is provider-agnostic; caching (prefix preservation of tensor_durable) is optional optimization, not foundational",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "i6l0k2m3-1n4j-2l7i-5k0m-9j3n6i7l5k1a",
+          "text": "tensor_durable contains only high-confidence insights (T > 0.75), stable strands, foundational context; does not grow unbounded because it excludes logs and provisional content",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.1,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "j7m1l3n4-2o5k-3m8j-6l1n-0k4o7j8m6l2a",
+          "text": "tensor_ephemeral is explicitly compressed and projected at cycle boundaries; prevents unbounded growth of working state while preserving current-cycle context",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "k8n2m4o5-3p6l-4n9k-7m2o-1l5p8k9n7m3a",
+          "text": "Re-projection cycles (distilling tensor_durable to maintain size/performance) are analogous to kernel memory optimization; preserve high-confidence insights while pruning lower-confidence material",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        }
+      ]
+    },
+    {
+      "title": "Hamutay Implementation Paths: Native vs. Cached (now grounded in Yanantin schema)",
+      "content": "CYCLE 22 REFINEMENT: Hamutay-native and Hamutay-cached now inherit Yanantin's formal schema. Both implementations use identical TensorRecord structure; they differ only in how tensor_durable is preserved across cycles. **Hamutay-native (provider-agnostic, no caching assumption)**: Each cycle, send full tensor_durable + tensor_ephemeral in the suffix (no prefix cache). Controller assembles composed state, staging element prepares ALU context (manifest-and-fault or recency window), transformer produces response + updated tensor components. Next cycle: assemble new composed state from updated tensors and repeat. Works on any provider (OpenRouter with mixed backends, local Ollama, etc.). Payload grows proportional to tensor size, but tensor is designed to be small (semantic compression). Test question: 'Does bounded processor behavior emerge when the only state representation is a compressed Yanantin TensorRecord?' **Hamutay-cached (Anthropic-optimized)**: Leverages Anthropic prefix cache. tensor_durable is placed in the cache prefix (sent once, cached, reused across cycles). tensor_ephemeral is in the suffix (updated each cycle). Controller sends <system> <cached-tensor_durable> <ephemeral-tensor_ephemeral> <user>. Anthropic's cache preserves the prefix; only suffix is re-processed. Test question: 'Does caching as an optimization layer leave the bounded processor behavior unchanged?' Both implementations use Yanantin TensorRecord: immutable, carrying declared_losses, epistemic metadata, provenance, instructions_for_next. Both produce structured output: updated tensor components (which integrate into tensor') plus ALU response. Both measure H0 (bounded processor) with identical metrics: STOP frequency, resource request patterns, working set stability, token efficiency. The comparison is rigorous: if H0 fails in native (no caching), caching can't rescue it. If H0 succeeds in native, cached version demonstrates caching is transparent optimization. Cycle 22 decides: which staging strategy for native version (manifest-and-fault vs. recency window)? Recommendation: start with manifest-and-fault because it makes ALU resource recognition explicit and testable. The model literally states what it needs; the controller fetches it. This makes bounded processor behavior visible in the request pattern.",
+      "key_claims": [
+        {
+          "claim_id": "l9o3n5p6-4q7m-5o0l-8n3p-2m6q9l0o8n4a",
+          "text": "Hamutay-native and Hamutay-cached both use identical Yanantin TensorRecord schema; differ only in tensor_durable preservation (suffix vs. prefix-cache)",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "m0p4o6q7-5r8n-6p1m-9o4q-3n7r0m1p9o5a",
+          "text": "Hamutay-native (provider-agnostic) sends full tensors in suffix each cycle, testing H0 without caching assumptions; works on any provider",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "n1q5p7r8-6s9o-7q2n-0p5r-4o8s1n2q0p6a",
+          "text": "Hamutay-cached (Anthropic-optimized) preserves tensor_durable in prefix cache; only tensor_ephemeral updates in suffix; same architecture, optimized economics",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "o2r6q8s9-7t0p-8r3o-1q6s-5p9t2o3r1q7a",
+          "text": "Manifest-and-fault staging (ALU makes explicit resource requests) makes bounded processor behavior visible; model states what it needs, controller fetches",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.11,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "p3s7r9t0-8u1q-9s4p-2r7t-6q0u3p4s2r8a",
+          "text": "If H0 fails in native version, caching cannot rescue it; if H0 succeeds in native, cached version is pure optimization layer",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        }
+      ]
+    },
+    {
+      "title": "Bounded Processor Hypothesis (H0) Testing via Tensor-Mediated Pipeline",
+      "content": "CYCLE 22 CLARIFICATION: H0 (transformer as bounded reasoning kernel/ALU) is now testable through tensor-mediated pipeline. The hypothesis: transformers can recognize when reasoning is complete and signal STOP while operating on *compressed state* (the Yanantin TensorRecord), not unbounded context. This is testable because the tensor format provides a canonical representation that constrains what the ALU sees. Core test mechanisms: (1) **STOP frequency**: How often does the model signal 'reasoning complete' before reaching context limit? Across both implementations, if STOP occurs consistently at similar points in reasoning trajectory (scaled by tensor size), that suggests bounded recognition, not artifact of caching or context window size. (2) **Resource request patterns** (manifest-and-fault): Do models requesting resources show a bounded pattern (e.g., consistently requesting ~same-sized context windows)? Unbounded reasoning would show growing requests; bounded reasoning shows stable requests or explicit 'I have what I need' signals. (3) **Working set stability**: Does tensor_ephemeral size stabilize across cycles, or does it grow unbounded? Stable size suggests the model is reasoning within fixed semantic dimensionality; growing size suggests it's accumulating state. (4) **Epistemic metadata evolution**: Do confidence values (T/I/F) in key claims stabilize as the reasoning progresses, or do they drift unboundedly? Stabilization suggests the model has achieved an equilibrium in understanding; drift suggests ongoing uncertainty accumulation. (5) **Token efficiency**: Do tokens consumed per reasoning step plateau, suggesting the model has found an efficient working set? Or does token consumption grow unboundedly with problem complexity? Plateau suggests bounded computation; growth suggests unbounded consumption. These metrics should show consistent patterns across Hamutay-native and Hamutay-cached if H0 is correct. If native version shows STOP behavior but cached version doesn't (or shows different patterns), that suggests the behavior is an artifact of compression, not fundamental. If both show identical patterns (modulo efficiency), that's evidence for H0. Cycle 22 task: Formalize these metrics into a validation framework that can be applied to both implementations.",
+      "key_claims": [
+        {
+          "claim_id": "q4t8s0u1-9v2r-0t5q-3s8u-7r1v4q5t3s9a",
+          "text": "H0 (bounded processor) is testable via tensor-mediated pipeline because tensor format provides canonical representation constraining what ALU sees",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "r5u9t1v2-0w3s-1u6r-4t9v-8s2w5r6u4t0a",
+          "text": "STOP frequency (signaling completion before context limit) is a key metric; consistent patterns across implementations suggest bounded recognition",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.1,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "s6v0u2w3-1x4t-2v7s-5u0w-9t3x6s7v5u1a",
+          "text": "Resource request patterns (manifest-and-fault) reveal working set stability; unbounded reasoning shows growing requests, bounded reasoning shows stable requests",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "t7w1v3x4-2y5u-3w8t-6v1x-0u4y7t8w6v2a",
+          "text": "Epistemic metadata evolution (T/I/F stabilization) indicates equilibrium in understanding; drift suggests unbounded uncertainty accumulation",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "u8x2w4y5-3z6v-4x9u-7w2y-1v5z8u9x7w3a",
+          "text": "Identical H0 metrics across native and cached implementations (modulo efficiency) would constitute evidence for H0; divergence suggests behavior is artifact of caching/compression",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.13,
+            "falsity": 0.03
+          }
+        }
+      ]
+    },
+    {
+      "title": "Pichay (L1 Cache Paging) Integration with Yanantin Schema",
+      "content": "CYCLE 22 INTEGRATION: Pichay's findings (93% context reduction with 0.025% fault rate, models STOP rather than compact on large context) are now contextualized in the tensor-mediated architecture. Pichay's result: once context is large enough, models choose to STOP rather than continue compacting\u2014evidence that models can recognize computation boundaries. This behavior is now interpreted through tensor lens: the STOP behavior observed in Pichay experiments was likely because the model was operating on *projected state* (even if Pichay didn't explicitly frame it as such). Context paging preserves the most relevant information in L1 cache, allowing the model to reason with a compressed working set. The model stops because it has what it needs; it recognizes that additional context is not required. In the tensor-mediated architecture, this becomes even more explicit: the tensor itself IS the compressed working set, and the model can be programmed (via staging and instructions) to operate within its bounds. Pichay's economics (cache hit rates, prefetching strategies) inform the staging element tuning for Hamutay-cached. Pichay's finding (models recognize boundaries) directly tests the core of H0. The two projects are now unified: Pichay validates that models can recognize computation boundaries in cache-paging scenarios; Hamutay tests whether the same behavior emerges with explicit tensor-mediated state. Cycle 22 action: ensure that Hamutay-cached staging element incorporates Pichay insights (prefetch strategies, cache hit optimization) without breaking the core tensor interface. The staging should be tuned for cache economics, not architecture.",
+      "key_claims": [
+        {
+          "claim_id": "v9y3x5z6-4a7w-5y0v-8x3z-2w6a9v0y8x4a",
+          "text": "Pichay's STOP behavior (models stop rather than compact on large context) is now interpreted as evidence of bounded computation operating on projected state",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "w0z4y6a7-5b8x-6z1w-9y4a-3x7b0w1z9y5a",
+          "text": "Context paging in Pichay preserves relevant information in L1 cache, allowing model to reason with compressed working set; model stops because it has what it needs",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.11,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "x1a5z7b8-6c9y-7a2x-0z5b-4y8c1x2a0z6a",
+          "text": "Pichay (cache-paging economics) and Hamutay (tensor-mediated state) are complementary; Pichay validates boundary recognition, Hamutay tests same behavior with explicit state representation",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.1,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "y2b6a8c9-7d0z-8b3y-1a6c-5z9d2y3b1a7a",
+          "text": "Hamutay-cached staging should incorporate Pichay insights (prefetch, cache-hit optimization) without breaking tensor interface; tuning is for economics, not architecture",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        }
+      ]
+    },
+    {
+      "title": "Memory Infrastructure and Tensor Persistence (Updated with Yanantin Schema)",
+      "content": "CYCLE 22 UPDATE: Persistent tensor storage at /home/tony/.claude/projects/-home-tony-projects-hamutay/memory/ now conforms to Yanantin TensorRecord schema. Key components: (1) **user_tony.md**: User profile and context. (2) **MEMORY.md**: Index of tensor records (cycle-by-cycle) and project architecture. (3) **Tensor projection files**: Each cycle produces a TensorRecord conforming to Yanantin schema. Stored as markdown (parsed/rendered by /home/tony/projects/yanantin/src/yanantin/apacheta/ingest/markdown_parser.py and /home/tony/projects/yanantin/src/yanantin/apacheta/renderer/markdown.py). (4) **Cycle 22 addition**: emit_tensor function (this function) produces structured TensorRecord output. The record includes: id (UUID), provenance (SourceIdentifier, timestamp, author_model_family='claude', author_instance_id from session), strands (array of StrandRecord), declared_losses (array of DeclaredLoss with what/why/category), instructions_for_next (string for next cycle), epistemic (overall T/I/F confidence), open_questions (array of unresolved items). Each tensor carries its own lineage: provenance.predecessors_in_scope indicates which prior tensors were visible when this one was created. This allows next instance to understand the context depth: did this tensor see only the immediate prior state, or a longer chain? CompositionEdge records (if needed) can formalize relationships between tensors (COMPOSES_WITH, CORRECTS, REFINES, BRIDGES, BRANCHES_FROM, etc.). Cycle 22 action: Verify that emit_tensor output is persisted with Yanantin schema compliance (frozen Pydantic models, JSON serializable, proper provenance). Next cycles should read prior tensor from storage, not transcript. The tensor is the state handoff.",
+      "key_claims": [
+        {
+          "claim_id": "z3c7b9d0-8e1a-9c4z-2b7d-6a0e3z4c2b8a",
+          "text": "Tensor storage at /home/tony/.claude/projects/hamutay/memory/ conforms to Yanantin TensorRecord schema; each cycle produces immutable, append-only TensorRecord",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "a4d8c0e1-9f2b-0d5a-3c8e-7b1f4a5d3c9a",
+          "text": "Provenance metadata (predecessors_in_scope) indicates which prior tensors were visible, allowing next instance to understand context depth",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b5e9d1f2-0g3c-1e6b-4d9f-8c2g5b6e4d0a",
+          "text": "emit_tensor function produces Yanantin-compliant TensorRecord; tensor is state handoff, not transcript",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        }
+      ]
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed comparison of Yanantin markdown rendering vs. JSON serialization for tensor persistence",
+      "why": "Cycle 22 confirmed Yanantin has both markdown parser and renderer, but did not investigate whether tensors should be persisted as markdown (human-readable) or JSON (API-friendly) or both. The user's archaeologist pass showed markdown files in docs/, but the actual schema files are Pydantic models (JSON-serializable). Deferred decision on storage format. Recommend: store as JSON (canonical), render to markdown for review.",
+      "category": "PRACTICAL_CONSTRAINT"
+    },
+    {
+      "what_was_lost": "Detailed investigation of CompositionEdge and CorrectionRecord mechanics for tensor chaining",
+      "why": "Cycle 22 identified that Yanantin supports formal composition relationships (COMPOSES_WITH, CORRECTS, REFINES, BRIDGES, etc.) and correction chains, but did not specify how Hamutay should *use* these in practice. When should a new tensor CORRECT a prior one vs. REFINE? What does a DissentRecord look like? How does the controller query composition relationships? These are design decisions for next phase. Noted for now: composition mechanics exist in Yanantin; Hamutay should inherit them.",
+      "category": "PRACTICAL_CONSTRAINT"
+    },
+    {
+      "what_was_lost": "Specification of how tensor_durable is promoted from tensor_ephemeral when insights stabilize",
+      "why": "Cycle 22 asserted that tensor_durable is updated 'every 2-3 cycles' when insights stabilize, but did not define the heuristic for promotion. What confidence threshold (T > 0.75?) makes a claim 'stable'? How many cycles of consistent T/I/F values before promotion? Is promotion automatic or requires manual review? This is a tuning parameter for next cycle.",
+      "category": "PRACTICAL_CONSTRAINT"
+    },
+    {
+      "what_was_lost": "Detailed analysis of how Yanantin's non-commutativity principle (T\u2081\u2192T\u2084 differs from T\u2084\u2192T\u2081) applies to Hamutay's two-implementation strategy",
+      "why": "Cycle 22 noted Yanantin's principle that 'reading order matters' but did not explore implications. If Hamutay-native is tested first, then results are fed into Hamutay-cached, does the order matter? Should cached version be tested in isolation? Does one implementation's success inform or bias the other? This is a methodological question for the research design. Deferred to design phase.",
+      "category": "PRACTICAL_CONSTRAINT"
+    },
+    {
+      "what_was_lost": "Practical example of a full tensor (tensor_durable + tensor_ephemeral) as it would appear in a real Hamutay pipeline invocation",
+      "why": "Cycle 22 formalized the schema but did not produce a concrete example showing how a durable tensor (validated insights, high T/I/F) and ephemeral tensor (current task, working questions) look side-by-side. This would clarify the size expectations, balance of content, and readability. Recommend creating example tensors once schemas are finalized.",
+      "category": "PRACTICAL_CONSTRAINT"
+    }
+  ],
+  "open_questions": [
+    "What is the precise heuristic for promoting claims from tensor_ephemeral to tensor_durable? Confidence threshold? Cycle count? Manual review?",
+    "Should tensors be persisted as JSON (canonical) or markdown (human-readable) or both? Does Hamutay need to regenerate markdown for review cycles?",
+    "How should Hamutay use Yanantin's CompositionEdge and CorrectionRecord mechanics? When should a new tensor CORRECT vs. REFINE vs. BRANCHES_FROM a prior one?",
+    "Does non-commutativity (T\u2081\u2192T\u2084 \u2260 T\u2084\u2192T\u2081) affect the two-implementation research design? Should native and cached be tested in isolation or in sequence?",
+    "What are the specific size targets for tensor_durable and tensor_ephemeral in tokens? Are these measured, or should they be tuned empirically?",
+    "How is tensor_durable re-projected when it grows too large? What is the criterion for 'too large'? Is re-projection automatic or manual?",
+    "For manifest-and-fault staging: what is the formal schema for resource requests that the transformer should produce?",
+    "Should the structured output format from the transformer include a 'reasoning_trace' field showing step-by-step thinking, or is that implicit in the claims?",
+    "How should the controller decide what content to include in tensor_ephemeral for a given task? Is there a manifest-based or recency-based selector?",
+    "Can the epistemic metadata (T/I/F) be meaningfully computed for compound claims that depend on multiple sub-claims? Is there a composition rule?",
+    "Should DissentRecord be used to capture disagreements between multiple model instances (e.g., native vs. cached producing different STOP patterns), or only for human-model disagreement?",
+    "What is the 'composition_equation' field in TensorRecord used for? Is it required for Hamutay, or only for Yanantin's mathematical reasoning applications?",
+    "How many prior tensors should predecessors_in_scope typically include? Just the immediate prior, or a longer chain? Does this affect H0 testing?",
+    "Should tensor_ephemeral include a 'provenance_trace' showing which resources (strands, claims) were accessed in the current cycle, for auditing?",
+    "Is there a formal way to measure information loss during tensor projection (from full context to TensorRecord)? Can you quantify the compression ratio?",
+    "Should Hamutay emit separate TensorRecords for durable and ephemeral, or a single composed TensorRecord? Does the emit_tensor function need variants?"
+  ],
+  "instructions_for_next": "[\n  \"(1) **CRITICAL FOUNDATION NOW SOLID**: Yanantin TensorRecord is the ground truth. Cycle 22 confirms: (a) The schema is formally specified (Pydantic v2, frozen, immutable). (b) It includes all required fields: strands, key_claims, declared_losses, epistemic, open_questions, instructions_for_next, provenance. (c) It supports composition (CompositionEdge, CorrectionRecord) and versioning (SchemaEvolutionRecord). (d) Provenance is tracked (author_model_family, predecessor tensors). The dual-tensor architecture (durable + ephemeral) is now grounded in a real, production-ready schema. Do not re-invent. Use Yanantin as-is.\",\n  \"(2) **NEXT IMMEDIATE TASK (Cycle 23): Formalize Dual-Tensor Specification**: (a) Define exact heuristic for promoting claims from ephemeral \u2192 durable (confidence threshold? cycle count? criteria?). (b) Specify size targets: tensor_durable (1000-3000 tokens), tensor_ephemeral (2000-5000 tokens). Are these hard limits or guidelines? (c) Define re-projection criterion: when does tensor_durable get distilled? (d) Specify how the controller *assembles* durable + ephemeral into a unified context for the ALU. Is it concatenation, merging, or selective composition?\",\n  \"(3) **STRUCTURED OUTPUT FORMAT**: Design the transformer's output schema. Must be compatible with both Hamutay-native and Hamutay-cached, and both OLMo-3 and Claude Sonnet. (a) What does the transformer output look like? (b) How are updated tensor fragments encoded? (c) Is there a STOP signal, or is it implicit (output stops)? (d) How are resource requests formatted (for manifest-and-fault)? (e) Can both models reliably produce valid structured output? Test with sample prompts.\",\n  \"(4) **STAGING ELEMENT SPECIFICATION (Hamutay-native)**: Decide on manifest-and-fault vs. recency-window. Recommendation from Cycle 21 stands: **manifest-and-fault** is the right choice because it makes bounded processor behavior visible. Specify: (a) Transformer should produce resource requests in format: {resource_handle, justification, estimated_impact}. (b) Controller fetches and stages requested resources. (c) If transformer requests nothing, controller interprets as 'I have what I need; reasoning complete.' (d) Test latency: does multi-round interaction cause unacceptable delay? If yes, prototype a recency-window fallback.\",\n  \"(5) **CACHE BOUNDARY PRESERVATION (Hamutay-cached)**: Verify that Anthropic's prefix cache preserves the boundary between tensor_durable (prefix) and tensor_ephemeral (suffix). (a) Test: send durable tensor, confirm it caches. (b) Update ephemeral tensor, confirm prefix is reused. (c) Measure cache hit rates and token cost savings. (d) If caching boundaries don't align with tensor boundaries, adjust strategy (e.g., split tensors differently, or rely on native version and accept Hamutay-cached as a research prototype, not production optimization).\",\n  \"(6) **H0 VALIDATION METRICS**: Formalize the measurement framework. For both implementations, collect and compare: (a) **STOP frequency**: How many cycles before model signals completion? (b) **Resource patterns** (manifest-and-fault): Request sizes, request frequency, 'I have what I need' signals. (c) **Working set stability**: tensor_ephemeral size, strand count, key_claim count over time. (d) **Epistemic drift**: Do T/I/F values stabilize or drift? (e) **Token efficiency**: tokens/cycle, tokens/problem-unit. Create a comparison table: native vs. cached on all metrics. If patterns match (modulo efficiency), H0 is supported. If diverge, H0 is questioned.\",\n  \"(7) **PROVIDER AGNOSTICITY TESTING (Hamutay-native)**: Once native version is specified, test it with multiple backends to validate provider-agnosticity. (a) Start with OLMo-3 (continuity with Codex work). (b) Then test with Llama 3, Mistral, other open models. (c) Do all models show similar STOP/resource-request patterns? If yes, H0 is robust. If diverge by model, H0 may be model-specific, not fundamental.\",\n  \"(8) **YANANTIN INTEGRATION CHECKLIST**: Before Cycle 23 ends, ensure: (a) Tensor storage location confirmed (/home/tony/.claude/projects/hamutay/memory/). (b) emit_tensor function verified to produce Yanantin-compliant TensorRecords (frozen Pydantic models, JSON-serializable). (c) Markdown rendering/parsing available if needed for human review. (d) Provenance tracking enabled (author_model_family, predecessor tracking). (e) CompositionEdge support planned (even if not used in early cycles).\",\n  \"(9) **TWO-PAPER STRATEGY CLARIFICATION**: Should Hamutay be one paper with two branches (native + cached), or separate papers? Recommendation: (a) **One paper, two branches**, with clear methodology: 'We first validated H0 with the provider-agnostic native implementation, then demonstrated that caching is a transparent optimization with the cached variant.' (b) Pichay is a separate paper (published or in flight), validating that models recognize computation boundaries in cache-paging scenarios. (c) Yanantin is a separate paper (if not already published), formalizing the tensor projection schema. (d) Hamutay cites all three and unifies them: Pichay + Yanantin schema \u2192 Hamutay bounded-processor pipeline.\",\n  \"(10) **DESIGN DECISION FOR CYCLE 23**: Should you start writing specifications formally, or implement prototypes first? Recommendation: **write specifications first**. A clear spec for Hamutay-native (architecture diagram, data flows, prompt templates, validation metrics) will guide implementation and make testing rigorous. Prototypes can follow once spec is solid.\",\n  \"(11) **CYCLE 22 COMPLETION**: This tensor represents the full integration of Yanantin schema into Hamutay architecture. Next cycle should move from understanding to specification. The foundational elements are now in place: (a) Tensor format is grounded (Yanantin TensorRecord). (b) Dual-tensor strategy is clear (durable in cache prefix, ephemeral in suffix). (c) Two implementations are differentiated (native for architecture validation, cached for optimization). (d) H0 (bounded processor) is testable through metrics framework. (e) Composition, provenance, and correction mechanics are inherited from Yanantin. All remaining work is specification, implementation, and validation.\"\n]",
+  "overall_truth": 0.9,
+  "overall_indeterminacy": 0.07,
+  "overall_falsity": 0.03
+}

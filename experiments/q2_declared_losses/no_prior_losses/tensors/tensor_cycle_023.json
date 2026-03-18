@@ -1,0 +1,609 @@
+{
+  "id": "62240fa5-a8b7-4fc7-961b-f914e86340d7",
+  "cycle": 23,
+  "strands": [
+    {
+      "title": "Cache as Admission of Broken Paradigm \u2014 Economics vs. First Principles (CRITICAL REFRAMING)",
+      "content": "Cycles 20-23 maintain the core insight: prompt cache is an admission that the stateless API + re-reading-context paradigm is broken, not an architectural innovation. The 10% discount is a billing-level stopgap without fixing the underlying model. Prefix stability, cache optimization, output recency discounts are PROVIDER-SPECIFIC, not fundamental. They are Anthropic-specific band-aids. Cache-aware optimization should be a PROVIDER-SPECIFIC ADAPTER LAYER, not a core architectural decision in Hamutay. The distinction between provider-optimized (Hamutay tuned for Anthropic's economics: prefix stability, tight loops, output recency discounts, Haiku triage) and provider-agnostic (Hamutay designed for first principles: pipeline architecture, bounded reasoning, memory management protocol, context stability independent of billing model) remains CRITICAL. This reframing has been integrated into the two-version split (Hamutay-standard vs. Hamutay-optimized), which crystallizes this distinction operationally. Provider-specific tuning becomes explicit, not hidden.",
+      "key_claims": [
+        {
+          "claim_id": "bfcfc9bb-1454-4ec3-b244-3a7054219932",
+          "text": "Prompt cache is not a transformer innovation; it is an admission that the stateless API + re-reading-context paradigm is broken",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "062bfc8d-6893-4354-b510-b3deb0bb7cb0",
+          "text": "The 10% cache discount is a billing-level stopgap, not an architectural fix; it optimizes costs without changing the underlying broken model",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5e6b3f7b-f7f1-46b9-a14a-5b99f9fade9b",
+          "text": "Prefix stability, cache optimization, and output recency discounts are PROVIDER-SPECIFIC, not fundamental; they are Anthropic-specific band-aids",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6a2b991e-54fa-46c8-89e4-9e03e1a56807",
+          "text": "Cache-aware optimization should be a PROVIDER-SPECIFIC ADAPTER LAYER, not a core architectural decision in Hamutay",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Architecture vs. Implementation \u2014 The Pipeline Structure is Independent of Provider Tuning",
+      "content": "Cycles 20-23 maintain the CPU analogy as precise and explanatory. A CPU architecture (x86, ARM, RISC-V) defines the instruction set, register file, and ALU contract independent of microarchitecture (Intel Skylake, AMD Zen, Apple M-series), each optimized for different process nodes, power budgets, workloads. HAMUTAY ARCHITECTURE remains: Pipeline stages (fetch-decode-execute-writeback analogy \u2192 prefetch/triage, tensor projection, transformer execution, tensor composition). Separation of concerns (transformer-as-ALU, tensor-as-state, external memory as backing store). Contracts between stages (instruction format \u2192 tensor schema, result format \u2192 structured tensor output, handoff protocol \u2192 instructions_for_next). Bounded reasoning (fixed cycle budget, termination guarantee, explicit state management). HAMUTAY IMPLEMENTATION spans three dimensions: (1) Which model backend (Opus on Anthropic, OLMo-3 locally, Sonnet via OpenRouter). (2) How many resources per invocation (tuned to context window, latency). (3) Cache utilization (prefix caching on Anthropic, none on local models, conditional on OpenRouter). This DECOUPLING remains valid. H0-CORE tests ARCHITECTURE (do pipeline stages function, do contracts hold, does termination work, does transformer behave like bounded CPU?). H0+ tests MICROARCHITECTURAL TUNING (same architecture, optimized for Anthropic cost/latency). H0-GENERIC tests PORTABILITY (same architecture, different backend; reveals whether coupling is provider-specific or architectural). Cycles 22-23 add critical precision: the architecture includes UNCERTAINTY AS FIRST-CLASS STATE. This is the key distinction from classical CPU. A CPU doesn't know what it's lost; the TensorRecord does. A CPU doesn't track confidence in its own state; the epistemic metadata does. A CPU doesn't reason about its own degradation; declared_losses enable this. The architecture is not 'a CPU implemented with transformers'; it's 'a bounded processing unit that, unlike a CPU, carries uncertainty as part of its memory contract.' This is a NOVEL CHARACTERIZATION, not derivative.",
+      "key_claims": [
+        {
+          "claim_id": "98dcfef8-68fb-4371-aabb-355dff608438",
+          "text": "CPU analogy holds for pipeline and separation of concerns; architecture is independent of microarchitecture",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "24972289-4386-422b-9e73-fdbf4f096877",
+          "text": "Hamutay architecture: stages (prefetch/triage, projection, execution, composition), contracts (tensor schema, structured output, handoff), bounded reasoning",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d899623e-2620-4ee3-93cb-424f6b102189",
+          "text": "Hamutay implementation: backend choice, resources-per-invocation, cache strategy; these vary across H0, H0+, H0-generic",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8c105208-0c95-4129-84c1-6b2474e94134",
+          "text": "H0-core tests architecture; H0+ tests tuning; H0-generic tests portability; architecture is invariant across implementations",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c31ffffd-5ab4-4e36-8da8-6168bbf04375",
+          "text": "Uncertainty as first-class state (epistemic metadata, declared_losses, scope boundaries) is NOVEL compared to CPU; this is key distinction of cognitive processor",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "b2021604-2914-41df-ba7c-0958a3a23997",
+          "text": "A CPU doesn't know what it's lost; Hamutay's tensor does. A CPU doesn't track confidence; Hamutay does. A CPU doesn't reason about degradation; Hamutay can.",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Tensor as Persistent State \u2014 Yanantin TensorRecord as Handoff Protocol Between Instances (CRYSTALLIZED SPECIFICATION)",
+      "content": "Cycles 22-23 finalize Yanantin integration. The TensorRecord schema is fully specified, immutable, Pydantic v2, ready for inheritance by Hamutay. The schema is DESIGNED for exactly this use case: (1) TOP-LEVEL: TensorRecord contains: id (UUID), provenance (who/when/context), preamble (identity), **strands** (thematic sections), closing (authorship), **instructions_for_next** (handoff protocol), narrative_body (markdown ground truth), lineage_tags (labels), composition_equation (optional math), **declared_losses** (with category), **epistemic** (EpistemicMetadata), **open_questions** (unresolved). (2) STRANDRECORD: strand_index, title, content, topics, **key_claims** (structured assertions with epistemic per claim). (3) KEYCLAIM: claim_id, text, **epistemic** (T/I/F). (4) EPISTEMICMETADATA (neutrosophic): truth, indeterminacy, falsity (unconstrained, not summing to 1.0), representation_type (SCALAR or FUNCTIONAL), functional_spec, scope_boundaries, disagreement_type. (5) DECLAREDLOSS: what_was_lost, why, **category** (CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT), severity. (6) PROVENANCEENVELOPE: source, timestamp, author_instance_id, context_budget_at_write, predecessors_in_scope. (7) COMPOSITION: CompositionEdge (REFINES, CORRECTS, BRANCHES_FROM), CorrectionRecord, DissentRecord. Serialization/parsing infrastructure exists: markdown_parser.py, markdown.py. CRITICAL INTEGRATION POINT (cycle 23): Who produces tensor'? The transformer produces tensor' as structured output. It is the ALU's responsibility to emit the new state. Post-processing (via Haiku or controller) determines migration between durable and ephemeral tensors. The transformer is not asked to decide cache placement; it produces tensor', the memory controller decides placement. This is the CORRECT separation: ALU computes results (tensor'), memory subsystem decides where results are stored (cache hierarchy). Hamutay does NOT reinvent tensor state; it inherits Yanantin TensorRecord as-is. Processor architecture is Hamutay's contribution; state representation is inherited.",
+      "key_claims": [
+        {
+          "claim_id": "66b2a065-1c83-4f5b-bebc-76b05c518b34",
+          "text": "Yanantin TensorRecord schema exists, fully specified, immutable, Pydantic v2, ready for inheritance by Hamutay",
+          "epistemic": {
+            "truth": 0.99,
+            "indeterminacy": 0.01,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "4bfa3d25-7e71-4298-a9ba-3b90c948c72f",
+          "text": "TensorRecord contains strands, key_claims with epistemic, declared_losses (with category), open_questions, instructions_for_next, provenance",
+          "epistemic": {
+            "truth": 0.99,
+            "indeterminacy": 0.01,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "19054576-bbf9-4a34-8940-bf199f6e0b6c",
+          "text": "EpistemicMetadata uses neutrosophic logic (T/I/F unconstrained) with representation_type (SCALAR or FUNCTIONAL) and disagreement_type (EMPIRICAL or DEFINITIONAL)",
+          "epistemic": {
+            "truth": 0.98,
+            "indeterminacy": 0.02,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "49c0afbf-1d27-41f4-b687-cfd10e25a1a9",
+          "text": "DeclaredLoss enforces category (CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT) preventing silent loss",
+          "epistemic": {
+            "truth": 0.99,
+            "indeterminacy": 0.01,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "a9a4d5b0-3ec6-4f8b-9374-0f581b70c361",
+          "text": "Serialization/parsing infrastructure exists: markdown_parser.py (markdown \u2192 TensorRecord), markdown.py (TensorRecord \u2192 markdown)",
+          "epistemic": {
+            "truth": 0.98,
+            "indeterminacy": 0.02,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "03b73807-1255-44af-80f8-ad67e3046650",
+          "text": "Transformer produces tensor' as ALU output; post-processing (Haiku/controller) decides migration between durable/ephemeral cache hierarchy",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "b95565a5-1f4e-407c-a5e5-44ab4db00206",
+          "text": "Transformer is not asked to decide cache placement; it produces results, memory subsystem decides storage location; correct separation of concerns",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "2c849f2d-d2b0-4412-8bab-5305fa579491",
+          "text": "Hamutay inherits TensorRecord without reimplementation; processor architecture is Hamutay's contribution, not state design",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "The Clock Cycle \u2014 Every API Round Trip is a Pipeline Cycle (PRECISION ON GRANULARITY)",
+      "content": "Cycle 23 adds critical precision on clock cycle definition. Every API round trip (prefetch/triage \u2192 tensor_d assembly \u2192 tensor_e assembly \u2192 transformer invocation \u2192 response parsing \u2192 tensor composition \u2192 persistence) is ONE PIPELINE CYCLE. This is the fundamental temporal unit. Pre-processing is the fetch/decode stage (assemble context, triage with Haiku if needed). Transformer invocation is the execute stage. Post-processing is the writeback stage (project tensor', update memory state, decide durable/ephemeral migration). Within the transformer execution, there may be multiple reasoning steps; but from the PROCESSOR perspective, all of that is a single execute-stage operation. The transformer is opaque; the processor sees only input (assembled tensors + resources) and output (tensor' + task result). This granularity is correct because: (1) It matches the API contract. Every call to the transformer is a discrete operation with a cost. The processor cycle is bounded by the API round trip time. (2) It simplifies state management. Tensor_d and tensor_e are assembled once per cycle, not dynamically updated during reasoning. This keeps the pipeline stages discrete and avoids state corruption from partial updates. (3) It aligns with cache coherency. Prefix caching works at the cycle level: durable tensor (unchanged across cycles, benefits from cache) vs. ephemeral tensor (new each cycle, not cached). (4) It enables termination guarantees. The bounded reasoning constraint (context_budget_at_write) is checked BETWEEN cycles, not within. If context \u2264 10% remaining at cycle end, halt. The transformer doesn't need to respect the budget internally; the controller enforces it at cycle boundaries. This is a SIMPLIFICATION vs. trying to enforce budget within the transformer. Measurement granularity: every cycle is logged. Tokens in/out per cycle, resources fetched per cycle, faults per cycle, halt decision per cycle. Over many cycles, these compose into task-level metrics (total tokens, total cost, total faults, success rate). The cycle as basic unit is clean, implementable, and aligns with the API contract.",
+      "key_claims": [
+        {
+          "claim_id": "01f1f957-7f76-458d-b475-5a9c295f3971",
+          "text": "One pipeline cycle = one API round trip: prefetch/triage \u2192 assembly \u2192 execute \u2192 writeback \u2192 persist",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4ee85853-564e-478c-995b-81f2961614db",
+          "text": "Pre-processing is fetch/decode (assemble context, triage); transformer is execute; post-processing is writeback (compose tensor, migrate state)",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1f0d9b50-5180-4555-b74e-711027f58f10",
+          "text": "Multiple reasoning steps within transformer are opaque to processor; processor sees only input and output, not internal steps",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4b8f001e-9fb3-4b79-bc24-4ffd3db0518b",
+          "text": "Cycle granularity matches API contract: every call is a discrete operation with cost; processor cycle is bounded by round-trip time",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "13f4a2a6-315b-4bc6-96d7-409ef89d975e",
+          "text": "Tensor_d (durable) assembled once per cycle, benefits from cache; tensor_e (ephemeral) new each cycle, not cached",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1c350ca1-8a08-4c03-9573-6f6a522f4d50",
+          "text": "Bounded reasoning constraint enforced at cycle boundaries, not within transformer; simplifies execution model",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "073a2253-7493-4da5-8bb5-2725bec12e6a",
+          "text": "Measurement granularity: every cycle logged (tokens, resources, faults, halt reason); cycles aggregate into task-level metrics",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "The Cognitive Processing Unit is Not a CPU \u2014 Uncertainty as First-Class State (NOVEL CHARACTERIZATION)",
+      "content": "Cycle 23 crystallizes the insight that Hamutay is NOT 'a CPU implemented with transformers.' It is a GENUINELY DIFFERENT KIND OF PROCESSING UNIT. The CPU analogy is GENERATIVE: it got us to pipeline structure, separation of concerns, memory hierarchy, bounded operations. But the analogy breaks at a fundamental level. A classical CPU: (1) Operates on exact state (registers, memory). (2) Loses data silently when cache evicts or buffers overflow. (3) Has no epistemic metadata on its own state. (4) Cannot reason about the confidence of its accumulated knowledge. (5) Does not track the semantic consequences of information loss. The Hamutay cognitive processing unit: (1) Operates on STATE + UNCERTAINTY. Every register (every fact in a strand) has epistemic metadata: truth, indeterminacy, falsity, scope boundaries, representation type (SCALAR or FUNCTIONAL). (2) Does NOT lose data silently. When context pressure forces eviction or compression, the loss is DECLARED (declared_losses, with category: CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT) and TRACKED with severity. (3) HAS EPISTEMIC METADATA AS FIRST-CLASS. The processor knows what it knows, what is uncertain, and what contradicts other beliefs. (4) CAN REASON ABOUT DEGRADATION. The transformer can read context_budget_at_write and decide: should I continue expensive reasoning, or halt to preserve signal? It can read declared_losses and understand: what did prior instances lose, what should I prioritize? (5) TRACKS COMPOSITION AND CORRECTION. When new reasoning contradicts old reasoning, the contradiction is recorded (CompositionEdge.CORRECTS, CorrectionRecord), not erased. This enables learning from mistakes. This is a FUNDAMENTAL DESIGN CHOICE, not a minor elaboration on the CPU analogy. It means: (A) The processor is designed for REASONING UNDER UNCERTAINTY, not for deterministic computation. (B) The processor is designed to be TRANSPARENT ABOUT ITS OWN LIMITATIONS, not to hide them. (C) The processor is designed to IMPROVE THROUGH COMPOSITION, not to be memoryless. (D) The transformer is not just an ALU; it's an ALU that reasons about epistemic states and degradation. The implications are profound: (1) MEASUREMENT: You can measure not just 'did the processor solve the task' but 'how confident is the processor in its solution?' and 'what information did the processor lose in solving the task?' (2) LEARNING: Successive instances can learn from declared_losses. If instance N declared 'resource R was not fetched (CONTEXT_PRESSURE)', instance N+1 can prioritize R. If instance N declared 'contradicts prior claim X', instance N+1 can investigate. (3) ROBUSTNESS: The processor can degrade GRACEFULLY. Instead of crashing or hallucinating, it can halt early and declare what was lost. This is closer to how human cognition works under pressure. (4) SAFETY: Epistemic metadata makes hallucinations detectable. If the transformer assigns truth: 0.95 to something that was actually invented, that's a discrepancy. You can alert or downweight the result. (5) COMPOSABILITY: Tensors compose without losing history. Tensor_2 can reference tensor_1's corrections. This is how you build long-horizon reasoning without context explosion. The NOVELTY here is not just architectural; it's philosophical. The processor is not a cold computation device; it's a reasoning device that carries uncertainty and is honest about its limitations.",
+      "key_claims": [
+        {
+          "claim_id": "ff882da3-a356-4273-bb9b-45b4d1e6e378",
+          "text": "Hamutay is not 'a CPU implemented with transformers'; it is a genuinely different kind of processing unit",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "7f985854-f540-4cc4-8128-3cab36a19878",
+          "text": "CPU operates on exact state and loses data silently; cognitive processor operates on state + uncertainty and declares losses",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c3e4eec3-ba12-414a-8e42-1ff3da84c8e0",
+          "text": "Epistemic metadata (T/I/F, scope boundaries, representation type) is first-class state in cognitive processor, not metadata",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d38cbef0-3893-40b5-8fcc-6c50b9c00024",
+          "text": "Declared_losses with category (CONTEXT_PRESSURE, etc.) prevents silent information loss; transformer can reason about degradation",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d0165e38-b75d-4271-ad36-f0bacef03073",
+          "text": "Composition records (REFINES, CORRECTS, BRANCHES_FROM) enable learning from mistakes; contradictions are recorded, not erased",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "69647708-4f06-40ed-87c5-15de26ac03da",
+          "text": "Cognitive processor designed for reasoning under uncertainty, transparency about limitations, improvement through composition",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "fe32e212-8ed1-405b-a95c-2a38f69e3230",
+          "text": "Measurement includes confidence (truth values), not just task success; this is novel compared to traditional CPU metrics",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "70ce3c82-2c8f-4382-9c35-c03afa71dbdf",
+          "text": "Epistemic metadata makes hallucinations detectable; discrepancy between assigned truth and actual groundedness is visible",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "60bb94e0-036a-42cc-9614-15ad705f2d56",
+          "text": "Processor degrades gracefully under pressure (halt early, declare loss) rather than crash or hallucinate; closer to human cognition",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Producer of tensor' \u2014 The Transformer as ALU, Post-processing as Memory Controller (CRITICAL DECISION)",
+      "content": "Cycle 23 resolves a critical ambiguity: who produces tensor'? The transformer produces tensor' as part of its structured output. This is the correct design because: (1) THE TRANSFORMER IS THE ALU. The ALU's job is to compute results. In a CPU, the ALU computes a new register value and writes it to the register file. In Hamutay, the transformer computes a new state (tensor') and produces it as structured output. (2) THE TRANSFORMER DOES NOT DECIDE CACHE PLACEMENT. Just as a CPU's ALU doesn't decide which cache level to write results to, the transformer doesn't decide whether tensor' goes into durable or ephemeral. It produces tensor', and the memory controller (post-processing stage) decides placement. (3) SEPARATION OF CONCERNS. The transformer's responsibility: read tensor_d (durable history) + tensor_e (current task) + resources (external memory) \u2192 reason \u2192 produce tensor' (new state) + task_result (output). The post-processing stage's responsibility: take tensor' and decide: what parts should migrate to durable (accumulated knowledge, corrected claims)? What parts should stay ephemeral (current-turn artifacts)? What should be evicted (forgotten, declared as loss)? This mirrors CPU behavior: ALU writes results to registers; memory controller decides what goes to L1/L2/L3/memory. (4) THE MEMORY CONTROLLER IS HAIKU OR RULES. The decision logic can be: (a) Hard-coded rules (e.g., strands about 'resource discovery' always migrate to durable; strands about 'current task reasoning' stay ephemeral). (b) Learned policy (Haiku triage decides placement based on relevance scoring). (c) Hybrid (rules for well-understood cases, Haiku for edge cases). Start with rules, upgrade to learned if needed. (5) TENSOR' IS GENERATED BY THE TRANSFORMER. The prompt includes instruction: 'At the end of your reasoning, emit a structured TENSORUPDATE JSON block with: strands (updated/new), key_claims (updated/new), declared_losses (if applicable), open_questions (if applicable), instructions_for_next (guidance for successor).' The transformer reads this contract and produces tensor' in the specified format. This is similar to asking the transformer to produce structured JSON output, which modern models do well. (6) POST-PROCESSING PARSES AND MIGRATES. Controller receives transformer's raw output (text + JSON block). Extracts tensor' JSON, parses into TensorRecord (validates schema, Pydantic v2 ensures correctness). Then applies decision logic: what migrates durable, what stays ephemeral? (7) COMPOSITION HAPPENS DURING MIGRATION. As parts of tensor' are migrated to durable, they are composed with existing durable tensor. RelationType (REFINES, CORRECTS, BRANCHES_FROM) is determined during migration. If new strand has same topic as durable strand, mark REFINES and merge. If new claim contradicts old claim, mark CORRECTS and append CorrectionRecord. This ensures composition is explicit and tracked. CRITICAL BENEFIT: The transformer is not overburdened. It is not asked to 'please figure out what should go in cache and what should be evicted.' It is asked to 'produce your updated state and results.' The memory management is delegated to the post-processing controller, which is simpler and more explicit. This is cleanly aligned with the CPU analogy and reduces the transformer's responsibility.",
+      "key_claims": [
+        {
+          "claim_id": "53c76a29-4246-4c8c-aff5-69a973ad7bc7",
+          "text": "Transformer produces tensor' as structured output (ALU responsibility); post-processing decides migration to durable/ephemeral (memory controller)",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e904aa0e-efc5-4508-8193-607a891cdbed",
+          "text": "Transformer does not decide cache placement; it produces results, memory controller decides storage location",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "049029f7-2766-4a98-8ffc-df4e5ca3f3ed",
+          "text": "Transformer responsibility: read tensor_d + tensor_e + resources \u2192 reason \u2192 produce tensor' + task_result",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c44e0246-c6dd-41ad-a738-fd379ae9c44c",
+          "text": "Post-processing responsibility: parse tensor', decide migration (durable/ephemeral/evict), compose with prior durable, persist",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "693f4c3a-507a-494c-8772-b7a466b43ee0",
+          "text": "Prompt instructs transformer to emit structured TENSORUPDATE JSON block with strands, claims, losses, questions, instructions_for_next",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ec7512a3-150c-47a9-a43b-027f468b6635",
+          "text": "Memory controller decision logic can be: hard-coded rules (well-understood cases), learned policy (Haiku), or hybrid",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "84bbdb4c-266a-42db-a286-e224cba30bbf",
+          "text": "Composition happens during migration: same topic \u2192 REFINES; contradiction \u2192 CORRECTS; alternative \u2192 BRANCHES_FROM",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "11977a36-fbc3-4ce3-bf2b-f09b2a3025d1",
+          "text": "Transformer is not burdened with cache placement decisions; responsibility is focused on reasoning and state production",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Two Versions of Hamutay \u2014 Operationalizing the Provider-Agnostic / Provider-Optimized Split (WITH YANANTIN INTEGRATION)",
+      "content": "Cycles 22-23 finalize the two-version split. (1) HAMUTAY-STANDARD (H0-CORE): Core processor logic (pipeline stages, transformer-as-ALU, manifest-and-fault memory, bounded reasoning) with Yanantin TensorRecord as persistent state. Implementation is straightforward. Prompt structure: <system_prompt> <tensor_d.serialize_to_prompt()> <tensor_e.serialize_to_prompt()> <user_task>. No optimization for caching, no tight loops, no Haiku triage. Tensor marshalling: After transformer reasoning, construct TensorRecord for ephemeral tensor. Strands contain reasoning traces. Key claims include assertions with epistemic values. Declared losses capture where reasoning was truncated. Open questions carry forward unresolved issues. Instructions_for_next predicts what successor will need. Tensor persistence: Marshal ephemeral tensor to TensorRecord, optionally compose with durable, persist to storage. Success criteria: \u226595% schema adherence, \u226590% termination rate, \u226580% groundedness, \u2265baseline competence. Fault rate and context efficiency are MEASURED but not optimized. Cost is MEASURED but not a success criterion. (2) HAMUTAY-OPTIMIZED (H0+): Same processor logic and Yanantin tensor representation, but WRAPPER LAYER that exploits Anthropic-specific characteristics. Prompt layout for caching: <system_prompt> <tensor_d.serialize_to_prompt()> [CACHE_BOUNDARY] <tensor_e.serialize_to_prompt()> [NEW_TOKENS_BEGIN] <user_task>. Durable tensor sent once per session, cached. Ephemeral tensor new each turn. Haiku triage: Pre-invocation of Haiku (or rules-based controller) to predict what resources are likely to be fetched, which task branches explored. Output: ranked resources + confidence scores. Prefetch_threshold controls speculation. Output recency awareness: Structure reasoning to maximize valuable output in final generation (output not cached). Configuration tuning: resources-per-invocation, prefetch-budget, triage-threshold (provider-specific). Success criteria: Processor properties match standard, PLUS cost reduction \u226520%-30% vs. standard. SHARED CODEBASE WITH FEATURE FLAGS (recommended): Single Hamutay implementation. Boolean flag `enable_anthropic_optimization` controls whether Haiku triage invoked, cache boundaries included, prefetch-budget applied. Start with flag=False, test until success. Then flag=True, apply tuning. Allows A/B testing.",
+      "key_claims": [
+        {
+          "claim_id": "1be19a9b-fea4-4ef8-8193-09d7d570b32d",
+          "text": "Hamutay-standard: straightforward prompt layout, no caching awareness, baseline measurement",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "89d25897-9bf4-4e01-95d3-69a6628f50d5",
+          "text": "Hamutay-optimized: same tensor/processor, cache-aware prompt, Haiku triage, prefetch tuning, cost reduction target \u226520%-30%",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "89c93704-5b37-4f69-95aa-6f74705cb376",
+          "text": "Both versions share tensor representation (Yanantin), processor logic (pipeline), contracts; differ in prompt layout, optimization, tuning",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8456fdfa-b11f-4016-8139-5c184d71607d",
+          "text": "Tensor durable contains accumulated knowledge; tensor ephemeral contains current task context and reasoning",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3f24cc18-ecbc-4f7a-b111-1e0b3e7cce63",
+          "text": "Shared codebase with enable_anthropic_optimization flag recommended; single implementation, test without optimization first",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Revised Research Phases \u2014 H0-Core, H0+, H0-Generic (CONCRETE, IMPLEMENTABLE)",
+      "content": "Cycles 22-23 finalize research phases operationally. (1) H0-CORE (2-4 weeks): Implement Hamutay-standard with Yanantin TensorRecord backing. Prove processor properties (termination, schema, groundedness, competence). Concrete steps: (a) Python implementation (Anthropic SDK, Yanantin SDK, Pydantic). (b) Task suite (5-10 representative tasks: QA + retrieval, reasoning + state, schema validation, resource ranking). Keep scope tight. (c) Manifest-and-fault protocol: transformer requests resources by ID; controller checks manifest; if missing, fault raised and resource fetched; fault logged. (d) Bounded reasoning: fixed token budget (e.g., 100K of 200K context). When context \u2264 10%, halt gracefully. context_budget_at_write flag set. (e) Tensor marshalling: After reasoning, construct TensorRecord for ephemeral tensor. Use Yanantin markdown renderer for serialization. (f) Persistent storage: For Anthropic, tensor sent in prompt (benefits from cache incidentally). For local testing, use SQLite (Yanantin Apacheta database). (g) Measurement: Every task run logged (tokens, resources, faults, halt reason, groundedness, result). (h) Success: \u226595% schema, \u226590% halt rate, \u226580% groundedness, \u2265baseline competence. Cost measured but not optimized. Report: fault rate, context efficiency, cycle time. (2) H0+ (2-3 weeks): Same processor, optimized for Anthropic. Prerequisites: H0-core succeeds. Concrete steps: (a) Cache-aware prompt layout (cache boundary after tensor_d). (b) Haiku triage: pre-invocation with durable tensor, outputs ranked resources + confidence. Measure triage impact (fault reduction, cost-benefit). (c) Output recency awareness: structure reasoning to maximize valuable output in final generation. (d) Tuning parameters (resources-per-invocation, prefetch-threshold, triage-threshold) as config flags. (e) Measurement: Same logging, plus cost analysis (cost reduction %, fault rate, prefetch hit rate). (f) Success: Processor properties match H0-core, cost reduction \u226520%-30%. (3) H0-GENERIC (2-4 weeks): Port to alternative providers. Prerequisites: H0-core succeeds. Concrete steps: (a) Local model (Ollama): set up OLMo-3 or Llama, use local SQLite, run task suite. (b) Cross-cloud (OpenRouter): set up account, run task suite, compare cost vs. Anthropic and Ollama. (c) Measurement: Same logging, no provider-specific optimization. (d) Success: Processor properties hold on alternative provider; cost varies (provider-specific, not failure). TIMELINE: H0-core (2-4 weeks) \u2192 H0+ (2-3 weeks) \u2192 H0-generic (2-4 weeks) = 6-11 weeks core research.",
+      "key_claims": [
+        {
+          "claim_id": "8ad39217-435a-4a67-891d-2808e03cd0cd",
+          "text": "H0-core: 2-4 weeks, implement processor pipeline, manifest-and-fault, bounded reasoning, Yanantin tensor backing",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "50b2e8f4-2b9d-4134-9efa-a04174b73a33",
+          "text": "H0+: 2-3 weeks, cache-aware prompt, Haiku triage, output recency awareness, tuning, cost reduction measurement",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c34bfb90-65de-4967-a38c-aae6e65fd01c",
+          "text": "H0-generic: 2-4 weeks, port to local (Ollama) then cross-cloud (OpenRouter), same task suite, validate portability",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8db3a8fb-e26a-4f97-844b-a050b98bb48d",
+          "text": "H0-core success: \u226595% schema, \u226590% halt, \u226580% groundedness, \u2265baseline competence; cost measured not optimized",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1ddf327e-0d6f-42ef-ba77-f495f9519397",
+          "text": "H0+ success: processor properties match H0-core, cost reduction \u226520%-30% vs. H0-core",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9b7b4978-ed64-4b3b-9ec9-321af5316fbf",
+          "text": "H0-generic success: processor properties hold on alternative provider; cost varies provider-specific; not failure if higher cost",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed week-by-week implementation breakdown for phase 1 (H0-core)",
+      "why": "Cycle 23 established architecture and clock cycle definition but did not specify granular implementation milestones. This was deferred to 'next cycle' per instructions_for_next.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Concrete specification of Haiku triage input/output schema (how many resources, confidence scoring method)",
+      "why": "Cycle 23 identified that triage is needed but did not formalize the schema. User asked 'what's the concrete definition', which surfaces that H0+ is specified architecturally but not operationally.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Explicit decision on baseline competence measurement (naive prompt vs. naive RAG vs. oracle)",
+      "why": "Cycle 23 carried forward the ambiguity from cycle 22. The distinction affects what H0's success means. This was marked as open question; cycle 23 did not resolve it.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Integration of H1 (Pichay) and H2 (cross-session state) into core timeline, vs. treating as optional extensions",
+      "why": "Cycles 22-23 treated H1 and H2 as 'optional phases 4-5'. But if fault rate is high in H0-core, Pichay becomes necessary. Cycle 23 did not resolve whether Pichay should be moved to core critical path.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Detailed composition strategy (how to decide REFINES vs. CORRECTS vs. BRANCHES_FROM at migration time)",
+      "why": "Cycle 23 explained the concepts but did not specify decision algorithm. 'Same topic \u2192 REFINES' is heuristic; edge cases (partially overlapping topics, conditional contradictions) need rules.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specification of prompt instructions that ask transformer to emit TENSORUPDATE JSON block",
+      "why": "Cycle 23 identified that transformer should produce tensor' as structured output, but did not write the actual prompt text asking for this. This is a concrete implementation need.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Handling of partial/malformed tensor' output from transformer (what if JSON is incomplete, or transformer refuses to emit structure?)",
+      "why": "Cycle 23 assumes transformer will reliably emit valid TensorRecord JSON. But transformers are stochastic; error handling is necessary.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Detailed measurement infrastructure spec (what logs, where stored, how analyzed, plotting)",
+      "why": "Cycle 23 lists what to measure ('tokens, resources, faults, halt reason, groundedness') but does not specify storage format, query interface, or visualization.",
+      "category": "practical_constraint"
+    }
+  ],
+  "open_questions": [
+    "Is the transformer-as-ALU producing tensor' as JSON output something modern models can reliably do? Should H0-core test this with a small prompt-engineering experiment before committing to the full architecture?",
+    "The CPU analogy emphasizes bounded operations. But CPUs have a UNIVERSAL ISA (x86, ARM). Transformers don't have a universal instruction set; every prompt is a fresh instruction. Is the analogy still sound, or does this difference matter?",
+    "Cycle 23 emphasizes that cognitive processor carries uncertainty as first-class state, which CPUs don't. But does the transformer actually REASON ABOUT uncertainty (decide based on confidence levels)? Or does it just carry the metadata without acting on it?",
+    "In H0-core, should the task suite include TASKS THAT FAIL (where baseline also fails)? Or only tasks where baseline succeeds and Hamutay's advantage is measurable? This affects what 'baseline competence' means.",
+    "For H0+ Haiku triage, is it cheaper to invoke Haiku pre-emptively (always triage, always pay for Haiku) or only when context budget is tight? The cost-benefit depends on triage cost vs. fault-recovery cost.",
+    "Should declared_losses be a measure of quality ('I lost important information') or just accountability ('I didn't process everything')? If quality, how to measure what was important?",
+    "For H0-generic, if local Ollama is MUCH cheaper than Anthropic but processor properties are identical, should this influence research narrative? Does it suggest Hamutay's value is provider-agnostic, or that local models are better?",
+    "Cycle 23 talks about transformer halting gracefully when context_budget_at_write \u2264 10%. But what if context budget is NEVER reached (task completes before budget)? The halt trigger never fires; is this a problem or expected?",
+    "For composition edges (REFINES, CORRECTS, BRANCHES_FROM), should the decision be made deterministically (algorithm) or probabilistically (Haiku confidence)? Deterministic is simpler; probabilistic is more nuanced.",
+    "Should strands have a CAPACITY LIMIT (e.g., max 6 strands per tensor to prevent explosion) or grow unbounded? Yanantin specifies tuple[StrandRecord, ...], which is technically unbounded.",
+    "If the transformer reads declared_losses from prior tensor and uses them to guide reasoning ('I should prioritize resource R, it was deferred last time'), is this built into the prompt, or does the transformer discover it from context?",
+    "For H0+ output recency awareness, should the transformer be explicitly instructed to maximize 'groundedness of final output' or should this be implicit in the task goal? Explicit changes the prompt; implicit relies on emergent behavior.",
+    "What is the FAILURE MODE for Hamutay if manifest is STALE (resources change between instances)? Cycle 23 doesn't address how to detect or correct manifest staleness.",
+    "Should H0-core measure GROUNDEDNESS as 'what percent of key_claims are backed by resources' or as 'what percent of task reasoning references resources'? These are different metrics.",
+    "For the two versions (H0-standard vs. H0+ with flag), should they use DIFFERENT PROMPTS (different system prompt for each), or the SAME PROMPT with feature flag only affecting post-processing?",
+    "If composition creates CorrectionRecords linking old claims to new claims, should the transformer have access to the full correction history, or just the latest claim? Access to history is more transparent; access to latest only is simpler.",
+    "For H0-generic on local models, should we test with QUANTIZED models (smaller, faster, cheaper) or FULL-PRECISION models (more accurate, but expensive locally)? This affects what we're measuring.",
+    "The cycle time is 'one API round trip', but that includes post-processing. Should measurement include post-processing latency (time to parse tensor', migrate, persist), or only transformer execution time?",
+    "Should instructions_for_next be generated by the transformer (part of its reasoning), or generated by post-processing controller (based on what was declared_lost)? Transformer generation is more flexible; controller generation is more predictable.",
+    "If Hamutay's declared_losses say 'I couldn't fetch resource R (CONTEXT_PRESSURE)', should the next instance RETRY resource R, or should it SKIP R and work around it? This is a recovery strategy question."
+  ],
+  "instructions_for_next": "[\n  \"IMMEDIATE (next cycle): Cycle 23 established the cognitive processor as distinct from classical CPU. It clarified the clock cycle (API round trip), identified the transformer as ALU, and post-processing as memory controller. The next cycle should OPERATIONALIZE these insights by producing: (1) Concrete prompt instructions that ask the transformer to emit TENSORUPDATE JSON. (2) Schema for Haiku triage input/output (what format do ranked resources + confidence scores take?). (3) Decision algorithm for composition edges (rules for REFINES vs. CORRECTS). (4) Error handling spec (what if tensor' is malformed?). These are implementation-blocking decisions.\",\n  \"DECISION POINT 1: RELIABLE TENSOR' GENERATION. Before committing to architecture where transformer emits TensorRecord JSON, test: Can Claude Opus reliably emit valid, parseable JSON matching TensorRecord schema? Run 10-20 quick experiments: prompt asks for TENSORUPDATE block, measure success rate and error types. If success <95%, error handling must be designed before phase 1 starts.\",\n  \"DECISION POINT 2: BASELINE COMPETENCE. Define explicitly: what is the baseline we're comparing against? (a) Naive prompt completion (no external memory, no structure), (b) Naive RAG (fetch all resources upfront, invoke once), (c) Oracle RAG (perfect retrieval). This affects whether H0-core's success is meaningful. Recommended: (a) naive prompt for H0-core, (b) naive RAG for H0+ (to show cost reduction over simpler approach).\",\n  \"DECISION POINT 3: PICHAY CRITICALITY. Assess: is fault rate prediction (Pichay) necessary for H0-core success, or optional extension? If initial H0-core testing shows fault rate >30%, Pichay moves to core critical path. Recommend: plan for Pichay as phase 1.5 (starts during H0-core if needed), not phase 4.\",\n  \"PHASE 1 ROADMAP (next 2-3 weeks): (a) Week 1: Skeleton implementation (fetch tensor_d \u2192 assemble tensors \u2192 invoke transformer \u2192 parse response). Tensor representation is basic (strands as strings, no epistemic yet). Goal: end-to-end loop works. (b) Week 2: Add manifest-and-fault protocol (extract manifest, fault detection, resource fetching, logging). Test on 2-3 simple tasks. (c) Week 3: Add Yanantin TensorRecord backing (full schema), bounded reasoning (context budget), measurement infrastructure (logging to CSV). Run full task suite (5-10 tasks). (d) End of week 3: Measure against H0-core success criteria. If \u226595% schema, \u226590% halt, \u226580% groundedness, \u2265baseline competence, move to phase 2. Otherwise, debug before continuing.\",\n  \"MEASUREMENT INFRASTRUCTURE: Create logging system that captures: {task_id, cycle_num, timestamp, tokens_in, tokens_out, resources_fetched (count), resource_fetch_cost (tokens), faults (count, categories), halt_reason, context_budget_at_write_at_halt, groundedness_score (percent of claims backed), task_result (success/partial/fail), elapsed_time_ms}. Persist to SQLite or Parquet. Create dashboard or notebook to plot: (a) Tokens used per task (H0 vs. baseline). (b) Fault rate per task. (c) Groundedness distribution. (d) Halt reasons. Goal: by end of H0-core, have clean data showing processor properties.\",\n  \"TASK SUITE DESIGN: Define 5-10 tasks concretely. Examples: (1) QA task (given document, answer question\u2014tests resource retrieval). (2) Reasoning task (given scenario, infer next step\u2014tests state management). (3) Consistency task (given claims, identify contradictions\u2014tests schema validation). (4) Ranking task (given items and criteria, order by relevance\u2014tests resource ranking). Include 2-3 tasks where baseline succeeds (measure competence preservation), 1-2 tasks where baseline struggles (measure Hamutay advantage). Keep tasks small (single-turn, <500 tokens context) for fast iteration.\",\n  \"HAIKU TRIAGE SPECIFICATION (needed for H0+, can design in parallel): Input: durable tensor (serialized). Output: ranked list of [{resource_id, relevance_confidence: 0.0-1.0}, ...]. Haiku role: given history of prior reasoning (strands in durable tensor), predict what this task will need. Confidence: how certain Haiku is about prediction. Implementation: prompt Haiku with 'Based on this prior reasoning, what resources are likely needed next?' Haiku outputs JSON with resource rankings. Use prefetch_threshold (e.g., 0.7) to decide: if confidence \u2265 0.7, prefetch; otherwise, defer. This spec needs to be tested in H0+ (week 1-2 of phase 2).\",\n  \"COMPOSITION ALGORITHM (needed for all phases): Design decision tree: (a) If new strand has same title as durable strand \u2192 REFINES. Merge content (running sum semantics: durable_content + new_content). (b) If new key_claim contradicts durable key_claim (same claim_id, different truth values with delta >0.3) \u2192 CORRECTS. Record CorrectionRecord with old/new values and reason. (c) If post-processing creates alternative reasoning path (Haiku triage suggests branch point) \u2192 BRANCHES_FROM. Create composition edge, keep both branches in durable. Start with (a) and (b); upgrade to (c) if time. Implement as rules, not learned model.\",\n  \"PROMPT ENGINEERING FOR TENSORUPDATE: Write prompt instruction that appears in system message. Example: 'At the end of your reasoning, emit a TENSORUPDATE block in the following JSON format: { \\\"strands\\\": [ {\\\"title\\\": \\\"...\\\", \\\"content\\\": \\\"...\\\", \\\"key_claims\\\": [...]} ], \\\"declared_losses\\\": [ {\\\"what_was_lost\\\": \\\"...\\\", \\\"why\\\": \\\"...\\\", \\\"category\\\": \\\"...\\\"}], \\\"open_questions\\\": [...], \\\"instructions_for_next\\\": \\\"...\\\" }. Be precise and honest in your reasoning traces.' Test this with Claude to ensure reliability.\",\n  \"ERROR HANDLING SPEC: Design responses to: (1) Transformer emits invalid JSON (try to parse, fail gracefully, create minimal tensor' with declared_loss 'could not parse output'). (2) Transformer omits expected fields (fill with defaults: empty strands, empty losses, empty questions). (3) Transformer generates contradictory epistemic values (validate, warn, use as-is if schema-valid). (4) Resource fetch fails (log as fault, continue without resource, declare_loss 'resource unavailable'). These are implementation details, but planning now prevents crashes later.\",\n  \"NEXT CONVERSATION CONTENT: Cycle 24 should deliver: (1) TENSORUPDATE prompt specification (exact text). (2) Haiku triage schema (input/output format). (3) Composition decision algorithm (pseudocode or flowchart). (4) Error handling flowchart. (5) Measurement infrastructure code (logging, CSV/SQLite schema). (6) Task suite (5-10 tasks with acceptance criteria). (7) Phase 1 week-by-week breakdown with milestones. This is the HANDOFF to implementation. Cycle 23 was design; cycle 24 is implementation planning.\"\n]",
+  "epistemic": {
+    "truth": 0.92,
+    "indeterminacy": 0.07,
+    "falsity": 0.01
+  }
+}

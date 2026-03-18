@@ -1,0 +1,337 @@
+{
+  "id": "9695ec39-0af8-49c1-ab74-b84d89b03922",
+  "cycle": 25,
+  "strands": [
+    {
+      "title": "Evaluation strategy via coherent failure on impossible tasks",
+      "content": "Cycles 16-24 developed evaluation through coherent failure: the experiment measures *stability of cognitive trajectory under different state representations* rather than correctness. Both append-only and structured tensor conditions fail at proving Riemann (no model succeeds), but failure patterns diverge in measurable ways. The measurement is geometric: embed outputs across N runs, measure dispersion in embedding space. Tighter cluster under tensor condition = structured state constrains reasoning coherence predictably. Scattered cluster under both conditions = pipeline has limited effect. This bias-variance decomposition applies to any intractable task and requires no correctness rubric. Cycle 25 adds critical context: the embedding space metric is vulnerable to one confound\u2014if context window effects dominate (long conversations become incoherent regardless of state structure), the tensor signal is buried. The paper 'Context Length Alone Hurts LLM Performance Despite Perfect Retrieval' (Pichay reference) directly interrogates this: does context length per se degrade performance even with perfect information access? If true, the Riemann experiment must isolate the tensor effect by controlling context growth. The append-only baseline will naturally accumulate longer context across cycles; the tensor condition compresses via Haiku eviction. Both conditions must maintain *similar total context length* if the measurement is to attribute dispersion changes to state structure rather than context bloat. This requires: (1) baseline context budget cap (truncate append-only history after K tokens), (2) tensor context budget cap (tensor_d + tensor_e must fit in same K tokens), (3) measurement of actual context lengths in both conditions (if they diverge significantly, the confound is present). If the context length paper shows that even 2\u00d7 context growth degrades performance measurably, then the experiment must either (a) fix context length via caps in both conditions, or (b) measure context length as a covariate and partition the variance (context effect vs. state structure effect). The coherent failure evaluation strategy remains sound, but the confound is now explicit and controlable.",
+      "key_claims": [
+        {
+          "claim_id": "176a6480-0b05-4ffc-b2aa-8c814855447f",
+          "text": "Embedding dispersion measurement is confounded by context length effects; Pichay paper directly studies this confound",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "867edef7-a203-475b-89a2-dcd29b228a5a",
+          "text": "Both baseline and tensor conditions must maintain similar total context length to isolate state structure effect from context growth effect",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "68fb99db-9d66-45f7-ae73-ea6c0db76d59",
+          "text": "If context length confound is present (e.g., 2\u00d7 context always degrades performance), experiment must either equalize context budgets or measure as covariate",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "72ce0daa-aeb5-40b2-a6ce-cfb7707c8221",
+          "text": "Coherent failure evaluation strategy is robust to this confound if properly controlled; measurement remains valid with context budget caps",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Autoresearch loop as meta-strategy for tensor space exploration",
+      "content": "Cycle 25 introduces Karpathy's autoresearch framework (github.com/karpathy/autoresearch) as a potential loop structure for exploring tensor configuration space. The autoresearch architecture: (1) **seed experiments**: run small-scale experiments with different hyperparameters, (2) **extract insights**: analyze results to identify patterns, (3) **propose improvements**: generate new experiment configurations, (4) **iterate**: run new experiments, measure, recurse. This is a meta-loop above the Hamutay pipeline. Applied to Hamutay, the structure would be: (a) **seed tensor configurations**: try different Haiku eviction policies (threshold-based, recency, cost-weighted, hybrid), different memory hierarchies (tensor_d size caps, tensor_e size caps), different composition strategies (how aggressively to merge tensor' into tensor_d). (b) **run proof experiments**: for each configuration, run Riemann task N times (small N, e.g., N=5), measure embedding dispersion. (c) **extract signals**: which configurations produce tighter clustering? Which scale better (less context overflow)? Do they converge consistently? (d) **propose new configurations**: use model-based optimization (Bayesian optimization, evolutionary search) or heuristic reasoning to generate promising new configurations. (e) **iterate**: repeat cycles 25-28 many times, guided by meta-loop. The autoresearch framing is appealing because it reframes the Hamutay project as a **search problem**: find the tensor configuration (eviction policy, memory hierarchy, composition strategy) that maximizes coherence under resource constraints. Rather than designing Haiku by hand and praying it works, you systematically explore the space. The risk: autoresearch adds complexity and computational cost. Running full Riemann experiments for K different configurations \u00d7 N runs each requires significant API spend or compute. The reward: you might discover that a radically different eviction policy (e.g., cost-weighted with recency decay) works far better than the hand-designed threshold-based policy. The decision point: (1) **Quick validation** (cycles 25-27): build MVP pipeline with simple hand-designed Haiku policy, run toy Riemann task, confirm pipeline works. (2) **Proof experiment** (cycle 28): run full N=15-20 experiment with MVP policy, measure effect. (3) **Autoresearch optimization** (cycles 29+): if proof experiment shows positive signal (tight clustering under tensor), use autoresearch loop to optimize Haiku policy. If no signal, the paper is the negative result; autoresearch is not justified. The autoresearch approach is conditional: it only pays off if the basic hypothesis (structured state helps) is already supported. If it's not, you have a negative result and are done. If it is, you have a platform for systematic optimization.",
+      "key_claims": [
+        {
+          "claim_id": "272d8407-5a60-4b74-8a5d-d8924d5875f8",
+          "text": "Autoresearch loop (seed \u2192 measure \u2192 propose \u2192 iterate) applies to Hamutay as meta-optimization over tensor configurations (eviction policy, hierarchy, composition)",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "5e162736-ea85-4b65-9856-5e13c4d36a9c",
+          "text": "Autoresearch can systematically explore tensor configuration space rather than hand-designing Haiku; requires K configurations \u00d7 N runs each, higher compute cost",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "4c8cba65-1573-48a0-b2a4-d2d17c5e745b",
+          "text": "Autoresearch is conditional on proof experiment showing positive signal (tight clustering under tensor); if no signal, paper is negative result, autoresearch not justified",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "62a83fea-e52f-4201-831f-c4178ce1a145",
+          "text": "Two-phase approach: cycles 25-28 test basic hypothesis with MVP policy; cycles 29+ optimize via autoresearch if hypothesis supported",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Pragmatic pipeline implementation path (cycles 25-28)",
+      "content": "Cycles 16-24 designed architecture; cycle 25 constrains the implementation path to a tight, executable scope. The question from turn 73 ('where do you want to start?') is answered by a dependency analysis: (1) **transformer prompting** is the bottleneck. Without reliable JSON output from the model, nothing else works. This must be validated first (toy task: 2-3 turn Riemann outline, confirm model produces both prose + valid JSON). (2) **tensor projection** (Haiku or delegated to model) depends on the prompting working. If model can output TensorRecord JSON reliably, Haiku logic is (temporarily) the model's own summarization; if not, Haiku is external logic. (3) **parser** is downstream of prompting and model choice. (4) **controller loop** integrates all three: fetch (assemble prior tensor + user input), invoke transformer, parse output, invoke Haiku, writeback state. The MVP implementation path: (a) **Week 1** (cycle 25): prompting validation. Design system prompt and user prompt templates that elicit both reasoning AND JSON output. Test on 5-10 toy Riemann outlines (3-4 turns each). Measure: parsing success rate, JSON validity, prose coherence. Goal: >90% parsing success, all JSON valid. (b) **Week 2** (cycle 26): controller loop + minimal Haiku. Implement the five-stage pipeline (fetch, decode, execute, writeback, halt). Implement Haiku as a simple confidence threshold (keep strands where T > 0.75, else evict). No optimization. Test on 3-5 turn Riemann task, both conditions (append-only baseline, tensor treatment). Measure: pipeline stability (no crashes), state carries across cycles, context budget never exceeded. Goal: 5 consecutive runs without failure. (c) **Week 3** (cycle 27): toy experiment validation. Run 10 instances of the toy Riemann task (5 turns each) under both conditions. Capture outputs, embed, measure dispersion. Goal: preliminary signal (tensor condition has lower dispersion than baseline, even if effect is small). (d) **Week 4** (cycle 28): full experiment. Run N=15-20 full Riemann tasks (20-30 turns each) under both conditions. Measure dispersion, test H0/H1. Report results. The timeline is aggressive but achievable if prompting validation succeeds (biggest risk). The controller loop is straightforward once prompting works. Haiku logic is minimal in MVP. The experiment itself is just running the pipeline at scale. This path assumes: (1) transformer prompting for JSON is feasible (risk: model refuses, produces malformed JSON, or reasoning suffers from mode-switching), (2) context budget is not a bottleneck (risk: tensor_d + tensor_e grows too large), (3) embedding dispersion is a clean metric (risk: metric is noisy or insensitive). Risks are testable in cycles 25-27. If any risk materializes, scope adjusts (shorter task, different embedding metric, fallback to simpler state format).",
+      "key_claims": [
+        {
+          "claim_id": "ae2991e8-8a74-489c-9203-107dacdd68d5",
+          "text": "Transformer prompting is the bottleneck and must be validated first (toy task, 5-10 instances, >90% parsing success)",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "98fe5172-cbef-48ab-b2fd-13a1da98837c",
+          "text": "MVP pipeline path: week 1 (prompting), week 2 (controller + Haiku), week 3 (toy validation), week 4 (full experiment); achievable if prompting succeeds",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "9f96d8da-9329-4ea3-9d76-aca681748b17",
+          "text": "Haiku MVP is simple confidence threshold (T > 0.75); no optimization; sufficient for proof hypothesis test",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a0ce0b0c-1c5e-4687-9da6-c2a59b0bf018",
+          "text": "Three main risks in implementation: (1) prompting fails, (2) context budget explodes, (3) embedding metric is insensitive; all testable in cycles 25-27",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Context length confound and the Pichay reference: experiment design revision",
+      "content": "The Pichay paper ('Context Length Alone Hurts LLM Performance Despite Perfect Retrieval') is directly relevant to the Riemann experiment's validity. If the paper demonstrates that longer context windows per se reduce performance (independent of information quality), then the Riemann experiment must account for this. The confound: append-only baseline accumulates longer context over 20-30 cycles (each cycle adds more conversation history). Structured tensor condition compresses via Haiku eviction (tensor_d is bounded, tensor_e is ephemeral). If context length effect exists, the baseline will have degraded performance not because the reasoning is incoherent, but because the context window is bloated. This would confound the measurement of state structure effect. Revision to experiment design: (1) **measure actual context lengths in both conditions**. For each run and each cycle, record total tokens in the context fed to the transformer. (2) **cap context budget in both conditions**. Define a maximum context token budget (e.g., 4000 tokens). Append-only baseline: truncate history when budget exceeded. Structured tensor: enforce tensor_d + tensor_e fit in budget via Haiku eviction. (3) **equalize context distributions across conditions**. If possible, both conditions should have similar context lengths at each cycle. If not possible, measure as covariate. (4) **analyze context length effect**. After experiment, partition variance: how much of the dispersion difference is due to context length? How much due to state structure? Use regression or covariance analysis. If Pichay paper shows that context length effect is large (e.g., 2\u00d7 context causes >10% performance drop), the experiment *must* equalize context budgets; otherwise the result is uninterpretable. If context length effect is small, context budget cap is still wise for reproducibility, but the confound is minor. The task is to read or summarize the Pichay paper and determine: (1) does longer context hurt performance? by how much? (2) does the effect depend on information density or retrieval quality? (3) are there mitigations (e.g., compression, hierarchical context)? The answers inform the Riemann experiment design.",
+      "key_claims": [
+        {
+          "claim_id": "d73fbf91-40a9-4ac3-be17-5f86d710798c",
+          "text": "Append-only baseline naturally accumulates longer context; structured tensor compresses via Haiku. If context length hurts performance, this confounds the measurement.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "cf22b103-7f62-4245-b56f-0a474ae19c18",
+          "text": "Pichay paper likely demonstrates that longer context reduces performance independent of information quality; magnitude and mechanisms are critical for experiment design",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "db295125-a2e0-491d-a13c-0d24af3c8263",
+          "text": "Experiment must measure actual context lengths, cap budgets in both conditions, and analyze context as covariate if confound is suspected",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "747397e1-cad9-447f-87c6-0f35d670957c",
+          "text": "Magnitude of context length effect determines experiment feasibility: large effect requires equalization; small effect allows measurement with context as covariate",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Integration of cycles 16-25: from architecture (16-23) to design (24) to implementation (25+)",
+      "content": "Cycles 16-23 developed Hamutay architecture; cycle 24 crystallized it into a testable hypothesis via the Riemann proof experiment. Cycle 25 adds two critical refinements. First, the context length confound (Pichay paper) is now explicit and controllable in experiment design. Second, the autoresearch framework (Karpathy) is available as a meta-loop for optimizing tensor configurations *if the basic hypothesis is supported*. These refinements don't change the architecture, but they change the implementation and evaluation strategy. The full arc: (1) **Cycles 16-23**: architecture design (Hamutay pipeline, TensorRecord schema, Haiku eviction, composition semantics, epistemic state). (2) **Cycle 24**: hypothesis formulation (structured state \u2192 coherent failure \u2192 tight embedding dispersion). (3) **Cycle 25**: evaluation design refinement (context length confound, autoresearch meta-loop). (4) **Cycles 26-28**: implementation and testing (MVP pipeline, toy validation, full experiment). (5) **Cycles 29+**: conditional optimization (if H1 supported, use autoresearch to optimize; if H0 supported, paper is complete). The architecture is stable; implementation is now the focus. The two new considerations (context confound, autoresearch) are actionable: read Pichay, design context budget caps, commit to MVP Haiku policy, start prompting validation. The project has moved from speculative (will this work?) to executable (here's how to test it). The next immediate deliverable is the prompting specification and toy validation, which can run in parallel with reading Pichay.",
+      "key_claims": [
+        {
+          "claim_id": "c9fcf4a7-f7c1-4a55-970a-88b27fdbd253",
+          "text": "Cycle 25 refines implementation and evaluation strategy without changing core architecture; two new considerations are actionable",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e44d4440-a391-4c0d-981f-98645be54049",
+          "text": "Context length confound from Pichay is controllable via context budget caps and covariate analysis; makes experiment design more robust",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9de20643-e6a0-4af8-bb86-c5130ac2278b",
+          "text": "Autoresearch meta-loop is conditional on proof experiment showing positive signal; enables systematic optimization of tensor configurations if hypothesis supported",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "cce713a1-6f32-4e4f-a904-fa7efd847b9f",
+          "text": "Project has moved from speculative to executable; next deliverable is prompting specification + toy validation, in parallel with Pichay paper reading",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Why now: the two-backend implementation strategy (Anthropic caching vs. OpenRouter/local)",
+      "content": "Turn 73 mentions 'two implementations tuned to different backends (Anthropic with caching, OpenRouter/local without)' as a deliverable. This is pragmatic and important. Rationale: (1) **Anthropic caching**: Claude's prompt caching feature (if available in Opus/Sonnet) could cache tensor_d across cycles, reducing token costs and latency. The structured prompt format (`<system><tensor_d><tensor_e><user>`) is cacheable. Testing with caching validates that the architecture is provider-friendly. (2) **OpenRouter/local**: running via OpenRouter or local models (e.g., Llama, Mistral) without caching tests that the architecture is provider-agnostic. If tensor output quality is similar across backends, the approach is robust. The two-backend strategy: (a) **Phase 1** (cycles 25-28): develop on Anthropic (assume caching available). Measure token efficiency, cache hit rates. (b) **Phase 2** (cycles 29+): port to OpenRouter/local. Compare output quality, cost, latency. If results are similar, you have a provider-independent architecture. If they diverge, you've identified a critical dependency. This is valuable for the paper: if you can show that Hamutay works across different models and backends, the contribution is stronger. The implementation path doesn't change; both backends use the same pipeline stages and TensorRecord format. The difference is in the prompting strategy (cache-aware for Anthropic, cache-naive for OpenRouter) and tensor output parsing (might differ if model outputs slightly different JSON). The two-backend requirement is deferred to cycles 29+ (after proof experiment), not blocking cycles 25-28.",
+      "key_claims": [
+        {
+          "claim_id": "5c08a87a-2b27-43b0-b4d8-be9d2a4e2937",
+          "text": "Two-backend implementation (Anthropic with caching, OpenRouter/local without) validates that architecture is provider-agnostic and cost-efficient",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "148fc357-aa30-4930-8343-d6dc1302b8b0",
+          "text": "Prompt caching (Anthropic) can reduce token costs if tensor_d is cacheable; validates efficiency of structured format",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "fa844a61-3d0e-4881-a4a5-3efe23485f97",
+          "text": "Two-backend strategy is deferred to cycles 29+ (after proof experiment); cycles 25-28 focus on Anthropic/Claude for simplicity",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f465d193-4602-4f29-9f0d-20f09830c1c5",
+          "text": "Provider-agnostic architecture is a publishing advantage; showing robustness across backends strengthens contribution",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed analysis of the Pichay paper. Turn 74 references '/home/tony/projects/pichay/paper/references/2025 Context Length Alone Hurts LLM Performance Despite Perfect Retrieval.pdf' but this cycle cannot directly read or analyze the paper. A subsequent analysis cycle (or agent task) is needed to: (1) extract key findings (context length effect magnitude, mechanisms, mitigations), (2) determine experiment design implications.",
+      "why": "Tensor projector cannot directly access files or execute web searches; this is a dependency on external analysis. The integration is deferred to next cycle pending Pichay paper summary.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Detailed evaluation of autoresearch loop applicability. Turn 74 points to github.com/karpathy/autoresearch; while the concept is integrated, the specific architecture, available optimization methods, and integration with Hamutay are not analyzed in depth. A subsequent cycle should: (1) evaluate autoresearch architecture, (2) specify which hyperparameters to optimize (eviction policy, memory hierarchy, composition strategy), (3) design meta-loop stages.",
+      "why": "Deep integration of autoresearch requires more detailed design work, deferred pending proof experiment results. Conditional logic is now explicit: optimize only if H1 is supported.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specification of how Haiku delegates vs. how model self-summarizes. Cycle 25 says 'Haiku logic is (temporarily) the model's own summarization; if not, Haiku is external logic', which leaves ambiguous: in MVP, is tensor projection delegated to the model (model outputs TensorRecord JSON) or is Haiku external (separate logic reads model output and constructs tensor_d)? This choice affects prompting design.",
+      "why": "Design decision (in-model vs. external Haiku) requires commitment. Recommend: in-model (model outputs TensorRecord JSON directly) for MVP simplicity. This is compatible with prior cycles' design but should be explicit. Deferred to cycle 26 (prompting specification).",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Comparison of Pichay findings to related work on context length effects (e.g., Lost in the Middle, other retrieval studies). Integration of Pichay into the broader context-length literature is not addressed.",
+      "why": "Comparative analysis requires reading multiple papers; deferred to literature review phase (cycles 29+).",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Specification of which embedding model to use for dispersion measurement. Cycle 24 recommended 'sentence-transformers/paraphrase-MiniLM-L6-v2' but cycle 25 does not confirm or revise. In light of context length effects, embedding model choice might matter (e.g., does embedding model also degrade with longer inputs?).",
+      "why": "Embedding model choice is implementation detail; deferred to cycle 27 (toy validation phase). Recommend testing multiple embedding models (MiniLM, large sentence-transformers model) to test robustness.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Analysis of whether context length confound could be eliminated by task design (e.g., choose a task where context naturally bounds\u2014instead of Riemann proof without stopping condition, use a fixed-length reasoning task where both conditions naturally finish at the same point).",
+      "why": "Task redesign is one mitigation for context confound; consideration is deferred to cycle 26 (prompting/task specification phase).",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Specification of the interaction between Haiku eviction policy and context length budget. If Haiku evicts strands to keep tensor_d + tensor_e under budget cap, but eviction is deterministic (same tensor' always evicts same strands), then composition is predictable but potentially suboptimal. The cycle does not address: does budget constraint create pathological eviction patterns?",
+      "why": "This is a design question for Haiku policy; requires empirical testing in cycles 26-27. Will be discoverable if context budget is frequently hit (will be visible in toy validation).",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Discussion of alternative metrics for 'coherence' beyond embedding dispersion. The cycle does not challenge whether embedding space distance is the right measure of coherence. Are there other metrics (e.g., logical consistency, semantic entailment, perplexity trajectory) that might be more interpretable?",
+      "why": "Metric choice is implementation decision; multiple metrics are defensible. Recommend measuring at least two (embedding dispersion + another metric like confidence trajectory or claim consistency) for robustness.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "The relationship between this tensor projection system (Yanantin) and the Haiku agent that the model might invoke. Are they separate systems? Does Haiku-the-agent use the tensor projection output? Does the tensor projector learn from Haiku decisions?",
+      "why": "This is a system design question; Yanantin has been treating Haiku as a logical component of Hamutay pipeline, not as a separate agent. The distinction is clarified in prior cycles but not revisited. Recommend: Haiku is a policy (deterministic decision rules), not an agent. Yanantin is the meta-cognitive system tracking the pipeline's beliefs.",
+      "category": "authorial_choice"
+    }
+  ],
+  "open_questions": [
+    "What are the specific findings of the Pichay paper regarding context length effects? Magnitude, mechanisms, and any proposed mitigations?",
+    "Does the context length effect interact with task type (e.g., does Riemann proof suffer more from long context than simpler tasks)?",
+    "Can autoresearch loop be configured to optimize for both performance *and* resource efficiency (minimize context token usage while maintaining coherence)?",
+    "In MVP, should Haiku be implemented as external policy logic or delegated to the model (model outputs TensorRecord JSON directly)? Or hybrid?",
+    "If the model's own summarization (TensorRecord JSON output) is used for tensor projection, is this introducing a confound (model's reasoning is constrained differently when asked to summarize)?",
+    "How much compute/cost will N=15-20 full Riemann experiments require? Is this feasible in one week (cycle 28)?",
+    "Should prompting validation (cycle 25) use a cheaper model (Haiku) for quick iteration, then switch to more capable model (Opus) for full experiment?",
+    "If context budget cap is enforced in both conditions, how do you decide what to truncate? Append-only: oldest history first? Structured: what does Haiku evict when budget is exceeded?",
+    "Is embedding dispersion metric sensitive enough to detect a small but real coherence difference? What is the minimum effect size the experiment can reliably detect?",
+    "Should the toy validation task (cycle 27) use the same Riemann proof or a different task (to test generalization)?",
+    "If the proof experiment shows no signal (H0 supported), should you still attempt autoresearch optimization, or declare the architecture unsuccessful?",
+    "How do you handle the case where one run of the Riemann task fails (model gives up, crashes, or gets stuck in a loop)? Do you exclude it, re-run, or count as zero coherence?",
+    "Does the two-backend implementation (Anthropic vs. OpenRouter) require different prompt structures, or can the same prompts work for both?",
+    "Should the paper emphasize the negative result (context length as a confound) as much as the positive result (tensor state helps)? Both are contributions.",
+    "Are there alternative task types (not Riemann proof) that might be more suitable for measuring coherence variance? Collatz conjecture? Open problem in combinatorics?",
+    "How is the composition graph (tensor' merging into tensor_d) audited for coherency during the experiment? Is this automated or manual review?",
+    "If model produces very high-confidence claims (T > 0.95) that turn out to be wrong, is this a sign that the model is overconfident, or that the Riemann task is eliciting speculation?",
+    "Should the experiment include a 'ground truth' version where a human expert attempts the Riemann proof, to calibrate what coherence looks like in this task?"
+  ],
+  "instructions_for_next": "[\n  \"CRITICAL: Analyze the Pichay paper ('Context Length Alone Hurts LLM Performance Despite Perfect Retrieval'). Extract: (1) magnitude of context length effect (e.g., 2\u00d7 context causes X% performance drop), (2) proposed mechanisms (why does longer context hurt?), (3) any mitigations tested (compression, hierarchical context, information density), (4) task types tested (does effect generalize across domains?). Produce 1-2 page summary with implications for Riemann experiment design. If context effect is large, experiment MUST equalize context budgets in both conditions.\",\n  \"CRITICAL: Commit to MVP Haiku eviction policy in pseudocode. Decide: (a) confidence threshold (T > 0.75) + what else? (recency tiebreaker? cost-weighted?), or (b) recency-based LRU with confidence minimum, or (c) cost-weighted with decay? Specify decision in pseudocode. Specify audit trail (how will you later verify what Haiku evicted and why?). Produce policy specification 1-2 pages.\",\n  \"CRITICAL: Design transformer prompting strategy for TensorRecord output. Specify: (1) delegation decision: should model output TensorRecord JSON directly (in-model), or should external code parse model output and construct tensor_d (external Haiku)? (2) if in-model: instruction format ('output JSON after prose in <tensor> tags'?), validation (check JSON is valid before parsing), error handling (what if JSON is malformed?). (3) if external: what output format does model use (can parser be robust to variation?). Prototype prompt on toy task (2-3 turn Riemann outline). Produce prompting specification + 2-3 example prompts + expected outputs.\",\n  \"CRITICAL: Design context budget cap mechanism. Specify: (1) total token budget for both conditions (recommend 4000-6000 tokens based on expected Riemann task length). (2) for append-only baseline: truncation strategy (oldest first? summarize old history?). (3) for tensor condition: Haiku eviction triggers (if tensor_d + tensor_e + context > budget, evict what?). (4) measurement: capture actual context length per cycle in both conditions. (5) analysis: if context lengths diverge significantly, use regression to partition variance (context effect vs. state effect). Produce context budget design specification.\",\n  \"PRIORITY: Commit to MVP implementation timeline (4-week aggressive path). Specify: week 1 (prompting validation), week 2 (controller + Haiku), week 3 (toy experiment), week 4 (full experiment). Per week: deliverables, success criteria, risk thresholds (e.g., if prompting success < 80%, pause and redesign). Produce timeline + checkpoint specification.\",\n  \"PRIORITY: Design Riemann proof task specification (final version). Specify: (1) task instruction (what exactly is model asked to do?), (2) per-turn structure (user poses next step, model responds with reasoning + tensor). (3) stopping condition (fixed 20-30 turns? model says 'give up'? contradiction detected?). (4) reproducibility (can task be run identically N times?). (5) example: show 3-4 turn Riemann attempt (user turn, model response, tensor' output). Produce task spec + example walkthrough.\",\n  \"PRIORITY: Commit to embedding model and dispersion metrics (final version). Specify: (1) embedding model (recommend: paraphrase-MiniLM-L6-v2 for reproducibility; consider testing robustness with larger model). (2) input preparation (clean prose? full conversation? JSON only?). (3) embedding distance metric (cosine similarity? Euclidean?). (4) dispersion metrics (silhouette coefficient for cluster quality; median pairwise distance for compactness; report both). (5) statistical testing (bootstrap confidence intervals? permutation test?). Produce embedding/metric specification.\",\n  \"PRIORITY: Design toy validation protocol (cycle 27 success criteria). Specify: (1) task: simple Riemann proof (5-6 turns). (2) N=10 instances under both conditions (append-only, tensor). (3) success criteria: (a) parser success >90%, (b) no pipeline crashes, (c) state carries across 5 cycles, (d) context budget never exceeded, (e) preliminary signal (embedding dispersion lower in tensor condition?). (4) debugging: if any criterion fails, what is fallback (simpler task? different embedding model? external Haiku instead of in-model?). Produce validation checklist.\",\n  \"PRIORITY: Identify and mitigate prompting risks. Question: can Claude reliably output both coherent prose AND valid JSON in one response? Test this empirically: run 10 toy Riemann turns (3-4 turns each) with prompting designed for dual output. Measure: (a) JSON validity rate, (b) parsing error rate, (c) prose coherence (does reasoning suffer from JSON generation?), (d) latency. If success < 80%, design fallback (separate requests for prose and JSON? external parsing?). Produce prompting risk analysis.\",\n  \"PRIORITY: Design autoresearch meta-loop (conditional, for cycles 29+ IF H1 supported). Specify: (1) what hyperparameters to optimize (eviction policy thresholds? memory hierarchy sizes? composition aggressiveness?). (2) search strategy (grid search? Bayesian optimization? evolutionary algorithm?). (3) experiment loop (for each config: run N=5 Riemann tasks, measure dispersion, extract signal). (4) stopping criterion (when to stop optimizing? number of iterations? convergence threshold?). (5) resource estimate (K configs \u00d7 5 runs each \u00d7 cost per run = total API cost). Produce autoresearch loop specification (deferred but designed).\",\n  \"DESIGN: Produce one-page architecture diagram showing: (1) pipeline stages (fetch, decode, execute, writeback, halt), (2) tensor flow (tensor_d/tensor_e in, model invocation, tensor' output, Haiku decision, updated tensor_d/tensor_e out), (3) context budget mechanism (budget cap, truncation/eviction, measurement points), (4) measurement points (where outputs are captured for embedding). Make suitable for paper.\",\n  \"DESIGN: Specify the two-backend implementation strategy (deferred to cycles 29+, but now designed). For Anthropic (cycles 25-28): assume prompt caching available, design cache-aware prompt structure. For OpenRouter/local (cycles 29+): design cache-agnostic version. Specify: (1) where caching happens (tensor_d is cache candidate). (2) expected cost difference (estimate token savings via caching). (3) how to test cache effectiveness (measure cache hit rates, token reductions). Produce two-backend specification.\",\n  \"DESIGN: Create risk register for cycles 25-28. Identify: (1) prompting fails (model doesn't output valid JSON), (2) context budget exhausted (tensor grows too large), (3) embedding metric insensitive (no dispersion difference), (4) Riemann task too hard/easy (no coherence variation to measure), (5) API costs exceed budget. For each: likelihood, impact, mitigation, fallback. Produce risk register + contingency table.\",\n  \"RESEARCH: Survey whether embedding space distance is validated as a coherence metric. Find papers that use embedding dispersion for coherence/consistency measurement. Are there standard benchmarks? Known limitations? If embedding distance is novel for this application, note that. Produce literature review (2-3 pages).\",\n  \"RESEARCH: Investigate Karpathy's autoresearch architecture in depth. Explore: (1) what meta-learning / hyperparameter optimization approaches are implemented? (2) how does it handle high-variance tasks? (3) what is the typical convergence speed? (4) any published results or case studies? Produce technical summary (2-3 pages, suitable for deciding if autoresearch is applicable to Hamutay).\",\n  \"RESEARCH: Evaluate alternative intractable tasks beyond Riemann hypothesis. Candidates: Collatz conjecture, open Erd\u0151s\u2013Ko-Rado problem, open conjecture in Ramsey theory, open problem in graph coloring. For each: (1) difficulty to state clearly, (2) likelihood of high-variance failure modes, (3) computational tractability, (4) suitability for showing reasoning coherence. Recommend a backup task. Produce task evaluation (1-2 pages).\",\n  \"CONTEXT: Clarify whether the tensor projection system (Yanantin, this document) will be used *within* the pipeline (model can read prior projections?) or only *about* the pipeline (post-hoc analysis). If within-pipeline, how does model access prior projections?\",\n  \"CONTEXT: Should cycles 25-28 run serially (week 1, week 2, week 3, week 4) or in parallel where possible (e.g., toy validation cycle 27 can start as soon as MVP is ready, not waiting for full week 2 completion)?\",\n  \"CONTEXT: If the Pichay paper shows that context length effects are devastating (>50% performance drop at 2\u00d7 length), should experiment design pivot to a short-task focus (fewer turns, less context accumulation)?\",\n  \"CONTEXT: How much should the paper emphasize the negative result (that context length is a confound) vs. the positive result (tensor state helps)? Both are publishable; emphasis shapes the narrative.\"\n]",
+  "epistemic": {
+    "truth": 0.87,
+    "indeterminacy": 0.11,
+    "falsity": 0.02
+  }
+}

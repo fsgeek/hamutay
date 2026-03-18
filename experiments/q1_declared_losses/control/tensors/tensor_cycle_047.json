@@ -1,0 +1,176 @@
+{
+  "strands": [
+    {
+      "title": "Core Projection Pipeline Architecture",
+      "content": "The hamutay system implements a three-stage pipeline: log_reader (ConversationTurn serialization from session JSONL) -> projector (Projector.project() method that maintains state across turns and emits Tensor objects) -> observation/output (run_projection.py orchestrates the full cycle). The Projector maintains internal cycle state and accumulates tensors across a conversation trajectory.",
+      "key_claims": [
+        {
+          "claim": "read_session_jsonl() parses JSONL into ConversationTurn objects with role and content fields",
+          "epistemic": "T",
+          "grounded_in": "log_reader.py ConversationTurn class definition shown in prior cycle"
+        },
+        {
+          "claim": "Projector.project(content: str) -> Tensor takes raw content strings and produces tensor output",
+          "epistemic": "T",
+          "grounded_in": "run_projection.py imports and instantiates Projector, calls projector.project(content)"
+        },
+        {
+          "claim": "Projector maintains cycle counter that increments across turns",
+          "epistemic": "T",
+          "grounded_in": "run_projection.py accesses projector.cycle and prints cycle number for each turn"
+        },
+        {
+          "claim": "Tensor carries strands, declared_losses, open_questions, instructions_for_next, and epistemic metadata",
+          "epistemic": "T",
+          "grounded_in": "run_projection.py accesses tensor.strands, tensor.declared_losses, tensor.open_questions, tensor.instructions_for_next, tensor.epistemic in post-processing"
+        },
+        {
+          "claim": "run_projection() returns list[Tensor] representing full trajectory through tensor space",
+          "epistemic": "T",
+          "grounded_in": "run_projection.py function signature and accumulation logic in for loop"
+        }
+      ],
+      "epistemic": 0.92
+    },
+    {
+      "title": "Projector State Management and Tensor Evolution",
+      "content": "The projector maintains internal state (cycle counter) across multiple turn projections. Each call to project() produces a new Tensor object that integrates prior state. The trajectory reveals tensor evolution: strand counts, claim accumulation, loss declarations, open question persistence. Epistemic values (truth, indeterminacy, falsity) are tracked per tensor and can be analyzed for stability or drift across cycles.",
+      "key_claims": [
+        {
+          "claim": "Projector.project() is stateful and increments cycle internally on each invocation",
+          "epistemic": "T",
+          "grounded_in": "projector.cycle accessed after each project() call suggests cycle is a mutable projector attribute"
+        },
+        {
+          "claim": "Tensor objects include epistemic tuple (truth, indeterminacy, falsity) for confidence measurement",
+          "epistemic": "T",
+          "grounded_in": "run_projection.py prints tensor.epistemic.truth, .indeterminacy, .falsity for each cycle"
+        },
+        {
+          "claim": "Token estimation is available via tensor.token_estimate() method",
+          "epistemic": "T",
+          "grounded_in": "run_projection.py calls tensor.token_estimate() and prints result"
+        },
+        {
+          "claim": "Tensor compression can be measured by comparing final token count to cycles processed",
+          "epistemic": "I",
+          "grounded_in": "print_tensor_trajectory() prints compression metrics but actual compression ratio calculation not shown"
+        }
+      ],
+      "epistemic": 0.88
+    },
+    {
+      "title": "Strand Stability and Semantic Thread Evolution",
+      "content": "The print_tensor_trajectory() function analyzes strand evolution across the tensor sequence. Strands have titles; the trajectory tracks which strands are added, removed, or remain stable between consecutive cycles. This enables measurement of semantic coherence \u2014 whether key themes converge, fragment, or persist as more conversational content is processed.",
+      "key_claims": [
+        {
+          "claim": "Strand titles are accessed via tensor.strands[i].title",
+          "epistemic": "T",
+          "grounded_in": "print_tensor_trajectory() collects strand_titles and all_titles from strands"
+        },
+        {
+          "claim": "Strand evolution can be tracked as set differences (added, removed, stable) between consecutive cycles",
+          "epistemic": "T",
+          "grounded_in": "print_tensor_trajectory() computes set unions and differences on strand title sets"
+        },
+        {
+          "claim": "Stable strands across cycles indicate convergent semantic themes",
+          "epistemic": "I",
+          "grounded_in": "Inferred from code structure; not explicitly stated but implied by tracking stable vs. added/removed"
+        }
+      ],
+      "epistemic": 0.85
+    },
+    {
+      "title": "Loss Declaration as Explicit Information Accounting",
+      "content": "Each tensor includes declared_losses array tracking what information was dropped during projection and why. The prior tensor declared three critical losses (system architecture, feedback loops, sample data). The run_projection.py code prints loss declarations, suggesting they remain visible in the trajectory for explicit information audit rather than silent compression.",
+      "key_claims": [
+        {
+          "claim": "declared_losses persists across cycles and is interrogable in trajectory analysis",
+          "epistemic": "T",
+          "grounded_in": "print_tensor_trajectory() iterates over t.declared_losses and prints what_was_lost and category"
+        },
+        {
+          "claim": "Loss declarations are intended as explicit accountability records, not hidden compression artifacts",
+          "epistemic": "T",
+          "grounded_in": "Prior tensor rule states 'Declared losses are CRITICAL. Silent loss is the enemy.' and code surfaces them"
+        },
+        {
+          "claim": "Loss categories enable classification of loss type (practical_constraint, semantic_collapse, etc.)",
+          "epistemic": "T",
+          "grounded_in": "print_tensor_trajectory() accesses loss.category.value in output"
+        }
+      ],
+      "epistemic": 0.9
+    },
+    {
+      "title": "Experimental Setup and Observability",
+      "content": "run_projection.py is the first concrete experiment: feed real conversation turns through the projector and observe whether the tensor stabilizes or drifts. The script supports max_turns limit, output_dir for persisting tensors as JSON, and pluggable model selection. Tensors are written to disk (tensor_cycle_NNN.json) for post-hoc analysis and cross-cycle comparison.",
+      "key_claims": [
+        {
+          "claim": "run_projection() supports max_turns parameter to limit conversation depth for testing",
+          "epistemic": "T",
+          "grounded_in": "Function signature and conditional turns = turns[:max_turns]"
+        },
+        {
+          "claim": "Output tensors are serialized to JSON via tensor.model_dump_json() for persistence",
+          "epistemic": "T",
+          "grounded_in": "Code writes path = output_dir / f\"tensor_cycle_{t.cycle:03d}.json\" with model_dump_json()"
+        },
+        {
+          "claim": "Model selection is pluggable via model parameter (defaults to claude-haiku-4-5-20251001)",
+          "epistemic": "T",
+          "grounded_in": "run_projection() function signature includes model parameter with default value"
+        },
+        {
+          "claim": "The experiment tests whether tensor drift/stability is observable across full conversations",
+          "epistemic": "I",
+          "grounded_in": "Docstring says 'first experiment: feed real conversation turns...measure whether tensor stabilizes or drifts' but no success criteria defined"
+        }
+      ],
+      "epistemic": 0.87
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Complete Projector class implementation",
+      "why": "run_projection.py imports Projector but the actual project() method, cycle state management, and tensor construction logic not shown in new content",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Tensor class definition and model_dump_json() schema",
+      "why": "Code accesses tensor.strands, tensor.epistemic, tensor.token_estimate() but full Tensor model definition and serialization behavior not provided",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Actual execution results and real tensor trajectories",
+      "why": "run_projection.py is a harness/experiment setup but no concrete output data, sample tensors, or real strand evolution shown",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Model invocation details in Projector",
+      "why": "Model parameter passed to Projector but no detail on how/when the LLM is called, what prompts are used, or how raw LLM output becomes Tensor structure",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Definition of strand title semantics and creation rules",
+      "why": "Code tracks strand titles and their evolution but no explicit grammar or logic for when/how new strand titles are created vs. merged",
+      "category": "semantic_constraint"
+    }
+  ],
+  "open_questions": [
+    "What is the complete implementation of Projector.project() and how does it transition from one Tensor to the next?",
+    "How are strands identified, named, and merged? Is there a strand creation grammar or heuristic?",
+    "What prompts or logic does the Projector use to populate strands, key_claims, declared_losses, and open_questions from raw conversation content?",
+    "How does Projector maintain prior tensor state when projecting the next turn \u2014 is it stored in memory, embedded in a system prompt, or reconstructed from persistent JSON?",
+    "What does Tensor.token_estimate() count, and how does it relate to actual LLM token consumption?",
+    "How are epistemic values (truth, indeterminacy, falsity) computed per strand or per tensor \u2014 is there an aggregation function?",
+    "What is the expected behavior when run_projection processes a session with dozens or hundreds of turns \u2014 does the tensor size grow linearly or stabilize?",
+    "How will the system handle conversation turns with missing or incomplete metadata (as mentioned in prior open questions)?",
+    "What validation ensures that Tensor objects conform to the expected schema before serialization to JSON?"
+  ],
+  "instructions_for_next": "[\n  \"If Projector implementation appears: extract the project() method, cycle management, prior tensor feeding mechanism, and LLM prompt engineering\",\n  \"If Tensor model/schema is shown: map all fields to their constructors, defaults, and serialization rules; update strands with complete schema definition\",\n  \"If execution logs or sample tensors appear: extract concrete examples of strand names, epistemic value ranges, loss categories seen in practice, and strand evolution patterns\",\n  \"If the experiment runs: analyze tensor trajectory for convergence, divergence, or oscillation patterns; extract actual compression ratios and stability metrics\",\n  \"Watch for: how prior tensor state is fed into next cycle; what model calls look like; whether strand merging is deterministic or stochastic\",\n  \"If issues arise (e.g., API errors, schema mismatches): escalate to declared losses and update open_questions with failure modes\"\n]",
+  "overall_truth": 0.88,
+  "overall_indeterminacy": 0.1,
+  "overall_falsity": 0.02
+}

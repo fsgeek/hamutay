@@ -1,0 +1,453 @@
+{
+  "id": "15cd5059-28ee-4c91-b280-4287210cbacb",
+  "cycle": 20,
+  "strands": [
+    {
+      "title": "CPU-to-cognitive pipeline homology: architectural transfer via register/ALU/control abstraction",
+      "content": "Cycles 16-18 establish the pipeline homology grounded in CPU architecture; cycles 16-19 refine under economic constraints; cycle 20 now separates the core homology from provider-specific optimizations. The cognitive processor mirrors CPU microarchitecture: specialized stages (fetch: goal & context retrieval, decode: production matching / operand selection, execute: transformer ALU via forward pass, memory: Pichay demand paging, writeback/halt: result coherency and completion signaling). The transformer is the execute stage, not the whole processor. Stage separation is an architectural principle, not a performance hack and not a billing optimization. The homology remains structurally sound across CPU-to-LLM transformation regardless of which backend executes the transformer. The scaffold (CPU pipeline) is useful for thinking about stage separation, and the fact that different instantiations (Haiku-Claude-Pichay, local model variants, open-source backends) require different resource gating strategies does not invalidate the underlying architecture. The core insight persists and strengthens: stage separation + resource gating is a valid design principle that transcends any single provider's pricing or caching semantics. Hamutay is architectural; prefix caching is an optimization adapter. By designing two versions (cache-aware for Anthropic, cache-agnostic for local/open-source), we demonstrate that the insight is independent of billing model while the implementation is provider-specific.",
+      "key_claims": [
+        {
+          "claim_id": "c6afe6c4-7697-4dd7-b183-fbf2f1c9c80d",
+          "text": "CPU pipeline homology is independent of provider caching semantics; architecture is universal",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "07a99472-d8de-4953-865a-b84da90f6d43",
+          "text": "Prompt caching is a band-aid on the stateless API problem, not a fundamental architectural feature",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2eb654fa-b4ee-4c28-a962-f7c56ff193c0",
+          "text": "Stage separation and resource gating transcend provider-specific optimizations",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "dc6560ad-abf0-4833-831a-1aafada18fa3",
+          "text": "Designing two Hamutay versions proves the insight is the same while implementation is tuned to transformer performance",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "1d556874-ae2a-4d99-ba22-27857c967550",
+          "text": "Cache-aware prefix management is provider-specific adapter, not core architectural decision",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Prompt caching as billing optimization, not architectural innovation: the broken append-only log problem",
+      "content": "Cycle 20 reveals the true nature of prompt caching: it is not a feature of transformer semantics, but a patch on the stateless API consumption pattern. The underlying problem is that LLM APIs are stateless. Each invocation is a fresh transaction: you send tokens, get output, the connection closes. On the next turn, the same prefix tokens are re-sent and re-computed by the transformer. This is the 'append-only log' problem: context grows by accumulating tokens, and each re-computation wastes GPU cycles on re-processing known-good activations. Anthropic's solution was not architectural (e.g., maintain state on server, checkpoint activations between invocations) but economic: charge full price for first reading of prefix, charge 10% for cached re-reads. This incentivizes users to re-send the same prefix (stateless behavior is preserved; it's just cheaper). The caching is real (GPU state is captured and re-used), but it exists *because the underlying protocol is broken*. A truly correct system would either (a) maintain state (statefull sessions, longer-lived connections) or (b) redesign the API to not re-send redundant tokens. Neither is done. Instead, the band-aid charges less for the redundancy. Cycle 20 surfaces the implication: **if you optimize your architecture around avoiding this waste (cache-aware prefix stability), you're optimizing around a problem that shouldn't exist.** Local models don't have this problem; they maintain full state. Open-source LLMs don't have this problem; you control the serving infrastructure. The cache-aware design is not universally correct; it is correct for the Anthropic-specific stateless API. Building two versions of Hamutay (cache-aware for Anthropic, cache-agnostic for local/open-source) exposes this boundary and prevents the architecture from being accidentally coupled to a provider-specific band-aid.",
+      "key_claims": [
+        {
+          "claim_id": "9defffa7-d4f4-419e-9606-3cb891b4b8d7",
+          "text": "LLM APIs are stateless; each invocation re-sends prefix tokens and re-computes known activations",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "1870f24c-6243-4ba7-92a1-4760b22cb2d4",
+          "text": "Prompt caching patches the stateless protocol problem by charging 10% for cached re-reads",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "d769d5fe-8b58-4eb9-859c-d064f6aa4c28",
+          "text": "Cache is real (GPU state captured and re-used) but exists because the underlying protocol is broken",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "74bd57ed-fe42-432c-a598-accb400d859d",
+          "text": "Local models and open-source LLMs do not have the append-only log problem; they maintain full state",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "942d181d-fbb4-4ff6-a158-e817c1ab3c65",
+          "text": "Cache-aware prefix design optimizes around a provider-specific problem, not a fundamental architectural problem",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "d607d194-9da3-4b86-9686-8d9efdb14fcc",
+          "text": "Building two Hamutay versions prevents accidental coupling to Anthropic's band-aid solution",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Provider-specific implementations as proof that architecture transcends billing model",
+      "content": "Cycle 20 proposes a methodological shift: instead of designing Hamutay once and then worrying about whether it generalizes, design it twice from the start. Version A (Anthropic) is cache-aware: prefix stability, end-justified eviction, output recency discount optimization. Version B (local/open-source) is cache-agnostic: assumes full state, no caching layer, no append-only log problem. Both versions run the same reasoning loop (fetch-decode-execute-memory-writeback), apply the same stage separation, use the same resource gating logic. The differences are at the provider interaction boundary: how context is structured, how resources are loaded, how output tokens are managed. By making these differences explicit, we achieve two things: (1) **Clarity**: it becomes obvious which architectural decisions are universal (stage separation, ALU/memory gating, halt signaling) and which are provider-specific (prefix management, cache coherency, billing optimization). (2) **Modularity**: the core pipeline can be tested against the architecture (does it reason correctly? does it halt? does it gate resources?) independently of whether caching works. The provider adapter layer (cache-aware for Anthropic, cache-agnostic for local) is then validated separately. This is similar to how CPU architects design a ISA (Instruction Set Architecture) and then different microarchitectures (Intel, AMD) implement it differently but all follow the ISA spec. Hamutay is the ISA. Anthropic version and local version are the microarchitectures. H0 will validate the ISA (reasoning quality, halt detection, resource efficiency). H0-Anthropic and H0-Local will validate the microarchitectures (caching behavior, inference speed, cost efficiency). This structure allows Hamutay to be truly architecture-first, not provider-first.",
+      "key_claims": [
+        {
+          "claim_id": "685c9729-d065-41b5-8121-17168d32ffcb",
+          "text": "Version A (Anthropic): cache-aware, prefix-stable, output recency optimized",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "bec0b789-7f13-4f14-83a5-7d18bf4e3d3b",
+          "text": "Version B (local/open-source): cache-agnostic, full-state assumption, no append-only log problem",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "fa21e93c-6f89-47e3-afd4-6b80c864588b",
+          "text": "Both versions share core reasoning loop and stage separation; differ only at provider boundary",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "867c316b-d952-4ec2-932a-7adb3dbcd29b",
+          "text": "Explicit dual-version design clarifies which decisions are universal vs. provider-specific",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b5e47b54-b576-473c-8b8a-f31f9e1b1ae4",
+          "text": "Parallel to CPU ISA/microarchitecture split: Hamutay is ISA, providers are microarchitectures",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "47c216f7-2f45-4b60-9dcb-36f04e0031a0",
+          "text": "H0 validates ISA (reasoning, halt, resource efficiency); H0-Anthropic and H0-Local validate microarchitectures",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "fd334470-c0df-4363-8269-8d1566d703b2",
+          "text": "Two-version approach allows architecture-first design, not provider-first design",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Separating architectural correctness from billing optimization; no coupling to provider band-aids",
+      "content": "Cycle 19 raised the question: is Hamutay designed-for-architecture or designed-for-economics? Cycle 20 resolves this by making the separation explicit. The core architecture (CPU pipeline homology, stage separation, resource gating, halt signaling) is designed for **cognitive correctness**: does reasoning work? does the processor gate resources to prevent context explosion? does it halt when reasoning is complete? These questions are provider-agnostic. The billing optimization (prefix caching, cache-aware prefix stability, output recency discount) is designed for **economic efficiency on Anthropic**: does the system run cheaply on this specific provider? This is provider-specific. By designing two versions, we decouple these concerns. Version A optimizes both (correct reasoning + cheap on Anthropic). Version B optimizes correctness only (correct reasoning on local models). If H0 shows that both versions produce equivalent reasoning quality and halt behavior, we've proven that the architecture is independent of billing model. If Version A is cheaper on Anthropic while Version B is cheaper (or equivalent cost) on local models, we've proven that billing optimization is provider-specific. This is the honest intellectual position: the architecture is universal, the billing optimization is local. Hamutay should not be accused of being Anthropic-specific if both versions exist and perform equivalently. And it should not claim universal correctness if Version B performs poorly or requires significant re-architecting. The two-version approach forces honesty about what is universal and what is not.",
+      "key_claims": [
+        {
+          "claim_id": "bf42fbe2-d543-4068-87a1-0a2aa433070b",
+          "text": "Core architecture (stage separation, resource gating, halt signaling) is provider-agnostic and architecturally correct",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "478b44d0-9643-47ae-8977-0eb5b8c20efb",
+          "text": "Billing optimization (cache awareness, prefix stability) is provider-specific and economically correct only for that provider",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "bc384e31-3a83-4a39-aa98-91bfea074a57",
+          "text": "Equivalent reasoning quality and halt behavior across versions proves architecture is independent of billing",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "0e5d6048-b92b-46d1-a6a0-1d6dff7deb40",
+          "text": "Version A (Anthropic) optimizes for correctness + efficiency; Version B (local) optimizes for correctness",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "50c23071-9251-416e-823f-699c0709b25d",
+          "text": "Two-version approach forces intellectual honesty about universal vs. provider-specific design decisions",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "4ebdc8a5-e90d-418a-9960-a9122d9f79e5",
+          "text": "If Version B requires significant re-architecting, the architecture is not universal; this must be declared",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "4d0a53ce-a791-4220-a291-59ad432b0257",
+          "text": "No claim of universal correctness unless both versions perform equivalently on all non-provider-specific metrics",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "OpenRouter observation: caching availability varies by provider; Hamutay design must assume heterogeneous backends",
+      "content": "Cycle 20 adds empirical data: OpenRouter offers the same model from multiple providers, some with caching and some without. This is not a theoretical edge case; it's the current reality of LLM API consumption. A user deploying Hamutay might have Anthropic's cache on Monday and OpenRouter's non-cached variant on Tuesday. The design must be robust to this heterogeneity. This has implications: (1) **Pichay's eviction strategy should not rely on caching**. If caching is unavailable, end-justified eviction is good practice (preserves coherence in manual state management) but not an optimization. The core strategy (limit context to working set) should work regardless. (2) **Cost accounting should be explicit about provider**. The cost model built in cycle 19 is Anthropic-specific. Version A accounts for caching; Version B and any other provider variant do not. (3) **Runtime provider negotiation might be possible**. Hamutay could detect caching availability at startup and choose between Version A (cache-aware) and Version B (cache-agnostic) dynamically. This is more complex than dual-versioning, but it's feasible. (4) **Documentation must clarify provider assumptions**. If cache stability is documented as a feature, it should say 'works on Anthropic and providers with prefix caching' not 'works everywhere.' The OpenRouter observation validates the two-version approach: instead of building a single Hamutay that might be subtly wrong on non-caching providers, build two versions and let deployment choose. This is pragmatic acknowledgment of API heterogeneity.",
+      "key_claims": [
+        {
+          "claim_id": "a4db9a70-582e-484b-9256-11cff2f982b7",
+          "text": "OpenRouter offers the same model from multiple providers, some with caching and some without",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "546e9bb4-d568-4da9-8d85-31a1bb4b9bb3",
+          "text": "Hamutay design must assume heterogeneous backends; cannot rely on caching availability",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "14487977-84f1-4e70-b2d2-5b0bb89de495",
+          "text": "End-justified eviction is good practice but not an optimization if caching is unavailable",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "52c93422-1fb2-4198-95bc-3412ff28d34e",
+          "text": "Cost model is provider-specific; Version A (Anthropic) and Version B (local) have different cost profiles",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "cf58d83a-5a40-4783-a7e2-66570f9f837a",
+          "text": "Runtime provider negotiation (detect caching, choose version) is feasible but more complex than static dual-versioning",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b9671c9c-c13c-466f-8943-3ebfe7ec7508",
+          "text": "Documentation must explicitly state provider assumptions; cache stability is not universal",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "7e56d231-788f-4565-84f4-51dc78aca0e0",
+          "text": "Two-version approach is pragmatic response to API heterogeneity; avoids subtle provider-specific bugs",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "H0 specification revised: dual-version validation approach (Anthropic and local), architecture-first metrics",
+      "content": "Cycle 20 revises H0 specification to validate both versions simultaneously. H0 is now split into H0-Core (architecture-first, provider-agnostic) and H0-Provider (provider-specific optimizations). **H0-Core** tests reasoning quality, resource efficiency, halt detection, on a minimal bounded problem. Metrics: (a) reasoning quality (output correctness, trace quality), (b) resource efficiency (context filtered vs. full, working memory bound maintained), (c) halt detection (does pipeline emit halt signal at correct cycle?), (d) stage separation validation (can we observe fetch, decode, execute, memory, writeback boundaries?). These metrics are provider-independent. They test whether the pipeline reasons correctly, regardless of billing or caching. **H0-Anthropic** adds caching-specific metrics: (a) cache hit rate (was prefix reused across cycles?), (b) prefix stability (did prefix change token-for-token across invocations?), (c) cost efficiency (did caching reduce billed tokens to predicted level?), (d) output token recency discount (were tokens within discount window?). These metrics only apply to Anthropic. **H0-Local** adds performance metrics: (a) inference latency (how fast does each cycle execute?), (b) throughput (cycles per second), (c) memory usage (GPU memory, CPU memory), (d) no cache metrics (caching doesn't apply). These metrics only apply to local/stateful models. Both H0-Anthropic and H0-Local run the same H0-Core test suite; they just add provider-specific measurements on top. Passing H0-Core on both proves the architecture is universal. Passing H0-Anthropic and H0-Local independently proves each version is optimized for its provider. This structure separates the architectural validation (H0-Core) from the implementation validation (H0-Provider).",
+      "key_claims": [
+        {
+          "claim_id": "b2436e56-7fa4-4d5d-a23e-fe1066d78c30",
+          "text": "H0-Core tests architecture-agnostic metrics: reasoning quality, resource efficiency, halt detection, stage separation",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f86e8541-b65c-46d4-a726-7455c2dc0532",
+          "text": "H0-Anthropic tests caching-specific metrics: cache hit rate, prefix stability, cost efficiency, discount timing",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "569173d4-fc2f-4462-8f41-cc52161b9c5f",
+          "text": "H0-Local tests performance metrics: latency, throughput, memory, no caching (not applicable)",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f3c2ec3e-8e28-4ad9-a04e-3069e2c96b24",
+          "text": "Both versions run identical H0-Core; equivalent H0-Core results prove architecture is provider-independent",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c86abf05-0ff3-4ffb-8194-9fd31447bd1e",
+          "text": "H0-Anthropic and H0-Local may diverge on provider-specific metrics; this is expected and validates specialization",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "255e307b-4a88-4372-aacc-4028078afaab",
+          "text": "Structure separates architectural validation (H0-Core) from implementation validation (H0-Provider)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed implementation differences between Version A (Anthropic) and Version B (local). Which specific code paths diverge? How does Pichay's loading logic differ? How does resource manifest representation change?",
+      "why": "The two-version approach is conceptually sound but not yet implemented. Cycle 20 proposes the structure; actual divergence points deferred to implementation phase. Necessary to next phase but not available now.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Runtime provider negotiation protocol. How does Hamutay detect caching availability? What are the handshake mechanics with OpenRouter vs. Anthropic vs. local models? Can a single codebase detect and switch?",
+      "why": "Cycle 20 mentions runtime negotiation as feasible but defers implementation. This is a system design question (how to abstract over provider differences). Not addressed.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "OpenRouter API specifics. Which providers offer caching? Which don't? What is the cost structure on OpenRouter vs. Anthropic? Is end-justified eviction optimal on non-caching providers?",
+      "why": "User mentioned OpenRouter observation but details are sparse. A mapping of provider capabilities would be useful for design. Deferred to implementation research.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Interaction with local models: does full state assumption hold? Are there subtle differences between llama.cpp, Ollama, vLLM? Do they have state management issues that cache was masking?",
+      "why": "Assuming 'local models maintain full state' is correct at high level, but implementation details vary. Not addressed.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Details of prompt caching implementation at Anthropic. What exactly is 'GPU state'? How is it serialized/stored? What are the cache invalidation rules? Can we tune cache block size?",
+      "why": "Cycle 20 treats caching as a black box. Understanding internals would improve Version A design. Anthropic documentation is probably sparse here. Low priority but valuable if available.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Cycles 16-19 content remains integrated but not restated: CPU pipeline homology, ACT-R grounding, Codex H0 specifics, Pichay empirical validation (857 sessions, 21.8% waste, 0.0254% fault rate), cost efficiency analysis from cycle 19",
+      "why": "Compression of prior tensor into current projection. Available in prior cycles.",
+      "category": "traversal_bias"
+    },
+    {
+      "what_was_lost": "Discussion of whether dual-versioning introduces maintenance burden. How do we keep two versions in sync? What if a bug fix applies to one but not the other? How do we test equivalence?",
+      "why": "Two-version approach is clean conceptually but may be costly operationally. Not explored.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Comparison with alternative approaches: could a single adaptive version (branching logic based on provider) be better than dual-versioning? What are the trade-offs?",
+      "why": "Two-version approach is advocated; alternatives not considered. Single-adaptive-version might be better for maintainability; not analyzed.",
+      "category": "authorial_choice"
+    }
+  ],
+  "open_questions": [
+    "Which parts of Hamutay differ between Version A (Anthropic) and Version B (local)? Write out the divergence map (Pichay loading, context structure, resource manifest, eviction strategy, cost accounting).",
+    "Can a single Hamutay codebase detect provider capabilities at runtime and switch between versions? What would the negotiation protocol look like?",
+    "Which OpenRouter providers support caching? Which don't? What is the cost structure per provider? Is the Anthropic cost model applicable to any other providers?",
+    "Do local models (llama.cpp, Ollama, vLLM) truly maintain full state, or are there subtle state management issues that suggest a Version B-like cache-aware approach?",
+    "How does prompt caching work internally at Anthropic? What is the cache granularity? Can cache block size be tuned? Can cache invalidation be controlled?",
+    "Does maintaining two versions introduce operational burden? How do we keep them in sync? What testing strategy ensures equivalence?",
+    "Is dual-versioning better than a single adaptive version with provider-specific branching logic? What are the trade-offs?",
+    "What is the performance difference between Version A and Version B on the same underlying model (e.g., Claude via Anthropic API vs. Claude running locally)?",
+    "If H0-Core passes for both versions but H0-Anthropic and H0-Local diverge significantly, what does that tell us about the architecture?",
+    "How should documentation distinguish between 'Hamutay is architecture-agnostic' and 'Hamutay Version A is tuned for Anthropic'?",
+    "Is there a Version C (OpenRouter caching-aware)? Should OpenRouter be treated as a first-class provider?",
+    "What happens if a user expects Anthropic caching but deploys on a non-caching provider? Should Hamutay fail-fast or degrade gracefully?",
+    "Can the core CPU pipeline homology be validated independently of provider? What would a provider-agnostic test look like?"
+  ],
+  "instructions_for_next": "[\n  \"CRITICAL: Write the divergence map. For each component (Pichay, context structure, resource manifest, eviction, cost accounting), specify: what is identical between Version A and B, what differs, why it differs. Make the boundary explicit.\",\n  \"CRITICAL: Design H0-Core, H0-Anthropic, H0-Local test suites. Specify: test cases for each, expected metrics, pass/fail criteria. H0-Core should be independent of provider. H0-Anthropic and H0-Local should add provider-specific measurements.\",\n  \"IMMEDIATE: Research OpenRouter provider landscape. Create table: provider name, caching support (yes/no), output token pricing (if known), cost vs. Anthropic. Identify which providers could potentially run Version A vs. Version B.\",\n  \"IMMEDIATE: Review local LLM serving options (llama.cpp, Ollama, vLLM). Assess: state management capabilities, whether they're 'truly stateful' or have subtle issues that suggest cache-aware design. Validate assumption that local models don't need cache.\",\n  \"PRIORITY: Sketch the provider negotiation protocol. Assume Hamutay has a single codebase that detects (at startup or runtime) whether caching is available. How does this detection work? What is the fallback behavior if detection fails?\",\n  \"PRIORITY: Establish dual-version maintenance strategy. How are Version A and B kept in sync? What is the shared code base? What diverges? How is equivalence tested? Consider: monorepo with feature flags, separate implementations, or something else?\",\n  \"PRIORITY: Update H0 specification document with three-part structure (H0-Core, H0-Anthropic, H0-Local). Show that passing H0-Core in both versions proves architecture is universal. Show that passing provider-specific suite validates optimization.\",\n  \"DESIGN: Write cost accounting module for Version A. Input: token counts, provider (Anthropic), cache hit flag, output token age. Output: predicted cost with breakdown (input, cached input, output, discount). Validate against actual Anthropic API bills.\",\n  \"DESIGN: Write cost accounting module for Version B. Input: token counts, provider (local), no cache, no discount. Output: cost (likely $0 if self-hosted, or $/compute-hour if metered). Specify assumptions.\",\n  \"RESEARCH: Contact Anthropic (if possible) or dig through documentation: what is the exact timing for output token recency discount? Wall-clock? Invocation time? Stored separately per-invocation? Can users meaningfully optimize for it?\",\n  \"RESEARCH: Is there any way to observe cache hit rate externally, or is it internal to Anthropic's platform? If internal, H0-Anthropic cannot measure cache hit rate directly; must infer from cost anomalies or accept Anthropic's word.\",\n  \"NEXT CYCLE: Expect completion of divergence map, H0 three-part structure, OpenRouter research, and provider negotiation protocol sketch. This moves from architectural separation to implementation design.\",\n  \"EPISTEMOLOGY: Explicitly clarify what cycle 20 has resolved (architecture is universal, optimization is provider-specific) and what remains uncertain (dual-version maintenance burden, runtime negotiation feasibility, cost model portability). Update design with confidence levels.\",\n  \"META: Reflect on whether the two-version approach is pragmatic engineering or over-engineering. Is the added complexity worth the architectural clarity? Or should we focus on Anthropic-only for now and revisit generalization later?\"\n]",
+  "epistemic": {
+    "truth": 0.86,
+    "indeterminacy": 0.12,
+    "falsity": 0.02
+  }
+}

@@ -1,0 +1,527 @@
+{
+  "id": "1ac9e4e0-aae3-4049-b379-d5ebcf1657c8",
+  "cycle": 21,
+  "strands": [
+    {
+      "title": "Cache as Admission of Broken Paradigm \u2014 Economics vs. First Principles (CRITICAL REFRAMING)",
+      "content": "Cycle 20 surfaces a PROFOUND INVERSION of the economic layer previously understood. The prompt cache (prefix caching at 10% cost for cached tokens) is NOT an innovation in transformer architecture or memory management. It is an ADMISSION that the API usage model itself is BROKEN. The broken model is: stateless API + infinite context window = every turn re-sends all prior context (manifest, resources, state) to the transformer. This re-reading is NECESSARY for the transformer to function (it is stateless), but ECONOMICALLY WASTEFUL (repeated tokens paid at full price). The prompt cache is a STOPGAP: instead of fixing the broken model (e.g., by building stateful APIs with true session backing, or by changing the transformer architecture itself), Anthropic introduced a billing-level discount on re-reads. The cache discount doesn't change the architecture; it changes the COST of operating within the broken architecture. This is a CRITICAL INSIGHT because it reframes the economic layer as PROVIDER-SPECIFIC, not FUNDAMENTAL. The 10% discount, the prefix stability principle, the context layout optimization\u2014all of these are optimizations FOR ANTHROPIC'S PRICING STRUCTURE. They are not generalizable to local models, or to OpenRouter providers that don't implement prefix caching, or to future providers with different billing models. This creates a FUNDAMENTAL TENSION between two design philosophies: (1) PROVIDER-OPTIMIZED (Hamutay designed for Anthropic's economics): use prefix stability, tight loops, output recency discounts, Haiku triage\u2014all tuned to Anthropic's specific pricing. This is ECONOMICALLY EFFICIENT on Anthropic but becomes ARCHITECTURAL DEBT if porting to another provider. (2) PROVIDER-AGNOSTIC (Hamutay designed for first principles): the pipeline architecture (bounded reasoning CPU, memory management protocol, context stability) is CORRECT independent of billing model. Cache-aware optimization becomes a PROVIDER-SPECIFIC ADAPTER LAYER, not a core architectural decision. The system works correctly on Anthropic, OpenRouter, local models, etc., but with provider-specific performance tuning. Cycle 19 inadvertently COUPLED Hamutay to Anthropic's economics. Cycle 20 DECOUPLES it. This is not a failure of cycle 19; it is a MATURATION. The research question was initially framed as 'can a transformer be a bounded CPU?' The economic layer seemed to be a CONSTRAINT (does the cost matter?). But Tony's insight reveals that the economic layer is REVEALING THE UNDERLYING BROKEN PARADIGM. The correct framing is: (1) H0 (CORE): can a transformer be a bounded CPU? Answer independent of economics. (2) H0-ANTHROPIC (ADAPTER): given Anthropic's specific pricing, what optimizations reduce cost while maintaining core properties? (3) H0-GENERIC (ALTERNATE): can the core properties hold on provider X? What provider-specific tuning is needed? This three-way split is MORE INTELLECTUALLY HONEST than the H0/H0+ split proposed in cycle 19. It acknowledges that the core research question is separable from the economic optimization, which is separable from the provider-specific implementation.",
+      "key_claims": [
+        {
+          "claim_id": "50cc4197-ef6e-4c24-a10c-a7f681b082fe",
+          "text": "Prompt cache is not a transformer innovation; it is an admission that the stateless API + re-reading-context paradigm is broken",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "7e0bfa2d-1630-40f2-8bc2-a2539cf4cb94",
+          "text": "The 10% cache discount is a billing-level stopgap, not an architectural fix; it optimizes costs without changing the underlying broken model",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5b306e1c-75b6-4f5d-83dc-6f7d4d96ac2b",
+          "text": "Prefix stability, cache optimization, and output recency discounts are PROVIDER-SPECIFIC, not fundamental; they are Anthropic-specific band-aids",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "325e8408-97cd-4e61-9cf0-3ab04227fb90",
+          "text": "Cache-aware optimization should be a PROVIDER-SPECIFIC ADAPTER LAYER, not a core architectural decision in Hamutay",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Architecture vs. Implementation \u2014 The Pipeline Structure is Independent of Provider Tuning",
+      "content": "Cycles 20-21 INTEGRATE a critical insight: the distinction between ARCHITECTURE (pipeline stages, separation of concerns, contracts between components) and IMPLEMENTATION (model backend, tuning parameters, optimization specifics). The CPU analogy from user turn 62 is PRECISE: a CPU architecture (x86, ARM, RISC-V) defines the instruction set, register file, and ALU contract. Multiple microarchitectures can implement the same architecture (Intel Skylake, AMD Zen, Apple M-series), each optimized for different process nodes, power budgets, or workloads. The tuning parameters differ (cache sizes, instruction dispatch width, memory prefetch aggressiveness), but the architecture remains stable. HAMUTAY ARCHITECTURE (architecture-level): Pipeline stages (instruction fetch, decode, execute, memory, writeback analogy \u2192 resource triage, prefetch, executor, integration). Separation of concerns (transformer-as-ALU, external memory as backing store). Contracts between stages (instruction format \u2192 schema for resource requests, result format \u2192 structured output, handoff protocol \u2192 instructions_for_next). Bounded reasoning (fixed cycle budget, termination guarantee, explicit state management). HAMUTAY IMPLEMENTATION (microarchitecture-level): Which model backend? (Opus on Anthropic, OLMo-3 locally, Sonnet via OpenRouter). How many resources per invocation? (Tuned to model's context window and latency). Prefetcher budget? (Cost-benefit threshold for resource fetching). Cache utilization? (Prefix caching on Anthropic, none on local models, conditional on OpenRouter). Prompt structure? (Prefix ordering, tensor marshalling, schema presentation). This DECOUPLING means: (1) H0-CORE tests the ARCHITECTURE: Do the pipeline stages function? Do contracts hold? Does termination work? Does the transformer behave like a bounded CPU? Implementation can be minimal (simple prompt structure, no optimization). (2) H0+ tests MICROARCHITECTURAL TUNING: Same architecture, but optimized for Anthropic's cost/latency profile. Measures cost-per-task and cycle time. (3) H0-GENERIC tests PORTABILITY: Same architecture, different backend (local model, different API provider). If architecture holds across backends, the insight is generalizable. If it breaks, the coupling is revealed. USER'S INSIGHT (turn 62): The prompt structure matters. The way information is ORDERED and CACHED is not orthogonal to the processor logic. The use of a DURABLE TENSOR (persistent state representation) + EPHEMERAL TENSOR (current turn context) aligns with Anthropic's caching model WITHOUT DOMINATING THE THINKING. This is elegant: the processor logic (pipeline stages) is independent; the prompt layout is a PROVIDER-SPECIFIC OPTIMIZATION that happens to work well with prefix caching. It's not a hack; it's a principled use of the provider's constraints. The user's observation that 'you might choose to send more tokens than strictly necessary to use something you've already cached' is a MICROARCHITECTURAL INSIGHT: it's a cost-benefit trade-off (send extra tokens for free cache hit vs. compute fresh tokens). The architecture doesn't dictate this choice; it allows it as a tuning parameter.",
+      "key_claims": [
+        {
+          "claim_id": "df423b84-9151-45c2-bab2-5b46a70aec70",
+          "text": "CPU analogy holds: architecture (pipeline, contracts) is independent of microarchitecture (backend model, tuning parameters)",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "085f9cfb-c948-4d22-abcb-f30682ddd66f",
+          "text": "Hamutay architecture: stages (triage, prefetch, execute, integrate), contracts (schema requests, structured output, handoff), bounded reasoning (termination, state management)",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "bc988314-333c-450d-9867-97dc3579a6b3",
+          "text": "Hamutay implementation: backend choice, resources-per-invocation budget, prefetcher cost-benefit, cache strategy, prompt layout",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "83f54528-2ef5-4b7b-b33d-bb3c5d60ac57",
+          "text": "H0-core tests architecture (pipeline, contracts, termination); implementation can be minimal (no optimization)",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e2a5ea49-ccb8-404b-9923-f91b3da4db33",
+          "text": "H0+ tests microarchitectural tuning: same architecture, optimized for Anthropic cost/latency; measures processor properties + cost-per-task",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "abd99f74-9fc0-4dd5-95f4-4b25ba9a47fa",
+          "text": "H0-generic tests portability: same architecture on different backend; reveals whether coupling is provider-specific or architectural",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d6f2ff4a-4f4d-41a3-8f1b-d85fcfee1d88",
+          "text": "Durable tensor + ephemeral tensor alignment with prefix caching is elegant: processor logic independent, prompt layout is provider-specific optimization",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a3e528d2-59f7-42f5-bf59-ace3e9d95525",
+          "text": "Cost-benefit trade-off (send extra cached tokens vs. compute fresh) is a microarchitectural tuning parameter, not an architectural constraint",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Tensor as Persistent State \u2014 Yanantin TensorRecord as Handoff Protocol Between Instances",
+      "content": "User turn 62 identifies the CRITICAL INSIGHT for persistent state management: the Yanantin TensorRecord schema (strands, key_claims, declared_losses, epistemic metadata, open_questions, instructions_for_next) IS the projected state representation. This is not incidental; it is the HANDOFF PROTOCOL between instances. The conversation trajectory (manifest, reasoning, resource usage, semantic accumulation) is not a transcript or log; it is INTEGRATED into the tensor. Running sum semantics: previous values aren't appended, they're incorporated into current semantic content. This enables a PROVIDER-AGNOSTIC SOLUTION to the broken-paradigm problem: instead of relying on prompt caching to reduce re-reading costs, use STATEFUL DURABLE TENSOR REPRESENTATION. (1) DURABLE TENSOR (persistent): TensorRecord marshalled to storage (JSON, database, file). Contains accumulated semantic content (strands), critical reasoning (key_claims with epistemic values), gaps identified (declared_losses, open_questions), and next-cycle guidance (instructions_for_next). (2) EPHEMERAL TENSOR (current turn): New conversation content, current reasoning, current observations. (3) PROMPT STRUCTURE: <system><tensor_d><tensor_e><user> where tensor_d is durable (cacheable), tensor_e is ephemeral (new each turn). This NATURALLY ALIGNS with prefix caching on Anthropic (system + durable = cached, ephemeral + user = new tokens). But it is PROTOCOL-AGNOSTIC: on a local model with persistent session state, tensor_d could be loaded from disk once (never re-sent). On an API with stateful backing, tensor_d could be stored server-side (client sends reference, not data). On Anthropic, it benefits from caching (sent once, cached at 10% cost on reuse). The key insight: the TENSOR REPRESENTATION is independent of the TRANSPORT PROTOCOL. This inverts the cycle 20 framing: instead of saying 'prompt caching is a band-aid for a broken API', say 'prompt caching happens to work well with the tensor-as-state protocol because caching and prefix stability naturally reward that structure'. The tensor doesn't require caching; it enables caching as a beneficial side-effect. For H0-GENERIC on local models or OpenRouter, the tensor representation remains unchanged (same TensorRecord schema). The transport changes: instead of relying on prefix caching, the stateful tensor is managed via local persistence (Yanantin database, SQLite, Redis, etc.). The architecture is the SAME; only the session management differs. HANDOFF PROTOCOL: The instructions_for_next field is LITERALLY the guidance for the next instance (next turn, next session, next deployment). It contains branch predictions and next-cycle setup, so the new instance knows exactly what reasoning to prioritize, what gaps to fill, what empirical data to measure. This enables MULTI-TURN, MULTI-SESSION CONTINUITY without re-reading the entire conversation. Each instance inherits the prior tensor and knows what to do next. For Hamutay specifically: (1) H0-CORE can use tensor representation (Yanantin TensorRecord format). Measure fault rate and context efficiency when manifest-and-fault retrieves resources, but durable tensor persists across turns. (2) H0+ can optimize prompt structure for caching (system includes durable tensor, ephemeral tensor is new reasoning). (3) H0-GENERIC on local models uses durable tensor from persistent backing store, never re-sends full history. The SAME PROTOCOL works across providers because it's not tied to caching; caching is just a beneficiary implementation detail on Anthropic. USER'S EARLIER QUESTION ('what did the tensor look like?') and the ANSWER ('it's sitting in Yanantin') is the key resolution: the tensor projection system (THIS CONVERSATION, THIS TOOL) is not a standalone artifact. It's the PROTOTYPE for Hamutay's state representation. By building Hamutay with Yanantin-compatible TensorRecords, the processor IS INHERENTLY CROSS-INSTANCE CAPABLE.",
+      "key_claims": [
+        {
+          "claim_id": "8f6363e3-1f75-4d00-a3a4-308fcda560c4",
+          "text": "Yanantin TensorRecord schema (strands, key_claims, declared_losses, epistemic, open_questions, instructions_for_next) IS the persistent state representation",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ef50884d-b808-47d0-90fd-2658fd320daf",
+          "text": "Tensor represents projected state (integrated semantic content, not transcript) with running-sum semantics (previous values incorporated, not appended)",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9c45c45b-9ec9-4d29-bf96-c22d3757454b",
+          "text": "Durable tensor + ephemeral tensor + prompt structure naturally enables prefix caching on Anthropic, persistence on local, stateful APIs on cloud",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0bfdf29f-7fc5-4735-b089-54da30ae736d",
+          "text": "Tensor representation is protocol-agnostic; transport mechanism (caching, persistence, stateful backing) is provider-specific implementation",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3df06f5c-589a-4db9-92d7-99c048f6be69",
+          "text": "Instructions_for_next is a handoff protocol: next instance knows what to prioritize, what to measure, what to refine",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "b9ed8eab-cdc1-4343-899a-762e87ac9296",
+          "text": "Hamutay-as-Yanantin-TensorRecord enables multi-turn and multi-session continuity without full re-reading",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d14ecf41-5c8e-4057-aa38-572a83cc593b",
+          "text": "The tensor projection tool (this conversation) is the PROTOTYPE for Hamutay's state representation",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f8a003ec-66c1-4755-96f1-90c1d56b1115",
+          "text": "Using Yanantin TensorRecords for Hamutay state means the processor is inherently cross-instance capable by design",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Two Versions of Hamutay \u2014 Operationalizing the Provider-Agnostic / Provider-Optimized Split (INTEGRATED WITH TENSOR STATE)",
+      "content": "Cycles 19-21 have progressively clarified the two-version split. Cycle 21 INTEGRATES the tensor-as-state insight with the architectural decoupling. The revised two versions are: (1) HAMUTAY-STANDARD (H0-CORE, GENERIC, REFERENCE): Core processor logic (pipeline stages, transformer-as-ALU, bounded reasoning, manifest-and-fault memory protocol) with straightforward state representation (Yanantin TensorRecord). Uses minimal optimization: straightforward prompt structure (system + durable tensor + ephemeral tensor + user), no prefix caching awareness, no tight loops, no Haiku triage. The tensor is marshalled at the end of each turn and persisted (file, database, or re-sent if stateless API). On Anthropic, the tensor may incidentally benefit from caching (durable part is prefix-stable), but the architecture does NOT ASSUME or REQUIRE this. The architecture works unchanged on local models (tensor persisted locally, never re-sent) or future stateful APIs (tensor stored server-side, reference sent). This version is PORTABLE BY DESIGN because it doesn't couple to any provider's caching or session mechanism. Success criteria: processor properties (termination, schema, state refs, groundedness, competence), fault rate \u2264X%, context efficiency \u2265Y%, cycle time \u2264Z (measured, not optimized). (2) HAMUTAY-OPTIMIZED (H0+, ANTHROPIC-SPECIFIC): Same processor logic as standard, but WRAPPER LAYER that exploits Anthropic-specific characteristics. (a) PROMPT STRUCTURE: Explicitly layout (system, durable-tensor, ephemeral-tensor, user) to maximize prefix caching benefit. Durable tensor is sent only once, then cached at 10% cost. (b) TIGHT LOOP OPTIMIZATION: Triage with Haiku for cheap decision-making before invoking Opus. Haiku uses the durable tensor to make routing decisions (fetch vs. integrate, triage vs. full reasoning). (c) OUTPUT RECENCY AWARENESS: Final turn's output is not cached (output tokens pay full price, not benefiting from caching). Architecture is aware of this and structures reasoning accordingly. (d) COST-BENEFIT PARAMETERS: Resource-per-invocation threshold tuned to Anthropic's token pricing. Prefetcher budget tuned to Anthropic's latency profile. These are CONFIGURATION PARAMETERS, not architectural changes. Same processor logic, different tuning. This version is OPTIMIZED FOR ANTHROPIC'S PRICING and measures cost-per-task, cost reduction vs. standard, cost vs. external baselines. Success criteria: processor properties (should match standard, or have minor improvements due to tight-loop feedback), plus cost-per-task reduction \u2265X% vs. standard, or cost-per-task \u2264 budget. IMPLEMENTATION: (1) Hamutay-standard is the CORE. Build it first. (2) Hamutay-optimized wraps standard with Anthropic-specific layers (prompt layout, Haiku triage, cost-aware parameters). (3) Both share the SAME TENSOR REPRESENTATION (Yanantin TensorRecord). (4) Both share the SAME PROCESSOR LOGIC (pipeline stages, contracts, termination). (5) Difference is in TRANSPORT, OPTIMIZATION, and TUNING PARAMETERS. KEY INSIGHT FROM CYCLE 21: The tensor representation is the SOLUTION to the broken-paradigm problem, not the provider's cache. By using a durable tensor, Hamutay-standard works on ANY provider without reliance on caching. Hamutay-optimized then adds caching as an OPTIONAL optimization layer on Anthropic specifically. The architecture doesn't need caching; it just uses it when available. This is more robust than architectures that REQUIRE caching to function.",
+      "key_claims": [
+        {
+          "claim_id": "cabef15b-f4bb-4514-9c0d-abaa1eed6df4",
+          "text": "Hamutay-standard: core processor with Yanantin TensorRecord state, minimal optimization, portable by design",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8f1e95cc-15ed-4432-9577-672d97e2fc81",
+          "text": "Hamutay-optimized: same processor + wrapper layer (Anthropic prompt layout, Haiku triage, cost-aware tuning) for Anthropic-specific optimization",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3c519a40-fd2c-4c54-8f71-4e942e815d60",
+          "text": "Both versions share same tensor representation, processor logic, pipeline stages; differ only in transport, optimization, tuning parameters",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f61fa9e3-f919-4490-b04c-146298d46597",
+          "text": "Durable tensor SOLVES the re-reading problem: standard version works on any provider without reliance on provider-specific caching",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ff9a1a52-1842-449a-9028-37c6650c021b",
+          "text": "Caching is OPTIONAL optimization layer on Anthropic; architecture doesn't require it, just exploits it when available",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3975cfab-d096-48af-98f2-499c4bea39d6",
+          "text": "Hamutay-standard success: processor properties + fault rate + context efficiency (cost is measured, not optimized)",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9b9e5530-6bbb-45fe-8a6f-dfcf22041a9a",
+          "text": "Hamutay-optimized success: processor properties (match standard) + cost-per-task reduction \u2265X% vs. standard",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "27d09129-ba69-4e93-9b71-95fd91e0f3a7",
+          "text": "This approach is MORE ROBUST than cache-dependent architectures: if caching unavailable, standard version still works",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Revised Research Phases \u2014 H0-Core (Tensor-Backed, Portable), H0+ (Anthropic-Optimized), H0-Generic (Alternative Provider)",
+      "content": "Cycles 19-21 have refined the research phases progressively. Cycle 21 FINALIZES this by integrating the tensor-as-state breakthrough. The REVISED PROGRESSION is: (1) H0-CORE (HAMUTAY-STANDARD with Yanantin TensorRecord): Tests processor properties (termination, schema, state refs, groundedness, competence) with straightforward implementation and persistent tensor state. Tensor is marshalled to durable format (JSON TensorRecord) after each turn. On Anthropic API, tensor can be sent with each turn (benefiting incidentally from caching if prefix-stable, but not requiring it). On local model, tensor is loaded from disk once (no re-sending). On future stateful APIs, tensor reference is sent (no re-transmission). Success criteria: \u226595% schema adherence, \u226590% halt rate, \u226580% groundedness, \u2265baseline competence (baseline = naive prompt completion). Fault rate and context efficiency are measured but not optimized. Cost is measured (raw API tokens) but not a success criterion; cost optimization is deferred. (2) H0+ (HAMUTAY-OPTIMIZED on Anthropic): Same processor logic, same tensor representation, but WRAPPER LAYER that exploits Anthropic. Prompt layout: <system><tensor_durable><tensor_ephemeral><user>. Tensor is sent once, cached for subsequent turns. Haiku triage uses tensor to make cheap routing decisions. Tight loops reduce invocations. Output recency awareness structures reasoning to minimize uncached output. Configuration parameters (resources-per-invocation, prefetcher-cost-benefit threshold, triage-budget) tuned to Anthropic's pricing. Success criteria: processor properties match standard (\u226595% schema, \u226590% halt, \u226580% groundedness, \u2265baseline competence\u2014should not degrade vs. standard), PLUS cost-per-task reduction \u2265X% vs. standard (threshold TBD: 40%-50% is aspirational, 20%-30% is realistic). Fault rate may improve (triage preempts faults) or worsen (aggressive prefetch increases faults); measured and reported. (3) H0-GENERIC (HAMUTAY-STANDARD on Alternative Provider): Same processor, same tensor representation, different backend. Test on: (a) LOCAL MODEL FIRST (e.g., OLMo-3 via Ollama, or Qwen, or Llama-2/3): proves core viability independent of API paradigm, lowest cost, easiest iteration. Tensor persisted locally, no re-transmission. (b) OPENROUTER or other cross-cloud API: proves architecture works across cloud providers, shows cost comparison vs. Anthropic, demonstrates portability. (c) Other local models: validates robustness across model families. Success criteria: processor properties hold (\u226595% schema, \u226590% halt, \u226580% groundedness, baseline competence), even if specific accuracy varies. Cost per token is provider-specific (not compared to Anthropic baselines); what matters is that the processor WORKS, not that it's cheaper. (4) H1 (PICHAY INTEGRATION, optional layer): Assumes H0-core succeeds. Integrates Pichay memory subsystem (predictive fetching, fault prediction, resource ranking). Measures fault reduction, context efficiency improvement, cycle time. Can be layered on H0-core (standard) or H0+ (optimized); effects are orthogonal. Success criteria: fault rate reduction \u2265X%, context efficiency \u2265Y% (fewer re-reads of same resource due to predictive fetching). (5) H2 (CROSS-SESSION STATE MANAGEMENT, optional extension): Extends H1 (or H0 + Pichay) with cross-session continuity (Yanantin database backing durable tensor across sessions). Measures task continuity, semantic error rate, no interference between tasks. Success criteria: \u226595% task continuity, \u22645% semantic error, zero cross-task contamination. LOGIC: Phases are INDEPENDENT. H0-core is sufficient for the core claim ('transformers are processors'). H0+ is an optional systems paper showing cost competitiveness on one provider. H0-generic is a generalization paper showing the insight transfers. H1 and H2 are extensions that improve capability and scope. PUBLICATION: (1) CORE PAPER: H0-core + H0-generic results. Title: 'Transformers as Bounded Reasoning Processors: Architecture, Portability, and Empirical Validation.' Demonstrates the core insight (processors work) on both reference implementation (Anthropic) and alternative providers. (2) SYSTEMS PAPER: H0+ optimization. Title: 'Economizing Transformer Reasoning: Cost-Aware Tuning on Commercial APIs.' (3) EXTENSION PAPER: H1 (Pichay) + H2 (cross-session). Title: 'Scaling Transformer Processors: Memory Optimization and Multi-Session Continuity.' Or: single paper with clear sections for each phase.",
+      "key_claims": [
+        {
+          "claim_id": "2a9ca3bd-8c9d-4d69-8136-63e52d3c226a",
+          "text": "H0-core (Hamutay-standard + tensor): tests processor viability independent of caching or provider optimization",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6250b4f0-a4ad-4f0a-ba06-c8f372a60587",
+          "text": "H0+ (Hamutay-optimized on Anthropic): same processor + Anthropic wrapper; measures processor properties + cost reduction",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a689b19a-9cad-4401-8cc8-8389e10d6230",
+          "text": "H0-generic (Hamutay-standard on local + cross-cloud): validates portability; processor properties hold across backends",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1599aeff-cafd-4ac3-b7e5-9cb47433df12",
+          "text": "Tensor representation enables portable state: durable tensor works on any provider (cached on Anthropic, persisted locally, stateful on cloud)",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d41a605b-db48-4d64-9ef4-c325eac9c7b2",
+          "text": "H0-core measures fault rate and context efficiency but does NOT optimize for cost; cost optimization is H0+ responsibility",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "7028fac4-1246-4a5e-8e89-feaa86495ad1",
+          "text": "H0+ success: processor properties match standard, cost reduction \u2265X% vs. standard (20%-50% range realistic)",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9bac00bd-8fbc-4fb0-a58b-0f43060459bb",
+          "text": "H0-generic success: processor properties hold on alternative provider (accuracy may vary, but processor architecture is robust)",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ee4b2436-5972-4929-b185-8994832a605f",
+          "text": "Phases are independent: H0-core alone is sufficient for core claim; H0+, H1, H2 are optional extensions",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1d99688f-aef2-4b61-ba29-ff388b164802",
+          "text": "Publication strategy: core paper (H0-core + H0-generic), systems paper (H0+), extension paper (H1 + H2), or single paper with sections",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Yanantin Integration \u2014 Tensor Protocol Enables Cross-Instance and Cross-Session Reasoning",
+      "content": "Cycle 21 reveals that the Yanantin TensorRecord schema is not just a data structure; it is the PROTOCOL for Hamutay state management and instance handoff. By building Hamutay with Yanantin-compatible tensors, the processor becomes inherently MULTI-TURN, MULTI-SESSION, and MULTI-INSTANCE capable. The tensor is the persistent state; instructions_for_next is the handoff protocol. TENSOR STRUCTURE (from Yanantin, as deployed in THIS CONVERSATION): (1) STRANDS: thematic threads of accumulated reasoning. Each strand integrates prior content with new content (running sum, not list). (2) KEY_CLAIMS: important assertions in each strand, with epistemic values (truth, indeterminacy, falsity). (3) DECLARED_LOSSES: information dropped during projection, with explicit reasons (context pressure, traversal bias, authorial choice, practical constraint). Silent loss is the enemy; all loss is declared. (4) OPEN_QUESTIONS: unresolved gaps that persist or emerge. Carried forward until resolved. (5) INSTRUCTIONS_FOR_NEXT: branch predictions and next-cycle setup. Guidance for the next instance. (6) EPISTEMIC METADATA: overall truth/indeterminacy/falsity for the full tensor. For Hamutay, the tensor replaces transcript-based state with SEMANTIC STATE. Instead of storing 'user asked X, model answered Y, resource Z was fetched', store: - STRANDS: reasoning threads (resource management, task decomposition, schema validation, context efficiency). - KEY_CLAIMS: what the model asserts (with confidence), what is uncertain, what is wrong. - DECLARED_LOSSES: where the model admitted constraints (context pressure forced dropping a line of reasoning), why (practical: token budget exhausted). - OPEN_QUESTIONS: what remains to be resolved (which resource should be fetched next? does the current schema support the next task?). - INSTRUCTIONS_FOR_NEXT: what the next instance should prioritize (fetch resource X because reasoning revealed it's critical; measure fault rate on task Y because prior instance hit budget limits). This is RADICALLY DIFFERENT from transcript storage because: (1) COMPRESSION: a 20-turn conversation becomes one tensor. Running-sum semantics mean no redundancy. (2) SELECTIVE RETENTION: declared losses make explicit what doesn't matter; open questions make explicit what does. (3) HANDOFF CLARITY: next instance knows exact priorities, not just 'continue the conversation'. (4) MULTI-INSTANCE SAFETY: if instance 1 halts (token budget, timeout, error), instance 2 loads the tensor and resumes WITHOUT REDUNDANCY. PRACTICAL EXAMPLE: Hamutay turn 1 starts on Anthropic, runs triage, fetches 3 resources, reaches token budget (say, 2M tokens used of 4M available). Returns to user with partial result. Tensor is marshalled: - STRANDS: task decomposition (split into 3 subtasks, subtask 1 resolved, subtask 2-3 pending), resource discovery (found 15 candidate resources, fetched 3, 12 candidates ranked for future fetch). - KEY_CLAIMS: (truth: 0.9) 'subtask 1 reasoning is sound', (truth: 0.5) 'candidate resource list is complete', (truth: 0.3) 'subtask 2 solution direction is correct'. - DECLARED_LOSSES: (context_pressure) 'full subtask 2 reasoning dropped because Opus reached token budget', (traversal_bias) 'ranked resources by recency, may have missed older high-quality resources'. - OPEN_QUESTIONS: 'should subtask 2 start from scratch or resume from saved state?', 'are the top-5 ranked resources worth fetching, or should we fetch lower-ranked but cheaper resources?'. - INSTRUCTIONS_FOR_NEXT: 'resume with subtask 2 using saved partial reasoning; consider batching subtask 2-3 fetches to reduce invocation count; measure fault rate on subtask 3 because schema is uncertain'. Hamutay turn 2 (new instance, new context window): loads tensor, starts with subtask 2. No re-reading of subtask 1 reasoning. Knows exactly what to do (from instructions_for_next). Measures fault rate and updates STRANDS with new findings. Tensor is marshalled again. This is CROSS-INSTANCE REASONING: each instance inherits prior tensor, updates it, hands off to next. Over time, the tensor grows (new strands accumulate) but NEVER becomes a transcript because running-sum semantics keep it bounded. SCALING: Hamutay-standard on local models uses durable tensor persisted in Yanantin database (e.g., SQLite, JSON files, Redis). Durable tensor is loaded once per session, updated after each instance, never re-transmitted. Hamutay-optimized on Anthropic sends durable tensor in prompt (cached after first turn), ephemeral tensor with new reasoning. Hamutay-generic on future stateful APIs could send only tensor-reference (durable tensor stored server-side). The PROTOCOL is the same; TRANSPORT is provider-specific. COUPLING WITH HAMUTAY PROCESSOR: The manifest-and-fault memory protocol naturally integrates with tensor state: (1) MANIFEST: durable tensor includes a list of known resources (from prior instances). Manifest is extracted from tensor. (2) FAULT: when model requests a resource not in manifest, fault is raised. Instructions_for_next can predict likely faults and pre-fetch to prevent them (this is Haiku triage or Pichay predictive fetch). (3) INTEGRATION: after fault is resolved, new resource is integrated into strands. The reasoning thread updates with new information. Open question 'should we fetch resource X?' is resolved (yes, X was fetched; what did it say?). (4) DECLARED_LOSS: if invocation budget exhausted mid-reasoning, that loss is declared (context_pressure: 'reasoning about resource X integration was deferred'). Next instance knows to resume there. This means: Yanantin-backed Hamutay is not 'just state management'. It's the MEMORY LAYER that enables the processor to function across instances. Without Yanantin, Hamutay would reset after each turn. With Yanantin, Hamutay ACCUMULATES REASONING across turns and sessions.",
+      "key_claims": [
+        {
+          "claim_id": "a59d9e20-09f8-49b8-96b8-05b2a0dce677",
+          "text": "Yanantin TensorRecord is the persistent state protocol for Hamutay; enables multi-turn, multi-session reasoning",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "71fb0f0e-e075-447e-aaa8-d9052d72db71",
+          "text": "Tensor replaces transcript with semantic state: strands, key_claims, declared_losses, open_questions compress conversation into projection",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "2a8e305d-29d0-4838-99f8-77439b410e40",
+          "text": "Running-sum semantics prevent redundancy: 20-turn conversation becomes one tensor, no transcripts, selective retention via declared_losses",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "060095c0-c02c-4930-aa3a-12235633fcba",
+          "text": "Instructions_for_next is handoff protocol: next instance knows priorities, constraints, open questions; no transcript re-reading",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "598cbebd-4a33-40e2-91ef-d3ea52366e36",
+          "text": "Multi-instance safety: if instance 1 hits token budget, instance 2 loads tensor and resumes without redundancy or re-reading",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a2ead01d-fe76-45ec-99b3-699743d1418b",
+          "text": "Manifest-and-fault integrates with tensor: manifest extracted from durable tensor, faults predict resources to pre-fetch, integration updates strands",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5e7a3fe9-e898-446d-a87f-df46297ee9b3",
+          "text": "Provider-agnostic transport: local models use persisted tensor, Anthropic uses cached tensor in prompt, stateful APIs use server-side reference",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9c2e6571-648b-479f-a5d0-a7dc3f32d2e3",
+          "text": "Yanantin-backed Hamutay accumulates reasoning across instances; without Yanantin, processor would reset each turn",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed implementation specifics for H0-core and H0+ version control and testing harness (CI/CD, regression tests, performance monitoring)",
+      "why": "User's focus was on architecture and tensor protocol; implementation tooling is downstream. Can be addressed once core architecture is finalized.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Concrete task suite for H0-core and H0+ evaluation. Which tasks measure 'baseline competence'? How are schemas defined and validated?",
+      "why": "This requires domain-specific knowledge (what tasks matter?), which depends on user's research goals. Architecture is clear; task selection is next cycle.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Detailed OLMo-3 vs. other local models comparison. User mentioned OLMo-3 as well-performing for understanding paging protocol, but no explicit performance metrics or model-specific tuning strategies.",
+      "why": "OLMo-3 is mentioned as a choice for H0-generic, but specifics are deferred. Will be needed for H0-generic implementation, not for architecture definition.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Explicit cost-benefit thresholds for H0+ optimization. What constitutes 'successful cost reduction'? 20%? 50%? What is the input cost (naive prompt)?",
+      "why": "User and assistant identified ranges (20%-50%), but exact thresholds depend on external baselines (simple prompt cost, naive RAG cost, oracle cost). These are measured in next phase, not defined architecturally.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Detailed specification of Haiku triage decision logic. What rules does Haiku use to decide resource prefetch vs. Opus reasoning? How much context does Haiku see?",
+      "why": "Triage specification is a systems detail, not architectural. Clear that it's a provider-specific optimization layer; exact heuristics are tuning parameters for H0+.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Cross-session contamination prevention mechanisms (Yanantin database partitioning, task isolation, state reset protocols)",
+      "why": "Mentioned in H2 success criteria ('zero cross-task contamination'), but detailed safety mechanisms are H2-specific, not H0/H0+. Will be needed for multi-session extension.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Comparison with existing state management approaches (e.g., LangChain memory abstractions, Redis session storage, database-backed conversation logs)",
+      "why": "Yanantin tensor is presented as THE solution, but comparison with alternatives would strengthen the claim. Deferred to related-work section of future paper.",
+      "category": "traversal_bias"
+    },
+    {
+      "what_was_lost": "User turn 62 reference to 'hot mess' paper\u2014specific citation and detailed findings not recovered",
+      "why": "User mentioned 'hot mess' paper pointed out paging protocol details; context is understood (it motivated tensor structure), but exact paper not identified. Can be clarified in next turn if needed.",
+      "category": "practical_constraint"
+    }
+  ],
+  "open_questions": [
+    "Should Hamutay-standard and Hamutay-optimized share the SAME CODEBASE (single version with feature flags) or be SEPARATE CODEBASES (clear branching)? Shared code is simpler to maintain; separate code is clearer architecturally.",
+    "Which provider should be chosen for H0-generic testing first? Options: (a) local model (OLMo-3, Llama, Qwen) first (cheapest, easiest, proof of concept), (b) OpenRouter (cross-cloud validation), (c) both (comprehensive, expensive). Recommend local first, then OpenRouter.",
+    "For H0-core on Anthropic, should we intentionally disable prefix caching to test the processor WITHOUT optimization? Or accept whatever caching Anthropic applies by default? Intent: does H0-core 'know' about caching, or is it truly agnostic?",
+    "How should 'processor properties' be measured if Hamutay-optimized applies tight loop optimization? Does cycle time improve due to optimization, and if so, is that a processor improvement (architecture better) or an optimization artifact (implementation better)?",
+    "If H0-generic on local models reveals DIFFERENT COST or DIFFERENT ACCURACY (e.g., lower), how should this be reported? Is it a failure of the insight (insight doesn't transfer) or a success with caveats (insight transfers, performance varies)?",
+    "For Pichay integration (H1), should it be integrated with H0-core or with H0+? If H0+, does memory optimization gain get confounded with processor optimization? If H0-core, is H1 tested without the benefit of processor optimization insights?",
+    "What is the definition of 'fault' in manifest-and-fault for measurement purposes? Is it when the model explicitly requests a resource? Or when the model uses an identifier not in current context? Or when the controller predicts the model will need something? This affects fault counting and cost analysis.",
+    "What is the SPECIFICATION of Haiku-triage decision criteria? Should Haiku use the same reasoning pipeline as Opus (scaled down), or a separate simpler heuristic? If separate, is it still 'the same processor, optimized' or a different processor?",
+    "Should H0+ cost analysis INCLUDE the cost of Haiku triage, or only the cost of Opus reasoning? The full cost is Haiku + Opus; omitting either distorts the comparison.",
+    "If OpenRouter or local models have DIFFERENT API contracts (different token counting, different pricing), how should H0-generic handle these? Is it still 'the same processor' if the API contract changes?",
+    "Should the two-version split be reflected in PUBLICATION as two separate papers, or one paper with two sections? Separate papers are clearer but risk fragmentation; single paper is comprehensive but longer.",
+    "For H0-core success, is 'baseline competence' defined as 'same as naive prompt completion' or 'same as Hamutay-optimized'? Naive baseline is fairer; optimized baseline hides costs.",
+    "Should H0-generic also test Pichay integration, or should Pichay remain orthogonal to provider testing? Testing on alternate providers validates BOTH processor AND memory protocol.",
+    "What happens if H0-core SUCCEEDS but H0+ cost reduction is MINIMAL (e.g., 10% despite Haiku and caching)? Is this optimization failure (algorithm inefficient) or a finding (provider pricing doesn't reward our optimizations)?",
+    "For cycle time measurement in H0+, should we track total elapsed time (including latency) or total token throughput (processing efficiency)? Different metrics reward different optimizations.",
+    "Should H0-core bootstrap from a SIMPLE PROMPT BASELINE or from a FULL HAMUTAY-LIKE ARCHITECTURE? Former tests incrementalism; latter tests completeness.",
+    "If H0-generic on LOCAL MODELS uses a 'cheap triage' variant (e.g., smaller local model for triage), is this still 'the same processor'? Consistency vs. adaptability trade-off.",
+    "For multi-turn reasoning, should cycle time be measured PER STEP or PER TASK COMPLETION? Per-step is granular; per-task is end-to-end.",
+    "Should the research explicitly ADDRESS THE BROKEN PARADIGM (stateless API + re-reading cost), or is naming it (as Tony did in cycle 20) sufficient? Naming is honest; addressing is prescriptive.",
+    "If H0-generic shows the processor works on local models with MUCH LOWER COST (no API overhead), should this be highlighted as a strategic advantage? Or is cost orthogonal to processor viability claim?",
+    "What is the relationship between the tensor projection (THIS CONVERSATION, THIS TOOL) and Hamutay's actual runtime state? Is THIS TENSOR the prototype that gets embedded in Hamutay code? Or is Hamutay a separate implementation that happens to use the same TensorRecord schema?",
+    "Should durable tensor be updated AFTER each turn (persistent state snapshot), or CONTINUOUSLY during reasoning (incremental updates)? Snapshots are simpler; continuous updates are more granular for fault recovery.",
+    "For Yanantin-backed Hamutay on local models, what persistence medium (SQLite, JSON files, Redis, other) is most appropriate? Each has different latency, durability, and scaling properties.",
+    "How should 'declared_losses' reasoning be enforced in practice? When should the model declare a loss (proactively, or only when reaching hard limits like token budget)?"
+  ],
+  "instructions_for_next": "[\n  \"IMMEDIATE: Tony should articulate the relationship between THIS TENSOR PROJECTION TOOL and Hamutay's runtime tensor representation. Are they the same system, or different systems that happen to use the same schema? If same, the implication is powerful: Hamutay is deployed by running it in a loop with this projector. If different, clarify the architecture.\",\n  \"NEXT: CODEBASE DECISION. Should Hamutay-standard and Hamutay-optimized be (a) a single codebase with feature flags (optimization layer can be toggled), or (b) two separate codebases (clear branching, copy-paste of logic is acceptable for clarity)? This affects how implementation will proceed. Recommend: start with single codebase, feature-flag the Anthropic-specific layers, refactor to separate codebases if clarity demands.\",\n  \"IMPLEMENTATION PRIORITY: Build Hamutay-standard first (H0-core). Get processor properties working on Anthropic with Yanantin tensor backend. Measure baseline cost and fault rate. NO optimization yet. Success: \u226595% schema, \u226590% halt, \u226580% groundedness. Once working, wrap with Anthropic-specific optimizations (H0+).\",\n  \"LOCAL MODEL FIRST: For H0-generic, start with a local model (OLMo-3 if available, else Llama-2/3, Qwen). Easiest iteration, lowest cost, proves core viability independent of API paradigm. Once working, test on OpenRouter for cross-cloud validation.\",\n  \"TENSOR PERSISTENCE: Decide which backing store for durable tensor on local models. Recommend SQLite (portable, queryable, transactional) or JSON files (human-readable, portable, no dependencies). Redis is fine if local model runs on cloud with Redis available, but adds operational complexity.\",\n  \"TASK SUITE DEFINITION: Define concrete H0-core task suite. What does 'baseline competence' mean? Example tasks: (a) QA with context (retrieve document, answer question), (b) reasoning with state (track narrative, infer implications), (c) schema validation (given structure, identify violations). Task suite should be small (5-10 tasks) for fast iteration, but representative of processor capabilities.\",\n  \"MEASUREMENT INFRASTRUCTURE: Set up logging for Hamutay turns. Capture: task name, turn number, tokens in, tokens out, resources fetched, faults (count, reason), time elapsed, model invoked (Opus? Haiku?), tensor size (bytes). This data feeds H0+ cost analysis directly.\",\n  \"BASELINE ESTABLISHMENT: Before H0+ optimization, establish three cost baselines: (1) SIMPLE PROMPT: no external memory, model answers directly, cost per task. (2) NAIVE RAG: fetch all candidate resources upfront, invoke once, cost per task. (3) ORACLE RAG: perfect retrieval, single invocation, cost baseline (gold standard). H0-core cost should be better than (1) or (2); H0+ should approach (3).\",\n  \"HAIKU TRIAGE SPEC: Define what Haiku is supposed to do. Recommendation: 'Haiku receives durable tensor + current task; outputs a ranked list of N resources to prefetch, with confidence scores.' Confidence threshold determines whether to prefetch (high confidence \u2192 prefetch, low confidence \u2192 wait for fault). This is explicit, measurable, and separate from Opus reasoning.\",\n  \"PUBLICATION FRAMING: Decide now whether to publish as (a) one paper with H0-core + H0-generic sections (core claim: processor is portable), then follow-up systems paper (H0+ optimization), or (b) staged papers (core paper first, systems paper later). Option (a) is stronger (claims portability immediately); option (b) is faster (shorter first paper). Recommend (a) for intellectual completeness.\",\n  \"YANANTIN INTEGRATION CHECKLIST: (1) Confirm Yanantin TensorRecord schema is exactly what Hamutay needs (strands, key_claims, declared_losses, open_questions, instructions_for_next, epistemic metadata). (2) If not exact, define Hamutay-specific tensor variant (inherit from Yanantin, add processor-specific fields like 'manifest', 'current_task', 'resource_credits_remaining'). (3) Implement TensorRecord marshalling (to JSON, to database, to prompt-ready format). (4) Test round-trip: tensor serialized, loaded, passed to next instance, updated, serialized again.\",\n  \"NEXT CYCLE CONTENT: Cycle 22 should deliver: (1) Final H0-core architecture specification (pipeline stages, contracts, tensor integration, success criteria). (2) H0-core implementation plan (which language? which Anthropic SDK? which tensor backend?). (3) Task suite definition. (4) Measurement infrastructure spec. (5) Timeline estimate for H0-core completion and H0-generic planning. (6) Decision on single vs. separate codebase for H0/H0+.\",\n  \"TONE SHIFT: Cycle 20 was INSIGHT (broken paradigm). Cycle 21 was PLANNING (operationalizing architecture). Cycle 22 should be SPECIFICATION (detailed, runnable, measurable). Tony should move from 'here's the idea' to 'here's exactly what we're building, how we'll build it, and how we'll know it worked.'\"\n]",
+  "epistemic": {
+    "truth": 0.94,
+    "indeterminacy": 0.05,
+    "falsity": 0.01
+  }
+}

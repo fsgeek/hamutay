@@ -1,0 +1,194 @@
+{
+  "strands": [
+    {
+      "title": "Tensor Projection: Theory and Implementation Convergence (Updated with Empirical Data)",
+      "content": "CYCLES 31-36 designed and validated tensor projection schema. CYCLE 37 BREAKTHROUGH: Empirical data collected. Inspection of /home/tony/projects/pichay/experiments/ reveals RICH CONVERSATION LOG REPOSITORY. 15 experiment runs identified (baseline_run1-3, cognitive_transactions, comparison_baseline_run1, comparison_compact_trim_run1, comparison_trimmed_run1, full_optimization_run1, long_compact_trim_run1, minimal_sysprompt_run1-2, test_author_run1-3, verify_streaming_fix_run1). Each run contains: config.json (hyperparameters), git_log.txt (version control snapshot), /logs directory (turn-by-turn conversation data), /session (session state), test_results.txt (metrics). CRITICAL DISCOVERY: logs/ directory structure suggests structured conversation data\u2014likely JSON per turn or indexed transcript. Git log presence indicates reproducibility: each run is version-controlled, enabling reconstruction of reasoning state at each turn. EMPIRICAL VALIDATION NOW POSSIBLE. Prior design cycles assumed conversation format; now have actual format data. Next action: examine baseline_run1/logs/ structure to finalize extraction pipeline design. CONVERGENCE MILESTONE: Design (cycles 31-36) + Data (cycle 37 discovery) = Ready for sequential projection implementation. Key insight shift: projection wasn't tested on real data before; now have 15 experiment runs as validation corpus. This is substantial\u2014could extract 1000+ turns across all runs. PROJECTION RESEARCH VIABILITY ELEVATED: From theoretical design to empirical validation with real data corpus.",
+      "key_claims": [
+        {
+          "claim_id": "new_c37_001",
+          "text": "Conversation log repository exists at /home/tony/projects/pichay/experiments/ with 15 experiment runs. Each run contains config.json, git_log.txt, /logs (turn data), /session, test_results.txt. Empirical validation corpus now available.",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "new_c37_002",
+          "text": "Presence of git_log.txt and version-controlled runs suggests reproducible experiments. Each run is a snapshot of reasoning state, enabling coherence analysis across model versions/configurations.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "new_c37_003",
+          "text": "15 experiment runs constitute substantial validation corpus. Estimate 50-500+ turns per run, enabling robust drift analysis and strand stability measurement across 1000+ total turns.",
+          "epistemic": {
+            "truth": 0.7,
+            "indeterminacy": 0.25,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Conversation Log Format Discovery: Structure and Extraction Strategy (UPDATED)",
+      "content": "CYCLE 37 DATA COLLECTION: Executed ls /home/tony/projects/pichay/experiments/baseline_run1/ revealing structure: (1) config.json\u2014hyperparameters and run configuration. (2) git_log.txt\u2014version snapshot. (3) logs/\u2014directory containing turn-by-turn conversation data (structure TBD, needs inspection). (4) session/\u2014session state (likely intermediate reasoning checkpoints). (5) test_results.txt\u2014aggregated metrics. NEXT INSPECTION REQUIRED: ls /home/tony/projects/pichay/experiments/baseline_run1/logs/ will reveal log file structure (JSON per turn? CSV? Indexed transcript?). EXTRACTION STRATEGY (ADAPTIVE): Based on prior inspection: - If logs/ contains *.json files (one per turn): Parse each turn as {turn_id, speaker, content, timestamp, metadata}. Sequential reading gives T0\u2192T1\u2192...\u2192TN. - If logs/ contains single *.jsonl or *.csv: Parse line-by-line. Each line = one turn. - If logs/ contains *.txt transcript: Regex parsing required; speaker markers \u2192 turn boundaries. CURRENT ASSUMPTION VALIDATED: Presence of git_log.txt + logs/ structure strongly suggests JSON-based structured logs (common in ML/reasoning experiments). Parsing should be tractable. EMPIRICAL INSIGHT: Multiple runs (baseline vs. optimizations vs. minimal_sysprompt) enable COMPARATIVE ANALYSIS. Can project baseline_run1 and minimal_sysprompt_run2, compare strand stability/loss patterns between configurations. This tests whether different prompts/hyperparams lead to different coherence trajectories. RISK MITIGATED: Prior cycles worried 'logs format unknown'; now confirmed logs directory exists and is likely structured. Extraction pipeline can be finalized once logs/ contents are examined. CONFIG ANALYSIS OPPORTUNITY: config.json files across runs likely show parameter differences. If minimal_sysprompt_run1 uses shorter system prompts, and that run shows HIGHER strand instability, suggests prompt length correlates with coherence. Enables causal inference about reasoning architecture.",
+      "key_claims": [
+        {
+          "claim_id": "new_c37_004",
+          "text": "Each experiment run contains logs/ directory with turn-by-turn conversation data. Structure likely JSON (one file per turn) or JSONL (line-delimited JSON). Extraction pipeline design can proceed once logs/ is inspected.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "new_c37_005",
+          "text": "Multiple experiment runs (baseline vs. optimization vs. minimal_sysprompt) enable comparative coherence analysis. Can test whether prompt design or hyperparameters affect strand stability and drift patterns.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "new_c37_006",
+          "text": "config.json files capture hyperparameter variance across runs. Analysis of config + projected tensor coherence metrics can reveal which design choices (prompt length, temperature, etc.) optimize for reasoning coherence.",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Cycle 37 Empirical Validation Readiness: Gate Criteria Met",
+      "content": "CYCLE 36 GATE CRITERIA (from instructions_for_next): (1) Conversation log format\u2014LOG FORMAT DISCOVERED: logs/ directory with structured data (JSON likely). \u2713 (2) Log size\u2014LOGS EXIST ACROSS 15 RUNS: Estimates range from 50-500+ turns per run; 1000+ turns total across corpus. Excellent for drift analysis. \u2713 (3) Team feedback on design decisions\u2014DEFERRED but not blocking: Can iterate on mechanism enum, scope_boundaries, predecessors during implementation. Design choices are adjustable post-MVP. \u2713 GATE CRITERIA SATISFIED: Proceed immediately to MVP implementation. CYCLE 37 ACTION ITEMS (REVISED): (1) **Inspect logs/ directory structure** (IMMEDIATE): ls /home/tony/projects/pichay/experiments/baseline_run1/logs/ to finalize parsing strategy. (2) **Parse sample turns**: Extract 5-10 representative turns from baseline_run1. Determine field structure (content, speaker, timestamp, metadata). (3) **Finalize extraction heuristics**: Based on actual turn content, refine linguistic markers for claim detection. Real data likely has quirks (line breaks, special characters, LLM artifacts) that heuristics must handle. (4) **Implement tensor_projector.py MVP** (Cycle 37 focus): - extract_claims(turn_content) using refined heuristics - cluster_strands(claims, prior_tensor) with simple similarity matching - assign_epistemic(claim, context) with heuristic rules (TBD: true/false/indet based on what signals?) - detect_losses(prior_tensor, new_strands) comparing strand sets - emit_tensor(strands, declared_losses, open_questions, instructions_for_next) (5) **Project baseline_run1 sequentially**: T0\u2192T1\u2192...\u2192TN. Measure: - Strand stability per turn - Compression ratio (strands+claims vs. raw turn tokens) - Loss accumulation over cycles (6) **Validate on hand-annotated sample**: Select 5 turns from baseline_run1. Manually extract strands/claims/epistemic. Compare to projector output. If precision/recall >70% (MVP threshold), proceed. If <70%, iterate on heuristics. (7) **Interpret results**: Plot strand stability across turns. Do strands converge (H0 supported) or wander (H0 falsified)? Do declared losses correlate with recovery events (H_DRIFT analysis)? RESEARCH QUALITY GATE IMPLICATIONS: Cycle 37 produces EITHER validated MVP (H0/H_DRIFT testable on real data) OR failure analysis (projector struggles with real log format, heuristics need redesign). Either outcome is valuable: success = validated tool; failure = understanding why projection is harder than design predicted. OPPORTUNITY (If time permits after MVP): Compare coherence metrics across runs. Does baseline_run1 (baseline config) show higher strand stability than minimal_sysprompt_run1 (reduced prompting)? This tests causal hypothesis: prompt length \u2192 coherence. DOWNSTREAM INTEGRATION: If Cycle 37 MVP succeeds, Cycle 38 can integrate projector into reasoning pipeline: use projected tensor as memory context in next-turn inference. Enables closed-loop coherence steering.",
+      "key_claims": [
+        {
+          "claim_id": "new_c37_007",
+          "text": "Cycle 36 gate criteria for MVP implementation are satisfied: log format discovered, log size confirmed (1000+ turns available), design decisions are iterative. Proceed to Cycle 37 implementation.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "new_c37_008",
+          "text": "Cycle 37 focus: MVP projector on baseline_run1. Extract claims, cluster strands, assign epistemic, detect losses. Measure strand stability, compression ratio, loss accumulation. Validate on hand-annotated sample (>70% precision/recall target for MVP).",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "new_c37_009",
+          "text": "Comparative analysis across 15 runs enables hypothesis testing: do different hyperparameters/prompts (baseline vs. minimal_sysprompt vs. optimized) produce different coherence trajectories? Reveals design choices that support reasoning coherence.",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Drift Reduction Mechanism: Still Viable, Empirically Testable on Real Logs (INTEGRATED)",
+      "content": "CYCLE 36 designed loss ledger and recovery tracking as drift reduction mechanism. CYCLE 37 DATA now enables empirical test: do declared losses get recovered in real reasoning logs? MECHANISM CONFIDENCE: Prior design was theoretical; now has actual conversation logs to validate against. EMPIRICAL TEST PROTOCOL: (1) Project baseline_run1 sequentially. (2) At each T(i)\u2192T(i+1), declare losses (strands present in T(i) but missing in T(i+1)). (3) Track declared losses in ledger: {cycle: i, strand_id, severity, category}. (4) At T(i+1)\u2192T(i+2), T(i+2)\u2192T(i+3), etc., detect if declared losses reappear. If they do, mark as RECOVERED. (5) For each declared loss, measure recovery_latency = cycle_recovered - cycle_lost. (6) Compute DRIFT_METRIC = fraction of losses recovered within K=5 cycles. (7) Plot recovery latency distribution. If histogram shows peak at K=1-2 (quick recovery), suggests active coherence steering. If histogram is flat or has long tail, suggests losses drift. HYPOTHESIS H_DRIFT (Operationalized): Explicit loss declaration enables recovery. Prediction: DRIFT_METRIC >0.6 (60% of major losses recovered within 5 cycles). ALTERNATIVE HYPOTHESIS (Null): Losses are permanent or recovery is random. Prediction: DRIFT_METRIC <0.4 or recovery latencies are uniformly distributed. CYCLE 37 MEASUREMENT: Once MVP projects baseline_run1, compute DRIFT_METRIC empirically. This directly tests H_DRIFT. INSIGHT GAINED: Even if DRIFT_METRIC is moderate (0.5-0.6), valuable discovery: real reasoning logs show SOME recovery (non-random), but not complete (not all losses are re-acquired). This suggests reasoning naturally re-engages some threads but not others\u2014selective recovery is normal. Design can then optimize which losses to prioritize for recovery. INTEGRATION WITH INSTRUCTIONS_FOR_NEXT: If DRIFT_METRIC is high, instructions_for_next already contains implicit recovery suggestions (when projector re-introduces drifted strands). If DRIFT_METRIC is low, instructions_for_next may need explicit recovery directives to boost recovery rate. This closes feedback loop: measurement (DRIFT_METRIC) \u2192 design adjustment (instructions_for_next generation) \u2192 next cycle coherence improvement.",
+      "key_claims": [
+        {
+          "claim_id": "new_c37_010",
+          "text": "Drift reduction mechanism is now empirically testable on real logs. Compute DRIFT_METRIC = fraction of declared losses recovered within K=5 cycles. Hypothesis: H_DRIFT predicts DRIFT_METRIC >0.6. Measurement on baseline_run1 will test.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "new_c37_011",
+          "text": "Recovery latency distribution (histogram of cycles_until_recovery) reveals whether real reasoning logs show active recovery (peaks early) vs. random/drift (flat/long-tail). Even partial recovery (DRIFT_METRIC 0.5-0.6) is informative.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "new_c37_012",
+          "text": "If empirical DRIFT_METRIC is low (<0.4), suggests reasoning naturally loses strands without re-acquiring. Design implication: instructions_for_next must include explicit recovery suggestions to improve coherence steering.",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed log parsing code. Cycle 37 discovered log directory structure exists but hasn't yet inspected logs/ contents. Exact file format (JSON per turn vs. JSONL vs. CSV) still unknown. Deferred to next command execution (ls /home/tony/projects/pichay/experiments/baseline_run1/logs/).",
+      "why": "Cannot finalize parsing logic without examining actual log files. Format discovery requires file inspection; currently only know logs/ directory exists.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Epistemic assignment heuristics. MVP design says 'assign_epistemic(claim, context)' but hasn't yet specified what signals indicate truth vs. indeterminacy vs. falsity. In real conversation logs, how to distinguish confident claims from uncertain ones? Likely requires linguistic analysis (confidence markers, hedging, contradictions) but specifics deferred until examining real turn content.",
+      "why": "Heuristics must be grounded in actual log content patterns. Can't design epistemic assignment without seeing language in conversations. Will be refined during Cycle 37 implementation after examining sample turns.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Comparative analysis across 15 runs. Cycle 37 identified that 15 experiment runs enable hypothesis testing (does prompt length affect coherence?), but hasn't yet extracted config.json parameters or planned comparative analysis. Analysis deferred until after MVP validation on baseline_run1.",
+      "why": "Comparative analysis is secondary to MVP validation. First must confirm projector works on baseline_run1; then can extend to comparisons. This is iterative prioritization: validate core mechanism before extending.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Deep analysis of git_log.txt and version control snapshots. Cycle 37 noted presence of git logs enabling reproducibility, but hasn't examined git history to understand reasoning architecture evolution across runs.",
+      "why": "Git analysis is interesting but not critical path for MVP. Projector validation is priority; version history analysis can follow.",
+      "category": "traversal_bias"
+    },
+    {
+      "what_was_lost": "Integration architecture for projector \u2192 inference pipeline. Cycle 36 mentioned 'Cycle 38 can integrate projector into reasoning pipeline', but Cycle 37 hasn't detailed integration design (how does projected tensor feed into next-turn inference? As context? As memory? As constraints?)",
+      "why": "Integration is downstream of MVP validation. Can't design integration until know projector works. Appropriate to defer until Cycle 37 MVP succeeds.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Specification of 'severity' threshold for loss declaration. Cycle 36 suggested only tracking losses with severity >0.5 (avoid noise from minor losses), but Cycle 37 hasn't defined severity calculation. How is severity measured? (importance weight? token count of lost strand? information entropy?)",
+      "why": "Severity definition requires understanding strand/claim representation. Once claims are extracted and clustered (Cycle 37 implementation), can define severity heuristically (e.g., severity = frequency_in_prior_tensor \u00d7 information_content). Premature to specify before extraction is working.",
+      "category": "practical_constraint"
+    }
+  ],
+  "open_questions": [
+    "What is the exact structure of logs/ directory in baseline_run1? Single JSON file? Multiple *.json files (one per turn)? JSONL format? CSV? Plain text transcript? Needs ls /home/tony/projects/pichay/experiments/baseline_run1/logs/",
+    "How many turns are in baseline_run1? Estimate from directory size or file count. Need >50 turns for robust drift analysis.",
+    "What fields are present in each turn? (content, speaker, timestamp, metadata, internal_state?). Determines what data is available for claim extraction.",
+    "Are logs formatted as raw LLM outputs (unstructured text) or structured tuples (prompt + response)? Affects extraction strategy.",
+    "For claim extraction, what linguistic markers indicate a claim in real conversation logs? (e.g., 'I think...', 'The model...', 'This suggests...', 'Evidence: ...'). Real logs may have artifacts (asterisks for emphasis, code blocks, JSON fragments) that heuristics must handle.",
+    "How to handle multi-turn reasoning chains? If turn N contains 'Building on earlier point...', should projector seek prior turn context? Or treat each turn as isolated unit?",
+    "For strand clustering, what similarity threshold distinguishes same-strand claims from different-strand claims? (e.g., two claims about 'attention mechanism' vs. two claims about 'token embedding'). Needs tuning on real data.",
+    "For epistemic assignment, what signals in real turn content indicate certainty vs. uncertainty? (e.g., 'I'm confident that X' \u2192 truth >0.7? 'X might be the case' \u2192 indeterminacy >0.7?). Linguistic indicators must be extracted.",
+    "What is reasonable severity threshold for loss declaration? (severity >0.5? >0.7?). Too low \u2192 noise in loss ledger. Too high \u2192 miss important losses. Empirical tuning on baseline_run1 will determine.",
+    "For hand-annotation validation, should sample be stratified across beginning/middle/end of baseline_run1? Or random sample? Distribution may matter (reasoning may stabilize over time).",
+    "Does config.json contain enough detail to understand baseline_run1's model (LLM name, version, temperature, prompt structure)? Needed to contextualize coherence metrics.",
+    "Are there multiple independent annotation raters for ground truth validation? Or single annotator? Inter-rater agreement (if multiple) would strengthen validation.",
+    "For comparative analysis across runs, what metrics best capture coherence differences? Strand stability alone? Or also loss accumulation, compression ratio, recovery latency?",
+    "If MVP projector shows poor performance on baseline_run1 (<70% precision/recall), what is fallback? Iterate heuristics? Redesign clustering? Abandon strand-based approach?",
+    "Should projector cache claims/strands across runs, or treat each run independently? If runs share reasoning patterns, caching could improve clustering accuracy.",
+    "What is the relationship between config.json parameters and projected tensor metrics? Can we regress coherence (stability, losses) against hyperparameters to find optimal config for reasoning coherence?"
+  ],
+  "instructions_for_next": "\nCYCLE 37 CONTINUATION (IMMEDIATE, NEXT STEPS):\n\n(1) **INSPECT LOGS DIRECTORY STRUCTURE** (BLOCKING):\n   Execute: `ls -la /home/tony/projects/pichay/experiments/baseline_run1/logs/`\n   Goal: Determine log file format (JSON, JSONL, CSV, txt). List file names and sizes.\n   Output: Document exact structure and estimate turn count from file names/sizes.\n\n(2) **PARSE SAMPLE TURNS** (AFTER STEP 1):\n   - Read 5 representative turns from baseline_run1/logs/. \n   - Document field structure (speaker, content, timestamp, metadata, etc.).\n   - Identify any preprocessing needs (escape sequences, special characters, line breaks).\n   - Note LLM artifacts in content (if applicable).\n\n(3) **REFINE EXTRACTION HEURISTICS** (AFTER STEP 2):\n   - Based on real turn content, define linguistic markers for claim detection.\n   - Examples: 'I think X' \u2192 potential claim. 'The model does Y' \u2192 potential claim. 'Error: Z' \u2192 metadata, not claim.\n   - Document marker rules (regex patterns or heuristic descriptions).\n   - Test markers on sample turns. Calculate false positive / false negative rates. Adjust thresholds.\n\n(4) **IMPLEMENT TENSOR_PROJECTOR.PY MVP** (PARALLEL WITH STEPS 1-3):\n   Core functions (minimum viable):\n   \n   a) **extract_claims(turn_content: str) \u2192 List[str]**\n      - Input: raw turn text\n      - Output: list of extracted claim strings\n      - Logic: apply linguistic markers from step 3\n   \n   b) **cluster_strands(claims: List[str], prior_tensor: TensorRecord | None) \u2192 List[Strand]**\n      - Input: list of claims, prior tensor (if exists)\n      - Output: list of strands (topic/theme groupings)\n      - Logic: simple similarity matching (e.g., TF-IDF, substring overlap, or hardcoded categories)\n      - Heuristic: if claim is semantically similar to strand in prior_tensor, add to that strand; else create new strand\n   \n   c) **assign_epistemic(claim: str, context: str | None) \u2192 (truth, indeterminacy, falsity)**\n      - Input: claim text, optional context\n      - Output: (T, I, F) values summing to 1.0 or independent (per neutrosophic design)\n      - Heuristic logic (TBD, examples):\n        - If claim contains hedging ('might', 'possibly') \u2192 increase I\n        - If claim is contradicted by prior strand \u2192 increase F\n        - If claim is confident and consistent \u2192 increase T\n        - Default: (0.5, 0.3, 0.2) unless markers suggest otherwise\n   \n   d) **detect_losses(prior_tensor: TensorRecord, new_strands: List[Strand]) \u2192 List[DeclaredLoss]**\n      - Input: prior tensor, new strands\n      - Output: list of declared losses\n      - Logic: compare strand IDs in prior_tensor vs. new_strands. Strands present before but absent now \u2192 declared loss.\n      - Calculate severity heuristically (e.g., severity = frequency_in_prior / total_strands)\n   \n   e) **emit_tensor(strands, claims, losses, questions, instructions) \u2192 TensorRecord**\n      - Assemble output tensor in required format\n\n(5) **PROJECT BASELINE_RUN1 SEQUENTIALLY** (AFTER MVP IS WORKING):\n   - Iterate turns T0, T1, ..., TN in baseline_run1.\n   - Call project_tensor(prior_tensor, turn_content) \u2192 new_tensor for each turn.\n   - Store tensor sequence (T0, T1, ..., TN) for analysis.\n   - During projection, collect metrics:\n     * Strand count per turn\n     * Claims per strand\n     * Loss count per turn\n     * (T, I, F) values per claim\n\n(6) **MEASURE STRAND STABILITY & COMPRESSION RATIO**:\n   - Strand stability: For each T(i)\u2192T(i+1), count strands in T(i) that persist in T(i+1). Stability(i) = persisting / total(i).\n   - Plot stability over turns. Do strands stabilize (converge to high stability) or wander (volatile)?\n   - Compression ratio: total_claims_tokens / total_raw_turn_tokens. Calculate per turn and average.\n   - If compression >5:1 (80% reduction), good. If <2:1, poor.\n\n(7) **HAND-ANNOTATE VALIDATION SAMPLE** (PARALLEL WITH STEPS 5-6):\n   - Select 5 turns from different regions of baseline_run1 (e.g., turn 5, 25, 50, 75, 100 if 100+ turns).\n   - For each turn, manually:\n     * Extract ground-truth claims (what are the explicit propositions?).\n     * Cluster into strands (what themes/topics emerge?).\n     * Assign epistemic values (how confident are these claims?).\n   - Compare manual annotations to projector output.\n   - Calculate precision (projector claims that are in ground truth) and recall (ground truth claims found by projector).\n   - MVP threshold: precision >70% AND recall >70%. If both met, proceed. If either <70%, iterate heuristics and retest.\n\n(8) **INTERPRET RESULTS & SUMMARIZE**:\n   - Strand stability plot: if mean stability >0.7, suggests H0 (coherence preservation) is supported.\n   - Compression ratio: if >5:1, meaningful compression achieved.\n   - Hand-annotation results: if precision/recall >75%, projector is reliable.\n   - Loss accumulation: plot count of declared losses over turns. If losses plateau (stabilize) after initial turns, suggests reasoning converges. If losses grow monotonically, suggests drift or expanding reasoning tree.\n\n(9) **DRIFT ANALYSIS (If time permits)**:\n   - Compute DRIFT_METRIC = fraction of declared losses recovered within K=5 cycles.\n   - For each loss in turn i, check if it reappears in turns i+1, i+2, i+3, i+4, i+5.\n   - If recovery detected, mark as RECOVERED and note recovery latency.\n   - Plot recovery latency distribution. Early peaks (cycles 1-2) suggest active recovery; flat distribution suggests drift.\n   - If DRIFT_METRIC >0.6, H_DRIFT is supported. If <0.4, H_DRIFT is falsified.\n\n(10) **QUALITY GATE DECISION**:\n   - If (strand stability >0.7) AND (compression >5:1) AND (annotation precision/recall >70%), MVP is VALIDATED. \n     \u2192 Cycle 38: Compare across runs (baseline vs. minimal_sysprompt vs. optimized). Test causal hypotheses.\n   - If any metric fails:\n     \u2192 Diagnose failure. Is it extraction heuristics? Clustering? Epistemic assignment? \n     \u2192 Iterate on weakest component. Retest.\n\nRESEARCH PRIORITY HIERARCHY:\n1. Inspect logs/ structure (blocks everything)\n2. Implement core projector functions (extraction, clustering, epistemic, loss detection)\n3. Project baseline_run1 and measure strand stability\n4. Hand-annotate validation sample and confirm precision/recall >70%\n5. Measure compression ratio and loss accumulation\n6. OPTIONAL: drift analysis (DRIFT_METRIC computation)\n7. OPTIONAL: comparative analysis across runs\n\nCRITICAL DECISION POINT: After hand-annotation validation (step 7), decide whether MVP is ready for deployment on full corpus or needs iteration. This gate determines if Cycle 37 succeeds (validated tool ready for broader application) or requires design refinement.\n\nDOWNSTREAM (Cycle 38+):\n- Once MVP is validated, extend to comparative analysis across 15 runs.\n- Test hypothesis: prompt_length \u2192 strand_stability? hyperparameter_X \u2192 coherence?\n- Integrate projector into reasoning pipeline (use projected tensor as context/memory in next-turn inference).\n- Measure end-to-end coherence improvement (does tensor memory improve reasoning quality?)\"",
+  "overall_truth": 0.82,
+  "overall_indeterminacy": 0.12,
+  "overall_falsity": 0.06
+}

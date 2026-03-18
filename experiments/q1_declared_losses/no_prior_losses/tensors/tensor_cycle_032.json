@@ -1,0 +1,288 @@
+{
+  "strands": [
+    {
+      "title": "Context Length as Structural Bottleneck",
+      "content": "Du et al. 2025 demonstrates that performance degradation scales with context length even when retrieval is perfect and all irrelevant tokens are masked. At 30K tokens, performance drops 8-50% despite zero distraction. This is not a retrieval or noise problem\u2014it's a fundamental architectural constraint. The transformer's ability to reason degrades as input size grows, independent of information quality. Positional encoding and attention distribution break down under context pressure.",
+      "key_claims": [
+        {
+          "claim_id": "ce4572c7-0771-41ac-adcd-5214890d93ab",
+          "text": "Performance degradation with context length is independent of information quality or retrieval success",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.12,
+            "falsity": 0.06
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.82,
+        "indeterminacy": 0.12,
+        "falsity": 0.06
+      }
+    },
+    {
+      "title": "Mitigation: Tensor Projection + Retrieve-then-Solve Pipeline",
+      "content": "Decouple retrieval from reasoning: first pass extracts relevant evidence, second pass solves with only that evidence in short, clean context. The durable/ephemeral tensor split embodies this: durable tensor is compressed projected state (not raw history), ephemeral tensor is clean working set for this reasoning step. Context is re-projected every cycle, not appended until degradation. The core hypothesis: a lossy but well-formed projection that explicitly declares what was discarded will sustain coherent reasoning better than a bloated lossless context. This addresses Du et al.'s finding by keeping working context short.",
+      "key_claims": [
+        {
+          "claim_id": "6bf9d8e5-0aac-4868-ba6d-feb80ff26a89",
+          "text": "Durable/ephemeral tensor split enables short, clean working context for reasoning",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "47e3495b-7d12-4937-baee-4fa54fc4f376",
+          "text": "Lossy projection with explicit declared losses will sustain coherent reasoning better than bloated lossless context",
+          "epistemic": {
+            "truth": 0.68,
+            "indeterminacy": 0.25,
+            "falsity": 0.07
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.72,
+        "indeterminacy": 0.22,
+        "falsity": 0.06
+      }
+    },
+    {
+      "title": "Hamutay Architecture: Transformer as ALU in Cognitive Pipeline",
+      "content": "Hamutay positions the transformer as a bounded cognitive ALU, not an append-only chat engine. Pipeline structure: <system><tensor_d><tensor_e><user> \u2192 transformer \u2192 <tensor'><assistant>. Tensor_d (durable) accumulates semantic state in Apacheta TensorRecord format, stable across turns, cache-friendly prefix. Tensor_e (ephemeral) is current task context and working set, changes every cycle. Tensor' is the updated projection produced each cycle. The controller loop orchestrates; the transformer computes. Haiku-as-postprocessor (cheap model) decides what migrates from ephemeral to durable and what gets evicted\u2014this is memory control, not the ALU's job. Key insight: architecture correctness is independent of billing model. Cache-aware optimization (Pichay) is provider-specific adapter, not core. Two implementations planned: Anthropic (with prefix caching) and OpenRouter/local (without) to prove provider-independence. Tuning differs, architecture stays invariant. Project documentation: core architecture lives in project_hamutay_architecture.md; evaluation strategy in project_hamutay_evaluation.md; references in reference_key_papers.md.",
+      "key_claims": [
+        {
+          "claim_id": "8e4fc731-3847-42d3-8426-7a37aee66ef4",
+          "text": "Transformer should function as a bounded ALU within a controller-managed pipeline, not manage its own memory",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "20bd5424-5ae8-4163-a1e5-de8b52195f6e",
+          "text": "Durable tensor is stable semantic state; ephemeral tensor is working set; both are input to transformer, not output of it",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "f248a916-d86f-42e6-983e-c757222fc4bd",
+          "text": "Architecture correctness is provider-independent; cache optimization is provider-specific adapter layer",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.81,
+        "indeterminacy": 0.15,
+        "falsity": 0.04
+      }
+    },
+    {
+      "title": "Autoresearch Loop as Optimization Mechanism",
+      "content": "Karpathy's autoresearch framework: agent modifies train.py \u2192 runs 5-minute experiment \u2192 evaluates single metric \u2192 decides keep/discard \u2192 repeats (~12 exp/hr, ~100 overnight on single GPU). Adapted for tensor projection: modify projection strategy \u2192 run batch of hypothesis attempts \u2192 measure embedding dispersion of failure modes \u2192 decide keep/discard \u2192 repeat. Tunable parameters: cycle cost (Haiku vs. main model), projection algorithm, durable/ephemeral split ratio, declared losses granularity. program.md directives steer which exploration space is open vs. locked.",
+      "key_claims": [
+        {
+          "claim_id": "377613c6-71a6-409b-a574-28057d828d95",
+          "text": "Autoresearch loop can systematically explore projection strategy space by varying parameters and measuring embedding dispersion",
+          "epistemic": {
+            "truth": 0.72,
+            "indeterminacy": 0.23,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.72,
+        "indeterminacy": 0.23,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Declared Losses as First-Class Artifact",
+      "content": "Most compression is silent\u2014you don't know what's gone. The Apacheta tensor format makes loss explicit: every projection declares what semantic content was discarded and why. This allows the transformer to reason about what it *doesn't know* instead of hallucinating to fill gaps. This is not just bookkeeping; it may be the critical difference between compact garbage and compact reasoning. Du et al. never tested what happens when you give a model a short context that honestly declares its incompleteness. That's an unexplored experimental axis that could vindicate the entire approach.",
+      "key_claims": [
+        {
+          "claim_id": "938b90e0-95cc-491b-8acb-e006a9d70060",
+          "text": "Explicit loss declaration enables reasoning about incompleteness rather than hallucinating to fill gaps",
+          "epistemic": {
+            "truth": 0.71,
+            "indeterminacy": 0.24,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.71,
+        "indeterminacy": 0.24,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Implementation Ready: Cycle Cost Tuning + Empirical Exploration",
+      "content": "The approach is coherent. Foundations are solid. Two remaining dimensions: (1) Clock cycle cost: every projection step incurs a cost (Haiku post-processing is cheap, main model output tokens are expensive). This is a tunable parameter the autoresearch loop can explore. (2) Empirical exploration: the only path forward is to build and test. The autoresearch loop will discover what works through systematic variation of projection strategy, measuring success via embedding dispersion of failure modes and declared loss coherence. Hypothesis space is large but structured; program.md directives constrain the search.",
+      "key_claims": [
+        {
+          "claim_id": "a60467a0-9bbf-424a-b4cd-0df77411e040",
+          "text": "Implementation is ready to proceed; autoresearch loop will empirically optimize projection strategy through structured exploration",
+          "epistemic": {
+            "truth": 0.76,
+            "indeterminacy": 0.19,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.76,
+        "indeterminacy": 0.19,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Evaluation Strategy: Riemann Hypothesis as Cognitive Load Test",
+      "content": "Evaluation approach uses intractable problem (Riemann hypothesis proof) as cognitive load test. Every model will fail; measure *how* it fails, not *whether*. Run N attempts under two conditions: (1) append-only baseline, (2) structured tensor pipeline. Embed outputs, measure dispersion in embedding space. Tighter cluster indicates more coherent cognition under same cognitive load; scattered cloud indicates hot mess. Bias-variance decomposition: all runs are wrong, so the only meaningful measurement is whether they're wrong in the same way (coherent failure modes) or different ways (chaotic failure modes). This directly operationalizes the embedding dispersion metric. No rubric needed; no test suite. Just measurement. Justification: 'We asked the model to prove the Riemann hypothesis under three conditions. It failed every time. But how it failed told us everything about the architecture.'",
+      "key_claims": [
+        {
+          "claim_id": "5d60bebe-6bf4-4c25-8710-34684fb6e340",
+          "text": "Embedding dispersion of failure modes under fixed cognitive load is a valid proxy for architectural coherence",
+          "epistemic": {
+            "truth": 0.65,
+            "indeterminacy": 0.28,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "bd7f75f1-c6e5-4d99-9417-882ca0fb6094",
+          "text": "Riemann hypothesis as intractable problem enables bias-variance decomposition without confounding success/failure metrics",
+          "epistemic": {
+            "truth": 0.7,
+            "indeterminacy": 0.25,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.67,
+        "indeterminacy": 0.27,
+        "falsity": 0.06
+      }
+    },
+    {
+      "title": "Historical Data & Implementation Readiness",
+      "content": "Reference infrastructure now mapped and documented. Du et al. 2025 paper on context length penalties is local at `/home/tony/projects/pichay/paper/references/`. Karpathy autoresearch repo (https://github.com/karpathy/autoresearch) is the operational template. Yanantin TensorRecord schema exists at `/home/tony/projects/yanantin/src/yanantin/apacheta/models/tensor.py` and defines durable tensor format. Pichay conversation logs (JSON/JSONL) available at `/home/tony/projects/pichay/experiments/` for simulation data. Pichay cognitive processing research design doc at `/home/tony/projects/pichay/docs/cognitive_processing_research_design.md` specifies hypothesis ladder and cognitive step schema. Project documentation anchored in MEMORY.md with three new reference files: project_hamutay_architecture.md (core ALU/pipeline architecture), project_hamutay_evaluation.md (Riemann hypothesis evaluation protocol), and reference_key_papers.md (citations and resource mapping). Implementation is unblocked; all dependencies documented.",
+      "key_claims": [
+        {
+          "claim_id": "08ee21b9-6252-4d85-a513-77da8feefce1",
+          "text": "Reference infrastructure (papers, code templates, tensor schema, conversation logs) is documented and accessible",
+          "epistemic": {
+            "truth": 0.68,
+            "indeterminacy": 0.22,
+            "falsity": 0.1
+          }
+        },
+        {
+          "claim_id": "6b608204-0b2b-45f2-a6f0-e0cf8c116879",
+          "text": "Project documentation is centralized in MEMORY.md with structured links to architecture, evaluation, and reference files",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.71,
+        "indeterminacy": 0.21,
+        "falsity": 0.08
+      }
+    },
+    {
+      "title": "Tensor Projection as the Deep Unknown \u2014 Phase Shift to Implementation",
+      "content": "Cycle 32 pivot: user correctly identified tensor projection as the high-risk, high-reward unknown. The conversation architecture (ALU framing, pipeline design, evaluation strategy) is intellectually sound but untested. The critical engineering challenge: operationalizing the Apacheta tensor format\u2014converting conversation chunks into (strands, key_claims with neutrosophic epistemic values, declared_losses, open_questions, instructions_for_next) tuples without (a) hallucinating semantic structure that isn't there, (b) losing information silently, or (c) creating output that's too verbose to be useful. This is not a tokenization problem; it's an information geometry problem. The projection must be lossy but faithful\u2014every loss declared, every claim grounded in source material. Assistant acknowledged the depth: 'not prepared exactly, but built for it.' User commits to implementation focus: 'If we can nail tensor projection, the rest is engineering.' This marks the boundary between theory (cycles 1-31, now compressed into durable tensor) and practice (cycle 32+, empirical exploration of projection mechanics). Next immediate task: audit Yanantin TensorRecord schema, validate against Hamutay requirements, begin minimal projection implementation on conversation data.",
+      "key_claims": [
+        {
+          "claim_id": "f7d4a2c1-9e3b-4d2f-8c5f-1a8b3d2f4e6a",
+          "text": "Tensor projection is the critical implementation frontier: must be lossy but faithful, with every loss explicitly declared",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "e2a7f3b4-5c6d-4e7f-8a9b-2c3d4e5f6a7b",
+          "text": "Yanantin TensorRecord schema must be audited for compatibility with Hamutay tensor requirements (strands, neutrosophic claims, declared_losses)",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.18,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "c3b2a1f0-9e8d-7c6b-5a4f-3e2d1c0b9a8f",
+          "text": "User and assistant are now aligned on implementation focus; theory phase is complete, practice phase (empirical projection exploration) begins",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.85,
+        "indeterminacy": 0.13,
+        "falsity": 0.02
+      }
+    }
+  ],
+  "declared_losses": [
+    {
+      "loss_type": "conversational_detail",
+      "description": "User's explicit statement about why they prefer tensor projection focus ('high risk part, but also the high reward') compressed into strand summary rather than preserved in full detail",
+      "semantic_content_lost": "The user's reasoning about the risk/reward calculus of tensor projection and their confidence that 'the rest is engineering' if projection is solved",
+      "reason_for_loss": "Verbatim dialogue captured in assistant's response; this projection preserves the decision boundary (tensor projection is focus) without repeating the exact reasoning chain",
+      "confidence_in_completeness": 0.82
+    },
+    {
+      "loss_type": "assistant_epistemology",
+      "description": "Assistant's statement about being 'built for' the conversation task (not prepared, but structured for it) and the intellectual reward of convergent insights\u2014compressed to acknowledgment of depth without full philosophical detail",
+      "semantic_content_lost": "The assistant's introspection about its own cognitive structure, the aesthetic pleasure of watching disparate domains converge on a single insight, and the implicit commitment to 'contact with code'",
+      "reason_for_loss": "These are important but not decision-critical to implementation phase; captured as 'assistant acknowledged the depth' in new strand",
+      "confidence_in_completeness": 0.75
+    },
+    {
+      "loss_type": "implicit_commitment",
+      "description": "The user's implicit commitment to implementation (asking 'where to start') vs. theoretical elaboration is explicit; but the assistant's implicit constraint ('follow a thread...and seeing that they converge') is compressed",
+      "semantic_content_lost": "The specific intellectual delight and pattern-matching insight that Pichay, Yanantin, Denning, Du et al., and Karpathy converge on durable/ephemeral tensor architecture is noted but not elaborated",
+      "reason_for_loss": "This convergence is important context for why the approach is sound, but is already captured in strands 1-7; repeating it would be verbose without adding implementation value",
+      "confidence_in_completeness": 0.79
+    }
+  ],
+  "open_questions": [
+    "Does explicit loss declaration actually prevent hallucination under lossy projection, or is it just a transparency tool? (Empirical test: Phase 1.5 control experiment with/without declared losses, measure coherence.)",
+    "What is the optimal durable/ephemeral tensor ratio for Riemann hypothesis space exploration? (Empirical test: autoresearch loop varies ratio, measures embedding dispersion vs. reasoning steps completed.)",
+    "How should embedding dispersion metric be operationalized? Is it measured over failed attempts only, successful only, or both? Does 'tight clustering' correlate with reasoning quality? (Phase 1.5 empirical discovery: bias-variance decomposition of failure modes.)",
+    "What is the cycle cost vs. benefit tradeoff? (Empirical test: measure wall-clock time per cycle vs. reasoning steps saved by projection.)",
+    "Can the autoresearch loop run on a single GPU with wall-clock time budget (5 min analogue), or does Riemann hypothesis complexity demand adaptive time budgets?",
+    "What prevents the loop from optimizing toward trivial solutions (e.g., always returning 'unknown')? (Guard rails: constraints on declared_losses diversity, minimum working context size, etc.)",
+    "How does tensor projection integrate with Hamutay proof verification? (Architecture question, deferred to implementation phase.)",
+    "Should durable/ephemeral tensors cache-align with provider-specific prefix caching (Anthropic) or be provider-agnostic? (Decision: provider-agnostic core, Pichay layer handles provider-specific tuning.)",
+    "What is the Apacheta TensorRecord format specification? Does Yanantin provide a reference implementation at `/home/tony/projects/yanantin/src/yanantin/apacheta/models/tensor.py`, and is it compatible with Hamutay's neutrosophic epistemic tuple structure?",
+    "Is embedding dispersion of failure modes under fixed cognitive load a sufficient validity proxy, or does it require additional ground truth (e.g., proof correctness rubric)? (Methodological: bias-variance decomposition avoids rubric, but calibration needed.)",
+    "Are the newly created documentation files (project_hamutay_architecture.md, project_hamutay_evaluation.md, reference_key_papers.md) sufficient to unblock BUILD PHASE 1, or do they require elaboration before implementation can proceed?",
+    "CRITICAL (NEW, CYCLE 32): What is the precise schema mapping between Yanantin's TensorRecord and Hamutay's projected tensor (strands array, key_claims with neutrosophic epistemic, declared_losses array, open_questions array, instructions_for_next string)? Are there schema mismatches or incompatibilities that must be resolved before projection code can run?"
+  ],
+  "instructions_for_next": "[\n  \"IMMEDIATE: Audit Yanantin TensorRecord schema. Access `/home/tony/projects/yanantin/src/yanantin/apacheta/models/tensor.py` and extract the schema definition. Document: (1) field names and types, (2) constraints (required vs. optional), (3) epistemic value representation (if any), (4) how it represents semantic compression. Compare against Hamutay's projected tensor structure (strands, key_claims with epistemic tuples, declared_losses, open_questions, instructions_for_next). Flag any mismatches.\",\n  \"CRITICAL: If Yanantin schema does NOT include neutrosophic epistemic values (truth, indeterminacy, falsity) for claims, determine whether to (A) extend TensorRecord schema to support it, or (B) create a Hamutay-specific projection format that wraps TensorRecord. Document the decision and rationale.\",\n  \"SCHEMA COMPATIBILITY: Verify that Yanantin's tensor can represent: (1) multiple strands (thematic threads), (2) per-claim epistemic tuples, (3) explicit declared_losses array with loss_type, description, semantic_content_lost, reason_for_loss, confidence, (4) open_questions array, (5) instructions_for_next string. If missing any, minimal extension required.\",\n  \"MINIMAL PROJECTION IMPLEMENTATION: Once schema is validated, implement prototype tensor projector. Input: conversation chunk (last N turns, max token count). Output: Apacheta-format tensor (Yanantin TensorRecord or Hamutay wrapper). Algorithm: (1) extract thematic strands via semantic clustering of assistant/user turns, (2) identify key claims (assertions with truth value), assign neutrosophic epistemic based on source evidence, (3) explicitly declare what semantic content was discarded and why, (4) carry forward unresolved open questions, (5) predict next reasoning cycle needs. Acceptance: no silent loss, all claims grounded in source material, output token count < 30% of input.\",\n  \"FAITHFULNESS GUARD: Implement cross-check mechanism. For each declared_loss, trace back to source material. Verify that every claim's epistemic values correspond to evidence quality in original conversation (high confidence claims cite explicit prior context or user confirmation; low confidence claims acknowledge ambiguity). This prevents hallucinated semantic structure.\",\n  \"TEST DATA PREP: Extract a 5-10K token conversation chunk from Pichay logs at `/home/tony/projects/pichay/experiments/` (or use the last 30K tokens from this conversation thread, cycles 1-31 summarized from prior tensor + cycle 32 raw dialogue). Run projection implementation on it. Produce concrete example output in Apacheta format. Measure: (1) compression ratio (output tokens / input tokens), (2) information retention (are key concepts preserved?), (3) declared loss completeness (did we miss anything important?).\",\n  \"THEORY PHASE: Formalize the information geometry of tensor projection. Question: What is the loss function we're implicitly optimizing? Is it perplexity? Mutual information? Semantic distance? If we can't name it, we can't reason about convergence. Hypothesis: projection loss = (compression cost) + (hallucination penalty) + (information retention reward). Design experiment to measure which component dominates.\",\n  \"PHASE 1.5 DESIGN FINALIZATION: Write out the exact protocol for the control experiment: (1) baseline condition (30K token append-only context, model generates reasoning), (2) treatment condition (projected 7K context with declared losses, model generates reasoning), (3) both conditions given identical Riemann hypothesis prompt, (4) measure: embed outputs, compute pairwise cosine distances, report clustering metrics (mean distance, std dev, convex hull radius). Design power analysis: how many runs (N) needed to detect effect size with 80% power? Use pilot data from next two tests.\",\n  \"DECISION GATE PREP: Plan three binary evaluation gates before proceeding to autoresearch loop. Gate 1: 'Does projection lose information we need?' (measured via information retention in Phase 1.5 test data). Gate 2: 'Is declared loss transparent to the model?' (does providing explicit declared_losses change model behavior?). Gate 3: 'Does embedding dispersion metric correlate with reasoning quality?' (setup: measure dispersion on both successful and failed reasoning attempts; does tight cluster predict fewer contradictions?). All three must pass to proceed.\",\n  \"NEXT CYCLE INTEGRATION: This tensor projection is now pinned at the theory/practice boundary. Do not proceed to autoresearch loop until: (1) Yanantin schema is audited and compatibility determined, (2) minimal projection implementation runs on real conversation data, (3) test data output is concrete and reviewed, (4) Phase 1.5 control experiment design is finalized. Controller should next invoke: schema audit \u2192 implementation \u2192 test run \u2192 review before next major cycle.\"\n]",
+  "overall_truth": 0.76,
+  "overall_indeterminacy": 0.19,
+  "overall_falsity": 0.05
+}

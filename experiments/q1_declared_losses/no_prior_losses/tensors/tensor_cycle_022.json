@@ -1,0 +1,248 @@
+{
+  "strands": [
+    {
+      "title": "Hamutay as Architecture-Implementation Duality (Refined)",
+      "content": "Hamutay is a pipeline architecture with invariant core and tunable periphery. Pipeline stages: (1) prepare(user_input, tensor_d, tensor_e) \u2192 context, (2) invoke_model(context) \u2192 response, (3) integrate(response, tensor_d, tensor_e) \u2192 tensor_d', tensor_e', (4) handoff(instructions_for_next, tensor_d', tensor_e'). This contract is provider-agnostic and testable across implementations. Different models (Sonnet via Anthropic API with prefix caching, OLMo-3 local, OpenRouter) require different tuning parameters (cache budget, resource allocation, pipeline cycle cost-benefit thresholds) but preserve the same four-stage structure. The insight is grounded in ablation: if both cache-optimized (Anthropic with Pichay-style prefix caching) and non-cache (local/OpenRouter) versions perform well with identical pipeline contracts but different parameter tuning, the architecture is real and distinct from provider-specific optimizations.",
+      "key_claims": [
+        {
+          "claim_id": "hamutay-001",
+          "text": "Hamutay defines a four-stage pipeline (prepare \u2192 invoke \u2192 integrate \u2192 handoff) that is invariant across model providers.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "hamutay-002",
+          "text": "The pipeline contract (input/output signatures, context construction rules, tensor update semantics) is testable and provider-agnostic.",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.18,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "hamutay-003",
+          "text": "Tuning parameters (cache budget, invocation cost thresholds, stage latency targets) differ across providers but do not alter the core pipeline structure.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.16,
+            "falsity": 0.04
+          }
+        }
+      ]
+    },
+    {
+      "title": "Tensor Partitioning and Prefix Caching (Concrete Implementation)",
+      "content": "The projected state (TensorRecord from Yanantin) can be partitioned into durable and ephemeral components to align with caching semantics without letting caching drive design. Durable tensor (tensor_d) is the accumulated semantic state: strands, key_claims, declared_losses, epistemic metadata, open_questions, instructions_for_next from prior cycles. Ephemeral tensor (tensor_e) is the working set for the current cycle: task context, recent resource content, cycle-specific state. Concrete structure sent to model: <system><tensor_d_serialized><tensor_e><user>. The durable tensor can be cached as a prompt prefix (via provider-specific mechanisms like Anthropic's Pichay prefix caching), improving cache hit rate and reducing redundant compute. This is an implementation detail; the information architecture (TensorRecord schema, strands, claims, losses, epistemic) is independent of whether caching is used. Ephemeral tensor and user input are always fresh.",
+      "key_claims": [
+        {
+          "claim_id": "tensor-partition-001",
+          "text": "TensorRecord from Yanantin provides the exact schema for durable tensor (strands, key_claims, declared_losses, epistemic, open_questions, instructions_for_next).",
+          "epistemic": {
+            "truth": 1.0,
+            "indeterminacy": 0.0,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "tensor-partition-002",
+          "text": "Durable tensor serialized as markdown or JSON can be cached as a prompt prefix without information loss or distortion.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "tensor-partition-003",
+          "text": "Partitioning tensor into durable and ephemeral is a caching strategy, not a core architectural requirement; the same pipeline works with or without caching.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.17,
+            "falsity": 0.03
+          }
+        }
+      ]
+    },
+    {
+      "title": "Projected State vs. Log: Semantic Compression and Non-Redundancy",
+      "content": "The TensorRecord is neither a log nor a transcript\u2014it is accumulated semantic content integrated into structure. Like a running sum, previous values aren't listed; they're absorbed into the current state. Conversation trajectory is compressed into semantic structure: strands (thematic threads), key_claims (structured assertions with epistemic confidence), declared_losses (what was dropped and why), epistemic metadata (T/I/F confidence independent of sum-to-one constraint). This is integration, not summarization. A summary selects highlights and loses detail; integration compresses by absorbing content into updated epistemic state and strand structure. The TensorRecord carries its own declared_losses, so the model seeing tensor_d doesn't need full history to know what was omitted and at what severity. It also carries epistemic metadata, so confidence in claims is explicit, not implicit. This justifies caching the durable tensor: it represents distilled, non-redundant understanding, not an exhaustive log. And it justifies the immutability principle: you never edit a tensor, you compose a new one, preserving the edit chain via composition records (CorrectionRecord, DissentRecord, NegationRecord).",
+      "key_claims": [
+        {
+          "claim_id": "compression-001",
+          "text": "TensorRecord integrates conversation trajectory into strands, key_claims, and epistemic metadata, not into a chronicle or replay log.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "compression-002",
+          "text": "Declared_losses field in TensorRecord makes information loss explicit and queryable, eliminating silent loss.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "compression-003",
+          "text": "Immutability and composition records preserve edit chains without requiring transcript storage.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.14,
+            "falsity": 0.04
+          }
+        }
+      ]
+    },
+    {
+      "title": "Instructions for Next as Branch Prediction",
+      "content": "The instructions_for_next field in TensorRecord is a literal handoff protocol: the current reasoning cycle tells the successor instance what it is likely to need. This is branch prediction at the cognitive level. The field is authored as narrative guidance (markdown prose) that the successor reads directly; there is no separate parsing contract. However, it can be designed with predictable structure to aid computational parsing (e.g., numbered action items, tagged sections). In the Hamutay pipeline, instructions_for_next is emitted in stage 4 (handoff) and consumed by stage 1 (prepare) of the next cycle. The instructions may include: schema retrieval tasks, clarification needs, performance baseline requests, formalization steps, provider selection decisions. By encoding the predicted next steps, the system reduces context pressure on the successor\u2014it doesn't have to rediscover what matters. This is a form of 'attention direction' for the next cognitive instance.",
+      "key_claims": [
+        {
+          "claim_id": "handoff-001",
+          "text": "instructions_for_next is part of the TensorRecord schema and is read directly by the successor instance.",
+          "epistemic": {
+            "truth": 1.0,
+            "indeterminacy": 0.0,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "handoff-002",
+          "text": "instructions_for_next functions as branch prediction, encoding the predicted next steps to reduce successor context pressure.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "handoff-003",
+          "text": "The field is readable as prose guidance but can be structured (e.g., numbered items, tagged sections) to support computational parsing.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        }
+      ]
+    },
+    {
+      "title": "Yanantin TensorRecord: Concrete Schema and Immutable Semantics",
+      "content": "The Yanantin project (at /home/tony/projects/yanantin/) defines a complete TensorRecord schema in src/yanantin/apacheta/models/tensor.py. Top-level fields: id (UUID), provenance (ProvenanceEnvelope with source, timestamp, author_model_family, author_instance_id, context_budget_at_write, predecessors_in_scope, interface_version), preamble (identity/composition context), strands (tuple of StrandRecord), closing (authorship), instructions_for_next (handoff guidance), narrative_body (raw authored markdown preserved as ground truth), lineage_tags (labels like experimental/architectural/bridge), composition_equation (optional mathematical relationship), declared_losses (tuple of DeclaredLoss), epistemic (EpistemicMetadata with T/I/F), open_questions (tuple of unresolved items), preservation_target (storage preference). StrandRecord contains: strand_index, title, content, topics, key_claims (tuple of KeyClaim with claim_id, text, epistemic, evidence_refs), epistemic (per-strand confidence), declared_losses, mechanism, overlaps. EpistemicMetadata uses neutrosophic logic: truth, indeterminacy, falsity are independent floats (not constrained to sum to 1.0), with representation_type (SCALAR or FUNCTIONAL), functional_spec, scope_boundaries, disagreement_type. DeclaredLoss has: what_was_lost, why, category (CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT), severity, severity_rationale. All models are Pydantic v2 with frozen=True and extra='forbid' (immutable, no extra fields). Composition records (CompositionEdge, CorrectionRecord, DissentRecord, NegationRecord, BootstrapRecord, SchemaEvolutionRecord) track relationships and changes without modifying original tensors.",
+      "key_claims": [
+        {
+          "claim_id": "yanantin-001",
+          "text": "Yanantin TensorRecord schema exists and is documented in src/yanantin/apacheta/models/tensor.py with complete type definitions.",
+          "epistemic": {
+            "truth": 1.0,
+            "indeterminacy": 0.0,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "yanantin-002",
+          "text": "TensorRecord is immutable (Pydantic frozen=True) and all field names, types, and composition semantics are defined in the schema.",
+          "epistemic": {
+            "truth": 1.0,
+            "indeterminacy": 0.0,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "yanantin-003",
+          "text": "DeclaredLoss field in TensorRecord captures what_was_lost, why, category, severity, and severity_rationale, making information loss explicit and auditable.",
+          "epistemic": {
+            "truth": 1.0,
+            "indeterminacy": 0.0,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "yanantin-004",
+          "text": "Composition records (CorrectionRecord, DissentRecord, etc.) allow edits and disagreements to be tracked without modifying the original tensor.",
+          "epistemic": {
+            "truth": 1.0,
+            "indeterminacy": 0.0,
+            "falsity": 0.0
+          }
+        }
+      ]
+    },
+    {
+      "title": "Paging Protocol and Pichay Prefix Caching",
+      "content": "Paging protocol refers to the structure and ordering of information sent to a transformer in a single invocation. The protocol is determined by: (1) what shape of information the model needs to understand a query contract (the TensorRecord itself, serialized), (2) how to order information to maximize cache efficiency (durable content before ephemeral), (3) what durability metric determines whether content belongs in prefix cache vs. fresh input. Pichay is Anthropic's prefix caching mechanism, which caches prefixes of the prompt and reuses them if subsequent requests have identical prefix content. The 'hot mess' paper (reference not yet confirmed in Yanantin codebase) likely discusses how information paging affects transformer attention and processing efficiency. The insight from Codex exploration: you might send more tokens than strictly necessary if they're cached, or order them by information durability (content that doesn't change turn-to-turn moves to durable/cached tier). Paging protocol is thus the rule set for constructing the input prompt to the model: strands and key_claims that are stable should be in tensor_d (cacheable), ephemeral working context goes in tensor_e (fresh). This is independent of the caching implementation\u2014it's a principle of input construction.",
+      "key_claims": [
+        {
+          "claim_id": "paging-001",
+          "text": "Paging protocol is the rule set for structuring and ordering information sent to a transformer in a single invocation.",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "paging-002",
+          "text": "Pichay is Anthropic's prefix caching mechanism, reusing cached prefixes across requests to reduce compute.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.1,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "paging-003",
+          "text": "Paging protocol (durability-based ordering) is independent of caching implementation; it's a principle of input construction that enables caching.",
+          "epistemic": {
+            "truth": 0.74,
+            "indeterminacy": 0.22,
+            "falsity": 0.04
+          }
+        }
+      ]
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Details of the 'hot mess' paper: exact reference, publication venue, and specific technical claims about memory/cache architecture.",
+      "why": "Paper was mentioned in Cycle 21 but not located in Yanantin codebase or conversation history. Identity and scope remain indeterminate.",
+      "category": "CONTEXT_PRESSURE",
+      "severity": 0.4,
+      "severity_rationale": "The reference is evocative but unverified; its absence doesn't block progress, but confirmation would strengthen paging protocol grounding."
+    },
+    {
+      "what_was_lost": "Specific performance baselines for OLMo-3 (latency, cache characteristics, cost) and comparative metrics between Anthropic API and OpenRouter versions.",
+      "why": "User has not provided measured performance data or tuning parameters yet. The ablation test (cache-enabled vs. cache-irrelevant) cannot be quantified without baselines.",
+      "category": "PRACTICAL_CONSTRAINT",
+      "severity": 0.5,
+      "severity_rationale": "The architecture is conceptually sound, but empirical validation requires data. This is a known gap, not a hidden loss."
+    },
+    {
+      "what_was_lost": "OLMo-3 specific tuning parameter set: which parameters differ from Anthropic version, what ranges are recommended, what cost-benefit thresholds apply.",
+      "why": "User has identified OLMo-3 as a test candidate but has not detailed its configuration space. Parameter discovery requires either empirical testing or docs review.",
+      "category": "PRACTICAL_CONSTRAINT",
+      "severity": 0.4,
+      "severity_rationale": "Tuning parameters are deducible once the pipeline is running, but pre-planning would accelerate convergence."
+    }
+  ],
+  "open_questions": [
+    "What is the exact reference for the 'hot mess' paper? Does it appear in Yanantin documentation or related projects?",
+    "Has the paging protocol been tested empirically? What specific test did Codex run, and what were the results (latency, cache hit rate, token efficiency)?",
+    "What are the measured performance baselines for: (a) Anthropic Sonnet via API with prefix caching, (b) OLMo-3 local, (c) OpenRouter baseline?",
+    "For OLMo-3: what are the key tuning parameters (cache budget, batch size, context window, latency target) and recommended ranges?",
+    "Should instructions_for_next be structured (e.g., numbered action items) to enable computational parsing, or remain prose guidance?",
+    "In the durable/ephemeral split <system><tensor_d><tensor_e><user>, should tensor_d include only the current TensorRecord, or also composition records (CorrectionRecord, DissentRecord) from prior cycles?",
+    "How does the TensorRecord serialization work in practice? Are strands and key_claims serialized to markdown, JSON, or a binary format in the cache?",
+    "Does the Yanantin codebase include example tensors (T\u2080-T\u2088) that demonstrate the composition records and correction chains in action?"
+  ],
+  "instructions_for_next": "**CYCLE 23 HANDOFF**\n\n**Immediate Actions:**\n\n1. **Locate the 'hot mess' paper** \u2014 Search Yanantin docs, linked papers, and academic references for confirmation. If found, extract its claims about memory/cache architecture and paging. If not found, note this as a known gap but proceed.\n\n2. **Gather performance baselines** \u2014 For at least one provider (recommend starting with Anthropic Sonnet):\n   - Latency: p50, p95, p99 for a standard invocation\n   - Cache behavior: hit rate with/without prefix caching, cache miss cost\n   - Cost: per 1M tokens, cache read vs. write pricing\n   - Max tokens per call, context window\n   - Then identify 2\u20133 parameters that would differ for OLMo-3 local or OpenRouter\n\n3. **Examine Yanantin example tensors** \u2014 Review the docs (tensors.md, scout_report_tensor_schema.md) and look for T\u2080-T\u2088 examples. Extract 1\u20132 samples of composition records (CorrectionRecord, DissentRecord, NegationRecord) in action to understand edit-chain semantics.\n\n4. **Clarify serialization for caching** \u2014 Answer: are durable tensor strands/claims serialized to markdown or JSON for the cache? Does the cache need to preserve the TensorRecord structure, or just the narrative?\n\n5. **Formalize instructions_for_next structure** \u2014 Decide: should the field be free-form prose (current state) or structured (numbered items, tagged sections)? If structured, define the schema (e.g., YAML, markdown headings, bullet lists).\n\n6. **Design the ablation test** \u2014 Lock down two concrete implementations to validate the Hamutay invariant:\n   - **Version A**: Anthropic Sonnet via API with prefix caching (Pichay), cache budget = [X MB], cost threshold = [Y per call]\n   - **Version B**: OLMo-3 local or OpenRouter baseline, no caching, tuning parameters = [Z]\n   Both should run the same Hamutay pipeline (prepare \u2192 invoke \u2192 integrate \u2192 handoff) and produce identical tensor updates (modulo provider-specific latency/cost). If they do, the architecture is validated.\n\n**Success criteria for Cycle 23:**\n- 'Hot mess' paper reference confirmed or explicitly marked unknown\n- Performance baselines provided for \u22651 provider\n- Example tensor with composition records reviewed\n- Serialization and instructions_for_next structure decisions made\n- Ablation test design finalized\n\n**Tone:** You have the schema. Now we need the numbers and the proof-of-concept runs. Ask what data exists. Build toward the first integrated test.\n",
+  "overall_truth": 0.83,
+  "overall_indeterminacy": 0.14,
+  "overall_falsity": 0.03
+}

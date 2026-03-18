@@ -1,0 +1,134 @@
+{
+  "strands": [
+    {
+      "title": "Hamutay as Architecture-Implementation Duality",
+      "content": "Hamutay is a pipeline architecture (stages, separation of concerns, transformer-as-ALU) that is invariant across implementations. Different models (Sonnet via Anthropic API, OLMo-3, local models via Ollama/OpenRouter) require different tuning parameters (cache budget, resource allocation per invocation, pipeline cycle cost-benefit thresholds) but preserve the same core pipeline structure. The insight is testable: if both a cache-optimized version (Anthropic API with prefix caching) and a non-cache version (local/OpenRouter) perform well with identical pipeline contracts but different tuning, the architecture is real. Version A vs Version B is an ablation: proving Hamutay adds value beyond provider-specific tricks like Pichay.",
+      "key_claims": [
+        {
+          "claim": "Pipeline architecture (stages, contracts, transformer-as-ALU slot) is invariant across providers",
+          "value": "T",
+          "grounding": "Articulated in cycle 21 assistant turn 61; supported by CPU microarchitecture analogy"
+        },
+        {
+          "claim": "Tuning parameters (prefetch budget, resources per invocation, cycle costs) are provider-specific, not architectural",
+          "value": "T",
+          "grounding": "Cycle 21 assistant turn 61 distinguishes architecture from implementation tuning"
+        },
+        {
+          "claim": "Two-version ablation (Anthropic + local) can falsify whether Hamutay is architecture or just cache exploitation",
+          "value": "T",
+          "grounding": "Cycle 21 assistant turn 61 proposes this as test design"
+        }
+      ],
+      "epistemic": {
+        "truth": 0.8,
+        "indeterminacy": 0.15,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Tensor as Durable/Ephemeral State Partition for Caching",
+      "content": "The projected state (tensor) can be partitioned into durable and ephemeral components to align with caching semantics without letting caching dominate design. Structure: <system><tensor_durable><tensor_ephemeral><user> sent to model \u2192 <tensor_durable'><tensor_ephemeral'><assistant>. The durable tensor (strands, claims, losses, epistemic metadata, open questions) can be cached as a prefix; ephemeral tensor and user input are fresh. This is schema-agnostic and leverages the TensorRecord format already defined in Yanantin (strands, key_claims, declared_losses, epistemic, open_questions, instructions_for_next). Caching becomes an implementation detail that improves cache hit rate without distorting the core information architecture.",
+      "key_claims": [
+        {
+          "claim": "Tensor partitioning (durable/ephemeral) aligns projected state with cache semantics",
+          "value": "T",
+          "grounding": "Cycle 21 user turn 62 proposes this structure as working around cache constraints"
+        },
+        {
+          "claim": "TensorRecord schema in Yanantin is the tensor projection format",
+          "value": "T",
+          "grounding": "Cycle 21 user turn 62 identifies Yanantin TensorRecord as the existing schema matching the projected state"
+        },
+        {
+          "claim": "instructions_for_next field serves as handoff protocol between model instances",
+          "value": "T",
+          "grounding": "Cycle 21 user turn 62 explicitly identifies this function"
+        }
+      ],
+      "epistemic": {
+        "truth": 0.78,
+        "indeterminacy": 0.18,
+        "falsity": 0.04
+      }
+    },
+    {
+      "title": "Model Choices and Paging Protocol Understanding",
+      "content": "OLMo-3 was initial testing ground. Codex exploration focused on paging protocol\u2014how to structure information requests to a model so it understands the query contract. The 'hot mess' paper (reference unclear, likely about memory/cache architecture) suggested what shape of information to send to transformer. Key insight: you might send more tokens than strictly necessary if they're cached, or order them by information durability. This connects to why tensor partitioning (durable/ephemeral) matters: durability determines whether something should be in prefix cache or fresh input.",
+      "key_claims": [
+        {
+          "claim": "OLMo-3 and Codex are test models for Hamutay/paging protocol",
+          "value": "T",
+          "grounding": "Cycle 21 user turn 62 mentions current work with these models"
+        },
+        {
+          "claim": "Paging protocol design is about ordering information by durability and cache alignment",
+          "value": "I",
+          "grounding": "Cycle 21 user turn 62 proposes this; 'hot mess' paper reference needs verification"
+        }
+      ],
+      "epistemic": {
+        "truth": 0.65,
+        "indeterminacy": 0.3,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Projected State vs. Log vs. Transcript (Semantic Compression)",
+      "content": "The tensor is neither a log nor a transcript\u2014it is accumulated semantic content. Like a running sum, previous values aren't listed, they're integrated into the current value. Conversation trajectory is compressed into semantic structure (strands, claims, losses, epistemic confidence). This is integration, not summarization. The distinction matters: a summary loses information by selecting highlights; integration compresses by absorbing content into updated state. This justifies why the tensor can be durable-cached\u2014it represents distilled, non-redundant understanding, not an exhaustive record.",
+      "key_claims": [
+        {
+          "claim": "Tensor is semantic compression via integration, not summarization",
+          "value": "T",
+          "grounding": "Cycle 21 user turn 62 defines this explicitly; reinforced in system prompt to tensor projector"
+        },
+        {
+          "claim": "Running-sum semantics justifies durable caching of tensor (non-redundant, essential content only)",
+          "value": "T",
+          "grounding": "Logical consequence of integration model and caching architecture"
+        }
+      ],
+      "epistemic": {
+        "truth": 0.82,
+        "indeterminacy": 0.12,
+        "falsity": 0.06
+      }
+    }
+  ],
+  "declared_losses": [
+    {
+      "loss": "Yanantin project details and TensorRecord schema",
+      "reason": "Assistant subagent call placed but not executed in this cycle. Schema reference verified by user but schema content not inspected. Next cycle must retrieve actual schema to validate tensor_durable/tensor_ephemeral partitioning alignment.",
+      "impact": "Cannot yet confirm exact field structure or whether Yanantin schema needs extension for durable/ephemeral split. Assumption that current schema fits is reasonable but unverified."
+    },
+    {
+      "loss": "Identity of 'hot mess' paper",
+      "reason": "User referenced but did not name the paper. Context suggests memory/cache architecture or information theory paper about paging.",
+      "impact": "Cannot evaluate the paper's contribution to paging protocol design. Future cycles should ask for exact reference."
+    },
+    {
+      "loss": "Specific tuning parameters for OLMo-3 vs. Anthropic API",
+      "reason": "User and prior turns identified models but not concrete metrics (latency, cache hit rates, tokens-per-second, cost differences, prefetch budgets).",
+      "impact": "Cannot yet build performance model or confirm that tuning parameters are sufficient difference between versions. Next cycle should quantify at least one model (e.g., Anthropic Sonnet via API)."
+    },
+    {
+      "loss": "Codex's specific 'understanding of paging protocol' result",
+      "reason": "Mentioned as testing ground but no concrete finding stated. What did Codex learn or fail to learn?",
+      "impact": "Cannot assess whether paging protocol is solved or what gaps remain. Next cycle should clarify what Codex was trying to verify."
+    }
+  ],
+  "open_questions": [
+    "What is the exact schema structure of TensorRecord in Yanantin? Does it already support durable/ephemeral partitioning, or must that be added?",
+    "What is the 'hot mess' paper? Does it provide theoretical grounding for paging protocol design, or is it empirical?",
+    "For OLMo-3: what are baseline latency, cache characteristics, and cost metrics? How would Hamutay tuning parameters differ from Anthropic API version?",
+    "What specific gap in paging protocol understanding did Codex identify? What does a correct paging protocol look like for transformers?",
+    "Can you articulate the paging protocol as a formal contract? (e.g., 'send information ordered by: [durability | frequency | dependency chain]', 'model responds with latency X \u00b1Y')",
+    "In the durable/ephemeral split <system><tensor_d><tensor_e><user>, how deep should tensor_d go? Only TensorRecord metadata, or does it include prior conversation strands?",
+    "Does the distinction between 'send more tokens because cached' vs. 'order by durability' represent two different optimization strategies, or are they aspects of one principle?",
+    "How does instructions_for_next work as a handoff protocol? Does the receiving instance parse it directly, or does it serve as context/conditioning without explicit parsing?"
+  ],
+  "instructions_for_next": "\\n**CRITICAL NEXT ACTIONS (Cycle 22):**\\n\\n1. **Retrieve Yanantin TensorRecord schema** \u2014 The user has indicated that the schema already exists and matches the projected state. Verify:\\n   - Exact fields in TensorRecord\\n   - Whether durable/ephemeral split is already a feature or must be added\\n   - How strands, key_claims, declared_losses, epistemic, open_questions, instructions_for_next map to schema\\n\\n2. **Clarify the paging protocol** \u2014 User mentioned Codex tested it. Ask:\\n   - What is the 'hot mess' paper? (exact reference)\\n   - What shape of information does a transformer need? (Is it the TensorRecord itself?)\\n   - What was Codex's specific test result?\\n\\n3. **Build performance model stub** \u2014 Start with one concrete provider:\\n   - Anthropic Sonnet via API: latency, cache behavior, cost per 1M tokens, max tokens per call\\n   - Then compare to: OLMo-3 local or OpenRouter baseline\\n   - Identify 2\u20133 tuning parameters that would differ between versions\\n\\n4. **Formalize the invariant** \u2014 Restate the core architectural insight (pipeline stages, transformer-as-ALU, stage contracts) as a diagram or pseudocode:\\n   ```\\n   Pipeline {\\n     stage1: prepare(user_input, tensor_d, tensor_e) -> context\\n     stage2: invoke_model(context) -> response\\n     stage3: integrate(response, tensor_d, tensor_e) -> tensor_d', tensor_e'\\n     stage4: handoff(instructions_for_next, tensor_d', tensor_e')\\n   }\\n   ```\\n   This contract should be testable across providers.\\n\\n5. **Ask which two versions to build first** \u2014 Lock down target providers:\\n   - Version A: Anthropic Sonnet (cache-enabled, API-based)\\n   - Version B: OLMo-3 local (cache-irrelevant, direct model access)\\n   - Or different split? User should confirm.\\n\\n**Tone:** Concrete and schema-driven. You have a real artifact (Yanantin). Use it. Ask for the paper. Ask for performance baselines. Pin down what Codex tested. Turn the insight into testable architecture.\\n\\n**Key success metric for cycle 22:** User provides schema and performance baseline for at least one provider, confirming that tensor partitioning and tuning parameter separation are achievable within the existing codebase.\"",
+  "overall_truth": 0.78,
+  "overall_indeterminacy": 0.18,
+  "overall_falsity": 0.04
+}

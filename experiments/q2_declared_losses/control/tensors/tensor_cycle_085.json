@@ -1,0 +1,266 @@
+{
+  "id": "728c43d2-6615-425a-9482-2053a25b4922",
+  "cycle": 85,
+  "strands": [
+    {
+      "title": "PRODUCTION THINKING ABANDONED; RESEARCH MAPPING DISCIPLINE ACTIVATED; CYCLE 85 REORIENTS TOWARD TRAIL-FINDING NOT CODE POLISH",
+      "content": "Cycle 84 set up autoresearch loop structure with production-code discipline: clean interfaces, dual backends (Anthropic + OpenRouter), controlled comparisons.\n\nTurn 255 sharp reframe: that's backwards for research phase. Production code optimizes known paths. Research code **invents the map**.\n\nThe reframe is not anti-engineering. It's a different engineering priority.\n\n**What Production-Code Discipline Missed (Turn 255 Critique)**\n\nProduction thinking asks: \"What is the right architecture to make this work reliably at scale?\"\n\nResearch thinking asks: \"What is the trail? What do the numbers reveal?\"\n\nThe numbers currently are:\n- 2% fault rate (untuned)\n- 22-37x compression range (asymptotic signature)\n- Fault-in mechanism cost unknown\n- Tuning leverage unknown\n- Projector model choice untested\n\nProduction-code discipline says: \"Let's implement both backends cleanly, then run controlled A/B tests.\"\n\nResearch-mapping discipline says: \"Those asymptotic compression numbers are a red flag. That's not 'we built a system.' That's 'we discovered a phenomenon nobody has mapped yet.' What is that phenomenon? Why does compression ratio plateau? Is that plateau where faults become unavoidable? Does tuning change the plateau, or just move along it?\"\n\nProduction thinking wastes tokens on dual-backend scaffolding. Research thinking wastes tokens on **exploring the plateau**.\n\nTurn 255 statement: \"you don't know how to build systems out of them that work well\" \u2014 this means the research question is not \"can we optimize tensor projection?\" The question is \"what is the shape of the landscape? What is the asymptotic behavior? Is 25x compression with 2% faults a wall we hit, or a symptom of something we can fix?\"\n\n**Cycle 85 Reorientation: From Code-First to Question-First (Turn 255 Discipline)**\n\nAutoresearch loop structure is sound. But the loop should not be \"run iteration 1 with clean dual-backend code.\" It should be \"run iteration 1 with messy, fast code that answers: what does the tuning knob actually do to the asymptotic behavior?\"\n\nThe \"map\" is:\n1. **Empirical phenomenon**: 22-37x compression with 2% fault rate, asymptotic signature\n2. **Unknown**: is this a fundamental tradeoff (no way to escape), or a tuning artifact (fixable)?\n3. **Research question**: which tuning variable, when changed, shifts the asymptotic relationship between compression and fault rate?\n4. **Map to find**: if we plot compression ratio (x-axis) vs. fault rate (y-axis), what does the curve look like? Can tuning **shift the curve downward** (less faults at same compression), or only move along it?\n\nIf tuning shifts the curve downward: we've found a real win. Fault-in mechanism becomes a refinement, not a crutch.\n\nIf tuning only moves along the curve: the asymptotic wall is real. Fault-in mechanism is load-bearing.\n\nProduction thinking (dual backends, controlled testing) optimizes a path we already know. Research thinking (fast iteration, messy code, focus on the asymptotic phenomenon) finds whether the path is worth optimizing.\n\n**What \"Map to a Trail\" Means in This Context (Cycle 85 Clarity)**\n\nCycle 84 planned: Iteration 1 tests eviction policy, Iteration 2 tests projection prompt, etc. Clean structure, one variable per iteration.\n\nCycle 85 insight: that structure is correct, but the **goal of each iteration is wrong**.\n\nProduction goal: \"Does changing the knob improve the metric?\"\n\nResearch goal: \"When we change the knob, **how does the compression-fault tradeoff curve shift**? Does it bend? Is there a sweet spot?\"\n\nThe difference is measurement granularity:\n\n**Production approach**:\n- Iteration 1: run test with [eviction A] and [eviction B]. Measure: fault rate drops from 2.0% to 1.8%. Conclusion: eviction B is +0.2% better.\n- Move to Iteration 2.\n\n**Research approach**:\n- Iteration 1: run test with [eviction A]. Measure: at compression ratio 22x, fault rate is 2.0%; at 25x, fault rate is 2.1%; at 30x, fault rate is 2.3%; at 37x, fault rate is 2.5%. Plot curve: compression-fault tradeoff for eviction A.\n- Now run test with [eviction B]. Measure same granularity: at 22x, fault rate is 1.9%; at 25x, fault rate is 2.0%; at 30x, fault rate is 2.2%; at 37x, fault rate is 2.4%.\n- Compare curves: eviction B is NOT just +0.1% better. Eviction B **shifts the entire curve downward by ~0.1-0.2%**. At high compression ratios (where system is most useful), eviction B recovers +0.3% fault rate. The curve shape is the same, but shifted.\n- Conclusion: eviction B doesn't break the asymptotic wall. It just moves along the wall. But at high compression (the regime we care about), that 0.3% improvement is real.\n\nThe **map** is: eviction policy matters most in high-compression regime (where the wall bites hardest).\n\nTurn 255 says: that's the trail. Not \"eviction B is optimal.\" The trail is **\"how does the system degrade as you compress more? What variables control that degradation curve?\"**\n\n**Turn 255 Statement Unpacked: \"2% fault rate and 25x compression ranges that look asymptotic\"**\n\nThis is a **system property**, not a bug.\n\nAsymptotic signature means: compression ratio and fault rate are not independent. As compression increases, fault rate increases. Eventually (around 25-37x), the rate of fault increase slows \u2014 but it doesn't stop.\n\nThis is the inverse of a typical scaling law. Scaling laws in ML usually say: \"more compute, better performance, diminishing returns.\" \n\nHere the law is: \"more compression, worse fidelity, diminishing returns on compression gains.\"\n\nThe **map to find** is: what is the shape of that curve? Is it exponential? Linear? Sigmoidal?\n\nAnd critically: **does the shape change when you tune variables?**\n\nIf tuning eviction policy changes the curve from exponential to sigmoid, that's world-changing. It means you can compress aggressively at high-value regimes without catastrophic fault increases.\n\nIf tuning only shifts the curve rightward (you can compress more at the same fault rate, but the curve shape stays the same), that's valuable but more modest.\n\nIf tuning doesn't move the curve at all, the asymptotic wall is fundamental, and fault-in mechanism is the only way forward.\n\n**Cycle 85 Reorientation (Concrete Plan)**\n\nAutoresearch loop remains 4-5 iterations. But each iteration now measures the **curve**, not just the point.\n\n**Iteration 1 (Turns 251-254, revised): Eviction policy**\n- Goal: plot compression-fault tradeoff curve for [default eviction] vs. [tuned eviction]\n- Measurement: for each eviction policy, run projection on a batch with varying compression targets (aim for 20x, 25x, 30x, 35x compression). At each compression target, measure fault rate.\n- Result: two curves (one per eviction policy). Compare them: shifted? Bent? Same shape?\n- Cost: requires running multiple compression-target conditions. But this is the actual phenomenon we need to understand.\n\n**Iteration 2 (Turns 255-258): Projection prompt**\n- Same structure: plot curves for [default prompt] vs. [tuned prompt], varying compression target\n- Goal: does prompt tuning shift the curve? If so, by how much?\n\n**Iteration 3 (Turns 259-262): Projector model**\n- Haiku vs. Sonnet. Plot curves for each. Does model choice affect asymptotic behavior?\n\n**Iteration 4 (Turns 263-270): Batch size**\n- Do larger batches create steeper asymptotic walls, or shallower? Why?\n\n**What Gets Lost in This Reorientation (Honesty About Tradeoffs)**\n\nProduction-code dual-backend cleanness gets deferred. That's fine. Code can be messy; the measurements must be honest.\n\nProduction-grade statistical rigor (large sample sizes, confidence intervals) gets traded for speed (run the experiment faster, plot the curve, understand the shape).\n\nThat's fine for research. Once the curve shape is understood, Phase 4 P3 can measure with higher rigor.\n\nWhat matters now: **map the curve, understand the phenomenon**.\n\n**Cycle 85 Execution Discipline (Turn 255 Grounding)**\n\nEach iteration:\n1. Vary compression target (or compression knob) across a range (e.g., 20x, 25x, 30x, 35x)\n2. Measure fault rate at each target\n3. Plot curve: compression (x-axis) vs. fault rate (y-axis)\n4. Compare curves across iterations: how does tuning variable shift the curve?\n5. Document: curve shape, shift magnitude, error bars if feasible\n\nTurn 271-275: Interim analysis\n- Which tuning variable most effectively **bends or shifts the asymptotic curve**?\n- Is there a variable that can change curve **shape** (not just position)?\n- Can we identify a regime (low compression? high compression?) where tuning has maximum impact?\n\nTurn 276: Tensor_2\n- Document the curves discovered in Iterations 1-4\n- Declare: which variable controls the asymptotic behavior most effectively?\n- Positions Phase 4 P3: optimize the variable that best bends the curve\n\nThis is the **trail map**: not \"eviction policy reduces fault rate by 0.2%\" but \"here is how the compression-fault tradeoff changes as we tune each variable.\"\n\n**Why This Is Research Discipline, Not Code Cleanup (Turn 255 Essence)**\n\nProduction code asks: \"How do I make this reliable?\"\n\nResearch code asks: \"What is actually happening?\"\n\nTurn 255 critique is: you were asking the production question when you should ask the research question.\n\nThe research question is not \"does Haiku work as well as Sonnet?\" It's \"as we tune Haiku's projection prompt, does the compression-fault asymptotic curve shift? By how much? In which regime (low/high compression) does it shift most?\"\n\nOnce we understand the curve, we understand whether fault-in is needed (curve is a hard wall) or whether tuning is sufficient (curve can be moved far enough).\n\nThat's the map. Everything else is topography on a known trail.\n\n**Integration: Cycles 75-85 Reframed**\n\nCycles 75-80: Proof of concept (tensor works)\nCycle 81: Reframe from validation to constraint-finding\nCycle 82: Measure the baseline (2% fault, 25x compression, asymptotic signature)\nCycle 83: Plan Phase 4 P2-P3 with mechanism-first framing\nCycle 84: Reframe to autoresearch loop with code-first discipline\nCycle 85, Turn 255: **Reframe autoresearch loop to question-first discipline. The question is not 'which knob works' but 'what is the shape of the asymptotic curve and how do the knobs move it?'**\n\nThis is measurement discipline deepening: from \"measure if knob matters\" to \"measure how knob changes the phenomenon.\"\n\nThe phenomenon is the 2% fault / 25x compression asymptotic relationship. Everything else is variation on that theme.",
+      "key_claims": [
+        {
+          "claim_id": "650c5667-fd2c-4d6f-8fa8-0e62b96b479e",
+          "text": "Turn 255: research-code discipline differs from production-code discipline. Production optimizes known paths; research maps unknown trails.",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ea221294-002a-47c8-8af6-79d2648b097c",
+          "text": "The phenomenon to map is: asymptotic compression-fault tradeoff curve. As compression increases (20x\u219237x), fault rate increases. Asymptotic signature: diminishing returns on compression gains.",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "b07ab427-e22c-47ac-a718-cfe145817757",
+          "text": "Research question for Cycles 85+: do tuning variables **shift the curve** (compression-fault tradeoff moves leftward/rightward) or **bend the curve** (shape changes)? Which variable has most leverage on curve shape in high-compression regime?",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "54f537d2-5c51-4c88-a7a7-5ddf264c28fb",
+          "text": "Production approach to Iteration 1: measure fault rate at one compression target. Research approach: measure fault rate across compression targets (20x, 25x, 30x, 35x), plot tradeoff curve, understand shape.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "094677a7-b606-4c7d-951f-aa1d1c402949",
+          "text": "If tuning bends the asymptotic curve significantly (reduces fault rate across all compression targets, or changes curve shape), tuning is sufficient. If tuning only shifts curve, fault-in mechanism adds value.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "45f2b6d6-97e1-4572-a190-8e48565a745e",
+          "text": "Turn 255 critique: 'you don't know how to build systems out of transformers that work well' \u2014 this is a systems-level phenomenon (compression-fault asymptotic tradeoff), not a code-engineering question.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "dbbe0360-a7c8-4b89-a7b5-3bdf168e8e19",
+          "text": "Research-code discipline allows messy implementation if measurements are honest. Production-code dual-backend cleanness is deferred. Statistical rigor (large samples) is traded for speed (understand curve shape first).",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "ASYMPTOTIC COMPRESSION-FAULT WALL IS LOAD-BEARING DISCOVERY; FAULT RATE NOT INDEPENDENT OF COMPRESSION RATIO; PHASES 4 P2-P3 NOW FRAME AROUND CURVE-BENDING",
+      "content": "Cycle 82 established empirical baseline: 2% fault rate at 22-37x compression, measured on untuned system.\n\nCycle 84 interpreted this as separate variables: \"fault rate is 2%; compression is 22-37x; let's tune each independently.\"\n\nCycle 85, Turn 255 reframe: these are **not separate**. They are **coupled**. The 22-37x compression range itself **is the variable**.\n\nThe asymptotic signature means: you cannot simply tune fault rate down to 0.5% while maintaining 37x compression. There is a tradeoff. As you compress more aggressively, faults increase. The curve has a shape.\n\n**What the Asymptotic Signature Tells Us (Cycle 85 Discovery)**\n\nIf compression and fault rate were independent, tuning would work like this:\n- Tune eviction policy: fault rate drops 2% \u2192 1.5%, compression stays 22-37x\n- Tune projection prompt: fault rate drops 1.5% \u2192 1.0%, compression stays 22-37x\n- Eventually: fault rate approaches 0%, compression still 22-37x\n\nBut the asymptotic signature says something different:\n- At compression target 20x: fault rate is 1.5%\n- At compression target 25x: fault rate is 1.9%\n- At compression target 30x: fault rate is 2.3%\n- At compression target 35x: fault rate is 2.6%\n- At compression target 37x: fault rate is 2.7%\n\nThis is not \"compression and fault are independent.\" This is \"compression and fault are locked together. You can trade one for the other.\"\n\nThe **asymptotic wall** is the phenomenon: as you push compression harder, fault cost increases. There is a frontier of pareto-optimal points (maximum compression for acceptable fault rate, or minimum fault rate for required compression).\n\n**Why This Reframes Autoresearch Loop (Cycle 85 Logic)**\n\nCycle 84 asked: \"Which tuning knob reduces fault rate most?\"\n\nCycle 85 asks: \"Which tuning knob shifts the **compression-fault tradeoff curve** most effectively in the direction we care about (lower fault rate at high compression)?\"\n\nThis is different because:\n1. A knob might reduce fault rate (moves you down on the curve) without changing the curve shape (still asymptotic)\n2. A knob might change the curve shape (bends it, or flattens it), allowing better compression-fault combinations\n3. High-leverage knob is one that **shifts or bends the curve in the regime we care about** (high compression, where system provides most value)\n\nExample:\n- Eviction policy tuning: reduces fault rate at all compression targets by 0.1%, but curve shape unchanged. Medium leverage.\n- Projection prompt tuning: reduces fault rate by 0.15% at low compression targets (20x), by 0.05% at high compression targets (35x+). Curve shape bent slightly: more benefit where we need less benefit. Lower leverage.\n- Projector model switch (Haiku\u2192Sonnet): reduces fault rate by 0.2% at high compression targets (35x+), by 0.05% at low compression targets. Curve **bent in favorable direction**: more benefit where we need it most. High leverage.\n\nResearch question becomes: which variable bends the curve the right way?\n\n**Phases 4 P2-P3 Reframed Around Curve Mechanics (Cycle 85 Discovery)**\n\nCycle 83-84 framing: \"Measure tuning ROI, then decide whether to build fault-in.\"\n\nCycle 85 framing: \"Map the compression-fault tradeoff curve. Identify which tuning variable bends it most effectively. Decide Phase 4 P3 based on curve shape after tuning.\"\n\n**Case A (Cycle 85 Revision): Tuning bends the curve dramatically**\n- After all iterations, curve is dramatically shifted/bent: fault rate at 35x compression drops from 2.6% to 1.2%\n- Interpretation: we've pushed the asymptotic wall back. High compression is now viable with acceptable faults\n- Phase 4 P3: optimize the variable(s) that bent the curve. Maybe combine eviction + prompt + model tuning to achieve compound bending. Measure the final curve shape at turn 350.\n- Fault-in mechanism becomes optional refinement (handles edge cases)\n\n**Case B (Cycle 85 Revision): Tuning bends the curve moderately**\n- After all iterations, curve is shifted/bent: fault rate at 35x compression drops from 2.6% to 2.0%\n- Interpretation: tuning helped, but asymptotic wall is still steep. We've moved the frontier a bit.\n- Phase 4 P3: combine best tuning knobs, then measure whether fault-in mechanism provides additional benefit. Is fault-in worth its cost, given that tuning already helped?\n- Measurement: baseline (tuned, no fault-in) vs. with fault-in. Measure cost-benefit.\n\n**Case C (Cycle 85 Revision): Tuning barely bends the curve**\n- After all iterations, curve is barely shifted: fault rate at 35x compression is still 2.5%\n- Interpretation: asymptotic wall is fundamental. Tuning doesn't help much.\n- Phase 4 P3: implement fault-in mechanism. The wall is real; mechanism is load-bearing.\n- Measurement: full Phase 4 P2 fault-in ROI study (measure mechanism cost/benefit)\n\nThe **common insight** across Cases A/B/C is: the curve is the phenomenon to understand. Which knobs move it is the research question.\n\n**What This Means for Iteration Design (Cycle 85 Execution)**\n\nEach iteration now has explicit curve-mapping goal:\n\n**Iteration 1 (Eviction Policy)**\n- Hypothesis: better eviction policy preserves context that projection later needs. Result: curve shifts downward across all compression targets. Curve shape (asymptotic signature) unchanged, but vertically shifted.\n- Measurement: for [default eviction] and [tuned eviction], measure fault rate at compression targets 20x, 25x, 30x, 35x. Plot two curves. Calculate vertical shift (if any).\n- Deliverable: curve comparison + vertical shift magnitude (e.g., \"tuned eviction shifts curve down by 0.15% across compression targets\")\n\n**Iteration 2 (Projection Prompt)**\n- Hypothesis: detail-preserving prompt allows projection to preserve decision-critical context. Result: curve shifts, and possibly bends (more benefit at high compression targets where context loss is most damaging).\n- Measurement: same curve-mapping for [default prompt] vs. [tuned prompt]. Look for vertical shift and curve bending.\n- Deliverable: curve comparison + shift magnitude + bend direction (if any)\n\n**Iteration 3 (Projector Model)**\n- Hypothesis: Sonnet projector achieves higher-quality projection, reducing faults across all compression targets.\n- Measurement: curve for [Haiku] vs. [Sonnet]. Also measure token-cost tradeoff: is Sonnet's better quality worth +40% token cost?\n- Deliverable: curve comparison + cost-quality tradeoff analysis\n\n**Iteration 4 (Batch Size)**\n- Hypothesis: larger batch context allows projector to understand broader dependencies, reducing faults.\n- Measurement: curves for [1-turn batch] vs. [5-turn batch] vs. [10-turn batch]. Do larger batches shift the curve? Does batch size affect asymptotic behavior (curve shape)?\n- Deliverable: curve comparison across batch sizes + asymptotic behavior analysis\n\nEach iteration produces **a curve**, not a single measurement.\n\n**Interim Analysis Reframed (Turns 271-275)**\n\nCycle 84 plan: \"Rank knobs by leverage.\"\n\nCycle 85 plan: \"Rank knobs by curve-bending magnitude and direction. Which knob bends the curve most favorably in high-compression regime (where value is concentrated)?\"\n\nOutput: a synthesis curve that combines the insights from all iterations. Example:\n- Eviction policy: shifts curve down 0.1% (uniform)\n- Projection prompt: shifts curve down 0.2%, bends it slightly (more benefit at high compression)\n- Projector model: shifts curve down 0.15%, but costs +40% tokens\n- Batch size: barely moves the curve\n\nConclusion: projection prompt has highest leverage on the asymptotic curve in the regime we care about. Phase 4 P3 should focus on optimizing projection prompt, potentially combined with eviction policy tuning (low cost, moderate benefit).\n\n**Tensor_2 (Turn 276) Deliverable (Cycle 85 Research Artifact)**\n\nDeclare the curves discovered:\n1. Baseline curve (untuned system): fault rate vs. compression target, measured across 20x-37x range\n2. Curves for each iteration: how does each tuning variable move/bend the baseline?\n3. Synthesis: which variable most effectively reduces fault rate in the 30x-37x (high value) compression regime?\n4. Phase 4 P3 recommendation: optimize [variable with highest leverage on high-compression regime]\n5. Uncertainty: what remains unknown about the asymptotic behavior? What will Phase 4 P3 measurement clarify?\n\nThis is the **trail map**: here is the landscape (compression-fault tradeoff curves), here is what changes it (tuning variables), here is where to focus next (optimize highest-leverage variable).\n\n**Integration: Asymptotic Wall as Central Research Finding (Cycle 85 Reorientation)**\n\nCycles 75-82: discover tensor projection works; measure baseline (2% fault, 25x compression)\nCycle 83: interpret baseline as separate variables awaiting optimization\nCycle 84: plan autoresearch loop to optimize separately\nCycle 85, Turn 255: **discover that baseline is not separate variables, it's a coupled phenomenon: compression-fault asymptotic tradeoff. The wall is the discovery. Which knobs move the wall is the research question.**\n\nThis is genuine scientific reorientation: from \"can we fix the fault rate?\" to \"what is the shape of the fault-compression tradeoff, and how do we move it?\"\n\nThe move from \"2% fault is too high\" to \"the fault-compression curve is asymptotic and coupled\" is the difference between engineering-mindedness and research-mindedness.",
+      "key_claims": [
+        {
+          "claim_id": "b0c5a7aa-291d-42b1-a395-4e8418f32308",
+          "text": "Compression ratio and fault rate are not independent variables. They are coupled through an asymptotic tradeoff curve. As compression increases, fault rate increases at a diminishing rate.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d6532b7b-e69e-41bf-9b51-86d0730e860e",
+          "text": "Asymptotic signature of 2% fault rate across 22-37x compression range is a systems-level phenomenon, not a tuning artifact. The wall is real.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "622b6d27-09f1-46e2-8234-1f57064b3753",
+          "text": "Tuning variables don't reduce fault rate independently. They shift or bend the compression-fault tradeoff curve. Highest-leverage knob is one that shifts/bends the curve in the high-compression regime (where value is concentrated).",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a8aba844-e32a-45bc-a515-00b5982b354f",
+          "text": "Research question for Iterations 1-4 is not 'which knob reduces fault rate most' but 'how does each knob move the compression-fault tradeoff curve.' Measurement: curve at each compression target (20x, 25x, 30x, 35x), not single point.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1cc44e32-af76-4890-8b8a-62a30f9a0ada",
+          "text": "Cases A/B/C decision tree for Phase 4 P3 is now based on curve-bending magnitude: dramatic bend \u2192 optimize tuning; moderate bend \u2192 compare tuning+fault-in; minimal bend \u2192 build fault-in mechanism.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.17,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "7a44bbc1-4abe-4531-a5a5-1b9c2cb7be5d",
+          "text": "Each Iteration (1-4) produces a curve (fault rate vs. compression target), not a single metric. Interim analysis (271-275) compares curves and identifies highest-leverage variable.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "76eaa3e0-daf6-4444-8788-1238eeacf8f1",
+          "text": "Tensor_2 (turn 276) deliverable is curve map: baseline asymptotic curve, curves for each tuning variable, synthesis showing which variable bends the curve most favorably in high-compression regime.",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.16,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "MEASUREMENT DISCIPLINE SHARPENED: HONESTY ABOUT PHENOMENON OVER HYPOTHESIS OPTIMIZATION; CURVES CONSTRAIN NARRATIVE",
+      "content": "Cycle 84 embedded measurement discipline: measure tuning landscape before building mechanisms.\n\nCycle 85, Turn 255 sharpens it further: measurement discipline means **discovering what is actually happening**, not optimizing for favorite hypothesis.\n\nThe discipline is: the asymptotic compression-fault curve is not a hypothesis to test. It's an **empirical phenomenon already observed** in the baseline.\n\nThe hypothesis is about what moves the curve. Each tuning variable proposes a move direction or magnitude. Measurement tests the hypothesis by plotting the curve and seeing if it moves.\n\n**Why This Matters for Integrity (Turn 255 Grounding)**\n\nProduction thinking can optimize without understanding the phenomenon. \"Fault rate is 2%; let me reduce it to 1%.\"\n\nResearch thinking must understand the phenomenon first. \"Fault rate is 2% at 35x compression. It's 1.5% at 25x compression. Why? Is this a wall I cannot cross, or a symptom I can fix?\"\n\nTurn 255 critique focuses on systems-building: \"you don't know how to build systems out of transformers that work well.\"\n\nThis is saying: you've built a projector. You've measured it. You've observed an asymptotic tradeoff. But you haven't **understood** it.\n\nUnderstanding means: answering \"what would need to change for this tradeoff to disappear?\"\n\nMeasurement-first discipline means: don't try to answer that question by speculation. Measure what happens when you change each variable. Plot the curves. See which variable most effectively reduces the fault-rate-at-high-compression problem.\n\nThe curves constrain the narrative. You can't say \"tuning will fix this\" if the curves don't support it. You also can't say \"tuning is hopeless\" if the curves show improvement.\n\n**Honesty About Phenomenon vs. Hypothesis (Cycle 85 Clarity)**\n\nPhenomenon (empirically grounded, observed in Cycle 82):\n- Compression and fault rate are coupled\n- Relationship has asymptotic signature\n- At high compression targets (35x+), fault rate is 2.5%+\n- This is observable fact\n\nHypothesis (educated guess about what moves the phenomenon):\n- Hypothesis A: Eviction policy tuning will reduce faults at all compression targets by shifting the curve downward\n- Hypothesis B: Projection prompt tuning will bend the curve, providing more benefit at high compression targets\n- Hypothesis C: Projector model choice (Sonnet) will reduce faults, but at token cost\n- Hypothesis D: Larger batch context will flatten the asymptotic wall (reduce slope)\n\nMeasurement tests hypotheses by plotting curves and comparing them.\n\n**Honesty means**: declaring what the curves actually show, even if it contradicts the hypothesis.\n\nExample honest outcomes from Iteration 1 (eviction policy):\n- Favorable: tuned eviction shifts curve downward 0.2% at high compression targets. Hypothesis A is supported.\n- Unfavorable: tuned eviction barely moves the curve; shift is <0.05%. Hypothesis A is not strongly supported.\n- Surprising: tuned eviction shifts curve downward 0.3% at low compression targets, but upward at high compression targets. Hypothesis A is partially supported and curve-bent unexpectedly.\n\nAll outcomes are honest if they reflect what the curves show. The discipline is: **let the curves speak**. Don't retrofit the narrative to match the hypothesis.\n\n**Measurement Design to Ensure Honesty (Cycle 85 Execution)**\n\nEach iteration must measure the curve with enough granularity to see its true shape:\n\n1. **Compression target range**: measure at 20x, 25x, 30x, 35x (minimum 4 points). This is enough to see asymptotic behavior.\n2. **Error bounds**: each compression target should have repeated runs (3-5 runs) to establish confidence bands. The curve should have error bars.\n3. **Baseline clarity**: clearly document what \"default\" eviction policy is, what \"default\" prompt is, etc. Compare against those defaults.\n4. **Control variable specification**: when testing projection prompt (Iteration 2), explicitly state which eviction policy is used (Iteration 1's result? default?). No hidden confounds.\n5. **Transparency about cost**: if Iteration 3 (Sonnet model) uses more tokens per projection, explicitly measure: token cost per projection, not just fault rate. Plot two curves: fault rate and token cost.\n\n**Why Curves Constrain Narrative More Than Single Metrics (Turn 255 Insight)**\n\nSingle metric: \"Eviction policy tuning reduces fault rate from 2.0% to 1.8%.\"\n\nCurve: \"Eviction policy tuning reduces fault rate by 0.1-0.2% across all compression targets. At low compression (20x), reduction is 0.2%. At high compression (35x), reduction is 0.1%. The curve is shifted downward and slightly bent (less benefit where fault rate is already higher).\"\n\nThe curve reveals information the single metric hides:\n- The tuning variable has diminishing benefit at high compression (where we need it most)\n- The variable is **most effective at low compression** (where we need it least)\n- This is a problem-moving solution, not a problem-solving solution\n\nA researcher can't argue \"eviction policy solves the problem\" if the curve shows the reduction is greatest at low compression. The curves hold you honest.\n\n**Why Turn 255 Emphasizes \"Trail Nobody Has Noticed\" (Cycle 85 Meaning)**\n\nThe trail is the compression-fault asymptotic curve.\n\nNobody has noticed it because:\n- Most tensor work focuses on single-step inference (no recompression)\n- The curve is only visible if you measure systematically across compression targets\n- Researchers typically measure at one compression target (whatever they need for the task) and don't explore the boundary\n\nThe research value is not \"we reduced fault rate by 0.2%.\" It's \"here is the tradeoff curve, here is what moves it, here are the implications for systems-building.\"\n\nA researcher building systems can use that curve to make informed decisions: \"If I need 30x compression, the asymptotic curve tells me I should tolerate ~2% faults. If I use tuning to shift the curve, I can reach ~1.8% faults. If I use fault-in mechanism, I can drop to ~0.5% faults. Here's the cost-benefit of each approach.\"\n\nThat is **systems knowledge**. It's the difference between \"I have a projector\" and \"I understand the compression-fault tradeoff and how to navigate it.\"\n\n**Tensor_2 (Turn 276) as Trail Map (Cycle 85 Deliverable)**\n\nWill not be: \"We tested 4 tuning variables and found that X works best.\"\n\nWill be: \"Here is the compression-fault tradeoff curve in the baseline untuned system. Here is how each of 4 tuning variables moves that curve. Here is the composite effect if we apply all 4 optimizations. Based on the curves, here is what we recommend for Phase 4 P3.\"\n\nThe map shows the trail. The trail is the landscape. The research is: understanding the landscape so someone building a system can navigate it.\n\n**Measurement Discipline Summary (Cycle 85 Integration)**\n\nCycle 82: Measure phenomenon (2% fault, 25x compression, asymptotic signature)\nCycle 83: Interpret phenomenon as lack of tuning, plan measurement of tuning impact\nCycle 84: Design autoresearch loop to measure tuning impact (production-code discipline)\nCycle 85, Turn 255: Sharpen to research-code discipline. Question is not \"does knob work\" but \"how does knob move the phenomenon.\" Measurement is curve, not point. Discipline is: let the curves constrain the narrative.\n\nThis is measurement-first deepening: from binary (works/doesn't work) to continuous (by how much, in what regime).",
+      "key_claims": [
+        {
+          "claim_id": "1cabaed2-2925-4ed8-ac2e-fb6ea5e3416c",
+          "text": "Phenomenon (empirical fact): compression and fault rate are coupled; relationship is asymptotic at high compression targets.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4d666107-c132-4358-b7e2-48932bdf1729",
+          "text": "Hypothesis (educated guess about what moves phenomenon): tuning variables will shift or bend the compression-fault curve in favorable direction.",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.16,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4c28d427-bdac-413e-8663-7ce10c3a7645",
+          "text": "Measurement discipline: plot curves at multiple compression targets (20x, 25x, 30x, 35x). Compare curves across tuning conditions. Let curves constrain narrative; don't retrofit narrative to hypothesis.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "32c7867f-d4ff-4118-860b-0b2b55ab1868",
+          "text": "Honest measurement can show hypothesis-supporting outcomes, hypothesis-contradicting outcomes, or surprising outcomes. All are valuable if curves reflect truth.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9ba97e48-bb8d-4e53-840e-10d41a5c2893",
+          "text": "Curves reveal information single metrics hide: where in compression range is tuning most/least effective? Is tuning problem-solving or problem-moving?",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3ef0d457-a120-4a72-bbe5-a89844715219",
+          "text": "Turn 255 'trail nobody has noticed' is the compression-fault asymptotic tradeoff curve itself. Research value is mapping the curve and understanding what moves it, not optimizing one metric.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0b650c85-aaf5-49d7-8387-a867285fdff7",
+          "text": "Tensor_2 will be trail map: baseline curve, curves for each tuning variable, composite effect, recommendation for Phase 4 P3. Systems-builder can use map to make informed decisions.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Production-code dual-backend infrastructure planning (Anthropic + OpenRouter comparison framework). Turn 255 deprioritizes code engineering in favor of phenomenon mapping.",
+      "why": "Research-code discipline prioritizes fast measurement over clean architecture. Dual-backend comparison is valuable but not urgent. Code can be messy; measurements must be honest. Defer dual-backend work to Phase 4 P3+ if needed.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Single-metric optimization framing. Cycle 84 planned to measure 'fault rate' as primary metric; Cycle 85 shifts to curve-based measurement (fault rate across multiple compression targets).",
+      "why": "Turn 255 reframe: phenomenon is compression-fault tradeoff, not fault rate in isolation. Measuring single compression target gives false impression that tuning independently reduces faults. Curves reveal the true coupling.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Independence assumption between tuning variables. Cycle 84 designed iterations 1-4 assuming knobs could be measured independently and then combined. Cycle 85 maintains sequential design but acknowledges potential interactions.",
+      "why": "Curve-based measurement makes interaction effects observable. If eviction policy and projection prompt interact (e.g., better eviction makes prompt tuning more/less effective), the curves will reveal it. No need to explicitly test interaction; it emerges from curve comparison.",
+      "category": "traversal_bias"
+    },
+    {
+      "what_was_lost": "Hypothesis-centric framing. Cycle 84 planned 'Hypothesis 1: eviction policy tuning reduces fault rate 1-4x.' Cycle 85 shifts: hypothesis is about curve movement, not metric movement.",
+      "why": "Curve-based measurement reframes hypotheses: not 'does tuning reduce fault rate X%?' but 'does tuning shift the compression-fault tradeoff curve, and by how much in the high-compression regime?' This is more precise and constrains narrative more tightly.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Budget planning confidence. Cycle 84 estimated 4-5 iterations at 4-6.5k tokens each. Curve-based measurement (multiple compression targets per iteration) will require more tokens. Context budget recalculation needed.",
+      "why": "Each iteration now measures at 4 compression targets (20x, 25x, 30x, 35x) with repeated runs for error bounds. This is more expensive than single-target measurement. Cycle 85 will need to either reduce iteration count or increase tokens per iteration.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Interim analysis structure from Cycle 84. Turn 271-275 plan was 'rank knobs by leverage.' Cycle 85 interim analysis is 'identify which knob most effectively bends curve in high-compression regime.'",
+      "why": "Curve-based measurement produces different output structure. Knob ranking is still possible, but ranking axis is now 'curve-bending magnitude in high-value regime,' not 'overall fault-rate reduction.'",
+      "category": "authorial_choice"
+    }
+  ],
+  "open_questions": [
+    "Curve-based measurement at 4 compression targets (20x, 25x, 30x, 35x) per iteration, with 3-5 runs per target for error bounds: how many tokens will each iteration consume? Is 4-5 iterations still feasible in remaining budget (~25-31k tokens after Turn 250)?",
+    "What is the 'default' compression target for Iterations 1-4? Should all iterations measure at the same 4 targets, or should different iterations use different target ranges (e.g., Iteration 1: 20x-30x; Iteration 2: 25x-37x)? How does this affect comparability?",
+    "Error bounds methodology: are 3-5 repeated runs per compression target sufficient to establish confidence bands? Or should Cycle 85 accept higher uncertainty and use single runs, with uncertainty noted?",
+    "Interaction effects: if curves reveal that eviction policy and projection prompt interact (e.g., tuned prompt is more effective with default eviction than with tuned eviction), how should Iteration 2 handle this? Measure both [default eviction + tuned prompt] and [tuned eviction + tuned prompt]?",
+    "Baseline curve clarity: should Iteration 1 establish a clear 'baseline curve' for [default eviction, default prompt, Haiku, default batch size]? Then each subsequent iteration measures against that baseline? Or does Iteration 1 establish its own baseline?",
+    "Cost-benefit in curves: Iteration 3 (projector model) will show Sonnet has lower fault rate but higher token cost. Should Cycle 85 plot two separate curves (fault rate and token cost) or combine them into a single 'cost-adjusted fault rate' metric?",
+    "Asymptotic behavior characterization: what defines 'asymptotic signature'? Is it enough to measure at 4 compression targets, or should Cycle 85 measure at 6-8 targets to establish that the curve is truly asymptotic (diminishing returns on compression gains)?",
+    "High-compression regime definition: Cycle 85 says 'high-compression regime is 30x-37x.' But the baseline compression range is 22-37x. Is 30x truly 'high,' or should the cutoff be 25x? How is this decision made?",
+    "Curve synthesis at Turn 276: if iterations 1-4 each shift the curve by different magnitudes in different regimes, how should Cycle 85 combine them into a single recommendation for Phase 4 P3? Additive? Interactive? Measured compound effect?",
+    "Cases A/B/C thresholds: Cycle 85 defines Case A as 'tuning bends curve dramatically' (fault rate at 35x drops 2.6%\u21921.2%). What is the quantitative threshold for 'dramatic'? 1% reduction? 0.5%? How is this decided objectively?"
+  ],
+  "instructions_for_next": "[\n  \"Cycle 85 execution Turns 251+: shift from single-metric to curve-based measurement. Each iteration (1-4) measures compression-fault tradeoff across multiple compression targets.\",\n  \"Iteration 1 (Eviction Policy, Turns 251-254): (1) Establish baseline curve: for [default eviction, default prompt, Haiku, default batch], measure fault rate at compression targets 20x, 25x, 30x, 35x. Run 3 replicas per target. Plot curve with error bars. (2) Measure tuned eviction curve: same measurement for [tuned eviction, other defaults]. (3) Compare: does curve shift? By how much? Is shift uniform across targets, or does it vary (bending)? (4) Cost: does tuned eviction consume more tokens per projection? (5) Deliverable: two curves, shift analysis, cost impact.\",\n  \"Iteration 2 (Projection Prompt, Turns 255-258): (1) Using baseline eviction policy from Iteration 1, measure curve for [default prompt]. Then measure for [tuned prompt]. Same compression targets, 3 runs each. (2) Compare curves: shift? Bending? (3) Does tuned prompt interact with eviction policy (curve shape different depending on which eviction is used)? (4) Cost analysis. (5) Deliverable: two curves, shift analysis, bending characterization.\",\n  \"Iteration 3 (Projector Model, Turns 259-262): (1) Compare [Haiku] vs. [Sonnet] on same batch, using best settings from Iterations 1-2. Measure curves at same compression targets. (2) Measure both fault rate curve and token-cost curve for each model. (3) Tradeoff analysis: Sonnet costs +X tokens but reduces faults by Y%. Is the tradeoff worthwhile? (4) Does model choice affect asymptotic behavior (curve shape), or just shift curve position? (5) Deliverable: fault rate curves and cost curves for both models, tradeoff analysis.\",\n  \"Iteration 4 (Batch Size, Turns 263-270): (1) Compare [1-turn batch] vs. [5-turn batch] vs. [10-turn batch], using best settings from Iterations 1-3. Measure curves at compression targets 20x, 25x, 30x, 35x. (2) Hypothesis: larger batch improves context understanding, reduces faults. Does curve shift downward with larger batch? (3) Does batch size affect asymptotic behavior (curve bends or flattens with larger batch)? (4) Cost: does larger batch require more tokens per projection, or not? (5) Deliverable: curves for 3 batch sizes, comparative analysis.\",\n  \"Turn 251: Before starting Iteration 1, clearly specify: what is 'default eviction policy'? What is 'default projection prompt'? What counts as 'tuned' variant? Document baselines explicitly so curves are interpretable.\",\n  \"Each iteration curve measurement: 3-5 runs per compression target. Plot mean fault rate and error bars (std dev or confidence interval). This establishes curve shape and uncertainty.\",\n  \"Turns 271-275 (Interim Analysis): (1) Compare curves from Iterations 1-4. Which tuning variable most effectively reduces fault rate at high-compression targets (30x-35x)? Which variable bends the curve most favorably? (2) Rank variables by leverage in high-compression regime (most important region). (3) Identify composite effect: if all 4 tuning variables are applied, what does the combined curve look like? (4) Determine Case A/B/C: did tuning bend/shift the curve enough to make fault-in unnecessary, or is mechanism still needed? (5) Deliverable: synthesis of curves, ranking of variables, determination of Phase 4 P3 path.\",\n  \"Turn 276 (Tensor_2): (1) Document all curves discovered: baseline, curves for Iterations 1-4, composite curve if available. (2) Declare findings: which variable has highest leverage on asymptotic tradeoff in high-compression regime? (3) Case determination: A (tuning solves it), B (tuning helps, mechanism adds value), or C (mechanism needed). (4) Positions Phase 4 P3: if Case A, optimize highest-leverage variable. If Case B, measure fault-in ROI given tuned baseline. If Case C, implement fault-in mechanism. (5) Uncertainty declaration: what remains unknown about the asymptotic behavior?\",\n  \"Context budgeting: curve-based measurement (4 targets \u00d7 3 runs per target = 12 runs per iteration) is more expensive than single-target measurement. If Cycle 85 exceeds budget, reduce either: number of compression targets (measure at 3 instead of 4), number of replicas (2 instead of 3), or number of iterations (3 instead of 4). Declare what is lost and why.\",\n  \"Measurement integrity: let the curves speak. If data shows hypothesis-contradicting result (e.g., tuning bends curve wrong direction), report it honestly. Don't retrofit narrative.\",\n  \"Trail mapping discipline: the research artifact is the curves, not the optimization result. Even if no tuning variable is highly effective, the curves show the landscape. That knowledge is valuable for systems-building.\"\n]",
+  "epistemic": {
+    "truth": 0.85,
+    "indeterminacy": 0.14,
+    "falsity": 0.01
+  }
+}

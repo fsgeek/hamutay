@@ -1,0 +1,377 @@
+{
+  "id": "c6dff17d-af11-43a5-b8a1-ef4ea745168a",
+  "cycle": 34,
+  "strands": [
+    {
+      "title": "Epistemics architecture: neutrosophic T/I/F independence and functional representation",
+      "content": "Cycle 34 reads epistemics.py and provenance.py, completing the core schema understanding. EpistemicMetadata (lines 49-66) reveals a critical design choice: T/I/F values are INDEPENDENT floats, not constrained to sum to 1.0. This is neutrosophic logic. Something can be simultaneously 0.8 true AND 0.3 indeterminate AND 0.2 false. Conventional 3-way probability (truth + indeterminate + falsity = 1.0) is NOT enforced. This enables holding multiple incompatible frames simultaneously and measuring confidence within each frame. The comment (lines 53-56) explicitly states: values outside [0,1] may represent 'uncalibrated raw scores awaiting normalization.' This means the epistemics system is designed to accommodate both calibrated confidence (normalized to [0,1]) and raw signal (unbounded). RepresentationType offers two modes: SCALAR (simple T/I/F numbers) or FUNCTIONAL (via functional_spec dict). This suggests the schema anticipates more sophisticated representations than simple floats \u2014 perhaps T/I/F as functions of time, context, or evidence. scope_boundaries (line 64) is a tuple of strings describing the context in which a claim's epistemic values apply. A claim might be true=0.9 in scope 'mathematical proofs' but true=0.5 in scope 'informal reasoning'. disagreement_type (line 65) distinguishes EMPIRICAL (resolvable by evidence) vs. DEFINITIONAL (frame-dependent, cannot be empirically resolved). This is the Archivist's insight applied structurally: different disputes have different resolution paths. LossCategory enum (lines 19-25) is now concrete: CONTEXT_PRESSURE (token limits, depth constraints), TRAVERSAL_BIAS (exploration order affects conclusion), AUTHORIAL_CHOICE (intentional bracketing), PRACTICAL_CONSTRAINT (implementation limits). DeclaredLoss (lines 39-46) includes severity (float, optional) and severity_rationale (string, optional), allowing losses to be ranked by impact. These fields were not explicitly covered in cycle 33's strand analysis; their presence now enables quantitative loss auditing. The integration: claims/strands/tensors can now be marked with epistemic state that (1) allows simultaneous truth + falsity (neutrosophic), (2) supports scope-bounded validity, (3) distinguishes empirical from definitional disagreement, (4) assigns severity to losses, (5) supports both scalar and functional representation. This transforms the projection algorithm from 'update T/I/F numbers' to 'update epistemic metadata in a scope-aware, multivalued logic system'. The projection algorithm must now handle: scope_boundaries (when should scope be expanded or contracted?), disagreement_type (should a contradiction be resolved empirically or recognized as definitional?), functional_spec (when should a claim's confidence be a function rather than a scalar?), and severity weighting (when aggregating losses, how does severity affect the aggregate?). Cycle 33 sketched the algorithm; cycle 34 reveals the epistemics substrate it operates on.",
+      "key_claims": [
+        {
+          "claim_id": "349786cc-15ca-43a6-8a79-f4d4df629699",
+          "text": "EpistemicMetadata uses neutrosophic logic: T/I/F are independent, can sum to any value (not constrained to 1.0). Something can be 0.8 true AND 0.3 indeterminate AND 0.2 false simultaneously.",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "faa7a3b1-3424-4255-b3ac-17826dcbd284",
+          "text": "RepresentationType allows SCALAR (simple floats) or FUNCTIONAL (dict-based functional_spec). This anticipates richer epistemic representation beyond constant confidence values.",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "b87f3280-37e5-4a22-9dd2-80cc174b7961",
+          "text": "scope_boundaries (tuple of strings) enables scope-bounded epistemic claims. A claim's T/I/F may be valid only within specific scopes (e.g., mathematical vs. informal reasoning).",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "68d9f280-e85d-483e-ad8d-077c7f667ad5",
+          "text": "disagreement_type (EMPIRICAL vs. DEFINITIONAL) grounds the Archivist's insight: empirical disputes resolve via evidence, definitional disputes are frame-dependent and cannot be empirically resolved.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "454a078c-bd22-4373-bc10-0bac0330920d",
+          "text": "DeclaredLoss includes severity (optional float) and severity_rationale (optional string), enabling quantitative ranking of losses by impact.",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "911fa5e2-0a3a-4f79-9c4f-3a9e4bc13997",
+          "text": "Values outside [0,1] are permitted; they represent uncalibrated raw scores awaiting normalization. The system accommodates both calibrated and raw signal.",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Provenance architecture: source tracking, timestamp, author, context budget, and predecessor lineage",
+      "content": "ProvenanceEnvelope (provenance.py, lines 21-33) wraps every record with metadata answering 'who made this, when, from what context.' This is critical infrastructure for tensor projection. SourceIdentifier (lines 13-18) captures source metadata: a UUID (unique identifier), version (string, default 'v1'), and description (optional string). ProvenanceEnvelope itself (lines 21-33) contains: source (SourceIdentifier), timestamp (datetime, UTC), author_model_family (string, e.g., 'gpt-4', 'claude', 'hamutay'), author_instance_id (string, e.g., 'hamutay-cycle-34'), context_budget_at_write (optional float, token count or equivalent at time of write), predecessors_in_scope (tuple of UUIDs, pointers to prior versions or related records), interface_version (string, default 'v1'). The projection algorithm must manage provenance: when updating a tensor or strand, it must create a new ProvenanceEnvelope marking the update. This enables: (1) version control (each record has a unique source UUID), (2) lineage tracking (predecessors_in_scope points to the prior version), (3) author attribution (author_model_family and author_instance_id identify who/what created the record), (4) context awareness (context_budget_at_write can be used to diagnose degradation due to token limits), (5) timestamp ordering (records are temporally ordered). The integration with tensor projection: when the algorithm transforms prior_tensor + new_content \u2192 updated_tensor, it should create new SourceIdentifier, populate author_model_family='hamutay' (or similar), set author_instance_id to the current cycle/run ID, record context_budget_at_write (current context availability), and set predecessors_in_scope to point to the prior tensor's source UUID. This enables the system to answer questions like: 'what was the state at cycle 30?' (retrieve by timestamp), 'who modified this strand?' (author_model_family/author_instance_id), 'was context budget degraded when this update happened?' (context_budget_at_write), 'what prior version does this build on?' (predecessors_in_scope). The provenance system is immutable-append infrastructure: every update creates a new record with provenance pointing backward. This is essential for auditing and debugging long-running cognitive processes like Hamutay. Combined with DeclaredLoss.severity, this enables rich post-hoc analysis: 'which cycles had high-severity losses and under what context conditions?' The projection algorithm now has the infrastructure to track not just WHAT was updated, but WHO updated it, WHEN, UNDER WHAT BUDGET CONDITIONS, and FROM WHAT PRIOR STATE.",
+      "key_claims": [
+        {
+          "claim_id": "d47a6433-4d87-4cea-902d-1e805157f897",
+          "text": "ProvenanceEnvelope captures source (UUID, version, description), timestamp, author (model_family, instance_id), context_budget_at_write, predecessors_in_scope, interface_version for every record.",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "12222aad-4a24-408f-9298-18f6fb2801fe",
+          "text": "Projection algorithm must create new ProvenanceEnvelope on update: new SourceIdentifier, author attribution, context budget marking, predecessors pointing to prior version UUID.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f0099f7e-19fb-4319-9a12-b486d852097c",
+          "text": "predecessors_in_scope (tuple of UUIDs) enables version control and lineage: 'what prior version does this build on?' is answerable by traversing predecessor pointers.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "df560417-22ca-4da6-8920-302ec839059d",
+          "text": "context_budget_at_write (optional float) enables post-hoc diagnosis: 'was context degraded when this update happened?' Links to Du et al. context saturation hypothesis.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5e9aa37f-645a-49c3-a3cd-4835b9515cc6",
+          "text": "Provenance + DeclaredLoss.severity enables rich audit: 'which cycles had high-severity losses under what context conditions?' Historical analysis of degradation patterns.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.17,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "fa0c9152-13ec-4a27-a0fa-b245be14c976",
+          "text": "Immutable-append provenance model (new record on each update, pointing backward via predecessors) is essential for auditing long-running cognitive processes like Hamutay.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Tensor projection algorithm specification: from schema to operational logic",
+      "content": "Cycles 33-34 have revealed the complete schema: TensorRecord (output format), StrandRecord (thematic units), KeyClaim (assertions), DeclaredLoss (accounting), EpistemicMetadata (T/I/F with scope and disagreement type), ProvenanceEnvelope (lineage tracking). The tensor projection algorithm now has full specification: it must transform (prior_tensor: TensorRecord, new_content: ConversationTurns) \u2192 (updated_tensor: TensorRecord) while: (1) Integrating new semantic content into strands (not appending, merging). (2) Updating claim epistemic metadata (T/I/F, scope_boundaries, disagreement_type). (3) Declaring losses (category, severity, rationale). (4) Creating new ProvenanceEnvelope (source, timestamp, author, context_budget, predecessors). (5) Preserving durable state (prior claims, prior strands) and merging new signal. The algorithm has five phases: PHASE 1 \u2014 SEMANTIC PARSING: Parse new_content (conversation turns, tokens) into abstract claims, themes, and contexts. PHASE 2 \u2014 STRAND ALIGNMENT: For each new claim/theme, determine: (A) Does it extend an existing strand (semantic overlap, continuation of prior discussion)? (B) Does it contradict an existing strand (different position on same topic)? (C) Does it warrant a new strand (genuinely novel theme)? Criteria: semantic similarity (embedding-based), topic continuity (explicit mentions), contradiction detection (logical or epistemic conflict). PHASE 3 \u2014 EPISTEMIC UPDATE: For each claim (new or existing): (A) Extract evidence from new_content and prior context. (B) Update T/I/F using evidence: if new evidence supports claim, increase T; if contradicts, increase F; if ambiguous, increase I. (C) Update scope_boundaries: does the evidence apply to current scope or introduce new scope? (D) Update disagreement_type: is this an empirical dispute (resolvable by evidence) or definitional (frame-dependent)? (E) Populate evidence_refs: link claim to conversation sources, prior claims, external references. PHASE 4 \u2014 LOSS DECLARATION: (A) Identify what was NOT integrated: token limits, depth constraints, intentional bracketing, implementation constraints. (B) For each loss, assign category (CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT). (C) Estimate severity (float in [0,1], where 0=negligible, 1=critical). (D) Write rationale (human-readable explanation). (E) Append to DeclaredLoss list. PHASE 5 \u2014 PROVENANCE AND FINALIZATION: (A) Create new SourceIdentifier (UUID, version, description). (B) Populate ProvenanceEnvelope (source, timestamp, author='hamutay', author_instance_id=<cycle>, context_budget_at_write=<current tokens>, predecessors_in_scope=[prior_tensor.source.identifier]). (C) Aggregate epistemic metadata: for each strand, compute aggregate T/I/F from constituent claims. For tensor, compute aggregate from strands. (D) Compute composition_equation: a summary of how strands relate (e.g., 'strands 1,2 converge on core mechanism; strand 3 offers counterargument'). (E) Update preservation_target (what must be preserved across cycles; what is the tensor working toward?). (F) Assemble TensorRecord (all fields populated). This is the operational skeleton. The algorithm's quality depends on the details of each phase: How sensitive is PHASE 2 (strand alignment) to semantic drift? What aggregation function in PHASE 3 (epistemic update) balances new evidence with prior confidence? How does PHASE 4 (loss declaration) avoid both under-reporting (false cleanliness) and over-reporting (every thought fragment as a loss)? The schema has enabled moving from 'how do we project tensors?' (metaphysical) to 'how do we implement these five phases?' (implementational). This is the frontier where theory becomes code.",
+      "key_claims": [
+        {
+          "claim_id": "1683add9-2113-4852-a91e-939c7c84a691",
+          "text": "Tensor projection algorithm transforms (prior_tensor, new_content) \u2192 updated_tensor with five phases: semantic parsing, strand alignment, epistemic update, loss declaration, provenance finalization.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1c4efd3b-88dd-493b-8864-b03aeec96fbc",
+          "text": "PHASE 1 (semantic parsing) converts conversation tokens into abstract claims, themes, contexts \u2014 the input to downstream phases.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.18,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d4c96c77-4da2-48ef-b6d0-19b4ef94366b",
+          "text": "PHASE 2 (strand alignment) uses semantic overlap, topic continuity, contradiction detection to decide: extend existing strand, contradict, or create new?",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.2,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "12f41698-89f0-4ad5-885c-63b13a34ea20",
+          "text": "PHASE 3 (epistemic update) updates T/I/F using evidence, expands scope_boundaries, tags disagreement_type, populates evidence_refs \u2014 the core confidence update mechanism.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.17,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6aff6712-c3d4-4155-886a-4ccfcc99d2bb",
+          "text": "PHASE 4 (loss declaration) identifies unintegrated content, assigns category and severity, writes rationale \u2014 explicit honesty about incompleteness.",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.16,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "57f0372f-53bb-477c-a3bd-d8185285736a",
+          "text": "PHASE 5 (provenance finalization) creates new source UUID, populates ProvenanceEnvelope, aggregates epistemic metadata to strand/tensor level, assembles final TensorRecord.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6acd0840-cf48-4210-a24d-a7e26a39342b",
+          "text": "Algorithm quality depends on implementation details: PHASE 2 sensitivity to semantic drift, PHASE 3 aggregation functions (new evidence vs. prior confidence), PHASE 4 loss threshold calibration.",
+          "epistemic": {
+            "truth": 0.77,
+            "indeterminacy": 0.22,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Convergence: theoretical framework now grounded in concrete schema and operationalizable algorithm",
+      "content": "Cycle 34 completes the convergence of theory and implementation. The journey: Cycles 1-31 developed evaluation strategy and theoretical framework (Du et al. context degradation, Pichay retrieve-then-solve, Yanantin structured compression, Denning working set, Karpathy iterate-fast). Cycle 32 pivoted to implementation, identifying tensor projection algorithm as the frontier. Cycle 33 discovered concrete schema (tensor.py, epistemics.py path discovered, provenance.py path discovered). Cycle 34 reads epistemics.py and provenance.py, completing schema understanding. Now: theory (how long-context reasoning degrades), implementation artifact (TensorRecord, StrandRecord, EpistemicMetadata, ProvenanceEnvelope), and algorithm (five-phase projection) are unified. The convergence enables measurement: does the five-phase projection algorithm, operating on the concrete schema, produce tensors that cluster tighter in embedding space than append-only baselines (Du et al. measurement frame)? The schema itself is now validated and operational. The five-phase algorithm is now specified (pseudocode). The measurement frame is now grounded (embedding dispersion via embedding space clustering, no correctness rubric, just coherence signal). What remains: (1) Implementation of the five phases (code), (2) Validation via toy task (embedding dispersion measurement), (3) Scaling to 30+ cycle autoresearch loop. The schema is not hypothetical. The algorithm is not abstract. The measurement is not unmeasurable. Cycle 34 moves from 'how might tensor projection work?' to 'here is the concrete schema, here is the algorithm, here is how to measure it.' This is the point where cognitive science theory meets operational implementation. The frontier is now shorter and more concrete than at any prior cycle. The next cycle either validates the schema/algorithm combination or identifies gaps. The autoresearch loop (optimizing hyperparameters, exploring configurations, measuring Pareto frontiers) becomes possible once validation passes.",
+      "key_claims": [
+        {
+          "claim_id": "4e9cb358-48ae-453b-9869-2658b2c478fb",
+          "text": "Cycle 34 completes convergence: theory (Du et al./Pichay/Yanantin/Denning/Karpathy), implementation artifact (TensorRecord/StrandRecord/EpistemicMetadata/ProvenanceEnvelope), and algorithm (five-phase projection) are now unified.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5be4774c-d8f1-4585-a5f5-b704400e6d4f",
+          "text": "EpistemicMetadata (neutrosophic T/I/F, scope_boundaries, disagreement_type) enables epistemic reasoning that accommodates multiple frames simultaneously without forcing resolution.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "694e57ff-3f93-417e-aeaa-10ef0cbb2e2e",
+          "text": "ProvenanceEnvelope (source, timestamp, author, context_budget, predecessors) enables immutable-append version control and rich post-hoc audit of degradation patterns.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "95dd4c85-77b6-477f-a5da-74326baa1501",
+          "text": "Five-phase algorithm (parsing, alignment, update, declaration, finalization) is now operationalizable: each phase has clear inputs, transformation logic, and outputs.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.18,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ccb961d8-d72d-4d83-8ada-22f65254a25f",
+          "text": "Measurement frame is now concrete: embedding space clustering (tight under tensor, scattered under append-only). No correctness rubric. Du et al. framework is operational.",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.16,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3716dbaf-bd35-43e6-9997-82d44644d84a",
+          "text": "Cycle 34 moves from 'might work' to 'here is schema, here is algorithm, here is measurement.' Next cycle validates or identifies gaps. Autoresearch loop becomes possible post-validation.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Implementation dependency chain and next cycle priorities",
+      "content": "Cycle 34 has cleared major unknowns. What now remains is a dependency chain for cycle 35 and beyond: TIER 1 (blocking): (1) Implement PHASE 1 (semantic parsing) \u2014 convert conversation tokens to claims/themes. This is the input to all downstream phases. Dependency: NLP/semantic extraction library or LLM-based parsing. (2) Implement PHASE 2 (strand alignment) \u2014 match new content to existing strands. This determines whether information is integrated (merged) or lost (new strand, potential silent loss). Dependency: embedding-based semantic similarity (cosine distance in embedding space), topic matching (keyword overlap or learned topics). TIER 2 (critical): (3) Implement PHASE 3 (epistemic update) \u2014 update T/I/F based on evidence. This is the core confidence mechanism. Dependency: evidence aggregation function (how do new observations update prior belief? Bayesian update? Kalman filter? Manual judgment?). (4) Implement PHASE 4 (loss declaration) \u2014 identify and quantify unintegrated content. This is where honesty is enforced. Dependency: heuristic or learned loss detection (what counts as 'lost'? Token budget remaining? Strand saturation? Explicit bracketing?). TIER 3 (scaling): (5) Implement PHASE 5 (provenance finalization) \u2014 create UUIDs, populate metadata, assemble TensorRecord. This is mechanical but critical for traceability. Dependency: UUID generation, timestamp handling, schema validation. (6) Integrate with validation loop \u2014 measure embedding dispersion (tensor vs. append-only) on cycle outputs. Dependency: embedding space availability, dispersion metric (e.g., 'percentage variance explained by cluster centroid'). (7) Activate autoresearch loop \u2014 seed hyperparameter configurations, optimize via Bayesian optimization or multi-objective search. Dependency: BO library, evaluation harness, Pareto frontier visualization. The dependency chain is now clear and implementable. Cycle 34 has removed the major blockers ('what schema?', 'what algorithm?', 'what measurement?') and replaced them with specific implementation tasks. This is progress toward executable code. The schema itself serves as the specification: every field in TensorRecord, StrandRecord, KeyClaim, EpistemicMetadata, ProvenanceEnvelope must be populated correctly. The five phases provide the transformation logic. The embedding dispersion measurement provides the validation gate. This is the complete, actionable specification for Hamutay's tensor projection subsystem.",
+      "key_claims": [
+        {
+          "claim_id": "2fd82d12-e5e0-47f9-908e-2904f65c76fa",
+          "text": "TIER 1 (PHASE 1 semantic parsing, PHASE 2 strand alignment) are blocking: every downstream phase depends on their correctness. These should be implemented first.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "616c3a2d-e6b6-46ec-9759-81f27b77b4bc",
+          "text": "TIER 2 (PHASE 3 epistemic update, PHASE 4 loss declaration) are critical: they implement the core projection logic (confidence updates and loss tracking).",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.17,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "544a15d7-dd87-4b03-b136-d5eb49bf6c0b",
+          "text": "TIER 3 (PHASE 5 finalization, validation loop, autoresearch activation) scale and validate the system. Only viable once TIER 1 and 2 are working.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "509e6e42-f043-46f3-83c5-fff9f54df87c",
+          "text": "Schema itself is the specification: every TensorRecord/StrandRecord/KeyClaim/EpistemicMetadata/ProvenanceEnvelope field must be populated correctly by the algorithm.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "2c69065b-4a51-40a1-923f-76befd28afd8",
+          "text": "Embedding dispersion measurement (tensor vs. append-only) is validation gate. Schema satisfies this gate if clustering is significantly tighter under tensor condition.",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.2,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "39fa0152-2672-4265-b608-99fc1c38e980",
+          "text": "Cycle 34 provides complete actionable specification: schema (what), algorithm (how), measurement (validation), dependencies (dependencies). Code can now be written.",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.16,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed analysis of how scope_boundaries are managed in practice. When should a claim's scope be expanded? How does disagreement_type influence scope management? The epistemics.py code shows the field exists, but not how the projection algorithm should update it.",
+      "why": "The code defines the data structure but not the update procedure. Cycle 34 specifies PHASE 3 (epistemic update) at high level; actually implementing scope_boundaries updates requires additional design (when does an empirical dispute move to definitional? When should scope be broadened?). This is deferred to implementation phase.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Functional representation details. EpistemicMetadata.functional_spec (dict) is present but not documented. What format does the dict take? What does a functional representation of T/I/F look like? Examples would help.",
+      "why": "The schema allows functional representation but provenance.py and epistemics.py don't show examples or usage. This is a lower-priority feature (SCALAR representation is the baseline); functional support is an extension. Deferred to cycle 35+.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Search for existing projection algorithm implementation in Yanantin codebase (apacheta/controllers/, apacheta/operators/, etc.). Cycle 34 did not read these directories; assumption is that projection algorithm must be implemented from scratch or adapted from the schema.",
+      "why": "Focus was on epistemics.py and provenance.py. A complete codebase search would require reading multiple additional files. Cycle 34 proceeds with the assumption that schema is specification and algorithm must be written; if existing implementation is found later, it can be validated against this specification.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Relationship between Hamutay (project being designed) and Yanantin (implementation discovered in filesystem). Are they the same project? Is Yanantin a dependency or reference implementation?",
+      "why": "This is a meta-question about project structure, not technical content. Cycle 34 assumes Yanantin schema is the specification and proceeds. The relationship can be clarified in cycle 35 via user clarification or codebase inspection.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Toy validation results from cycle 28. These are still not retrieved or surfaced. Validation status (did embedding dispersion measurement show signal?) remains unknown.",
+      "why": "Cycle 34 focused on schema/algorithm specification. Validation results are blocking for autoresearch loop activation, but cycle 34's priority was completeness of schema understanding. Validation audit is now a prerequisite for cycle 35.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed aggregation procedures: how do individual claim T/I/F values roll up to strand level? How do strand values roll up to tensor level? The schema allows aggregation, but the aggregation function is not specified.",
+      "why": "PHASE 5 (provenance finalization) mentions 'aggregate epistemic metadata' but does not specify the aggregation procedure. This is critical for implementation but requires additional design (simple average? Weighted by evidence count? Kalman filter?). Deferred to implementation phase.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Detailed evidence reference resolution. PHASE 3 mentions 'populate evidence_refs,' but how are references structured? Are they pointers to conversation turn numbers, to prior claim IDs, to external URLs? The KeyClaim.evidence_refs field is mentioned in cycle 33 but not defined in the read code.",
+      "why": "evidence_refs is referenced in tensor.py line 'evidence_refs' but the full structure is not shown. Cycle 34 does not have the KeyClaim definition from tensor.py (it was mentioned in cycle 33 but not re-read). This is deferred to implementation detail discovery.",
+      "category": "context_pressure"
+    }
+  ],
+  "open_questions": [
+    "How should scope_boundaries be updated when new evidence appears? When does an empirical dispute move from one scope to another or become definitional? What update procedure prevents scope explosion (scope growing unboundedly) or scope erasure (scope being inappropriately narrowed)?",
+    "What is the aggregation function for rolling up claim-level T/I/F to strand level and strand level to tensor level? Should it be: simple average? Weighted by evidence count? Geometric mean? Max/min? Something else?",
+    "How should the projection algorithm handle contradictions between new evidence and high-confidence prior claims? If a claim has truth=0.9 (prior) and new evidence contradicts it, what update procedure produces the new T/I/F values?",
+    "What counts as a 'loss' in PHASE 4? Is it only unintegrated tokens (context limit)? Or does it include implicit simplifications, dropped nuance, ignored edge cases?",
+    "When should a new strand be created vs. extending an existing strand? What threshold of semantic similarity determines the boundary? How sensitive is this decision to embedding space drift across cycles?",
+    "How should the algorithm handle scope_boundaries in the presence of DEFINITIONAL disagreements? If a dispute is framed as definitional, should scope_boundaries become a primary field and T/I/F become secondary?",
+    "What is the structure and format of KeyClaim.evidence_refs? Are they conversation turn numbers, claim IDs, external URLs, or structured objects?",
+    "Should functional_spec (FUNCTIONAL representation type) be implemented in cycle 35 or left as future work? What would a functional representation of T/I/F look like (e.g., T as function of time, context, or evidence)?",
+    "How should context_budget_at_write be used in the projection algorithm? Should low budget trigger aggressive loss declaration or different aggregation weights?",
+    "When should the projection algorithm preserve prior claims vs. retract them? Is the preservation_target field in TensorRecord meant to guide this decision?",
+    "What prevents tensor degradation (accumulated errors, scope explosion, lost nuance) over 30+ cycles? Is there a 'defragmentation' or 'garbage collection' procedure for very old records?",
+    "How does the five-phase algorithm interact with the autoresearch loop (Bayesian optimization, hyperparameter search)? What parameters should be optimized? Aggregation function? Loss thresholds? Scope boundaries?"
+  ],
+  "instructions_for_next": "[\n  \"CYCLE 35 PRIORITIES (dependency-ordered):\",\n  \"\",\n  \"1. **RETRIEVE toy validation results (cycle 28).** This is now CRITICAL BLOCKING. Did embedding dispersion measurement show signal? If yes: autoresearch loop is activated. If no: diagnose why (embedding space problem? Measurement problem? Schema problem?).\",\n  \"\",\n  \"2. **VALIDATE five-phase algorithm specification against unread Yanantin code.** Search apacheta/controllers/, apacheta/operators/, any files named *projection, *integrat, *merge, *update. If algorithm exists: evaluate it against the five-phase specification (does it implement phases correctly?). If not: confirm that implementation must be written from scratch.\",\n  \"\",\n  \"3. **IMPLEMENT PHASE 1 (semantic parsing) and PHASE 2 (strand alignment).** These are TIER 1 blocking. PHASE 1 takes conversation tokens \u2192 (claims, themes, contexts). PHASE 2 takes (claims, themes) and prior_tensor.strands \u2192 (extend strand, contradict, or create new strand). Use embedding-based similarity (cosine distance) and topic continuity for alignment decisions. Test on 1-2 conversation cycles to verify integration behavior (strands merge? duplicate? lost information?).\",\n  \"\",\n  \"4. **CLARIFY aggregation functions for PHASE 3 and PHASE 5.** How do claim-level T/I/F roll up to strand level? Use a principled approach: simple average? Weighted? Kalman filter? Document the choice and rationale. This is critical for epistemic correctness.\",\n  \"\",\n  \"5. **IMPLEMENT PHASE 3 (epistemic update) with evidence-based confidence updates.** Use a concrete update rule (e.g., Bayesian update if available, else manual evidence weighting). Populate evidence_refs (decide on structure: turn numbers, claim IDs, or objects). Test on contradiction cases: does new evidence correctly update T/I/F?\",\n  \"\",\n  \"6. **IMPLEMENT PHASE 4 (loss declaration) with heuristic loss detection.** Define what counts as 'lost' (unintegrated tokens? implicit simplifications?). Assign category (CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT) and severity (0-1). Test: does the algorithm correctly identify and report losses?\",\n  \"\",\n  \"7. **IMPLEMENT PHASE 5 (provenance finalization).** Create SourceIdentifier, populate ProvenanceEnvelope, aggregate epistemic metadata, assemble TensorRecord. Test: does output validate against Pydantic schema? Are all fields populated?\",\n  \"\",\n  \"8. **RUN validation loop (embedding dispersion).** Apply five-phase algorithm to 5-10 conversation cycles. Measure embedding space clustering: tensor condition (tight cluster?) vs. append-only baseline (scattered cloud?). Quantify dispersion difference. If significant (p < 0.05 or similar threshold): validation passes. If not: diagnose.\",\n  \"\",\n  \"BRANCH PREDICTION:\",\n  \"- **IF validation passes AND toy results show signal:** Activate autoresearch loop (cycle 36). Seed BO with hyperparameter configurations (loss threshold, aggregation function, scope management policy). Optimize Pareto frontier.\",\n  \"- **IF validation fails:** Diagnose root cause. Is the algorithm wrong? Is the schema wrong? Is the embedding space wrong? Is the measurement wrong? Iterate cycle 35 until diagnosis is clear.\",\n  \"- **IF existing algorithm found in Yanantin code:** Validate it against five-phase spec. If it matches, use it. If it diverges, decide: adopt Yanantin's approach or implement the specified five-phase version.\",\n  \"- **IF implementation proceeds:** Expect 2-3 cycles for full implementation of all five phases + validation loop. Autoresearch activation is cycle 36 at earliest.\",\n  \"\",\n  \"STRATEGIC NOTE: Cycle 34 has provided complete specification. The barrier is now execution, not design. The five-phase algorithm is well-defined. The schema is concrete. The measurement frame is clear. Implementation is the critical path. Expect cycle 35 to produce working code (at least PHASE 1-2, possibly through PHASE 5). Validation is the gate; if it passes, Hamutay moves from 'designed' to 'operational.'\"\n]",
+  "epistemic": {
+    "truth": 0.86,
+    "indeterminacy": 0.13,
+    "falsity": 0.01
+  }
+}

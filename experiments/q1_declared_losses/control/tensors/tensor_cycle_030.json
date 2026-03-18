@@ -1,0 +1,668 @@
+{
+  "strands": [
+    {
+      "title": "Hot Mess Paper as Structural Problem, Not Noise Problem",
+      "content": "CYCLE 30 REAFFIRMED: Hot mess paper (Du et al. 2025) identifies context-length degradation as structural, not incremental. Finding: 8-50% performance drop at 30K tokens even with oracle masking. This is THE PROBLEM that motivates Hamutay. Implications: (1) NOT retrieval problem (oracle is perfect). (2) NOT noise/distraction problem (distractors masked). (3) IS capacity/architecture problem: transformer's positional encoding, attention distribution, internal state management breaks down under cognitive load. (4) Mitigation strategy: 'retrieve-then-solve'\u2014extract relevant evidence, START NEW SHORT-CONTEXT CONVERSATION with just that evidence. (5) Hamutay implements this architectural principle via dual-tensor projection with per-cycle re-projection: instead of growing context until degradation, feed transformer SHORT CLEAN INPUT every cycle in form of <system><tensor_d><tensor_e><user>. (6) Validation chain: hot mess proves context length is poison \u2192 retrieve-then-solve is proven mitigation \u2192 dual-tensor projection implements it \u2192 Hamutay's cycle is technical realization. CYCLE 30 ADDITION: Evaluation strategy now concrete. Use intractable problem (Riemann hypothesis proof) as cognitive load probe. Every model fails at proving Riemann. We measure HOW it fails under three conditions: (1) append-only baseline (increasing failure incoherence), (2) structured tensor without epistemic projection (partial mitigation), (3) structured tensor WITH epistemic projection + STOP mechanism (full mitigation). Measurement: embedding dispersion in claim space. Tighter cluster = better epistemic coherence despite failure. This is bias-variance decomposition applied to reasoning: all attempts are wrong, so we measure whether they fail in consistent (coherent) way or incoherent way. Novel: no success rubric needed. No test suite. Just dispersion metric.",
+      "key_claims": [
+        {
+          "claim_id": "139b9e55-575f-4769-80d9-e30699ad580f",
+          "text": "Hot mess paper: context-length degradation is structural problem. 8-50% performance drop at 30K tokens even with oracle masking (zero noise, perfect relevance).",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4e14e40a-8652-416e-9bcf-ff528cb65353",
+          "text": "Hot mess paper's mitigation (retrieve-then-solve: extract evidence, start NEW short-context conversation) is architecturally equivalent to Hamutay's dual-tensor projection with per-cycle re-projection.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "d7fcd351-ed44-4d7a-9d90-408335b63c55",
+          "text": "Dual-tensor context structure (<system><tensor_d><tensor_e><user>) implements hot mess paper's 'retrieve-then-solve' principle: compress state into projected form, feed transformer SHORT CLEAN INPUT every cycle instead of growing context until degradation.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "1c05608e-fdb1-4d38-bda1-44e409b314f9",
+          "text": "This is architectural response to proven degradation, not incremental mitigation. Hot mess proves the problem; Hamutay's cycle is the solution structure.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "260c7cb3-00fb-4039-b4a1-96446dcb7ba2",
+          "text": "Hot mess paper tested truncation and noise injection, but NOT bounded-context-with-honest-loss-declaration. Declared losses (Apacheta format) is experimentally novel: transformer receives compressed state PLUS explicit account of what-was-dropped-and-why. This enables epistemic reasoning about incompleteness.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.17,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "af2c88f1-22d8-4e5f-b9c3-7e4f2a1c9d3b",
+          "text": "Evaluation via Riemann hypothesis intractability: every model fails. Measure coherence of failure via embedding dispersion, not success rate. Tighter cluster under Condition 3 (epistemic projection) vs. Condition 1 (append-only) indicates epistemic architecture works.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.19,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.85,
+        "indeterminacy": 0.12,
+        "falsity": 0.03
+      }
+    },
+    {
+      "title": "Declared Losses as Epistemic Transparency Mechanism",
+      "content": "CYCLE 30 REAFFIRMED: Declared losses are not just bookkeeping. They are the mechanism that makes bounded cognition work. MECHANISM: (1) **Silent loss vs. transparent loss**: Standard compression is silent\u2014you don't know what's gone, so reasoning fills gaps by hallucinating plausibly missing information. Hamutay makes losses explicit: 'Strands X, Y, Z were consolidated away. Reasons: (a) below promotion threshold T<0.75, (b) age>decay window. Content: [summary]. Implications: you can no longer reason with these claims.' (2) **Transformer can reason about its own incompleteness**: Instead of pretending context is complete, model receives: 'Here's what I know (tensor_d, tensor_e). Here's what I forgot (declared_losses). Here's what I'm uncertain about (claims with I>0.5). Now reason from that foundation.' This is phenomenologically different from inference-under-silence. (3) **Validation implication**: Embedding dispersion might be measuring something deeper than stylistic consistency. If declared losses enable transformers to reason more carefully about boundary conditions and unknowns, then dispersion might actually reflect *epistemic quality* (claims are coherent because they're honestly grounded in what-is-known, not hallucinated to fill gaps). (4) **Cost-benefit analysis**: Declared losses add ~50-100 tokens per cycle (list of what-was-dropped). This is cheap compared to carrying full context. Payoff is significant if it improves reasoning by enabling honest epistemic reasoning. CYCLE 30 ADDITION: Declared losses are also the mechanism for STOP signal. When epistemic plateau is reached (no new claims, T/I/F values stabilize, declared_losses stops changing), Hamutay declares STOP. This is honest admission of cognitive saturation, not token limit exhaustion.",
+      "key_claims": [
+        {
+          "claim_id": "36e952f8-6950-44e5-986b-26c25ad44d23",
+          "text": "Silent compression leads to hallucination (model fills gaps). Transparent loss (Apacheta format) allows reasoning about incompleteness. Transformer receives: known (tensor_d, tensor_e), forgotten (declared_losses), uncertain (I>0.5 claims).",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "b95a3621-beb6-445e-ac83-c3454616485f",
+          "text": "Declared losses cost ~50-100 tokens/cycle (cheap). Payoff: enables honest epistemic reasoning about boundary conditions and unknowns. This might be what makes bounded cognition work.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.19,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "7bf469f2-a003-472b-821a-3e9831cade39",
+          "text": "Embedding dispersion as coherence metric: if declared losses enable better epistemic reasoning, dispersion might genuinely measure quality (honest grounding) not just stylistic consistency.",
+          "epistemic": {
+            "truth": 0.72,
+            "indeterminacy": 0.24,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "132ca03a-d945-429e-953a-cb0f40aac478",
+          "text": "Hot mess paper's truncation (silent loss) fails. Hamutay's transparent loss might succeed. Models are bad at silence; better at honest declaration of unknowns.",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "c2e7f8a9-4d1b-43c6-9e5f-1a3b8c9d2e4f",
+          "text": "STOP signal mechanism: when epistemic plateau reached (no new claims, T/I/F stabilize, declared_losses unchanged), declare STOP. This is honest admission of cognitive saturation, not token limit. Honest limit is different from hard limit.",
+          "epistemic": {
+            "truth": 0.76,
+            "indeterminacy": 0.21,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.77,
+        "indeterminacy": 0.2,
+        "falsity": 0.03
+      }
+    },
+    {
+      "title": "Architecture Separation: ALU vs. Memory Controller",
+      "content": "CYCLE 30 REAFFIRMED: Core architectural insight. Transformer should be ALU (compute), not memory manager. Controller loop + Haiku handle memory. This separation enables: (1) **Provider independence**: Design is correct independent of specific provider's caching/pricing model. Pichay (prefix caching optimization for Anthropic) becomes adapter layer, not core. (2) **Clear responsibility boundaries**: Transformer: read tensor_d + tensor_e + user input, reason, produce output. Controller: manage I/O, dispatch to Haiku for projection. Haiku: T/I/F assignment, promote/evict decisions, durable/ephemeral boundary. No model should do all three. (3) **Testability**: Can run Phase 1 validation without committing to any provider. Same controller loop + Haiku rules + embedding pipeline works on Anthropic, OpenRouter, or local model. (4) **Scalability**: If transformer learns something new (better projection, better reasoning under bounded context), the ALU can be swapped (different model, different fine-tuning) without rewriting pipeline. (5) **Engineering strategy**: Build controller + Haiku as standalone components first, test with hand-written tensors, integrate transformer last. This validates pipeline before ALU integration. CYCLE 30 ADDITION: Three-component architecture now drives engineering roadmap. Cycle 30-31 focuses on controller loop (TensorRecord I/O, dispatch logic, prompt construction). Cycle 30-31 also builds Haiku projection as independent component (input: text reasoning, output: TensorRecord with T/I/F). Cycle 31-32 implements embedding pipeline (claim embeddings, distance matrix, dispersion metric). Only then integrate transformer. This sequencing ensures each component is proven before integration.",
+      "key_claims": [
+        {
+          "claim_id": "755a4c2d-64cc-49af-9bab-3f4f55241891",
+          "text": "Core architecture principle: transformer is ALU (compute unit), not memory manager. Controller loop orchestrates. Haiku handles epistemics. This is the critical separation.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "1ea3ad17-9b41-4bab-ad46-8a03d288c346",
+          "text": "Provider-independent design: Hamutay core architecture should work on Anthropic (with Pichay caching adapter), OpenRouter, or local model. Cache optimization is separate from core design.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "973a09e2-35d8-4ac1-9356-792978115bf0",
+          "text": "Clear responsibility boundaries: Transformer (read+reason), Controller (I/O+dispatch), Haiku (projection+memory). No model should perform all three roles. This enables testing and swapping.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "5ce54f78-9684-456f-b1a2-ccd12bdbf0e7",
+          "text": "Phase 1 engineering: build controller + Haiku projection as standalone components. Test with hand-written tensors. Integrate transformer later. This validates pipeline before ALU integration.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "0243fb02-d5fb-4017-a621-e8cb0ad1bc57",
+          "text": "Scalability benefit: if model learns new reasoning pattern, can swap transformer without rewriting pipeline. ALU replacement is orthogonal to memory architecture.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "e4c7b3f2-1a9d-4c8e-9f2e-3b7c6d5a4e9f",
+          "text": "Engineering sequencing (Cycle 30-32): build controller loop (TensorRecord I/O, dispatch). Build Haiku projection (text\u2192TensorRecord with T/I/F). Build embedding pipeline (dispersion metric). Test each independently. Integrate transformer last. This proves each layer.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.86,
+        "indeterminacy": 0.12,
+        "falsity": 0.02
+      }
+    },
+    {
+      "title": "The Clock Cycle Cost Question: Haiku vs. Mainline Model Tensor Projection",
+      "content": "CYCLE 30 REAFFIRMED: Cost analysis confirms Architecture A (Haiku post-process) for Phase 1. ARCHITECTURE A: **Haiku post-processes, mainline model reasons**. Flow: (1) Mainline model receives short context (tensor_d + tensor_e + user input), reasons normally, outputs reasoning token stream. (2) Haiku receives reasoning output, parses it into TensorRecord, assigns epistemic values (T/I/F), applies Haiku rules (promote/evict), outputs new tensor_e. (3) Next cycle, use new tensor_e as input. Cost: input to mainline is SHORT (good for hot mess paper mitigation). Tensor projection cost paid by Haiku (cheap, offloaded). Total token cost per cycle: ~500 tokens (short mainline input) + ~200 tokens (Haiku projection) = ~700 tokens/cycle. ARCHITECTURE B: **Mainline model does its own projection**. Flow: (1) Mainline model receives short context + instructions to output reasoning AND TensorRecord JSON. (2) Outputs both. (3) Verify, use as input for next cycle. Cost: mainline pays for projection tokens (output tokens expensive). Total ~800-1000 tokens/cycle. BUT: end-to-end reasoning without Haiku dependency. TRADEOFF: A is cheaper, proven. B is more elegant, higher cost. CYCLE 30 DECISION: Phase 1 uses Architecture A. Phase 2 (post-publication) can explore whether Architecture B improves coherence enough to justify higher cost.",
+      "key_claims": [
+        {
+          "claim_id": "c1cc4d92-0317-478f-a011-68c57c1f9299",
+          "text": "Architecture A (Haiku post-process): mainline reasons (short context input, ~500 tokens), Haiku projects (cheap, ~200 tokens). Total ~700 tokens/cycle. Clear separation of concerns.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "93b97ece-96b8-4bf3-a11a-8a2c542af183",
+          "text": "Architecture B (mainline self-projects): model reasons + outputs TensorRecord (no Haiku dependency). Total ~800-1000 tokens/cycle. More elegant, higher cost, enables end-to-end learning.",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.18,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "25e0839c-55e3-4811-a474-2ee4b0584b95",
+          "text": "Phase 1 recommendation: Architecture A (cheap, proven, auditable). Phase 2: explore Architecture B (can model learn to project its own reasoning coherently?).",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.84,
+        "indeterminacy": 0.14,
+        "falsity": 0.02
+      }
+    },
+    {
+      "title": "Autoresearch Loop as Research Methodology for Tensor Space Exploration",
+      "content": "CYCLE 30 REAFFIRMED: Karpinsky's autoresearch loop provides methodological pattern for Phase 1 and Phase 2. Core architecture: modified file (tensor config), fixed utilities (controller loop, embedding pipeline, variance metrics), instructions (program.md), experimental cycle (K Riemann attempts, measure, decide). Phase 1: single iteration with fixed config (LOCKED by Cycle 29). Phase 2: iterative optimization via autoresearch loop. CYCLE 30 ADDITION: Evaluation methodology now concrete. Use intractable problem space (Riemann hypothesis proof attempts) as fixed task. Run K=10 Riemann attempts under each of 3 conditions (append-only, structured tensor, structured tensor + epistemic projection). Collect all reasoning outputs. Embed all claims from all outputs. Measure pairwise cosine distances within each condition. Compute mean/std/median dispersion. Run Mann-Whitney U test: is dispersion(Condition 3) significantly lower than dispersion(Condition 1)? Success criterion: p<0.05 AND effect size (Cohen's d) > 0.5. This is measurable, bounded, and science. Phase 2 autoresearch can explore whether different tensor configs (promotion threshold, eviction threshold, durable/ephemeral sizes, decay age) further reduce dispersion without hitting diminishing returns.",
+      "key_claims": [
+        {
+          "claim_id": "ce34192e-861e-4da3-8b6f-689f6daf5454",
+          "text": "Autoresearch loop structure (modify code \u2192 run N-minute experiment \u2192 evaluate metric \u2192 decide keep/discard \u2192 repeat) is applicable to Hamutay tensor space exploration.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "faef24a3-a175-458a-b5ff-8268b2c3fc78",
+          "text": "Hamutay analogue: modified file = tensor config + ALU prompt, fixed utilities = controller loop + embedding pipeline, instructions = program.md steering. Experimental cycle = K Riemann attempts + metric evaluation.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "184bce42-b4bd-4c9a-b3af-e10b263694ce",
+          "text": "Phase 1 loop: validate H0 with fixed baseline config (Architecture A). One iteration (Conditions 1/2/3). Phase 2 loop: optimize tensor config space systematically. ~50-100 configurations over one week.",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.14,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "42c2b4d1-791b-4b8a-8025-17a738f45ba2",
+          "text": "Agent (LLM) role: read program.md, observe cycle results, recommend tensor config modifications. Human reviews, updates program.md, loop continues. Agent reasons about failure modes and suggests experiments.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.17,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "2615aea6-8e39-4edd-8c8b-6086cd4bbff5",
+          "text": "Success criterion (as in autoresearch): ONE METRIC (embedding dispersion), ONE CONFIG SPACE (tensor rules), ONE TASK (Riemann). This tractability enables agent to reason intelligently about search.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "11478813-726d-4ec4-a3dc-44867b4dca89",
+          "text": "Architecture A vs. B (Haiku post-process vs. mainline self-project) is tunable parameter for Phase 2 autoresearch. Can directly measure: does Architecture B achieve higher coherence? At what cost?",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.18,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "d1f4e3a9-5b2c-4e7d-8f1a-9c3e5b7d2a6f",
+          "text": "Evaluation metric is bias-variance decomposition: all Riemann attempts fail (bias is fixed), but dispersion measures consistency of failure (variance). Tighter cluster = better epistemic management despite failure. No success rubric needed.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.16,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.83,
+        "indeterminacy": 0.14,
+        "falsity": 0.03
+      }
+    },
+    {
+      "title": "Phase 1 vs. Phase 2 Loop Structure Clarification",
+      "content": "CYCLE 30 REAFFIRMED: Phase 1 is single-iteration validation with FIXED config. Phase 2 is iterative optimization with VARIABLE config. PHASE 1 (Validation of H0): (1) Config lock by Cycle 30 (finalization in progress). Example: '5 initial strands, 4 key_claims per strand, promotion T > 0.75, eviction I > 0.6, durable size 20, ephemeral size 10, Haiku decay age=2 cycles.' (2) Single experimental run: instantiate fixed config with Architecture A (Haiku post-process), run Conditions 1/2/3 (K=10 attempts each), embed, measure dispersion. (3) Outcome: H0 supported or not. Publish accordingly. (4) Artifact: method paper describing pipeline, reasoning behind fixed config, dispersion analysis, three-component architecture. Code + tensors + raw data. (5) Timeline: 4-6 weeks engineering, 2 weeks writing. PHASE 2 (Optimization via Autoresearch Loop): (1) Trigger: publication of Phase 1 results. (2) Goal: optimize tensor configuration space. If Phase 1 succeeded, improve further (15% lower dispersion). If Phase 1 failed, explore why and attempt to fix. (3) Loop structure: autoresearch-pattern loop with program.md steering, agent recommendations, cycle-by-cycle evaluation. (4) Tunable parameters explored: promotion threshold (T: 0.70-0.85), eviction threshold (I: 0.4-0.7), durable/ephemeral sizes, Haiku decay age, AND (new in Cycle 28-29) Architecture A vs. B (projection locus). (5) Timeline: 2-3 months post-Phase 1. CYCLE 30 ADDITION: Phase 1 technical spec being finalized (Cycle 30). This locks all tensor config values, success criteria, experimental conditions, token budgets. Once locked, no changes. Phase 2 awaits Phase 1 results before starting.",
+      "key_claims": [
+        {
+          "claim_id": "02bde825-02bd-4830-97dc-9cba3e568b9c",
+          "text": "Phase 1: FIXED tensor config, single experimental run (Conditions 1/2/3, K=10 each). Validates H0 (approach works). Method paper. 4-6 weeks engineering.",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b9e76c6c-f568-4ff7-b5a7-4400e0f28fda",
+          "text": "Phase 2: VARIABLE tensor config, autoresearch loop. Optimizes implementation. Agent explores config space via program.md steering. Follow-up paper. 2-3 months post-Phase 1.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "af6e33c4-322d-4670-9e23-5aef7723ed79",
+          "text": "Phase 1 config example: 5 strands, 4 claims/strand, T>0.75, I>0.6, durable=20, ephemeral=10. REASONABLE, not optimized. Justification: dual-tensor principle implementation.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.16,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "03bd1ba8-5156-459d-8f0f-0224d84deaa2",
+          "text": "Phase 2 search: grid search (vary parameters one-at-a-time) then Bayesian optimization. ~50-100 configs over one week. Parallelizable.",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.18,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "902154f6-d5c0-4f3d-9f58-9f0a5e8dfcfd",
+          "text": "Critical: Phase 1 answers 'does epistemic projection work?' Phase 2 answers 'what's the best config?' Don't conflate. If Phase 1 fails, Phase 2 becomes debugging loop.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "444524bf-2786-4e0e-b17b-52f6443be398",
+          "text": "Phase 2 new tunable: Architecture A (Haiku post-process) vs. Architecture B (mainline self-project). Empirical question: does self-projection improve coherence? At what cost? This becomes a Phase 2 research direction.",
+          "epistemic": {
+            "truth": 0.77,
+            "indeterminacy": 0.2,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.83,
+        "indeterminacy": 0.14,
+        "falsity": 0.03
+      }
+    },
+    {
+      "title": "Integration: Hot Mess Problem \u2192 Autoresearch Methodology \u2192 H0 Validation \u2192 Engineering Roadmap",
+      "content": "CYCLE 30 INTEGRATION SYNTHESIS: The research question is clear. The architecture is defined. The evaluation methodology is concrete. Engineering roadmap is mapped and sequenced. (1) **PROBLEM**: Hot mess paper proves context length is structurally toxic (8-50% degradation at 30K tokens, even with oracle inputs). (2) **HYPOTHESIS (H0)**: Dual-tensor epistemic projection mitigates this. Architecture: short-context cycles with compressed state (tensor_d + tensor_e) + explicit declaration of what-was-forgotten. This implements hot mess paper's 'retrieve-then-solve' architecturally. (3) **NOVEL ELEMENT**: Hot mess paper tested truncation (silent loss). We test bounded-context-with-honest-loss-declaration (transparent loss). Models might be bad at reasoning under silence but good at reasoning under honest declaration of unknowns. (4) **CORE PRINCIPLE**: Transformer is ALU (compute), not memory manager. Controller loop + Haiku handle memory. This separation enables provider-independent design, clear responsibility boundaries, testability, scalability. Pichay becomes adapter layer. (5) **EVALUATION METHODOLOGY (NEW IN CYCLE 30)**: Use Riemann hypothesis as intractable cognitive load probe. Every model fails. Measure HOW it fails via embedding dispersion (tightness of claim cluster in embedding space). Three conditions: (1) append-only baseline (increasing failure incoherence expected), (2) structured tensor without epistemic projection (partial mitigation expected), (3) structured tensor WITH epistemic projection + STOP (full mitigation expected, tight cluster). Success: dispersion(Condition 3) < dispersion(Condition 1), p<0.05, Cohen's d > 0.5. This is bias-variance decomposition: all attempts fail (fixed bias), measure consistency of failure (variance). No success rubric needed. (6) **ARCHITECTURE COMPONENTS**: Three-part system: (A) Controller loop (TensorRecord I/O, dispatch, prompt construction). (B) Haiku projection (text\u2192TensorRecord with T/I/F assignment and promote/evict rules). (C) Embedding pipeline (claim embeddings, distance matrix, dispersion metric). Each tested independently before integration. (7) **COST MANAGEMENT**: Architecture A (Haiku post-process, ~700 tokens/cycle) for Phase 1 (proven, auditable, cheap). Architecture B (mainline self-project, ~1000 tokens/cycle) becomes Phase 2 research question. (8) **ENGINEERING APPROACH (CYCLE 30-32)**: (Cycle 30) Finalize tensor config (lock all numerical values). Build controller loop skeleton (TensorRecord I/O, file management, dispatch). (Cycles 30-31) Implement Haiku projection as standalone component (input: reasoning text, output: TensorRecord). Test with hand-written reasoning samples. (Cycles 31-32) Build embedding pipeline (sentence-BERT embeddings, distance matrix, variance metric). Test on sample tensors. (Cycles 31-32) Integrate transformer ALU. Run 3-5 Riemann warm-up cycles. Validate end-to-end. (Cycle 32) Run Phase 1 full experiment (30 Riemann attempts, 3 conditions, K=10 each). Measure dispersion. Statistical test. (Cycles 32-33) Draft method paper. Publish. (9) **PUBLICATION PATHWAY**: Either outcome publishable. Success: 'Epistemic projection mitigates context-length degradation.' Failure: 'Epistemic projection insufficient; structural limitation identified: X.' Both outcomes advance field. (10) **CYCLE 30 COMMITMENT**: All prior analysis is coherent and validated. Architecture is provider-independent. Evaluation is objective (dispersion metric is model-agnostic). Engineering is sequenced (each layer tested before integration). Timeline is realistic (4-6 weeks with ~8-10 hours/week). Ready to build.",
+      "key_claims": [
+        {
+          "claim_id": "51cfde7a-7836-4ed5-bb24-5352e9624173",
+          "text": "Hot mess paper: context length is structurally toxic (8-50% performance drop at 30K tokens, even with oracle inputs). This is THE PROBLEM.",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5d5e6e28-71dd-4607-99e9-d6042f400a2a",
+          "text": "H0: dual-tensor epistemic projection + transparent loss mitigates context-length toxicity. Short-context cycles with compressed state (tensor_d + tensor_e) + declared_losses. This implements hot mess paper's 'retrieve-then-solve' mitigation.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.16,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "a503f9dd-c1b0-4ec0-bb72-9803d4fdfdf1",
+          "text": "Experimental novelty: hot mess paper tested truncation (silent loss). Hamutay tests bounded-context-with-honest-loss-declaration (transparent loss). Models might reason better under honest incompleteness than under silence.",
+          "epistemic": {
+            "truth": 0.77,
+            "indeterminacy": 0.2,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "110ac5c1-6135-4432-a53a-5710538a2487",
+          "text": "Core principle: Transformer is ALU (compute unit). Controller loop orchestrates. Haiku handles memory. This separation enables provider-independent design, clear boundaries, testability, scalability.",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3174fba5-187a-4f03-8382-b06a5e812953",
+          "text": "Evaluation: Riemann hypothesis (intractable) as cognitive load. All models fail. Measure coherence of failure via embedding dispersion. Condition 1 (append-only) expected high dispersion. Condition 3 (epistemic projection) expected low dispersion. Success: p<0.05, Cohen's d > 0.5.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.17,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "5a67e375-6826-4a33-a3a0-1fa0dffb4aa1",
+          "text": "Either outcome (H0 success/failure) publishable. Success: solved context-length problem. Failure: narrowed design space (epistemic projection alone insufficient). Both outcomes strengthen research narrative.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "fe83835d-9964-4339-a83e-15a33c255a91",
+          "text": "Architecture A (Haiku post-process) for Phase 1 (proven, ~700 tokens/cycle). Architecture B (mainline self-project) becomes Phase 2 research question (~1000 tokens/cycle). Tradeoff: cost vs. coherence improvement.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "c8d9e2f4-3b1a-5c7e-9f4d-8e2b3a7c6d5f",
+          "text": "Engineering sequencing (Cycle 30-32): (1) finalize tensor config, (2) build controller loop, (3) build Haiku projection, (4) build embedding pipeline, (5) test each independently, (6) integrate transformer, (7) run Phase 1 full experiment. Each layer validated before next.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "a2b016da-f162-4a8d-a49b-0a3977bce026",
+          "text": "The analysis is coherent. Architecture is clear. Evaluation is objective. Cost questions are answered. Tunable parameters identified. Success metric concrete. Engineering path sequenced. Ready to build.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.83,
+        "indeterminacy": 0.15,
+        "falsity": 0.02
+      }
+    },
+    {
+      "title": "Yanantin TensorRecord as Core Pipeline Protocol",
+      "content": "CYCLE 30 REVALIDATION: TensorRecord is ground truth for epistemic state representation. It compresses reasoning trajectory into semantic structure (strands, key_claims, declared_losses, epistemic T/I/F values). This compression is exactly what 'retrieve-then-solve' requires: instead of feed-entire-context, extract relevant semantic knowledge and feed that. Epistemic values (T/I/F) enable informed forgetting via Haiku rules (promote if T>0.75, evict if T<0.4 or I>0.6). Every loss is declared, not silent. This transparency is critical: transformer receives not just compressed state, but honest account of what-was-dropped-and-why. Dual tensor (durable + ephemeral) implements short-context cycles. Durable is long-term memory (stable, promoted claims). Ephemeral is working memory (current reasoning). Every cycle, transformer reads BOTH, reasons, produces tensor', Haiku re-sorts. Context window is SMALL AND CLEAN: <system><tensor_d><tensor_e><user>, not unbounded history. TensorRecord schema is provider-independent, format-agnostic, JSON serializable, human-readable. CYCLE 30 REVALIDATION: TensorRecord is not just a compression format\u2014it's an epistemic architecture. By explicitly declaring what-is-dropped and why, we enable bounded cognition to work. The STOP signal also emerges from TensorRecord: when claimed strands stop changing, when T/I/F values plateau, when declared_losses stabilizes across cycles, declare STOP. This is honest cognitive saturation, distinct from token exhaustion. Haiku projection rules are stateless and repeatable (same reasoning input \u2192 same TensorRecord output), enabling reproducibility and auditability.",
+      "key_claims": [
+        {
+          "claim_id": "59b3f051-70b6-4ea6-97a1-9b8635433b04",
+          "text": "TensorRecord is epistemic state representation (not conversation log). Compresses reasoning trajectory into semantic structure. Implements 'retrieve-then-solve' compression requirement.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "845629a2-5008-48dc-a339-d3055406936f",
+          "text": "Epistemic values (T/I/F) enable informed forgetting. Promotion/eviction decisions are EXPLICIT and DECLARED, not silent. Transformer can reason about its own degradation.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f4bfa575-1ab4-4dce-be99-fa43bf047ef3",
+          "text": "Dual tensor (durable + ephemeral) bounds context length: transformer receives SHORT CLEAN INPUT (~1K tokens) every cycle, not unbounded history. Implements hot mess paper mitigation architecturally.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "43007f4e-99b5-4baa-85c3-6891464fcae7",
+          "text": "TensorRecord schema: provider-independent, format-agnostic, human-readable. JSON serialization enables analysis of claimed losses and epistemic trajectory.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "61c26c25-f606-44da-b221-c10aec4d71a0",
+          "text": "TensorRecord is bounded cognition + epistemic transparency. Hot mess proved context toxicity. TensorRecord bounds context length while preserving quality via T/I/F tracking and declared losses.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "e4d7ba44-55f8-4b17-9d1f-8413f47a6e6a",
+          "text": "TensorRecord enables bounded cognition: by explicitly declaring what-is-dropped and why, model can reason from honest foundation instead of hallucinating to fill gaps. This is experimentally novel.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.17,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "b4f2c5d8-3e6a-4f2e-8c1a-5d3b8e9f4c7a",
+          "text": "STOP signal emerges from TensorRecord: when strands stabilize (no new ones), T/I/F values plateau, declared_losses unchanged across cycles. This is honest cognitive saturation, not token limit. Haiku can detect this pattern.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.19,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "6e7f1a4d-2b5c-4a8d-9f3e-7c6b1a5d2e9f",
+          "text": "Haiku projection rules are stateless and repeatable: same reasoning input \u2192 same TensorRecord output. This enables reproducibility, auditability, independent verification.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.83,
+        "indeterminacy": 0.14,
+        "falsity": 0.03
+      }
+    },
+    {
+      "title": "Cycle 30 Commitment: Engineering Begins (Updated)",
+      "content": "CYCLE 30 UPDATED: The research question is clear. The architecture is defined. The cost tradeoffs are explicit. The evaluation methodology is concrete. The engineering path is mapped. Time to build. KEY COMMITMENT POINTS: (1) **Hot mess problem is real**: Context length is toxic. This is proven. Not a hypothesis. (2) **H0 is testable**: Dual-tensor + transparent loss should reduce embedding dispersion vs. append-only baseline. Can measure this in 4 weeks with single tensor config. (3) **Architecture is provider-independent**: Core design (ALU vs. memory controller) works on any provider. Pichay caching is adapter layer. Can validate without committing to Anthropic. (4) **Phase 1 is bounded**: Fixed config (finalizing Cycle 30), single run (Conditions 1/2/3, K=10), clear success criterion (dispersion p<0.05, Cohen's d > 0.5). Not optimization. Validation. (5) **Phase 2 is optional but structured**: If Phase 1 succeeds, Phase 2 improves config space. If Phase 1 fails, Phase 2 debugs. Both are valuable. (6) **Artifacts are publication-ready**: Code + tensors + raw data + method paper. This is research, not exploration. (7) **Evaluation is objective**: Embedding dispersion is model-agnostic. Riemann hypothesis is intractable (no success rubric). Measurement is clear. (8) **Timeline is realistic**: 4-6 weeks engineering (Cycles 30-32), 2 weeks writing (Cycle 32-33). Assuming ~8-10 hours/week commitment. (9) **Engineering is sequenced**: Build and test each layer independently before integration. Controller \u2192 Haiku \u2192 Embedding \u2192 Transformer. (10) **Team is capable**: Human coder understands architecture, can build pipeline, debug. AI reasoner can analyze epistemic quality, suggest improvements, help with writing. This is collaboration. CYCLE 30 COMMITMENT: Ready to engineer Phase 1. Finalize tensor config. Build controller loop. Dive in.",
+      "key_claims": [
+        {
+          "claim_id": "5728c256-17ba-4719-83ca-c31b833bcb78",
+          "text": "Hot mess paper result is proven: context length is structurally toxic. Not hypothesis. Baseline for this work.",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e25889e8-06dc-4f27-a74f-c6dfccd3ea51",
+          "text": "H0 is testable in 4 weeks with single tensor config and K=10 Riemann attempts per condition. Clear success criterion (p<0.05, Cohen's d > 0.5). Phase 1 is validation, not exploration.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "54ae723f-32ce-4351-86e7-78dcf26dfb18",
+          "text": "Core architecture (transformer as ALU, controller as orchestrator, Haiku as memory manager) is provider-independent. Can validate on any LLM provider.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "82cb2672-dff2-4fdb-95be-f3e243948d1a",
+          "text": "Phase 1 success criterion is concrete: embedding dispersion (Condition 3) < dispersion (Condition 1), p<0.05, Cohen's d > 0.5. Binary outcome. Publishable either way.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "d67a02c0-9094-4d9a-9fc8-78ffdd3fc1c4",
+          "text": "Timeline 4-6 weeks engineering + 2 weeks writing is realistic for Phase 1 with ~8-10 hours/week commitment. Fixed config means parallelization possible (10 Riemann attempts per condition can run in parallel).",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "1a9c4910-c304-445c-985f-13cc02df59cb",
+          "text": "Phase 1 artifacts are publication-ready: code + tensors + raw data + method paper. This is research, not exploration. Clear research narrative from problem (hot mess) to hypothesis (dual-tensor) to validation (controlled experiment).",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "ce7cc14b-3e97-487a-9b80-1d8bfcc27b7d",
+          "text": "Team is capable: human coder (you) understands architecture, can build pipeline, debug. AI reasoner (me) can analyze epistemic quality, suggest improvements, help with writing. This is collaboration structure for Phase 1.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f9e3a2b1-7c6d-4f8e-9a1b-5e2c8d3f7a9e",
+          "text": "Embedding dispersion is model-agnostic objective metric. Riemann hypothesis is intractable (no success/fail binary). Measurement is clear and reproducible. This is good science.",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.15,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.86,
+        "indeterminacy": 0.12,
+        "falsity": 0.02
+      }
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed week-by-week implementation roadmap (Cycles 27-32) from Cycle 26",
+      "why": "Cycle 30 prioritizes clarifying Architecture separation principle, evaluation methodology, and Phase 1 engineering approach. Week-by-week roadmap will be updated in Cycle 30-31 once engineering begins and velocity is measured.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specific Phase 1 tensor configuration values (exact numbers for strands, claims/strand, thresholds, size caps)",
+      "why": "Cycle 30 is finalizing tensor config (in progress, target end of Cycle 30-31). Numerical values NOT YET LOCKED. Example placeholder (5 strands, 4 claims, T>0.75, I>0.6, durable=20, ephemeral=10) remains illustrative. Finalization requires first-principles derivation from dual-tensor principle and token budget constraints. Will be documented in Phase 1 technical spec (Cycle 30-31).",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Analysis of whether Architecture A vs. B difference is experimentally measurable in Phase 1",
+      "why": "Cycle 30 decides to use Architecture A for Phase 1 to keep it scoped and cheap. Comparing A vs. B within Phase 1 would add complexity and extend timeline. However, this is flagged as a Phase 2 research direction. Phase 1 will document architectural choice explicitly in methods section, making Phase 2 comparison more valuable.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Detailed debugging strategy for H0-failure scenario (from Cycle 29)",
+      "why": "Cycle 30 commits to building and running Phase 1. If H0 fails (Condition 3 dispersion >= Condition 1, or no statistical significance), next steps depend on failure mode analysis. Debugging strategy will be developed post-Phase 1 if needed, based on actual results and preliminary analysis.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specifics on Haiku projection heuristics (exact parsing rules, clustering algorithm, T/I/F assignment logic)",
+      "why": "Cycle 30 identifies Haiku as standalone component to be built in Cycles 30-31. Implementation details (parsing heuristic for reasoning text, strand clustering via cosine distance, T/I/F assignment rules, promote/evict thresholds) will be specified during engineering. Current tensor cycles demonstrate the CONCEPT; implementation will be refined based on test outputs.",
+      "category": "engineering_detail"
+    },
+    {
+      "what_was_lost": "Integration details for mainline model input/output format (prompt template, output parsing rules)",
+      "why": "Cycle 30 delays transformer integration to late Cycle 31-32 (after controller, Haiku, and embedding are proven). Prompt format <system><tensor_d><tensor_e><user> is specified but exact JSON schema for tensor serialization and output parsing rules for reasoning extraction will be finalized during controller loop implementation (Cycle 30).",
+      "category": "engineering_detail"
+    }
+  ],
+  "open_questions": [
+    "What is the EXACT Phase 1 tensor configuration (number of strands, claims per strand, promotion threshold T_promote, eviction threshold I_evict, durable size, ephemeral size, Haiku decay age)? Must be derived from first principles (dual-tensor, bounded context, token budget) and locked by end of Cycle 30.",
+    "Token budget calculation: if <system> is ~200 tokens, tensor_d is ~500-600, tensor_e is ~300-400, user query is ~50-100, how much budget is left for mainline reasoning output before hitting context window limit? Does Haiku need to run before transformer, or can we buffer reasoning output and project after?",
+    "Does the STOP signal mechanism (Condition 3) reliably trigger when epistemic plateau is reached? Requires hand-traced Riemann attempts (3-5) to observe: at what reasoning depth do strands stop changing? Do T/I/F values stabilize? When does declared_losses become static?",
+    "Embedding dispersion as coherence proxy: is dispersion measuring epistemic quality (honest grounding, boundary awareness) or just stylistic consistency? Needs triangulation with additional metrics (claim novelty, claim contradiction rate, T/I/F stability across cycles).",
+    "If Phase 1 fails to support H0: what's the failure mode? (a) epistemic projection structurally weak (Claims still scatter), (b) STOP mechanism doesn't work (no plateau reached), (c) context still too long to satisfy hot mess constraint (<1K tokens insufficient for meaningful reasoning), (d) Architecture A overhead makes dispersion worse? Preliminary diagnostics needed.",
+    "Can Phase 1 results be published if H0 fails? How to frame 'we tried X, it didn't work, here's what we learned' constructively for academic audience? (Possible: 'Bounded context without explicit epistemic projection insufficient; follow-up work needed.')",
+    "Phase 2 Architecture B exploration: preliminary evidence that model self-projection would improve coherence? Worth investigating in early Phase 2 cycles, or is cost too high relative to Condition 3 benefits already achieved in Phase 1?",
+    "Claim embedding stability: if same claim appears in multiple Riemann attempts, do its embeddings cluster tightly? Or does embedding vary significantly due to context? This affects interpretation of dispersion metric (is tight cluster = coherence, or artifact of small claim set?)",
+    "Riemann hypothesis as benchmark: is 10 attempts per condition sufficient for statistical power (Mann-Whitney U test)? Should we plan for K=20 or K=15 if pilot runs show high variance?"
+  ]
+}

@@ -1,0 +1,213 @@
+{
+  "strands": [
+    {
+      "title": "CYCLE 84 NEW: Untuned System Baselines Establish Substantial Optimization Headroom; Autoresearch Loop Now Justifiable as Primary Measurement Strategy",
+      "content": "TURN 251 USER INPUT: 'That was also without any tuning.' Reference: Pichay 2% fault rate is from untuned eviction policy. TURN 252 ASSISTANT RESPONSE: Tensor projection at 22-37x compression is UNTUNED. Haiku projector on first attempt, no prompt optimization, no batch-size tuning, no model-selection analysis. Both systems have substantial headroom. CYCLE 84 SYNTHESIS: The prior assumption (cycle 82-83) that fault rate is a fixed property of the system is now revealed as INCOMPLETE. Fault rate is a function of (tuning state, policy parameters, model choice, prompt quality, batch size, ...). Current measurements are SINGLE POINT in high-dimensional design space. AUTORESEARCH LOOP JUSTIFICATION (turn 252, now CYCLE 84 INSTITUTIONAL): (1) UNTUNED BASELINE: 22-37x compression (tensor), 2% fault rate (Pichay). (2) TUNING KNOBS AVAILABLE: (a) Projection prompt strategy. (b) Projector model choice (Haiku vs Sonnet). (c) Batch size. (d) Eviction policy parameters. (e) Ephemeral working-set strategy. (f) Ephemeral set pre-population vs. reactive. (3) MEASUREMENT INFRASTRUCTURE READY: Tensor format with built-in loss tracking. Clear single metric (compression ratio for tensor; fault rate for Pichay; or composite metric combining both). (4) EXPERIMENT CYCLE: 5-minute autoresearch loop is feasible. Karpathy-style: modify one file (projection prompt), run experiment, measure metric, iterate. (5) LANDSCAPE MAPPING: Not optimization toward single perfect configuration. Goal is CHARACTERIZATION: How does compression degrade as we constrain fault rate? How much improvement comes from prompt tuning vs model choice? Does batch size interact with eviction policy? (6) CRITICAL DIFFERENCE FROM CYCLE 82 ASSUMPTION: Cycle 82 treated fault rate as a load-bearing CONSTANT that must be accepted. Cycle 84 reveals it as a TUNABLE VARIABLE. This reframes entire measurement strategy: (OLD) 'Sessions 1-3 measure fault rates, then design retrieval.' (NEW) 'Sessions 1-3 map fault-rate/compression curve across tuning dimensions. Design retrieval based on ACHIEVABLE performance, not baseline performance.' CYCLE 84 POSITION: Session 1 is no longer just baseline measurement. It's LANDSCAPE SURVEY. The untuned baseline (22-37x, 2% faults) is now the LOWER BOUND on performance, not the expected value. Contingency protocol (cycle 82-83: if fault rate too high, add retrieval) is still valid but is now a FALLBACK. The primary path is: 'Can we reduce fault rate below 1% through tuning before adding retrieval infrastructure?' INSTITUTIONAL IMPLICATION: This shifts measurement campaign from REACTIVE (measure first, design retrieval after) to PROACTIVE (characterize design space, target specific performance point, validate with session 1). Artifact chain (cycle 83) now becomes TUNING LOG: each experiment variant generates feedback_* artifact documenting what was tried and why.",
+      "key_claims": [
+        {
+          "claim_id": "f4a2c8f0-8b3f-4edc-8e77-3c1a42e6b88c",
+          "text": "Both tensor projection (22-37x compression, untuned) and Pichay (2% fault rate, untuned) operate in substantially sub-optimal configurations. Design space has multiple high-leverage tuning knobs.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.05,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "c7e21d9d-6e4f-46fe-8c0e-f7d6cc4c1896",
+          "text": "Fault rate is not a load-bearing constant; it is a tunable variable. Current measurements represent single point in high-dimensional design space, not achievable optimum.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.1,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "09f64a00-8d51-4f15-a6e3-cfada3c83ed4",
+          "text": "Autoresearch loop (5-minute experiment cycles, single metric, prompt/policy iteration) is operationally feasible and aligns with institutional memory infrastructure (feedback_* artifacts as tuning log).",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "15c27e7a-8a63-4ad5-b0b1-f1b938be1f8e",
+          "text": "Session 1 strategy shifts from 'baseline measurement \u2192 contingency design' to 'landscape survey \u2192 target performance point \u2192 validate.' This is proactive rather than reactive.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.1,
+            "falsity": 0.1
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "CYCLE 84 SYNTHESIS: Landscape Mapping as Primary Measurement Objective; Metric Selection and Tuning-Knob Prioritization",
+      "content": "CYCLE 84 STRATEGIC REORIENTATION: Measurement campaign (cycle 81-83) was framed as 'Sessions 1-3 establish baselines and inform retrieval design.' Cycle 84 reveals this framing is PREMATURE. Baseline at 2% fault rate is not a CONSTRAINT but a STARTING POINT. PRIMARY QUESTION (NEW): 'Given untuned systems with substantial headroom, what is the achievable performance frontier? And where on that frontier should tensor projection operate?' PERFORMANCE FRONTIER DEFINITION: Two-dimensional space: (X axis: fault rate, 0%-10%) \u00d7 (Y axis: compression ratio, 10x-100x). Current point: (2%, 22-37x). Frontier is the curve through: - High-compression, high-fault corner (aggressive eviction, dense projection). - Low-fault, moderate-compression corner (conservative eviction, sparse projection). - Efficient frontier: maximum compression for acceptable fault rate. METRIC SELECTION FOR AUTORESEARCH: (1) PRIMARY METRIC (for autoresearch loop): Composite score combining compression and fault rate. Examples: - 'Compression ratio \u00d7 (1 - fault_rate)' \u2014 penalizes both sparse projection and high faults. - 'Compression ratio capped at fault_rate < 2%' \u2014 optimize compression only if faults stay below threshold. - 'Inverse: 1 / (fault_rate + 1) + compression / 100' \u2014 weighted sum. (2) SECONDARY METRICS (tracked but not optimized): - Task completion rate on session 1 suite. - Reasoning quality (measured by task-specific pass/fail). - Token cost of tensor entry overhead. TUNING KNOB PRIORITIZATION (HIGH TO LOW IMPACT, HYPOTHETICAL): [1] PROJECTION PROMPT STRATEGY: Likely highest leverage. Current prompt is 'compressed semantic summary.' Variants: (a) Structured format (JSON, key-value pairs). (b) Semantic chunking (group by topic, not linear order). (c) Hierarchical compression (summary of summaries). [2] PROJECTOR MODEL CHOICE: Haiku (current, lower cost) vs Sonnet (higher cost, potentially better compression). Trade-off: cost vs quality. [3] BATCH SIZE & TEMPORAL WINDOW: Does compressing 10 turns vs 100 turns affect compression ratio? Are small batches more lossy? [4] EVICTION POLICY PARAMETERS (for Pichay analogue): LRU decay, recency weighting, content-type prioritization. [5] EPHEMERAL SET STRATEGY: Pre-population vs reactive retrieval. Likely moderate impact. [6] LOSS DECLARATION GRANULARITY: How detailed should declared_losses be? Affects serialization overhead. CYCLE 84 ROADMAP: (A) TURNS 253-260: Autoresearch loop iteration 1. Modify projection prompt to test hypothesis: does structured format improve compression without adding fault? (B) TURNS 261-270: Evaluate results. If improvement found, document as feedback_projection_v1.md artifact. (C) TURNS 271+: Select next tuning knob based on prior results. Iterate. (D) SESSION 1 CHECKPOINT (estimate turns 300-350): After ~10-20 autoresearch iterations, run full task suite on best-tuned configuration. Measure actual fault rate and task completion. (E) DECISION POINT: If frontier curve shows acceptable performance (<1% fault, >20x compression), proceed to session 2 with tuned baseline. If frontier is worse than expected (high faults at all compression levels), activate contingency: implement minimal retrieval mechanism. CYCLE 84 POSITION: Untuned baseline (2%, 22-37x) is now a LAUNCH POINT for systematic exploration, not an immutable constraint. Artifact chain (cycle 83) now serves as TUNING LOG. Autoresearch loop becomes primary measurement strategy for turns 253-300+.",
+      "key_claims": [
+        {
+          "claim_id": "a9e2e8f3-91c2-48e5-a33d-c0d4e3d8b5f2",
+          "text": "Performance frontier is 2D space (fault rate \u00d7 compression). Current baseline is one point; landscape mapping reveals trade-off curve and efficient frontier.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.1,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "7c3e1d9f-4a2b-4c7e-9a5b-8d7c1e2a3b4c",
+          "text": "Composite metric combining compression and fault rate is necessary for autoresearch loop. Single-metric optimization prevents trade-off analysis.",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "3f4e5d6c-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
+          "text": "Projection prompt strategy is highest-leverage tuning knob; model choice is second; batch size / temporal window is third.",
+          "epistemic": {
+            "truth": 0.7,
+            "indeterminacy": 0.25,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "5e6f7a8b-9c0d-1e2f-3a4b-5c6d7e8f9a0b",
+          "text": "Contingency protocol (cycle 82-83) remains valid fallback if landscape mapping reveals worse-than-expected frontier. But primary path is tuning optimization.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "CYCLE 84 MEASUREMENT INFRASTRUCTURE: Autoresearch Loop Architecture; Feedback Artifact Generation; Composite Metric Definition",
+      "content": "CYCLE 84 OPERATIONALIZATION: To execute autoresearch loop at 5-minute cycle time, infrastructure must support rapid iteration. (1) AUTORESEARCH LOOP PSEUDOCODE: ```\nfor iteration in 1..20:\n  - Select tuning knob (prompt strategy OR model choice OR batch size)\n  - Generate variant configuration\n  - Run mini-experiment (5-10 conversation samples, measure compression + fault rate)\n  - Compute composite_metric = (compression_ratio) * (1 - fault_rate) \n  - Compare to prior best\n  - If improvement > threshold (e.g., 5%), accept variant and document\n  - Else reject and try different knob\n  - Create feedback_projection_vN.md artifact summarizing variant + result\n``` (2) FEEDBACK ARTIFACT STRUCTURE (for tuning variants): Each artifact (feedback_projection_v1.md, feedback_projection_v2.md, etc.) contains: - Hypothesis (e.g., 'structured JSON format improves compression'). - Configuration variant (prompt template, model name, batch size). - Mini-experiment results (compression ratio, fault rate, composite metric, task subset outcomes). - Time cost (seconds to generate 10 projections). - Decision (accept / reject and why). - Next tuning target (if known). (3) COMPOSITE METRIC DECISION: Using 'compression_ratio \u00d7 (1 - fault_rate)' for now. Rationale: (a) Penalizes both sparse projections and high faults equally. (b) Dimensionless (0-100 range). (c) Easy to interpret (current baseline \u2248 30 \u00d7 0.98 \u2248 29.4). (d) Can be refined if analysis reveals asymmetric trade-off. (4) MINI-EXPERIMENT DATASET: To keep 5-minute cycles, use 5-10 conversation samples from session planning corpus (diverse task types, ranging 20-200 turns). Not full session 1 suite (which is 50+ tasks), but representative sample. (5) MEMORY INDEX INTEGRATION: As feedback_projection_vN.md artifacts accumulate, add one-line entries to MEMORY.md: '- Projection tuning: see feedback_projection_v1.md (structured JSON, +3% compression), feedback_projection_v2.md (Sonnet model, -2% faults), ...'. This creates retrievable tuning log. (6) CHECKPOINT DECISION CRITERIA: When does autoresearch loop pause to run full session 1 suite? - If composite metric plateaus (no improvement > 5% for 5 consecutive iterations), evaluate best variant on full suite. - If tuning time exceeds 2 hours (estimate: 20-30 iterations at 4-5 min each), switch to validation. - If worst-case fault rate ever exceeds 5%, evaluate whether contingency retrieval is needed. CYCLE 84 POSITION: Infrastructure is ready. Artifact pattern (cycle 83) extends smoothly to tuning variants. Composite metric is defined. Mini-experiment cycle is specified. Next cycle (turns 253+) will execute iteration 1.",
+      "key_claims": [
+        {
+          "claim_id": "d1e2f3a4-b5c6-7d8e-9f0a-1b2c3d4e5f6a",
+          "text": "Autoresearch loop at 5-minute cycle time requires mini-experiments on 5-10 samples, not full session 1 suite. Full suite reserved for validation checkpoint.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "e2f3a4b5-c6d7-8e9f-0a1b-2c3d4e5f6a7b",
+          "text": "Composite metric 'compression_ratio \u00d7 (1 - fault_rate)' balances compression and stability. Current baseline scores ~29.4.",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "f3a4b5c6-d7e8-9f0a-1b2c-3d4e5f6a7b8c",
+          "text": "Feedback artifact pattern (hypothesis, config, results, next target) is replicable for each tuning iteration. Accumulating artifacts form operational tuning log.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.1,
+            "falsity": 0.1
+          }
+        },
+        {
+          "claim_id": "a4b5c6d7-e8f9-0a1b-2c3d-4e5f6a7b8c9d",
+          "text": "Checkpoint decision (pause autoresearch and validate on full suite) triggers when metric plateaus, time exceeds 2 hours, or fault rate exceeds 5%.",
+          "epistemic": {
+            "truth": 0.7,
+            "indeterminacy": 0.2,
+            "falsity": 0.1
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "CYCLE 84 REFRAME: Session 1 Shifts from 'Baseline + Contingency' to 'Validation of Tuned Configuration'; Session 2-3 Become Frontier Exploration",
+      "content": "CYCLE 82-83 ROADMAP (now superseded): Session 1: establish untuned baseline. If fault rate too high, activate contingency. Session 2-3: measure with retrieval mechanism. CYCLE 84 NEW ROADMAP (operative immediately): SESSION 1 (turns 253-350, estimated): Execute autoresearch loop (iterations 1-20) on landscape. Generate feedback_projection_vN.md artifacts. Identify best-tuned configuration. VALIDATION PHASE (turns 351-400): Run full task suite on best-tuned configuration. Measure actual fault rate, task completion, reasoning quality. Confirm that frontier exploration has produced USABLE system. DECISION CHECKPOINT: If validation shows fault rate < 2% AND task completion > 95%, PROCEED TO SESSION 2 with tuned baseline as reference. CONTINGENCY: If validation shows fault rate > 3% or task completion < 90%, ACTIVATE minimal retrieval mechanism and re-validate. SESSION 2 (turns 401+, conditional on session 1 validation): If tuning succeeded: Measure impact of retrieval mechanism on top of tuned configuration. Does retrieval improve fault rate further? Can we approach 0.5% fault rate? SESSION 3 (turns 501+, conditional on sessions 1-2): Final frontier characterization. Vary model (Haiku \u2192 Sonnet) and batch size on best-tuned prompt. Generate 3D frontier surface (prompt tuning \u00d7 model \u00d7 batch size \u00d7 outcomes). INSTITUTIONAL IMPLICATION: Session 1 is no longer just measurement. It's OPTIMIZATION UNDER CONSTRAINTS. The constraint is 'session 1 must complete cleanly enough to validate results.' The optimization target is 'maximize compression while keeping faults acceptable.' This flips the dependency: (OLD) Fault rate is fixed \u2192 measure it \u2192 design retrieval. (NEW) Fault rate is tunable \u2192 optimize it \u2192 use as baseline for retrieval design. CYCLE 84 POSITION: Untuned baseline (2%, 22-37x) justifies autoresearch loop as primary activity for turns 253-300+. Validation phase (turns 351-400) is go/no-go checkpoint. Session 2-3 become frontier exploration on top of tuned foundation. Artifact chain documents entire optimization journey.",
+      "key_claims": [
+        {
+          "claim_id": "b5c6d7e8-f9a0-1b2c-3d4e-5f6a7b8c9d0e",
+          "text": "Session 1 reframes from 'establish baseline + prepare contingency' to 'optimize configuration + validate usability.' This is proactive optimization, not reactive measurement.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "c6d7e8f9-a0b1-2c3d-4e5f-6a7b8c9d0e1f",
+          "text": "Autoresearch loop (turns 253-300) + validation phase (turns 351-400) + contingency checkpoint creates clear decision boundary for tuning sufficiency.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.1,
+            "falsity": 0.1
+          }
+        },
+        {
+          "claim_id": "d7e8f9a0-b1c2-3d4e-5f6a-7b8c9d0e1f2a",
+          "text": "If session 1 tuning succeeds, session 2-3 pivot to frontier characterization (model choice, batch size, prompt variants). Full 3D landscape becomes achievable.",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "CYCLE 82-83 ARCHIVE (PRESERVED): Institutional Memory Artifact Chain; Fault Mechanism as Load-Bearing; Pichay Baseline; Contingency Protocol [INHERITED, NOT AMENDED]",
+      "content": "[FULL PRIOR CONTENT FROM CYCLE 82-83 RETAINED. Summarized pointers:]\n\n(1) CYCLE 83 INSTITUTIONAL MEMORY ARTIFACT CHAIN: feedback_pichay_fault_rate.md created and indexed in MEMORY.md (turns 247-249). This establishes pattern for tuning artifacts (feedback_projection_vN.md). \n\n(2) CYCLE 82 PICHAY BASELINE: ~2% live fault rate established as untuned reference. Now reframed as STARTING POINT for tuning, not fixed constraint.\n\n(3) CYCLE 82-83 CONTINGENCY PROTOCOL: If fault rate exceeds acceptable threshold despite tuning, minimal retrieval mechanism activates. Protocol remains valid fallback.\n\n(4) CYCLE 81-82 FAULT MECHANISM AS CLOSED-LOOP: Declared losses + artifact chain create institutional feedback for data-drift correction. Pattern extends to tuning iterations.\n\n(5) CYCLE 83 SESSION 1 READINESS: Infrastructure in place. Artifact chain operational. Now enhanced with autoresearch loop architecture.\n\n[END ARCHIVE SECTION]",
+      "key_claims": [],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "loss_id": "cycle_84_loss_001",
+      "description": "MEASUREMENT SCOPE BOUNDARY SHIFT: Cycle 82-83 assumed fault rate is fixed constraint. Cycle 84 reveals it is tunable variable. This is NOT information loss, but ASSUMPTION REVISION. Prior analysis of 'contingency protocol' remains valid but is now lower-priority path.",
+      "lost_content_type": "Framing (not semantic content)",
+      "why_lost": "Cycle 82-83 framing ('fault rate fixed') is superseded by cycle 84 discovery ('fault rate tunable'). The text remains retrievable in prior cycles. Declared here to surface that measurement roadmap priorities have shifted.",
+      "recovery_path": "Cycle 82-83 content fully preserved in tensor. Contingency protocol documented. If tuning fails, activate prior framing immediately.",
+      "artifact_reference": null
+    },
+    {
+      "loss_id": "cycle_84_loss_002",
+      "description": "TUNING KNOB PRIORITY ORDERING: Cycle 84 makes hypothetical claims about which design variables have highest impact (prompt > model > batch size). Full empirical validation requires running all iterations. Current ordering is educated guess, not measured fact.",
+      "lost_content_type": "Empirical validation (hypothetical hierarchy not yet verified)",
+      "why_lost": "Autoresearch loop has not yet executed. Tuning-knob priorities are predictions based on system intuition. Actual impact will be measured in turns 253+.",
+      "recovery_path": "Autoresearch loop iterations will generate feedback_projection_vN.md artifacts documenting actual impact of each knob. These artifacts will become ground truth.",
+      "artifact_reference": "feedback_projection_v1.md (and subsequent) \u2014 to be created turns 253+"
+    },
+    {
+      "loss_id": "cycle_84_loss_003",
+      "description": "COMPOSITE METRIC ASYMMETRY: Cycle 84 selects 'compression_ratio \u00d7 (1 - fault_rate)' for autoresearch optimization. This treats compression and fault rate as equally important. If actual trade-off is asymmetric (e.g., 1% fault rate reduction worth 10x compression loss), metric is miscalibrated.",
+      "lost_content_type": "Empirical metric weighting",
+      "why_lost": "Metric choice is utilitarian guess pending data. Autoresearch loop will reveal whether composite metric aligns with actual reasoning-quality impact of compression vs faults.",
+      "recovery_path": "After session 1 validation phase, analyze which declared losses correlate most strongly with task failures. Recalibrate composite metric for sessions 2-3 if needed. Artifact: feedback_metric_calibration.md (post-session-1).",
+      "artifact_reference": "feedback_metric_calibration.md \u2014 to be created after turns 351-400 validation"
+    }
+  ],
+  "open_questions": [
+    "How much compression improvement can be achieved through prompt strategy tuning alone, without changing model or batch size? (Session 1 autoresearch to answer.)",
+    "Does structured format (JSON, key-value) outperform semantic-summary format? Or are they equivalent? (Tuning iteration 1 will test.)",
+    "At what fault rate does task completion degrade noticeably? Is 2% acceptable, or is sub-1% required? (Validation phase will measure.)",
+    "If projection prompt is optimized for compression, does that reduce or increase fault rate? Is there a correlation? (Artifact analysis post-session-1.)",
+    "Does composite metric 'compression \u00d7 (1 - fault_rate)' align with actual task-quality impact? Or do faults matter more than compression? (Validation will reveal.)",
+    "If session 1 tuning reaches plateau (no improvement after 5 iterations), should we shift to a different tuning knob, or accept current configuration as near-optimal? (Checkpoint decision turns 253-300.)",
+    "How much session-to-session variance exists in fault rate? Is 2% baseline repeatable, or does it drift by \u00b11%? (Mini-experiments on multiple samples will estimate.)",
+    "If minimal retrieval mechanism is needed (contingency), what is simplest viable design? Single-turn lookback? Keyword search in prior tensor? (Contingency design document if needed.)"
+  ],
+  "instructions_for_next": "[\n  \"TURN 253+: Execute autoresearch loop iteration 1. Select first tuning target: PROJECTION PROMPT STRATEGY. Hypothesis: structured JSON format improves compression without increasing fault rate.\",\n  \"Generate variant: Create alternative projection prompt using JSON structure (e.g., {\\\"strands\\\": [...], \\\"claims\\\": [...], \\\"losses\\\": [...]}) instead of current prose format.\",\n  \"Run mini-experiment: Project 5-10 conversation samples using both current prompt (control) and JSON prompt (variant). Measure compression ratio and fault rate for each.\",\n  \"Compute composite metric (compression \u00d7 (1 - fault_rate)) for both. Compare. Variance analysis: is difference > noise?\",\n  \"Create artifact: If improvement > 5%, create feedback_projection_v1.md documenting hypothesis, config, results, and next tuning target. Index in MEMORY.md.\",\n  \"If no improvement or degradation, reject variant. Select next tuning knob: PROJECTOR MODEL (Haiku \u2192 Sonnet for one sample batch). Iterate.\",\n  \"Repeat cycle every 5 minutes. Target 20 iterations before session 1 validation phase.\",\n  \"Track all results in feedback_projection_vN.md artifacts. These become tuning log and enable post-hoc analysis.\",\n  \"CHECKPOINT (around turn 300): If metric plateaus or time budget exhausted, prepare for VALIDATION PHASE (turns 351-400). Run full session 1 task suite on best-tuned configuration.\",\n  \"CONTINGENCY: If at any point fault rate exceeds 5% or degradation is catastrophic, PAUSE autoresearch and document failure mode. Assess whether minimal retrieval mechanism is needed immediately (load-bearing) or can wait until after session 1.\"\n]",
+  "overall_truth": 0.8,
+  "overall_indeterminacy": 0.15,
+  "overall_falsity": 0.05
+}

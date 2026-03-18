@@ -1,0 +1,219 @@
+{
+  "strands": [
+    {
+      "title": "Tensor Projection as Operational System: From Theory to Code",
+      "content": "CYCLE 33 INTEGRATION: Prior cycles (31-32) designed tensor projection theoretically. Cycle 33 reads actual codebase (tensor.py, epistemics.py) and grounds projection in WORKING IMPLEMENTATION. KEY FINDING: Apacheta codebase already instantiates tensor projection architecture. TensorRecord (tensor.py line 46) is the OUTPUT format. StrandRecord (line 23) is the strand container. KeyClaim (line 14) is the claim unit. EpistemicMetadata (epistemics.py) is the T/I/F container. SCHEMA DESIGN IMPLICATIONS: (1) **StrandRecord carries declared_losses** (line 41, tuple[DeclaredLoss, ...] | None). This enables PER-STRAND loss declaration, not just global. CYCLE 32 ASSUMED global losses. Reality is more fine-grained: losses can be tied to strands they affected. (2) **Schema evolution fields** (lines 26-32). declared_losses=None means 'not considered' (pre-migration tensor). declared_losses=() (empty tuple) means 'considered, nothing evicted'. declared_losses=(populated) means 'losses declared'. DIAGNOSTIC: the None vs. empty distinction is the signal. This matches Cycle 32's loss declaration principle but operationalizes it: losses are NOT SILENT, they're explicitly structured. (3) **Mechanism field** (line 42, str | None). StrandRecord.mechanism is the 'how did this strand survive?' annotation. Value semantics: \"\" = migration default (not yet filled). None = actively considered and purely conceptual (no mechanism applies). This is NOVEL to codebase. Cycle 32 didn't anticipate mechanism annotation. (4) **Overlaps field** (line 43, tuple[str, ...] | None). Strand overlaps with other strands. Again, None vs. empty semantics for schema evolution. Cycle 32 had single-strand claim assignment. Reality allows overlaps: claim may belong to multiple strands. (5) **narrative_body** (line 60). Raw authored markdown is preserved. Comment on line 49-51: 'Log before you parse: the raw authored text is the ground truth.' This is CRITICAL. Structured fields (strands, claims, epistemics) are EXTRACTED VIEWS. Projection must preserve source (narrative_body) for auditability. Cycle 32 didn't emphasize this. CYCLE 33 CORRECTION: Tensor projection is NOT just claim extraction + T/I/F assignment. It's: (1) **Receive**: narrative_body (free-form reasoning markdown). (2) **Parse**: extract strands, claims, T/I/F, mechanism, overlaps. (3) **Declare**: losses per strand + global. (4) **Preserve**: narrative_body as immutable ground truth. (5) **Output**: TensorRecord with all fields populated, including narrative_body and mechanism. RISK IDENTIFIED: mechanism field is underspecified in Cycle 32. What counts as a valid mechanism? How is it assigned? Cycle 33 must clarify this. OPPORTUNITY: overlaps field enables richer strand relationships than Cycle 32's single-assignment assumption. If two strands are semantically related but distinct, their overlap can be explicit rather than forcing merge-or-separate binary decision.",
+      "key_claims": [
+        {
+          "claim_id": "c33-001-tpa",
+          "text": "TensorRecord schema (tensor.py) operationalizes Cycle 32 theory. Components: StrandRecord (strand container), KeyClaim (claim unit), EpistemicMetadata (T/I/F), declared_losses (per-strand and global), narrative_body (immutable ground truth).",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.05,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "c33-002-dloss",
+          "text": "declared_losses is per-strand (StrandRecord.declared_losses) AND global (TensorRecord.declared_losses). None vs. empty tuple semantics: None = not considered, () = considered but nothing evicted, (populated) = losses declared. This is loss declaration operationalized.",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.08,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "c33-003-mech",
+          "text": "mechanism field (StrandRecord.mechanism) is novel. Semantics: \"\" = migration default, None = purely conceptual (no mechanism), str = mechanism annotation. Cycle 32 didn't anticipate this. Must clarify what counts as valid mechanism.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c33-004-overlap",
+          "text": "overlaps field (StrandRecord.overlaps) enables rich strand relationships beyond Cycle 32's single-assignment. Claim can belong to multiple strands explicitly, rather than forcing binary merge/separate decision.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "c33-005-preserve",
+          "text": "narrative_body is immutable ground truth (tensor.py line 49-51). Structured fields are EXTRACTED VIEWS. Projection must preserve source. Auditability depends on narrative_body being complete and unmodified.",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.04,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "c33-006-schema",
+          "text": "Schema evolution strategy: new fields use None to mark 'not considered' vs. empty/populated to mark 'considered'. This diagnostic distinguishes pre-migration and post-migration tensors without breaking backwards compatibility.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "EpistemicMetadata: T/I/F Implementation and Confidence Semantics",
+      "content": "CYCLE 33 DISCOVERY: epistemics.py defines EpistemicMetadata, the actual T/I/F container. Must read this file to understand how confidence values are stored, normalized, and validated. CYCLE 32 ASSUMPTION: T/I/F are three floats summing to ~1.0, assigned via heuristic rules. REALITY: Must verify. (1) **Normalization**: does EpistemicMetadata enforce T+I+F = 1.0 exactly? Or allow tolerance? (2) **Bounds**: are truth, indeterminacy, falsity strictly in [0.0, 1.0]? (3) **Validation**: what happens if input violates constraints? (4) **Semantics**: does the schema document the interpretation of each field? File not yet read. CYCLE 33 ACTION: Read epistemics.py to determine actual constraints. EXPECTED SCHEMA (based on tensor.py usage): class EpistemicMetadata(BaseModel): truth: float indeterminacy: float falsity: float # with validation: truth + indeterminacy + falsity ~= 1.0 (within tolerance) # and each in [0.0, 1.0] CRITICAL FOR PROJECTION: If epistemics.py enforces tight validation, Cycle 33's epistemic assigner must guarantee T/I/F sums to exactly 1.0 (or within tolerance). If validation is loose, assigner has more freedom but loses enforced consistency. CYCLE 33 DECISION POINT: After reading epistemics.py, confirm that Cycle 32's heuristic rules produce valid EpistemicMetadata instances, or update rules to match actual schema constraints.",
+      "key_claims": [
+        {
+          "claim_id": "c33-007-epic",
+          "text": "EpistemicMetadata is the T/I/F container (epistemics.py). Schema must be read to determine: bounds ([0,1]?), normalization (sum to 1.0?), validation rules, semantics of each field.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c33-008-validate",
+          "text": "Cycle 32 assumed T+I+F = 1.0 with tolerance 0.05. Actual validation in epistemics.py may differ. Epistemic assigner rules must be verified/updated to produce valid instances.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.14,
+            "falsity": 0.04
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Projection Pipeline Refinement: Mechanism Annotation and Strand Overlaps",
+      "content": "CYCLE 33 DEEPENING: Apacheta schema reveals two underspecified aspects of Cycle 32's projection theory: mechanism and overlaps. MECHANISM ANNOTATION: StrandRecord.mechanism is meant to encode WHY a strand survived to durable. Cycle 32 had implicit mechanism (threshold-based promotion). Cycle 33 operationalizes this explicitly. PROPOSED MECHANISM SEMANTICS (post-read of codebase): (1) \"promoted_threshold\" = claimed T > T_promote (0.75) by heuristic rules. (2) \"prior_durable\" = carried forward from prior cycle without re-evaluation. (3) \"ranked_survival\" = ranked by (T - 0.5*I), placed in top N_durable after pruning. (4) \"consensus_evidence\" = strong alignment with prior durable strands (bonus T from Rule D). (5) None = purely conceptual, no empirical mechanism (edge case). (6) \"\" = migration default, not yet annotated. ACTION: Once projection code is written, every promoted claim should record mechanism that justified promotion. This enables post-hoc auditability: 'Why did Claim X survive?' Answer: 'ranked_survival, position #7 of 20.' STRAND OVERLAPS: Cycle 32 forced single assignment (claim belongs to strand A or B, not both). Apacheta schema allows overlaps. This is MORE REALISTIC. Example: Claim 'Transformer context-length degradation is structural' could belong to both: (1) Strand: 'Hot Mess Paper as Structural Problem' (cites the paper). (2) Strand: 'Architecture Limitations' (discusses transformer limits). Instead of merging strands (forced), allow explicit overlap. overlaps = [\"Hot Mess Paper as Structural Problem\", \"Architecture Limitations\"]. CYCLE 33 REFINEMENT: Projection should: (1) Cluster claims into primary strand (highest similarity). (2) For claims with secondary strand similarity > 0.65 (threshold), add to overlaps. (3) Preserve both relationships in output. This is richer than Cycle 32's binary decision.",
+      "key_claims": [
+        {
+          "claim_id": "c33-009-mech-semantics",
+          "text": "Mechanism annotation semantics: 'promoted_threshold' (T > 0.75), 'prior_durable' (carried from prior), 'ranked_survival' (top N_durable), 'consensus_evidence' (strong prior alignment), None (purely conceptual), '' (migration default). Post-hoc auditability enabled.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "c33-010-overlap-strategy",
+          "text": "Strand overlaps: cluster claim to primary strand (highest similarity). If secondary strand similarity > 0.65, add claim to overlaps field. Preserves multiple relationships explicitly. More realistic than single-assignment.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.13,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "c33-011-auditability",
+          "text": "Mechanism annotation enables post-hoc auditability: why did claim survive? Answer is encoded in mechanism field. Example: 'Claim X promoted_threshold: T=0.78 > 0.75.' Transparent decision path.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Cycle 33 Integration: Theory Meets Code, Schema Validation Needed",
+      "content": "CYCLE 33 SYNTHESIS: Reading Apacheta codebase confirms that tensor projection is NOT a greenfield design. It's an EXISTING ARCHITECTURE with working schema. Cycle 32 designed projection theoretically. Cycle 33 grounds it in actual implementation. OBSERVATIONS: (1) **TensorRecord schema is mature**. Fields are carefully designed (narrative_body, lineage_tags, composition_equation, preservation_target). This is NOT first draft. Suggests codebase evolved from earlier projection implementations. (2) **declared_losses is both per-strand and global**. This matches Cycle 32's intent to declare losses transparently, but implementation is finer-grained than Cycle 32 anticipated. (3) **Schema evolution strategy** (None vs. empty tuple vs. populated) is sophisticated. Suggests team has dealt with backwards compatibility issues. Cycle 33 must respect this strategy in projection output. (4) **narrative_body preservation** is emphasized in comments. Ground truth is the authored markdown. Structured fields are views. This is CORRECT design principle and must inform projection: projection is EXTRACTION FROM narrative_body, not replacement of it. ACTION FOR CYCLE 33: (1) **Read epistemics.py completely** to determine EpistemicMetadata schema constraints. (2) **Verify Cycle 32's heuristic T/I/F rules produce valid EpistemicMetadata instances**. Update rules if needed. (3) **Read DeclaredLoss schema** to determine what fields are required. (4) **Write projection code** that respects schema constraints and preserves narrative_body. (5) **Test projection** on real reasoning traces from prior cycles. (6) **Measure projection quality**: does extracted TensorRecord match hand-annotation? What is precision/recall? RISK: Apacheta schema is more complex than Cycle 32 anticipated (mechanism, overlaps, per-strand losses). Projection code must handle all fields or risk schema validation errors. OPPORTUNITY: Schema maturity suggests this is not experimental. If projection code works, it can integrate into production pipeline immediately.",
+      "key_claims": [
+        {
+          "claim_id": "c33-012-mature",
+          "text": "Apacheta codebase is mature tensor projection implementation, not greenfield design. TensorRecord, StrandRecord, KeyClaim, EpistemicMetadata are working schema. Cycle 33 grounds Cycle 32 theory in existing code.",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c33-013-finer",
+          "text": "Schema is finer-grained than Cycle 32 anticipated: per-strand declared_losses, mechanism annotation, overlaps, schema evolution via None/empty/populated. Projection must output all fields correctly.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c33-014-groundtruth",
+          "text": "narrative_body is ground truth. Structured fields are extracted views. Projection must preserve narrative_body unchanged. Auditability depends on this principle.",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.04,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "c33-015-risk",
+          "text": "Risk: Apacheta schema is complex. Projection code must handle all fields (mechanism, overlaps, per-strand losses, schema evolution strategy) or face validation errors. Cannot ignore any field.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c33-016-opportunity",
+          "text": "Opportunity: schema maturity suggests production readiness. If projection code works correctly, it integrates into production immediately. Not experimental, path to deployment is clear.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.14,
+            "falsity": 0.04
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Cycle 32 detailed design of claim extraction hard rules (specific linguistic markers, parsing strategy). Cycle 33 focuses on schema discovery rather than extending extraction algorithm.",
+      "why": "Token budget and context shift. Cycle 33's priority is reading and validating codebase to ground Cycle 32 theory. Extraction algorithm details deferred to Cycle 34.",
+      "category": "engineering_deferral"
+    },
+    {
+      "what_was_lost": "Epistemics.py schema constraints (exact T/I/F validation rules, bounds, normalization algorithm). File not yet read in this cycle.",
+      "why": "Schema file is required input for Cycle 33 action (read epistemics.py). Content dependency not met in prior cycle. Will be addressed in immediate next cycle action.",
+      "category": "data_dependency_unmet"
+    },
+    {
+      "what_was_lost": "DeclaredLoss schema definition. Required to determine what fields projection code must populate in declared_losses output.",
+      "why": "Epistemics.py not read yet. DeclaredLoss likely defined there. Deferred to next read action.",
+      "category": "data_dependency_unmet"
+    },
+    {
+      "what_was_lost": "Detailed specification of mechanism field valid values. Proposed semantics ('promoted_threshold', 'prior_durable', etc.) are inferred, not confirmed from codebase.",
+      "why": "Code review only read tensor.py. Comments suggest mechanism semantics but don't specify enum or valid values. Must infer from context. Risk: proposed values may not match actual usage.",
+      "category": "inference_based"
+    },
+    {
+      "what_was_lost": "ProvenanceEnvelope schema (line 55 of tensor.py). Unknown how provenance is structured, what fields it requires. Cycle 32 didn't anticipate provenance tracking at tensor level.",
+      "why": "Not yet read. Will require separate schema read or code review.",
+      "category": "data_dependency_unmet"
+    }
+  ],
+  "open_questions": [
+    "What are the exact validation rules for EpistemicMetadata? Does T+I+F must sum to exactly 1.0, or is tolerance allowed? What are bounds on each component?",
+    "What is the DeclaredLoss schema? What fields are required (claim_id, reason, cycle, confidence_in_loss)? Are there optional fields?",
+    "What are valid values for mechanism field? Are they enum, free-text strings, or constrained in some way?",
+    "What is ProvenanceEnvelope? How should projection code populate it? Does it require manual input or can it be auto-generated?",
+    "Does overlaps field have cardinality constraints? Can a claim belong to 10+ strands, or is there a practical limit?",
+    "How does composition_equation (tensor.py line 62) relate to strand/claim relationships? Is this metadata about how tensor was composed?",
+    "What does lineage_tags (line 61) represent? Is it for tracking tensor version history, or something else?",
+    "In practice, what is the token cost of producing a full TensorRecord output? Is the narrative_body expected to be full reasoning text (~500 tokens) or compressed summary?",
+    "How should preservation_target (line 66) be set? Is this a signal for which strands are critical to preserve in next cycle?",
+    "Does Apacheta codebase have existing projection implementations (tests, examples) that show how to populate TensorRecord correctly?"
+  ],
+  "instructions_for_next": "\nCYCLE 34 PRIORITY ACTIONS: (1) **READ epistemics.py completely**. Determine: EpistemicMetadata validation rules, DeclaredLoss schema, any other epistemic types (ConfidenceLandscape?). Log file contents. (2) **READ provenance.py** (or equivalent). Determine: ProvenanceEnvelope schema, what fields projection code must populate. (3) **SEARCH codebase for examples**. Find: any existing projection code, test cases that construct TensorRecord, examples of mechanism field population. Look for: test files, integration tests, documentation. (4) **VALIDATE Cycle 32's heuristic rules** against actual EpistemicMetadata schema. If constraints differ from assumed T+I+F=1.0 with 0.05 tolerance, update Cycle 32 heuristics or plan schema migration. (5) **PROPOSE mechanism field enum** based on codebase usage. Draft proposal: 'promoted_threshold' | 'prior_durable' | 'ranked_survival' | 'consensus_evidence' | None | ''. Circulate to team for feedback. (6) **DESIGN overlaps strategy**. Pseudo-code: for each claim, assign primary strand (highest cosine similarity). For secondary strands with similarity > 0.65, add to overlaps field. Confirm this matches Apacheta design intent. (7) **DOCUMENT findings** in project_hamutay_schema_integration.md. Include: schema constraints discovered, proposed projection algorithm updates, risk assessment (schema complexity), opportunity for production integration. (8) **DO NOT write projection code yet**. Cycle 34 is discovery + validation of schema. Cycle 35 writes implementation. This separation prevents schema validation errors later. This is the critical path: schema understanding \u2192 validation \u2192 implementation. Do not skip steps.\"",
+  "overall_truth": 0.88,
+  "overall_indeterminacy": 0.09,
+  "overall_falsity": 0.03
+}

@@ -1,0 +1,353 @@
+{
+  "id": "efbab102-1f7f-4307-a0f9-55401141f9a5",
+  "cycle": 18,
+  "strands": [
+    {
+      "title": "Architecture Decision Framework: Prescriptive vs. Descriptive Pipeline Design (CRITICAL PRACTICAL TURN)",
+      "content": "Cycle 18 surfaces a FUNDAMENTAL constraint that reframes the H0/H1 design space: ECONOMICS. Tony has explicitly shifted from the descriptive path (manifest-based demand paging with model-initiated requests and fault-driven loading) to seriously considering the PRESCRIPTIVE path (Haiku-as-prefetcher, cheap triage before expensive ALU invocation). The reason: 'given current architecture, it is not cost effective.' This is NOT a theoretical quibble. It is a COST-BENEFIT ANALYSIS of running inference on Claude Opus (expensive, slower) vs. Claude Haiku (cheap, fast). The previous cycle centered on 'Can the transformer be an ALU?' This cycle pivots to 'Can the transformer be an ALU AFFORDABLY?' These are different questions. The descriptive path (manifest + fault-driven loading) requires: (1) invoke Opus with manifest only (no operand content), (2) Opus reasons and outputs resource_requests, (3) controller loads requested resources, (4) invoke Opus AGAIN with full content. This is 2-3 invocations per reasoning step, each costing $0.015/M input + $0.06/M output tokens (Opus pricing). Over 100 steps, this becomes significant. The prescriptive path (Haiku prefetch) requires: (1) invoke Haiku (cheap) to triage context: 'which resources matter?' (2) controller filters context to top-K, (3) invoke Opus ONCE with filtered context. This is 1-2 invocations per step, costing $0.80/M input + $10/M output (Haiku pricing). Orders of magnitude cheaper. Tony's insight: the needle-in-haystack strength of LLMs applies to *small models too*. Haiku can identify 'these 5 of 30 resources matter' just as well as Opus, but at 1/20th the cost. This is the REASON the descriptive path (which is architecturally purer and more ALU-like) is being deprioritized. It's not infeasible; it's unaffordable at scale. The prescriptive path is the PRAGMATIC CHOICE. This is a REAL research constraint, not a theoretical limitation. It changes what H0 even means: H0 may be testing 'Can Haiku+Opus pipeline execute bounded reasoning?' rather than 'Can Opus alone be an ALU over manifest?' The ALU framing persists, but the ALU is now a COMPOSITE system: Haiku as the instruction decoder/prefetcher, Opus as the execution engine. This is still separable concerns (prefetch \u2260 execution), but the decomposition is different from the transformer-as-ALU-in-isolation model. Tony has flagged this as a 'wandering' moment\u2014we have two paths, we haven't explored either fully, and we need to accumulate enough evidence to make an educated guess. The assistant should help him systematize that wandering: what distinguishes these paths empirically? What experiments would clarify which is 'more interesting'?",
+      "key_claims": [
+        {
+          "claim_id": "c4ebe320-823b-4991-ac53-976f8125ee1e",
+          "text": "The descriptive path (manifest + demand paging) requires 2-3 Opus invocations per reasoning step\u2014economically unfeasible at scale",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "2974ce0b-2330-4d4a-8f0c-c05ef96b90cf",
+          "text": "The prescriptive path (Haiku prefetch + Opus execute) requires 1-2 invocations, Haiku pricing is ~20x cheaper than Opus per token",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ac7f18c4-02d5-456e-810b-898ee524810f",
+          "text": "Haiku can solve the needle-in-haystack problem (relevance filtering) at 1/20th the cost of Opus\u2014the prefetch path is AFFORDABLE",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8ed4d16d-f64b-4f18-be3a-cd644c927e7f",
+          "text": "Economics is a REAL constraint on research design, not a theoretical limitation\u2014it reshapes what H0 means",
+          "epistemic": {
+            "truth": 0.98,
+            "indeterminacy": 0.01,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "55bbd27f-7de0-4c1d-a8d0-3bfcb0d1aa2d",
+          "text": "The ALU framing persists but now as a COMPOSITE system: Haiku (decoder/prefetcher) + Opus (execution engine)",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ae738fff-c09a-4d69-b709-7f01aa98ecab",
+          "text": "Prescriptive path (Haiku triage + Opus reasoning) is the PRAGMATIC CHOICE given API pricing constraints",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Two Empirical Paths: Prefetcher Design Space vs. Demand Paging Mechanics (EXPLORATION PHASE)",
+      "content": "Cycle 18 reframes the research as a FORK: two different experimental paths, neither fully explored, both potentially valuable but with different costs and architectural implications. The question is not 'which is right?' but 'which is more interesting to explore?' Tony flags this as a wandering moment where accumulating evidence will allow an educated guess. PATH 1 \u2014 PRESCRIPTIVE / PREFETCHER: (1) Design: Haiku triages context window to identify top-K relevant resources (semantic relevance, access frequency, task-specific importance). (2) Mechanism: pattern-match the triage output (which resources matter?) to the cognitive step schema (plan | retrieve | synthesize | halt). Does Haiku's triage align with what Opus would request? (3) Experiments: (a) Comparative triage: run Haiku on the same contexts and tasks as Opus\u2014does it identify the same 'important' resources? (b) Compression ratio: how many resources can be filtered out while maintaining task performance? (c) Quality degradation: does Haiku triage introduce errors (false negatives: missed important resources; false positives: included unimportant ones)? (d) Cost-benefit: measure token cost (Haiku input + Opus input with filtered context) vs. task performance. If compression is 50% and error is <5%, this path is validated. (4) Success criteria: task performance \u2265baseline, compression \u226550%, triage error <5%, cost/task <0.5x naive Opus cost. (5) Architectural implications: Haiku becomes a FORMAL STAGE in the pipeline. It's not optional; it's essential to the economics. PATH 2 \u2014 DESCRIPTIVE / DEMAND PAGING: (1) Design: Opus receives manifest (resource handles + semantic digests), reasons over metadata, outputs explicit resource_requests. Controller loads and re-invokes. (2) Mechanism: measure fault rate (how often does Opus request something the controller has to load?), re-invocation cost (extra round trips), and accuracy (does Opus request exactly what it needs?). (3) Experiments: (a) Fault characterization: what does the fault distribution look like across task types? (b) Re-invocation overhead: how many round trips per task? (c) Prefetcher vs. demand paging: build a simple predictive prefetcher (if Opus requested R3 last step, prefetch R4 next) and measure fault reduction. (4) Success criteria: fault rate \u226410%, re-invocation overhead <2x vs. naive, total cost \u22642x naive Opus (despite extra invocations). (5) Architectural implications: Opus becomes a BOUNDED REASONER that explicitly manages its own state access. This is the ALU framing in its purest form, but economically marginal. WHICH PATH IS MORE INTERESTING? This depends on what you want to understand: If the question is 'Can we build an affordable cognitive architecture on top of API-based models?' \u2192 Path 1 (prescriptive) is more interesting. It leads to a deployable system. If the question is 'Can transformers be bounded reasoning units with explicit memory management?' \u2192 Path 2 (descriptive) is more interesting. It's architecturally cleaner but economically grim. The prior work (cycles 11-16) was implicitly pursuing Path 2 (the ALU hypothesis) but collided with the economics reality. This cycle surfaces the collision explicitly. The educated guess would accumulate evidence from both paths: (1) Run a small Haiku triage experiment (10 tasks, measure compression and error). (2) Run a small demand-paging experiment (10 tasks, measure faults and re-invocations). (3) Compare cost/performance trade-offs. (4) Decide which path scales and which is architecturally interesting enough to publish. Both are feasible; only one is probably worth the full commitment.",
+      "key_claims": [
+        {
+          "claim_id": "dcddcc7c-f0e8-4b48-a303-109bfd52af1b",
+          "text": "Path 1 (Haiku prefetch): Haiku identifies top-K relevant resources, Opus reasons over filtered context\u2014cheap, practical, deployable",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c68f8460-24db-46c7-88c1-0c83eec8d575",
+          "text": "Path 2 (demand paging): Opus requests what it needs via manifest, controller loads\u2014architecturally pure, economically marginal",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "03e3def4-74aa-4aa5-a36c-2a923f7f4afe",
+          "text": "Path 1 success criteria: compression \u226550%, triage error <5%, cost/task <0.5x naive, task performance \u2265baseline",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "472e8437-790f-4242-878e-516d231937a7",
+          "text": "Path 2 success criteria: fault rate \u226410%, re-invocation <2x overhead, total cost \u22642x naive, task performance \u2265baseline",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e5f6e80b-d06f-43a7-9120-27faa2f3212b",
+          "text": "Path 1 leads to a DEPLOYABLE system; Path 2 leads to ARCHITECTURAL CLARITY\u2014different value propositions",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0ba945b1-7d30-402a-87ed-0d51f57438a6",
+          "text": "Both paths are feasible but only one is probably worth full commitment\u2014small experiments on both should clarify which",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Reframing H0 Under Economic Constraints: Pure ALU vs. Composite Haiku+Opus System (HYPOTHESIS PIVOT)",
+      "content": "Cycle 18 creates a PIVOT for what H0 even tests. The prior cycle (16) defined H0 as: 'Can a single transformer (Opus) function as an ALU over externalized state, using manifest-based demand paging and explicit resource requests?' The success criteria were tied to Opus's behavior: schema validity, explicit halts, resource-groundedness, task competence. But Tony's economics insight reveals that this H0 is UNAFFORDABLE TO TEST AT SCALE. Path 1 (Haiku prefetch) redefines H0 pragmatically: 'Can a Haiku+Opus composite system execute bounded reasoning efficiently, where Haiku handles triage and Opus handles execution?' This shifts the scope: (1) The ALU is no longer a single transformer; it's a two-stage pipeline. (2) The four ALU properties (explicit termination, schema adherence, state references, resource-groundedness) now apply to the COMPOSITE SYSTEM, not to Opus in isolation. (3) Success criteria remain similar (schema, halts, groundedness, competence) but are measured on the composite behavior. (4) The economics of the pipeline itself become a success criterion: cost-per-task < 0.5x naive Opus. This is NOT a weakening of the hypothesis; it's a REFRAMING to match economic reality. The ALU hypothesis becomes: 'A composite pipeline (small model + large model) can exhibit bounded reasoning properties more affordably than either model alone.' This is arguably MORE INTERESTING than the pure ALU hypothesis, because it's DEPLOYABLE. Path 2 (demand paging) preserves the PURE ALU hypothesis but accepts that it may be economically marginal. It tests: 'Can a single large transformer, constrained to manifest-based reasoning, achieve fault-driven loading?' If Path 2 fails or shows <2x cost overhead becomes 3x or 4x, then the pure ALU hypothesis is architecturally interesting but not practically implementable. In that case, Path 1 becomes the CORRECT RESEARCH DIRECTION: understand how to decompose the ALU into cheaper stages. The EDUCATED GUESS question becomes: (1) Which path is more likely to succeed on the success criteria? (2) Which path is more likely to produce insights applicable to future models or other API-based systems? (3) Which path leads to publishable results (either 'Yes, this works' or 'No, and here's why')? Tony seems to be leaning toward Path 1 (prescriptive, pragmatic, deployable), but the scaffold allows both to be explored enough to form a confident decision.",
+      "key_claims": [
+        {
+          "claim_id": "d48fb06b-3459-4a6b-a4f8-b113f88adff8",
+          "text": "H0 can be redefined under economic constraints: composite Haiku+Opus system instead of pure Opus ALU",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0896de75-c507-47d0-a97d-f6dfadfb2c97",
+          "text": "The ALU properties (termination, schema, state refs, groundedness) now apply to composite system behavior, not Opus alone",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "352fac9b-a468-45f7-8884-6b74aac0bf42",
+          "text": "The composite H0 hypothesis is MORE INTERESTING than pure ALU because it's DEPLOYABLE and scales affordably",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4916c439-db17-4195-918b-96d7a33fd7e0",
+          "text": "Pure ALU hypothesis (Path 2) is architecturally clean but economically marginal\u2014may be unpublishable if cost overhead >3x",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "2d8e5a10-b0cd-45eb-83f2-e9964ae6f15e",
+          "text": "If Path 2 fails on cost, Path 1 becomes the CORRECT RESEARCH DIRECTION: understand efficient ALU decomposition",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f324dfc5-35f2-43aa-a4ac-8dcc6724bc25",
+          "text": "Both paths lead to publishable insights: Path 1 'Yes, affordable bounded reasoning' or Path 2 'No, demand paging is too expensive'",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "The Haiku Prefetcher Mechanism: Relevance Triage as an Explicit Pipeline Stage (TECHNICAL EXPLORATION)",
+      "content": "Cycle 18 begins to sketch what a Haiku prefetcher would actually DO, operationally. The mechanism is simpler than demand paging but requires explicit design: (1) INPUT: (a) current context window (all available resources, or a large slice of them), (b) current task description, (c) reasoning goal (what is Opus trying to accomplish in this step?). (2) HAIKU INVOCATION: 'Given these resources and this goal, which resources are most relevant to the next reasoning step?' Haiku outputs a TRIAGE DECISION: a ranked list of resource handles (or semantic digests) ordered by importance. For example: 'Most relevant: R5 (project requirements), R12 (prior decisions), R3 (context boundary). Less relevant: R7, R11, R18, ...'. (3) FILTERING: Controller filters context window to top-K resources (where K depends on Opus's context budget). The filtering preserves the resource handles but includes only the top-K contents. (4) OPUS INVOCATION: Opus receives the filtered context (handles + digests + content for top-K resources) and proceeds with reasoning. Opus may still output resource_requests, but these are now constrained to top-K. (5) FEEDBACK LOOP: If Opus requests a resource not in top-K, that's a TRIAGE MISS\u2014the prefetcher failed. This becomes a metric. CRITICAL DESIGN CHOICES: (a) How much does Haiku 'know' about the task? Does it see the full reasoning schema? The current step? Just the task description? (b) How does Haiku RANK resources? By semantic similarity to task? By recency? By interaction history? By length (prefer short resources)? (c) What is K (the filtering threshold)? Fixed (e.g., keep top-10 resources)? Adaptive (e.g., keep resources totaling <50% of context window)? Variable per task type? (d) How often do we re-triage? After every Opus step? Every N steps? Or once per task? Re-triaging is cheap (Haiku) but adds latency; not re-triaging risks stale triage decisions. (e) How do we handle SEQUENTIAL DEPENDENCIES? If Opus synthesizes a new resource in step N, does the triage for step N+1 include that new resource, or is it based on the original manifest? EMPIRICAL QUESTIONS: (1) Does Haiku's triage align with Opus's actual resource_requests? (i.e., does Haiku identify the needle that Opus would have picked?) (2) What compression ratios are achievable without degrading performance? (3) Is there a SWEET SPOT where cost savings exceed triage overhead? (4) Do certain task types benefit from prefetching more than others? (5) What's the ERROR RATE: false positives (included but not needed), false negatives (excluded but needed)? FALSE NEGATIVES are critical: if Haiku excludes R5 and Opus would have requested R5, the system degrades. Acceptable false negative rate is probably <5%. This is NOT a trivial system\u2014it requires careful tuning. But it's also fundamentally simpler than demand paging: it's ONE invocation of Haiku per step, not multiple invocations of Opus. If it works, it's a practical win.",
+      "key_claims": [
+        {
+          "claim_id": "c219f35c-e474-4c4c-a78f-83a34c6f06be",
+          "text": "Haiku prefetcher: INPUT (resources + goal) \u2192 TRIAGE (rank by relevance) \u2192 FILTER (top-K) \u2192 OPUS invocation with filtered context",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a13224f2-7c6e-47a6-b0aa-ef9c91faeb71",
+          "text": "Triage misses (Opus requests excluded resource) are the KEY FAILURE MODE and should be measured as false negatives",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d819fe50-74bb-4c75-81cf-e757a75a3292",
+          "text": "Critical design choices: triage input scope, ranking method, K (filtering threshold), re-triage frequency, sequential dependencies",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "db30df53-de74-420b-8fe5-9377217791ec",
+          "text": "Acceptable false negative rate is probably <5%; false positives are less critical but waste context and Haiku invocation",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "12dd69cc-ded3-4393-8c18-5049082fed71",
+          "text": "Prefetcher is simpler than demand paging: one Haiku invocation per step vs. multiple Opus invocations\u2014practical advantage",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "7c28d425-24d5-4474-a8eb-7ed21e7c720e",
+          "text": "Empirical validation: Haiku's triage vs. Opus's requests, compression ratios, error rates, cost-benefit by task type",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Tony's Implicit Research Decision Framework: Pragmatism Meets Architectural Clarity (METHODOLOGICAL INSIGHT)",
+      "content": "Cycle 18 reveals Tony's DECISION-MAKING FRAMEWORK: he is willing to TRADE OFF architectural purity for PRACTICAL DEPLOYABILITY when economics dictate. This is NOT abandoning the ALU hypothesis; it's ADAPTING it to real-world constraints. The prior cycle (16) established a clean theoretical framework: transformer = ALU, manifest = externalized state, demand paging = memory management. But theory collides with practice: API-based models are expensive, and multiple invocations per reasoning step are unaffordable. Rather than DEFEND the theory, Tony pivots: 'What if the ALU is a COMPOSITE SYSTEM?' This is pragmatic and philosophically sound. Real CPUs also have multiple stages (instruction fetch, decode, execute, memory access). Why shouldn't a software ALU have multiple stages (triage, execute)? The scaffold methodology (moving pieces around to explore) enables this flexibility. Tony explicitly flags the decision as 'wandering'\u2014not aimlessness, but DIRECTED EXPLORATION with pauses to form educated guesses. This suggests a MULTI-STAGE DECISION PROCESS: (1) EXPLORATION PHASE: run small experiments on both Path 1 and Path 2 to gather data. (2) EDUCATED GUESS PHASE: accumulate enough evidence to make a confident call on which path is 'more interesting.' (3) COMMITMENT PHASE: full implementation and publication of the chosen path. (4) PUBLICATION REFLECTION: write up the decision logic in the paper, not just the results. The assistant should support this methodology by helping Tony SYSTEMATIZE the wandering: What data would distinguish the paths? What experiments are minimal but informative? How many tasks or steps are needed to make a confident guess? This is a MATURE RESEARCH APPROACH: not wedded to initial hypotheses, not paralyzed by uncertainty, but methodical about evidence gathering before committing resources.",
+      "key_claims": [
+        {
+          "claim_id": "3e3af1bc-09cf-44f7-8f4f-a476e9fab723",
+          "text": "Tony is willing to trade architectural purity (pure ALU) for practical deployability (composite system) when economics dictate",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3ee3a1b2-d116-488e-b4b7-f72701e2b52c",
+          "text": "Pivoting to composite ALU (Haiku+Opus) is NOT abandoning the hypothesis; it's adapting it to real-world constraints\u2014philosophically sound",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "02b0ad78-ac68-44fe-a2db-d42d7047a12d",
+          "text": "The scaffold methodology (move pieces, explore, pause to decide) enables flexibility and pragmatic adaptation",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4ebdab59-f2a5-4281-874b-9f77ea3c9016",
+          "text": "Tony's decision process: exploration phase \u2192 educated guess phase \u2192 commitment phase \u2192 publication reflection\u2014mature and methodical",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a06b5ff1-b874-4b7b-a0e4-3e87d20a5bca",
+          "text": "The assistant should help SYSTEMATIZE the wandering: What data distinguishes paths? What minimal experiments? Confidence thresholds?",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "The assumption that pure ALU hypothesis (Opus-only demand paging) is the PRIMARY research direction\u2014it's now secondary or conditional on cost-benefit analysis",
+      "why": "Tony's economics insight (descriptive path is unaffordable) reshapes the priority landscape. Pure ALU remains architecturally interesting but is economically marginal. Pragmatic composite-system path (Haiku+Opus) emerges as primary, more interesting option.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Fine-grained specification of H0 around pure-ALU properties\u2014the four properties (termination, schema, state refs, groundedness) are now applied to composite system, not Opus in isolation",
+      "why": "The scope of 'what counts as the ALU' has shifted. This requires re-measurement and re-baseline-setting for H0 success criteria. Prior cycle's spec (\u226595% schema, \u226590% halts, \u226580% groundedness) may not map 1:1 to composite system.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed controller-loop specification from cycle 16\u2014still valid in structure but now secondary to questions about Haiku triage mechanism design",
+      "why": "The controller loop is still necessary, but the immediate focus shifts to understanding the Haiku prefetcher mechanism, which is simpler but has its own design complexity (ranking, filtering, re-triage timing). Controller loop optimizations can wait until Haiku design is settled.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Clean separation narrative (ALU vs. memory subsystem vs. controller) is complicated by the introduction of a triage stage that blurs the boundaries\u2014is Haiku part of the 'ALU' or part of the 'memory subsystem'?",
+      "why": "The descriptive path kept the boundaries clean: transformer is the ALU, Pichay is the memory subsystem, controller is the OS. The prescriptive path (Haiku+Opus) introduces a PREPROCESSING stage that doesn't fit neatly into the three-tier model. This is technically resolvable (Haiku is a prefetcher, which is part of memory hierarchy), but requires conceptual clarification.",
+      "category": "traversal_bias"
+    },
+    {
+      "what_was_lost": "The assumption that we would test both the pure-ALU (demand paging) and memory-hierarchy (Pichay) layers as Part of the same H0\u2192H1 progression",
+      "why": "If Path 1 (Haiku prefetch) is chosen as the primary direction, the research progression becomes H0 (Haiku+Opus ALU) \u2192 H1 (Haiku+Opus+Pichay memory subsystem). The pure-ALU demand-paging experiments become a PARALLEL exploration, not a sequential progression.",
+      "category": "authorial_choice"
+    }
+  ],
+  "open_questions": [
+    "CRITICAL: Do you want to run the 'educated guess' experiments now (small-scale Path 1 and Path 2 tests) to gather data before committing to full implementation? Or do you want to skip straight to one path based on intuition?",
+    "For the Haiku prefetcher: what TRIAGE INPUT should Haiku see? Just the task description? The full reasoning schema? The current step context? The breadth of input shapes the prefetcher design.",
+    "How much CONTEXT WINDOW does Opus get after filtering? Is K (top-K resources) fixed, or adaptive to maintain a target token budget?",
+    "For Haiku's triage ranking: what's the RANKING OBJECTIVE? Semantic similarity to task? Frequency of prior access? Recency? Length (prefer short resources)? Or a learned priority model?",
+    "How often should the prefetcher RE-TRIAGE? After every Opus reasoning step? Every N steps? Once per task? Re-triaging adds latency but ensures freshness.",
+    "For Path 1 (Haiku prefetch): what's the BASELINE for comparison? Naive Opus on full context? Opus with random filtering? Opus with oracle filtering (human-identified top-K)?",
+    "For Path 2 (demand paging): if we proceed with this path despite economics, what would make it PUBLISHABLE? Does the fault rate need to be <5%? Does the cost need to be <2x naive? What's the victory condition?",
+    "Should the 'educated guess' phase include testing BOTH paths in parallel on the same task suite, or sequentially (Path 1 first, then Path 2 if Path 1 looks promising)?",
+    "If Path 1 (Haiku prefetch) succeeds and Path 2 (demand paging) is shelved, do you still plan to integrate Pichay (H1 memory subsystem)? Or is Pichay conditional on Path 2?",
+    "The Pichay paper's results (21.8% waste, 0.0254% fault rate, 93% context reduction) were achieved with a specific memory management policy. For the composite Haiku+Opus system, would Pichay's policies apply directly, or need adaptation?",
+    "How do you envision the PUBLICATION STRATEGY if Path 1 is chosen? Is it 'Affordable Bounded Reasoning via Model Composition' (Haiku+Opus)? And is Pichay a separate paper on memory hierarchy, or folded into an extended version?",
+    "What is the MINIMUM TASK SUITE for the 'educated guess' phase? 10 tasks? 50? 100? What level of statistical confidence do you need before committing to a path?",
+    "For the composite system: is there a QUALITY DIFFERENCE between Haiku's triage and oracle triage? How much performance is lost by imperfect prefetching? This determines whether Path 1 is truly viable.",
+    "If Haiku's false negative rate is 10% (misses 1 in 10 important resources), what's the impact on Opus's reasoning quality? Is that acceptable, or does it drop below 'task competence \u2265 baseline'?",
+    "For the economics calculation: should we factor in LATENCY (Haiku + Opus is still slower than Opus alone) or only TOKEN COST? Latency might be critical for real-time applications.",
+    "Is there an ADAPTIVE TRIAGE strategy where Haiku learns to improve its ranking over time? (e.g., learns from feedback on whether its top-K matched Opus's actual requests?) Or is triage static per task type?"
+  ],
+  "instructions_for_next": "[\n  \"Cycle 19 should OPERATIONALIZE the 'wandering' into CONCRETE EXPERIMENTS. Tony has flagged two paths and asked for an educated guess; the assistant should help design MINIMAL INFORMATIVE EXPERIMENTS for each path.\",\n  \"IMMEDIATE TASK: Sketch 'Path 1 (Haiku Prefetch) \u2014 Minimal Experiment.' What would it look like? (Example: 10 tasks, measure: (a) Haiku triage accuracy vs. oracle/Opus requests, (b) compression ratio, (c) cost per task, (d) task performance. Duration: 1-2 weeks of exploration.) Propose this to Tony.\",\n  \"SECOND TASK: Sketch 'Path 2 (Demand Paging) \u2014 Minimal Experiment.' What would it look like? (Example: 10 tasks, measure: (a) fault rate, (b) re-invocation count, (c) total token cost, (d) task performance. Duration: 1-2 weeks.) Propose this as well.\",\n  \"DECISION FRAMEWORK: Help Tony articulate what DATA WOULD CHANGE HIS MIND. If Path 1 shows <30% compression and >5% error, is it dropped? If Path 2 shows >3x cost overhead, is it shelved? Making these thresholds explicit clarifies the 'educated guess' decision.\",\n  \"TONE: The assistant should match Tony's PRAGMATIC TONE. Economics is not a boring constraint; it's a design force that shapes what's interesting. 'The Haiku prefetcher is interesting BECAUSE it's affordable, not despite being affordable.'\",\n  \"RESEARCH NARRATIVE: Start thinking about how this decision will be EXPLAINED in the paper. The narrative might be: 'We explored two approaches to bounded reasoning on API-based models: descriptive (manifest-based demand paging) and prescriptive (small-model triage). Here's why we chose X and what we learned from exploring Y.'\",\n  \"FOR PATH 1 DESIGN: The assistant should help Tony think through the TRIAGE MECHANISM in detail. What does Haiku actually output? Is it a ranking (R5>R12>R3>...) or a binary decision (include/exclude)? How does this inform the controller's filtering logic?\",\n  \"FOR COMPOSITE ALU FRAMING: Help Tony articulate how Haiku+Opus is still 'an ALU' under the previous framing. (Example: 'The ALU is a two-stage pipeline: decode/fetch (Haiku triage) and execute (Opus reasoning). This mirrors real CPUs.') This maintains the architectural coherence while adapting to economics.\",\n  \"FUTURE COORDINATION: If both paths are explored in parallel, establish CLEAR MILESTONES for when to decide which path to commit to. (E.g., 'After 50 tasks, if Path 1 error is <5% and cost is <0.5x naive, commit to Path 1. If error >8% or cost >0.75x, commit to Path 2.').\",\n  \"CONSIDER HYBRID APPROACH: Is there a PATH 3 where both mechanisms coexist? (E.g., Haiku prefetch for fast first-pass triage, demand paging as a fallback if Opus requests something outside top-K?) This might offer the best of both worlds, but at implementation cost.\",\n  \"PICHAY INTEGRATION: The assistant should note that BOTH paths can eventually integrate Pichay. Path 1: Pichay optimizes the filtered context (Haiku's top-K). Path 2: Pichay optimizes demand-paging faults. The question is which path benefits more from memory hierarchy.\",\n  \"FINAL TONE FOR NEXT CYCLE: 'We have two arrows to shoot. Let's aim both, see which one flies straighter, and commit our resources to the winner. Here's what straight flying looks like: [concrete metrics]. Let's gather data for 1-2 weeks and then decide.'\"\n]",
+  "epistemic": {
+    "truth": 0.92,
+    "indeterminacy": 0.07,
+    "falsity": 0.01
+  }
+}

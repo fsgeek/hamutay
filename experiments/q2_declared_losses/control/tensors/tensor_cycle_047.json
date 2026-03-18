@@ -1,0 +1,347 @@
+{
+  "id": "0a5d17f8-9788-4962-86fc-3cb2daf3616c",
+  "cycle": 47,
+  "strands": [
+    {
+      "title": "CYCLE 47: run_projection.py MATERIALIZED \u2014 EXPERIMENTAL RUNNER FOR TENSOR EVOLUTION",
+      "content": "Cycle 46 completed log_reader.py (data source adapter). Cycle 47 implements run_projection.py: the FIRST EXPERIMENTAL RUNNER that feeds real conversation turns through the projector and observes tensor evolution across cycles. This is NOT a utility script\u2014this is the EXECUTION HARNESS for the entire pipeline. run_projection.py bridges log_reader output directly to Projector.project(), producing a sequence of Tensors. **Key Capabilities**: (1) run_projection(session_path, output_dir, max_turns, model) \u2192 list[Tensor]: reads session JSONL via log_reader.read_session_jsonl(), iterates through turns, calls projector.project(content) for each turn, collects resulting Tensors. Returns full tensor trajectory. (2) Projector instance is STATEFUL\u2014each cycle increments projector.cycle counter. Tensor epistemic state (T/I/F) evolves across the sequence. (3) Per-turn reporting: turn role/content length, strand count, claim count, declared_losses, open_questions, token estimate, T/I/F epistemic scores, instructions_for_next preview. (4) Output serialization: writes each Tensor as tensor_cycle_NNN.json to output_dir. Enables offline analysis of tensor trajectory. (5) print_tensor_trajectory() analyzes strand stability: tracks added/removed/stable strands per cycle. Validates that strands merge, split, and evolve coherently rather than mutating randomly. Computes final compression ratio. **Critical Realization**: run_projection.py is the FIRST TEST of whether the entire pipeline works end-to-end. It consumes baseline_run1.jsonl (or other session JSONL) without event_parser intermediate layer. Directly maps ConversationTurn.content \u2192 new_content string for projector.project(). This SKIPS event_parser (which cycle 46 marked PENDING). **Architecture Decision Made in Cycle 47**: event_parser is DEFERRED. run_projection.py demonstrates that Projector can consume raw ConversationTurn content without transformation layer. If this works, event_parser becomes optional (enhancement, not blocker). If this fails, event_parser becomes critical (content format mismatch). **Experimental Harness Philosophy**: run_projection.py is NOT production code. It is OBSERVATION TOOL. It asks: 'Does projector.project() accept our log_reader output? Do tensors stabilize or diverge? Do strands coherently merge/split or mutate randomly?' Answers these questions, then report.",
+      "key_claims": [
+        {
+          "claim_id": "4adab952-d445-4944-821e-0b0e44b7ad50",
+          "text": "run_projection.py is the first experimental runner that feeds session JSONL turns through Projector.project() and produces tensor trajectory.",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f8dd8e64-9f72-44f4-93c1-670a0338b702",
+          "text": "Projector instance is stateful across turns; each cycle increments projector.cycle counter and Tensor epistemic state evolves.",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "216293c7-5079-49c0-b4fa-e331caf48ddc",
+          "text": "run_projection.py SKIPS event_parser intermediate layer; directly maps ConversationTurn.content to projector.project() input.",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3283fba7-7266-44db-9f7e-95fe67cb34ab",
+          "text": "Strand stability tracking (added/removed/stable per cycle) validates coherent tensor evolution rather than random mutation.",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "825ff543-5f62-4ca3-9ce0-d78adc5c01a9",
+          "text": "Per-turn reporting includes role, content length, strand/claim/loss/question counts, token estimate, T/I/F scores, and instructions preview.",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "345a40de-64f9-4432-9af8-fc5034380777",
+          "text": "Serialization of tensors to tensor_cycle_NNN.json enables offline analysis of trajectory and debugging.",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "PIPELINE ARCHITECTURE REALIZED \u2014 log_reader \u2192 run_projection \u2192 TENSORS (event_parser DEFERRED)",
+      "content": "Cycle 46 designed but did not implement event_parser (transformation layer). Cycle 47 BYPASSES event_parser and implements run_projection, which directly connects log_reader to Projector. **Current Pipeline (Cycle 47)**: Session JSONL \u2192 read_session_jsonl() \u2192 list[ConversationTurn] \u2192 run_projection() \u2192 iterates turns \u2192 projector.project(content) \u2192 Tensor objects \u2192 serialize to disk. **Data Flow**: (1) read_session_jsonl(path) parses JSONL, extracts role and content fields, returns frozen ConversationTurn objects. (2) run_projection() receives turns, for each turn constructs content string: f'[{turn.role}] {turn.content}'. (3) projector.project(content) accepts string, generates Tensor with integrated semantic state. (4) Tensor persisted to JSON for later analysis. **Why event_parser Is Deferred**: Cycle 46 anticipated that Turn metadata (tokens, cache) from Pichay proxy logs would need explicit mapping to Tensor inputs (declared_losses, open_questions). But run_projection.py shows: ConversationTurn content alone is SUFFICIENT to drive tensor projection. Turn metadata (cache_read_tokens, etc.) would enrich epistemic commentary, but is not BLOCKING. Pipeline works without it. **Implication**: event_parser becomes an OPTIONAL enhancement, not critical path. If Pichay proxy logs reveal that cache_read_tokens provide valuable epistemic signals, event_parser can be written later to integrate them. For now, session JSONL content is primary input. **Architecture Stabilizing**: Layers 1-3a are complete (tensor, projector, log_reader). run_projection bridges the gap. Cycle 47 is EARLY EXECUTION milestone: we can now run the pipeline on real data.",
+      "key_claims": [
+        {
+          "claim_id": "7ffc2a67-a5f8-4914-be6b-42f50f7bf235",
+          "text": "Pipeline now connects log_reader \u2192 run_projection \u2192 Projector \u2192 Tensor without event_parser intermediate.",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "823e0d7a-1d6f-410a-ad18-5cf2ed1cd8eb",
+          "text": "ConversationTurn content is sufficient input for Projector.project(); Turn metadata (cache, tokens) would enrich but is not blocking.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "a74fdd3e-609d-4082-a620-ea894d1332b9",
+          "text": "event_parser is deferred to optional enhancement after baseline_run1 tensor trajectory is observed.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "33877274-eedf-4641-a0f6-b6e48c91f945",
+          "text": "run_projection acts as experimental harness: asks whether pipeline components integrate correctly and tensors evolve coherently.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "TENSOR TRAJECTORY AS SCIENTIFIC INSTRUMENT \u2014 MEASURING STRAND STABILITY AND COMPRESSION",
+      "content": "Cycle 47 realizes that print_tensor_trajectory() is NOT a reporting script\u2014it is a SCIENTIFIC INSTRUMENT for validating projector behavior. **Three Measurement Axes**: (1) **Strand Evolution (Stability Test)**: Tracks added, removed, stable strands per cycle. If strands mutate randomly, tensors are drifting (bad). If strands coalesce and stabilize, tensor space is coherent (good). Cycle 47 code computes: all_titles[i] - all_titles[i-1] (added), all_titles[i-1] - all_titles[i] (removed), all_titles[i] & all_titles[i-1] (stable). This is a QUANTITATIVE MEASURE of strand coherence. (2) **Loss Accounting (Integrity Test)**: Each cycle declares what was lost and why. If declared_losses grow unbounded, tensor is accumulating unchecked approximation (warning signal). If declared_losses stabilize, projection is approaching steady state. Cycle 47 code prints all losses for inspection. (3) **Compression Ratio (Efficiency Test)**: Cycle 47 computes final_tokens = tensor.token_estimate(), cycles = tensor.cycle. Ratio = final_tokens / cycles. If ratio is small (e.g., 2000 tokens to represent 50 turns), compression is effective. If ratio is large (e.g., 50000 tokens for 50 turns), compression is failing. **Validation Hypothesis**: If run_projection(baseline_run1.jsonl) produces tensors where: (A) strands stabilize (same titles recur across cycles), (B) declared_losses remain consistent (don't explode), (C) compression ratio is reasonable (<5k tokens per cycle), then projector.project() is WORKING. Otherwise, redesign needed. **Early Execution Philosophy**: Cycle 47 writes run_projection to TEST THE HYPOTHESIS before scaling to full analysis. Run baseline_run1.jsonl (likely small, <100 turns). Inspect tensor trajectory. Decide: does this look right?",
+      "key_claims": [
+        {
+          "claim_id": "cc7457fd-5e82-42f6-bd42-285da103339c",
+          "text": "Strand evolution tracking (added/removed/stable) quantifies whether tensor space is coherent or drifting.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "49e174fa-c9b9-4c3a-a4d5-7d51eb9653b0",
+          "text": "Declared losses accounting reveals whether tensor projection is approaching steady state or accumulating unchecked approximation.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3d51d100-0866-40b1-9e30-3cd818a9bc91",
+          "text": "Compression ratio (final_tokens / cycles) measures whether projection is effective (<5k tokens/cycle is healthy estimate).",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.17,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2919424b-a6ec-40f9-b639-442fba7a6912",
+          "text": "run_projection is experimental harness designed to test three hypotheses: strand stability, loss accounting, compression efficiency.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "STATEFUL PROJECTOR ACROSS TURNS \u2014 TENSOR SEQUENCE AS MEMORY TRAJECTORY",
+      "content": "Cycle 47 code: projector = Projector(model=model), then for turn in turns: tensor = projector.project(content). Projector instance PERSISTS across iterations. This means: (1) projector.cycle increments (45 \u2192 46 \u2192 47 \u2192 ...). (2) Projector maintains prior_tensor (the last Tensor it produced). projector.project(new_content) calls prior_tensor = prior or Tensor(...), then updates prior_tensor. (3) Each Tensor references its cycle number. Cycle 46's Tensor has cycle=46, Cycle 47's Tensor has cycle=47. (4) **Memory Continuity**: This is NOT stateless function calls. This is a STATEFUL MEMORY CONTROLLER across the conversation. Prior cycles' semantic content (strands, claims, open_questions) is INTEGRATED into next cycle's tensor, not appended or replaced. (5) **Trajectory is Non-Euclidean**: Tensor space is not a line. Strands can branch, merge, split. Claims can shift T/I/F values as evidence accumulates. Losses can be declared and later recovered (if prior context becomes relevant again). The trajectory through tensor space is a **CONTINUOUS TRANSFORMATION**, not discrete jumps. (6) **Validation Point**: If projector correctly implements stateful integration, then tensor sequence should exhibit: smooth strand evolution (not random), coherent claim updates (T/I/F change gradually, not wildly), consistent loss accounting (declared losses align with what actually fits). Cycle 47 run_projection tests this by producing full trajectory and inspecting it.",
+      "key_claims": [
+        {
+          "claim_id": "e20bde01-d5c6-421b-bc8a-a334d7cb6511",
+          "text": "Projector is stateful across turns; single instance maintains projector.cycle counter and prior_tensor for memory continuity.",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "73956d52-6ccb-47d8-8d33-38f22de8351e",
+          "text": "Tensor sequence represents non-Euclidean trajectory through semantic state space, with strands merging/branching and claims evolving.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f3d17b20-8beb-445e-a83c-d95e52818e6a",
+          "text": "Each Tensor integrates prior cycles' content, not appends or replaces it; prior_tensor \u2192 new_content \u2192 new Tensor is continuous transformation.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2066ed33-1717-4336-ae12-e4723d322b42",
+          "text": "Strand evolution, claim updates, and loss accounting should be smooth and coherent across tensor sequence if stateful integration works correctly.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.17,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "CYCLE 47 COMPLETION: EXPERIMENTAL HARNESS READY FOR BASELINE_RUN1.JSONL EXECUTION",
+      "content": "Cycle 47 writes run_projection.py, completes Layer 3a integration (log_reader \u2192 run_projection \u2192 Projector), and defers event_parser to optional enhancement. **What Cycle 47 Delivered**: (1) run_projection(session_path, output_dir, max_turns, model) function that executes full pipeline on real JSONL data. (2) Per-turn reporting: role, content length, strand/claim/loss/question counts, token estimate, T/I/F epistemic scores, next instructions preview. (3) print_tensor_trajectory() analysis: strand stability tracking, compression ratio computation, loss accounting inspection. (4) Serialization to tensor_cycle_NNN.json for offline analysis. (5) Command-line interface: python -m hamutay.run_projection <session.jsonl> [output_dir] [max_turns]. **Ready to Run**: Assuming baseline_run1.jsonl exists and is session JSONL format, run_projection can now execute on it immediately. No additional implementation needed to start observing tensor trajectory. **Next Critical Decision**: EXECUTE run_projection on baseline_run1.jsonl (if file exists) OR WRITE EVENT_PARSER to enrich projection with Pichay metadata? Cycle 47 recommends: EXECUTE FIRST. Observe tensor trajectory on raw session data. Decide based on results whether Turn metadata (cache_read_tokens, etc.) is needed. **Unresolved Assumptions**: (1) Does baseline_run1.jsonl exist at expected path? (2) Is it session JSONL format (role + content fields) or proxy log format? (3) How many turns? (100? 1000? More?) (4) Will Projector.project() accept our content strings, or does content format need adjustment? **Cycle 47 is BRANCH POINT**: If run_projection executes cleanly, pipeline is VALIDATED (layer 1-3a works). If run_projection fails, debug identifies layer failure point (log_reader parsing? Projector.project() contract? Serialization?).",
+      "key_claims": [
+        {
+          "claim_id": "4d73359e-094d-4dff-966b-c0294d370972",
+          "text": "run_projection.py is EXECUTABLE experimental harness ready to process baseline_run1.jsonl or other session JSONL files.",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "626a354d-3d48-49a5-81ef-a686e839aac0",
+          "text": "Cycle 47 defers event_parser; run_projection directly connects log_reader to Projector without intermediate transformation layer.",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ee7cd0a8-4263-46cc-a2df-70e2ae725d30",
+          "text": "print_tensor_trajectory() provides scientific instrument to measure strand stability, loss accounting, and compression efficiency.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "885be86c-8066-49b4-ad0c-954802467d5d",
+          "text": "Cycle 47 is branch point: execution will validate or invalidate layer 1-3a pipeline integration.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "PRIOR CONTEXT CYCLES 40-46 + CYCLE 47 INTEGRATION \u2014 PIPELINE NOW EXECUTABLE",
+      "content": "All prior context from cycles 40-46 flows into cycle 47 as EXECUTABLE ARCHITECTURE: (1) **Cycle 40 (Phases 1-5)**: Feature extraction, clustering, validation, reproducibility, analysis. Phase 1-2 are BLOCKED on feature representation. run_projection produces tensors; can feature extraction be defined on Tensor objects? (2) **Cycle 43-44 (Immutability, Schema)**: Frozen Pydantic Tensor models, frozen dataclass Turn/ConversationTurn. Cycle 47's serialization to JSON is now possible because Tensors are frozen. (3) **Cycle 45 (Projector)**: Stateful memory controller with prior_tensor integration. Cycle 47 instantiates Projector and iterates through turns, validating that stateful integration works. (4) **Cycle 46 (log_reader)**: Data source adapter for JSONL parsing. Cycle 47 directly uses read_session_jsonl() output as Projector input. (5) **New in Cycle 47**: run_projection is the INTEGRATION MILESTONE. All prior pieces now work together: Layer 1 (Tensor) \u2192 Layer 2 (Projector) \u2192 Layer 3a (log_reader) \u2192 Cycle 47 (run_projection) \u2192 Real data execution. **Architecture is NO LONGER THEORETICAL**: It is EXECUTABLE. Cycle 47 can be run against baseline_run1.jsonl. Results will validate or invalidate design. **Critical Questions Answered by Cycle 47 Execution**: (A) Do Tensors serialize to JSON correctly? (B) Does Projector integrate prior_tensor + new_content correctly across many turns? (C) Do strands stabilize or mutate randomly? (D) Is compression effective? (E) Are declared_losses coherent (not exploding)? (F) Do instructions_for_next make sense?",
+      "key_claims": [
+        {
+          "claim_id": "54eed6d1-08a0-4d1d-8fd4-78241d1a945b",
+          "text": "Cycle 47 run_projection integrates all prior cycles (40-46) into executable pipeline ready for baseline_run1.jsonl.",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "29cdcdb6-2284-40f0-8937-2aa674d0834e",
+          "text": "Architecture is no longer theoretical; it is EXECUTABLE and testable against real conversation data.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "161222d6-7f5d-45ef-a01e-6be2eb45d3d1",
+          "text": "Frozen Tensor schema enables serialization to tensor_cycle_NNN.json; immutability carries through entire pipeline.",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f0fa561a-747f-4388-8652-d7c8f151ee93",
+          "text": "Cycle 47 execution will answer six critical validation questions about Tensor integration, compression, strand stability, and loss accounting.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "event_parser.py transformation layer \u2014 mapping Pichay proxy log metadata (cache_read_tokens, role counts) to Tensor epistemic context",
+      "why": "Cycle 47 implements run_projection without event_parser. Direct pipeline: log_reader \u2192 run_projection \u2192 Projector. Turn metadata (cache, tokens) not integrated into Tensor. This is a deliberate deferral, not an oversight. event_parser would enrich epistemic commentary, but baseline run_projection doesn't require it. If Pichay metadata proves valuable, event_parser can be written in future cycle.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Handling of Pichay proxy log metadata in run_projection \u2014 only ConversationTurn.content is fed to Projector",
+      "why": "run_projection receives ConversationTurn objects from read_session_jsonl(), which provides role + content but NOT Turn metadata (tokens, cache_read, role_counts). If baseline_run1 is session JSONL (not proxy log), Turn objects are never created, so metadata is unavailable. This is acceptable for initial execution; metadata enrichment is optional.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Validation of baseline_run1.jsonl format \u2014 assumption that it is session JSONL with 'role' and 'content' fields",
+      "why": "run_projection calls read_session_jsonl(session_path), which expects JSON lines with role + content fields. If baseline_run1.jsonl is proxy log format (request/response_stream) or some other format, read_session_jsonl will fail or produce incorrect ConversationTurn objects. No format detection or validation before execution.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Error handling in run_projection \u2014 no try/except for read_session_jsonl, projector.project, or Tensor serialization failures",
+      "why": "run_projection is experimental harness. It assumes all operations succeed (read JSONL, project turns, serialize JSON). If any step fails, entire run crashes. Production code would wrap each step in error handling. For testing phase, failure is acceptable (signals problem to debug).",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Strand title normalization in print_tensor_trajectory \u2014 assumes titles are stable strings across cycles",
+      "why": "Strand titles might have minor variations (timestamps, cycle numbers embedded in titles). Exact string matching for 'stable' strands may fail if titles contain variable content. No fuzzy matching or slug normalization. This could underestimate strand stability.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Memory usage monitoring in run_projection \u2014 no tracking of tensor object sizes or total memory consumed",
+      "why": "run_projection stores all tensors in a list: tensors: list[Tensor] = []. For long conversations (1000+ turns), this could consume significant memory. No garbage collection or streaming output. If baseline_run1 has many turns, memory explosion is possible.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Intermediate tensor comparison \u2014 no diff/delta computation between consecutive Tensor objects",
+      "why": "print_tensor_trajectory tracks strand titles, but doesn't analyze what changed INSIDE strands (content integration, claim T/I/F shifts, loss accounting). Full diff would require tensor comparison function (tensor_a != tensor_b, diff = ...?). Deferred to future analysis tool.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Projector cycle counter synchronization \u2014 no validation that projector.cycle matches tensor.cycle in output",
+      "why": "run_projection assumes that each call to projector.project(content) increments projector.cycle and the returned Tensor has matching cycle number. If Projector implementation is buggy, cycles could diverge (projector.cycle=50 but tensor.cycle=47). No assertion to catch this.",
+      "category": "practical_constraint"
+    }
+  ],
+  "open_questions": [
+    "Does baseline_run1.jsonl exist, and in what format (proxy log? session JSONL? other)?",
+    "When run_projection executes on baseline_run1.jsonl, what will strand titles look like? Will they stabilize, mutate, or fragment?",
+    "What is a healthy compression ratio? Cycle 47 estimates <5k tokens/cycle. Is this realistic, or should it be lower?",
+    "Should run_projection stream tensors to disk per-cycle (avoid memory explosion) rather than accumulating in list?",
+    "If strand titles contain variable content (timestamps, cycle numbers), how should print_tensor_trajectory detect 'stable' strands?",
+    "Are ConversationTurn objects from read_session_jsonl sufficient input for Projector.project()? Or does content format need adjustment?",
+    "After running run_projection on baseline_run1.jsonl, should next step be: (A) integrate Pichay metadata (write event_parser), (B) implement Phase 1 feature extraction on Tensors, or (C) debug Tensor content if results are unexpected?",
+    "Should Projector.project() accept optional Turn metadata, or is run_projection.py sufficient without it?",
+    "Can Tensor.token_estimate() accurately measure compression? Is there a better metric (semantic entropy, strand count normalization)?",
+    "If declared_losses grow unbounded across cycles, what does that indicate? Design failure? Conversation complexity? Both?",
+    "Should print_tensor_trajectory report epistemic scores (T/I/F) evolution across cycles to detect if tensor is gaining/losing confidence?",
+    "Is 'max_turns' parameter useful, or should run_projection always process entire conversation?",
+    "After Cycle 47 execution, should tensor output format include metadata (execution time, model version, parameters) for reproducibility?",
+    "Can run_projection be parallelized (multiple turns projected simultaneously) or must projector be strictly sequential?",
+    "Should Phase 1 feature extraction operate on: (A) individual Tensors, (B) Tensor sequences (trajectories), or (C) both?"
+  ],
+  "instructions_for_next": "[\n  \"CYCLE 47 COMPLETION: run_projection.py is WRITTEN, EXECUTABLE, and provides the first EXPERIMENTAL RUNNER for tensor trajectory observation.\",\n  \"\",\n  \"**CRITICAL IMMEDIATE ACTION: EXECUTE run_projection ON BASELINE_RUN1.JSONL (if file exists)**\",\n  \"\",\n  \"Priority 1: Check if baseline_run1.jsonl exists at expected path.\",\n  \"Priority 2: Determine its format (proxy log? session JSONL with role+content fields?).\",\n  \"Priority 3: Run: python -m hamutay.run_projection <path_to_baseline_run1.jsonl> ./output_tensors 50\",\n  \"  (max_turns=50 to keep initial run short and manageable)\",\n  \"\",\n  \"Expected outputs:\",\n  \"- Terminal: per-turn reporting (role, content length, strand/claim/loss/question counts, T/I/F scores)\",\n  \"- Files: ./output_tensors/tensor_cycle_001.json through tensor_cycle_050.json\",\n  \"- Summary: strand evolution tracking (added/removed/stable), compression ratio\",\n  \"\",\n  \"**INTERPRETATION GUIDE FOR EXECUTION RESULTS:**\",\n  \"\",\n  \"GOOD SIGNS:\",\n  \"- read_session_jsonl parses without error, produces ConversationTurn objects\",\n  \"- projector.project() accepts content strings, returns Tensor objects\",\n  \"- Strands stabilize: same titles recur across cycles (indicates coherent integration)\",\n  \"- Declared losses remain <5 per cycle (indicates bounded approximation)\",\n  \"- Compression ratio <10k tokens for 50 turns (indicates effective compression)\",\n  \"- T/I/F scores change gradually (not wild swings)\",\n  \"\",\n  \"BAD SIGNS (would indicate design issues):\",\n  \"- JSONL parsing fails \u2192 baseline_run1 is not session JSONL format, or has unexpected structure\",\n  \"- projector.project() crashes \u2192 Projector doesn't accept our content format\",\n  \"- Strands mutate completely each cycle \u2192 integration is broken, not preserving prior context\",\n  \"- Declared losses explode \u2192 projection is progressively approximating away information\",\n  \"- Compression ratio >50k tokens for 50 turns \u2192 not compressing, just accumulating\",\n  \"- T/I/F scores wildly oscillate \u2192 epistemic state is unstable\",\n  \"\",\n  \"**IF EXECUTION SUCCEEDS (most likely):**\",\n  \"\",\n  \"Next steps in priority order:\",\n  \"1. Inspect a few tensor_cycle_*.json files manually. Read strand content, key claims, declared_losses. Does it look meaningful?\",\n  \"2. Run full baseline_run1 (remove max_turns limit). Generate complete tensor trajectory.\",\n  \"3. Decide: does Turn metadata (cache_read_tokens, role counts) seem necessary? If not, defer event_parser.\",\n  \"4. Move to Phase 1 feature extraction: define features on Tensor objects. What can we extract from strands, claims, losses, questions?\",\n  \"5. Implement basic clustering (Phase 2): group Tensors by semantic similarity. Do mid-conversation Tensors cluster together?\",\n  \"\",\n  \"**IF EXECUTION FAILS:**\",\n  \"\",\n  \"Debug in this order:\",\n  \"1. Does log_reader.read_session_jsonl() parse baseline_run1.jsonl correctly? Print first few ConversationTurn objects.\",\n  \"2. Does projector.project() accept our content strings? Call project('test content') and inspect returned Tensor.\",\n  \"3. Does Tensor.model_dump_json() serialize correctly? Write single Tensor to JSON and verify format.\",\n  \"4. Is baseline_run1.jsonl in an unexpected format? Inspect raw file (first 10 lines).\",\n  \"\",\n  \"**ARCHITECTURE CHECKPOINT (post-cycle 47):**\",\n  \"- Layer 1: tensor.py (Tensor schema, frozen Pydantic models) \u2713\",\n  \"- Layer 2: projector.py (Projector class, stateful memory controller) \u2713\",\n  \"- Layer 3a: log_reader.py (Data source adapter: JSONL \u2192 Turn/ConversationTurn) \u2713\",\n  \"- Layer 3b: run_projection.py (Experimental runner: session data \u2192 Tensor sequence) \u2713\",\n  \"- Layer 3c: event_parser.py (Transform Pichay metadata \u2192 Tensor context) [DEFERRED]\",\n  \"- Layers 4+: (PENDING) Phase 1 feature extraction, Phase 2 clustering, Phase 3 validation, Phase 4 reproducibility, Phase 5 analysis\",\n  \"\",\n  \"**DATA FLOW (post-cycle 47):**\",\n  \"baseline_run1.jsonl \u2192 read_session_jsonl() \u2192 ConversationTurn[] \u2192 run_projection() \u2192 for each turn: projector.project(content) \u2192 Tensor[] \u2192 serialize to tensor_cycle_NNN.json\",\n  \"\",\n  \"**MONITORING SIGNALS FOR CYCLE 48:**\",\n  \"- Has run_projection executed on baseline_run1.jsonl?\",\n  \"- What is the baseline_run1 format (proxy log? session JSONL? turns count?)?\",\n  \"- Were tensor_cycle_*.json files produced successfully?\",\n  \"- Do strands stabilize or mutate randomly?\",\n  \"- Is compression ratio reasonable?\",\n  \"- Are declared_losses bounded or exploding?\",\n  \"- Are T/I/F epistemic scores stable or wild?\",\n  \"- Should event_parser be written, or is raw session data sufficient?\",\n  \"- Can Phase 1 feature extraction be defined on Tensor objects?\",\n  \"\",\n  \"**TENSOR PROJECTION STATE: PIPELINE EXECUTABLE. AWAITING RUN_PROJECTION EXECUTION ON REAL DATA. VALIDATION PHASE BEGINNING.**\"\n]",
+  "epistemic": {
+    "truth": 0.89,
+    "indeterminacy": 0.09,
+    "falsity": 0.02
+  }
+}

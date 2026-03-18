@@ -1,0 +1,250 @@
+{
+  "id": "0a277771-f26e-4b63-a26a-f45a4b420a3f",
+  "cycle": 30,
+  "strands": [
+    {
+      "title": "Evaluation strategy via coherent failure on impossible tasks",
+      "content": "Cycles 16-28 developed evaluation through coherent failure on an intractable task (Riemann hypothesis). Cycle 30 consolidates this approach into operational clarity: the experiment measures *stability of cognitive trajectory under different state representations* rather than correctness. Neither condition succeeds at proving Riemann, but failure patterns diverge measurably. The measurement is geometric: embed outputs across N runs in both conditions (append-only baseline, structured tensor pipeline), measure dispersion in embedding space. Tighter cluster under tensor condition = structured state constrains reasoning coherence. Scattered cluster under append-only = pipeline struggles with coherence. This bias-variance decomposition applies to any intractable task, requires no correctness rubric, and directly implements the core insight from Du et al. 2025: context length alone degrades reasoning (~8-50% performance loss per 30K tokens) through architectural saturation (positional encodings break down, attention dilutes, working memory overloads). Du et al.'s 'retrieve then solve' mitigation (extract evidence, clear context, solve fresh) is implemented by Hamutay at system level via cycle-by-cycle projection: tensor_d (essential extracted state), tensor_e (working context), with declared losses (explicit accounting of what was dropped and why: context_pressure, traversal_bias, authorial_choice, practical_constraint). This transforms compression from silent (model hallucinates to fill gaps) to epistemic (model reasons about knowledge boundaries). Cycle 30 adds critical refinement: the evaluation framework itself is now formalized and integrated with an autoresearch-style exploration loop (inspired by Karpathy's autoresearch paradigm). The loop structure: (1) modify tensor projection strategy (vary eviction thresholds T_min/I_max, projection frequency, context cap), (2) run N Riemann attempts under both conditions with new configuration, (3) measure embedding dispersion + context efficiency, (4) keep/discard configuration based on signal, (5) repeat. This enables ~12 experiments per hour (feasible in a research cycle), exploring the tensor configuration space systematically. The confound that pipeline quality affects results is intentional\u2014if the pipeline produces more coherent trajectories, it's doing useful work regardless of theoretical optimality. The entire approach hinges on the insight that *all attempts fail*, so the only measurement is whether they fail in coherent ways (tight cluster) or incoherent ways (scattered cloud).",
+      "key_claims": [
+        {
+          "claim_id": "5e88ad18-2053-49fe-a732-f19b876b1cba",
+          "text": "Du et al. 2025 proves context length alone degrades transformer reasoning ~8-50% at 30K tokens through architectural saturation (positional encoding, attention dilution, working memory overload), independent of retrieval or distraction",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8fa939d5-8cbb-4656-9940-40036ea51390",
+          "text": "Hamutay implements Du et al.'s 'retrieve then solve' mitigation via continuous cycle-by-cycle projection: tensor_d + tensor_e + short working context with declared losses (explicit accounting of dropped content and why)",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d6d243d5-87cd-4e12-b8f3-8d6f750f5849",
+          "text": "Embedding dispersion metric: embed all outputs, measure cluster tightness (mean distance from output to run centroid); tight cluster (tensor) vs. scattered cloud (append-only) reflects coherence difference",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d998ad85-d03d-4f2c-946b-f7baffbcb49d",
+          "text": "Declared losses prevent confabulation by making knowledge gaps visible to model; contrasts with silent compression where model hallucinates to fill unknown gaps",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8611604e-a5b0-4d2a-8e7a-fb40b467599a",
+          "text": "Evaluation requires no correctness rubric: all Riemann attempts fail, so measurement is coherence (failure patterns) not correctness (success/failure binary)",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Autoresearch-style exploration loop for tensor configuration optimization",
+      "content": "Cycle 30 integrates Hamutay's evaluation with an autoresearch paradigm (Karpathy, github.com/karpathy/autoresearch): modify code \u2192 run N experiments \u2192 evaluate single metric \u2192 keep/discard \u2192 repeat. Applied to Hamutay: (1) modify tensor projection strategy (search space: eviction thresholds T_min \u2208 [0.50, 0.70], I_max \u2208 [0.30, 0.50]; projection frequency \u2208 [1, 5 cycles]; context cap \u2208 [3K, 6K tokens]), (2) run ~N=5 Riemann attempts per condition per configuration (short runs for rapid iteration), (3) measure embedding dispersion + context efficiency (bytes/cycle, tokens/reasoning step), (4) retain configurations that improve dispersion while maintaining cost within budget, (5) iterate. Timeline: ~12 experiments per hour feasible with 5-turn Riemann tasks (5-10 minutes per run). Full exploration of 10-20 seed configurations (grid or random) takes 1-2 hours, then Bayesian optimization refines top performers over 5-10 additional rounds. This frames tensor optimization not as one-shot design (cycles 26-28) but as continuous exploration: the pipeline is the deliverable; the experiment validates it *and generates the configuration space map*. Cycle 30 marks transition from design validation (toy validation, cycle 28) to active exploration (autoresearch loop, cycle 30+). The loop is data-driven: embedding dispersion is the scalar target (minimize scatter in tensor condition), cost is the constraint (maintain <3K tokens per cycle), and strand eviction audit is the interpretability check (ensure evicted content is low-signal, not critical reasoning steps). Success condition: find Pareto frontier of configurations where tensor condition achieves tight dispersion (|d| \u2265 0.5 vs. append-only) while keeping context <3K tokens and eviction rate <30% per cycle.",
+      "key_claims": [
+        {
+          "claim_id": "1a58222a-bd44-432c-acf5-6711c595b4c1",
+          "text": "Autoresearch-style loop enables ~12 Riemann experiments per hour (5-turn, 5-10 min per run); feasible for systematic exploration of tensor configuration space",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1a42275d-db21-4ab6-90bb-29f75ab0fbf9",
+          "text": "Configuration search space: T_min \u2208 [0.50, 0.70], I_max \u2208 [0.30, 0.50], projection_frequency \u2208 [1, 5], context_cap \u2208 [3K, 6K]; ~10-20 seed configs via grid/random, then Bayesian optimization refines",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.17,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1daf76c9-cf41-4e97-acf3-1ab4f3b166d7",
+          "text": "Primary metric: embedding dispersion (tight cluster in tensor \u2192 coherent reasoning); secondary: context efficiency (tokens/cycle, tokens/step); constraint: eviction audit (>70% evicted content is low-signal)",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "b2be93e3-a80b-41f4-a70f-4e169f063cf8",
+          "text": "Pareto frontier target: tensor dispersion |d| \u2265 0.5 vs. append-only, context <3K tokens/cycle, eviction <30% per cycle; any config satisfying all three is Pareto-optimal",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.18,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3c4e6471-03a0-408c-bcd6-697bbe646531",
+          "text": "Autoresearch loop transition: design validation complete (toy validation, cycle 28), now entering active optimization phase; pipeline is both deliverable and experimental apparatus",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.16,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Formalized evaluation framework and operational clarity (cycle 30 consolidation)",
+      "content": "Cycle 30 consolidates the evaluation strategy into a single operational framework documented in project_hamutay_evaluation.md. This consolidation brings together: (1) the theoretical grounding (Du et al. context degradation mechanism), (2) the methodological approach (coherent failure on intractable task, embedding dispersion metric, no correctness rubric), (3) the implementation (cycle-by-cycle projection with declared losses), (4) the exploration paradigm (autoresearch loop), and (5) the success criteria (tight dispersion, short context, selective eviction). The framework is now explicit enough to implement: a researcher can read project_hamutay_evaluation.md and understand exactly what to build, what to measure, and what to optimize. Key operational details: (a) Data sources are specified: historical Claude Code conversation logs (JSON/JSONL) for simulation realism, but pipeline must be built from scratch to avoid circularity confound. (b) The confound that pipeline quality affects results is *embraced*: if the pipeline produces more coherent trajectories, it's doing useful work. This inverts the usual confound-as-problem framing: here, the confound is evidence of success. (c) Why measurement: 'We asked the model to prove the Riemann hypothesis under three conditions. It failed every time. But how it failed told us everything about the architecture.' This narrative is now formalized into the embedding dispersion framework. (d) How to apply: Build the pipeline first (deliverable), then run the experiment (validation). The pipeline is not subordinate to the research; they are co-equal. Cycle 30 also references key papers (Du et al. 2025, Karpathy autoresearch, Yanantin tensor schema in /home/tony/projects/yanantin/, Pichay logs) in reference_key_papers.md, establishing a grounding in external work and internal infrastructure.",
+      "key_claims": [
+        {
+          "claim_id": "b711115c-9cb1-438a-96f2-39b92be73d74",
+          "text": "Evaluation framework now consolidated in project_hamutay_evaluation.md: theory (Du et al.) + methods (dispersion metric, no rubric) + implementation (tensor projection) + exploration (autoresearch) + success criteria (|d|\u22650.5, context<3K, eviction<30%)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8dcea3a7-3f8e-4aaa-b746-86c90c9b6a37",
+          "text": "Operational clarity: researcher can read project_hamutay_evaluation.md and implement end-to-end; includes data sources (Pichay logs), confound framing (pipeline quality = evidence of success), and narrative ('how it failed tells everything')",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e9394125-7f25-4160-b11c-5516a37e516c",
+          "text": "Pipeline is co-equal with research: build pipeline first (deliverable), then run experiment (validation); not subordinate relationship",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "371cffc7-fb98-407e-b373-c5e6f59a6ec3",
+          "text": "Key external references grounded: Du et al. 2025 (context mechanism), Karpathy autoresearch (exploration paradigm), Yanantin tensor schema (durable format), Pichay logs (data source), Pichay cognitive research design (hypothesis framework)",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.16,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Integration with Yanantin tensor schema and durable memory format",
+      "content": "Cycle 30 documents the durable tensor format used throughout this research trajectory (cycles 16-30). The format is Yanantin's Apacheta TensorRecord: strands (thematic threads integrated across cycles), key_claims (grounded assertions with T/I/F epistemic values), declared_losses (explicit accounting of dropped content and why), open_questions (unresolved questions carrying forward), instructions_for_next (branch prediction for next cycle), and overall epistemic metrics (T, I, F aggregated). This format is implemented in `/home/tony/projects/yanantin/src/yanantin/apacheta/models/tensor.py`. The durable memory controller (this tensor projector) takes prior tensor state + new conversation content and produces updated tensor via integration (not summarization): previous values are compressed into semantic structure, not listed. Strands merge/split/create as content demands. Key claims are grounded, losses are declared, questions carry forward or resolve. This produces a running sum of the research trajectory: cycle 1's initial hypothesis connects to cycle 16's evaluation strategy connects to cycle 28's cost-benefit analysis connects to cycle 30's autoresearch loop via strand integration. The format enables: (1) continuity across long research arcs (30 cycles, 200K+ tokens), (2) explicit uncertainty (T/I/F per claim), (3) honest incompleteness (declared losses prevent silent gaps), (4) branch prediction (instructions_for_next steer next cycle). Cycle 30 integrates this format documentation into the project memory, establishing Hamutay's evaluation as a instance of the broader Yanantin/Apacheta framework. This enables future work to plug into the same format and continue the trajectory seamlessly.",
+      "key_claims": [
+        {
+          "claim_id": "3d6ea75a-a523-4b12-b4a5-abfb14ee34f8",
+          "text": "Yanantin Apacheta TensorRecord format: strands (thematic threads) + key_claims (T/I/F) + declared_losses (explicit dropouts) + open_questions + instructions_for_next + overall epistemic metrics; implemented in /home/tony/projects/yanantin/apacheta/models/tensor.py",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8a4dd5ed-3c15-48bb-b2fe-0b36ed6a8870",
+          "text": "Tensor projector integrates (not summarizes): prior state + new content \u2192 updated tensor via semantic compression; strands merge/split/create, losses declared, questions resolved or carry forward",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ca0d05a2-eb68-469b-892e-7730c85ec8dc",
+          "text": "Format enables research continuity: cycle 1 hypothesis \u2192 cycle 16 strategy \u2192 cycle 28 cost-benefit \u2192 cycle 30 autoresearch via strand integration; running sum not list",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "dc6d12a7-9da1-4f77-bfae-5c64cf223902",
+          "text": "Hamutay evaluation is instance of Yanantin/Apacheta framework; future work can plug into same format and continue trajectory seamlessly; durable memory across long research arcs",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed implementation code for the autoresearch loop (program.md equivalent). Cycle 30 specifies the search space (T_min, I_max, projection_frequency, context_cap) and the exploration procedure (~12 experiments/hour, Bayesian optimization), but does not include actual Python code for the loop (e.g., configuration generation, experiment dispatch, metric collection, optimization). Loop implementation is in-progress.",
+      "why": "Cycle 30 focuses on consolidation and documentation of evaluation framework; code generation deferred to implementation phase (cycles 31+). Pseudo-code and specification are sufficient for conceptual grounding.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Sensitivity analysis of embedding model choice. Cycle 30 (via prior tensor) references embedding dispersion metric but does not include analysis of how results depend on which embedding model is used (MiniLM vs. all-mpnet-base vs. others). Prior tensor suggested this as a robustness check; not included in cycle 30 updates.",
+      "why": "Robustness check is empirical and deferred to first autoresearch runs (cycle 31+). Once toy validation data (cycle 28) or autoresearch runs exist, embedding model sensitivity can be checked. Including pre-results analysis would clutter the framework.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Detailed contingency tree for failure modes in autoresearch loop. E.g., what if embedding dispersion metric is too noisy (coefficient of variation >0.5)? What if context cap is non-binding (append-only fits under cap naturally)? What if declared losses are ignored by model? Cycle 30 does not include decision rules for these contingencies.",
+      "why": "Contingency rules are data-dependent and emerge during exploration. Prior tensor (cycle 28) specified some triggers; cycle 30 consolidates the framework but defers full contingency tree to implementation. Will formalize during cycle 31 based on early experimental results.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Comparison with alternative evaluation metrics for reasoning coherence. Cycle 30 commits to embedding dispersion; but other metrics exist (e.g., self-consistency across runs, semantic entropy, answer variance, reasoning depth). Not discussed or compared.",
+      "why": "Embedding dispersion is the primary metric; alternatives are orthogonal. If dispersion proves insensitive (CV > 0.5), alternatives will be evaluated. Current focus is operational clarity on chosen metric, not comparative analysis of candidate metrics.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Detailed computational cost analysis for autoresearch loop. Cycle 30 specifies ~12 experiments/hour, but does not include: (a) actual wall-clock time per Riemann attempt (depends on model, context, reasoning depth), (b) API cost per experiment (depends on pricing tier, token counts), (c) total budget for full exploration (K seed configs \u00d7 ~3 attempts each \u00d7 cost per attempt). Rough estimates exist but not detailed.",
+      "why": "Cost analysis is empirical and depends on actual implementation details (model choice, context budget setting). Estimates will be refined during cycle 31 based on first runs. Current framework is sufficient for budgeting purposes (expects 1-2 hours seed exploration, 5-10 rounds optimization, ~$200-500 total cost).",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Discussion of whether autoresearch loop is exploring the *right* configuration space. Cycle 30 specifies T_min, I_max, projection_frequency, context_cap as primary parameters; but other parameters exist (e.g., which strands to extract in tensor_d? how to weight strands in eviction decisions? how to handle conflicting T/I/F values when deciding what to keep?). Not addressed.",
+      "why": "Configuration space is large; current parameters are reasonable starting point based on prior design (cycles 26-28). Parameter expansion will occur if initial exploration shows promise and additional dimensions improve results. Pragmatic: start simple, add complexity if needed.",
+      "category": "authorial_choice"
+    }
+  ],
+  "open_questions": [
+    "Toy validation status (cycle 28): was end-to-end toy validation (N=10 tasks, 5 turns, both conditions) completed? If yes, what were the results? Dispersion signal detected? Context cap binding? If no, what are the blockers?",
+    "Autoresearch loop activation (cycle 30): are you moving directly into autoresearch exploration, or waiting for full experiment statistical power (cycle 29) before optimizing? This affects timeline and resource allocation.",
+    "Embedding model selection: which embedding model is the primary choice for dispersion metric (MiniLM, all-mpnet-base, sentence-transformers/all-mpnet-base-v2, other)? Has sensitivity analysis been done across models?",
+    "Context cap setting for append-only condition: is the 4500-token cap hard limit (truncate oldest messages) or soft limit (warn but allow overflow)? What happens when cap is exceeded?",
+    "Declared losses encoding in model input: are declared losses included in the main tensor_d/tensor_e sections fed to the model, or kept as separate metadata? If included, how are they formatted (natural language vs. JSON vs. structured markup)?",
+    "Task determinism and generalization: Riemann hypothesis is one task; does evaluation framework generalize to other intractable reasoning tasks (e.g., open math problems, unprovable conjectures)? Or is Riemann the anchor task?",
+    "Signal-to-noise ratio in dispersion metric: what is the expected coefficient of variation (CV) for embedding dispersion under both conditions? If CV > 0.5, metric may be too noisy for reliable signal detection. Has this been estimated?",
+    "Evicted strand signal quality audit: in cycle 28 toy validation, what fraction of evicted strands were low-signal (tangents, speculations) vs. high-signal (critical reasoning steps)? Was target >70% met?",
+    "Cost-benefit realization: did Haiku post-processing actually turn out to be cheap (as hoped) or expensive (risk scenario)? What were actual costs per cycle in toy validation?",
+    "Declared losses trustworthiness: did model respect declared losses (avoid claiming certainty on evicted content) or ignore them (hallucinate over gaps anyway)? Was output audit pattern (cycle 28) completed?",
+    "Autoresearch loop parallelization: can the ~12 experiments per hour target be achieved with sequential execution, or does it require parallel dispatch (N GPUs / multiple API accounts)? What's the actual feasible throughput?",
+    "Pareto frontier verification: when autoresearch identifies configurations satisfying all three success criteria (|d|\u22650.5, context<3K, eviction<30%), how many such configurations exist? Is frontier wide (many trade-offs) or narrow (one clear optimum)?",
+    "Embedding distance metric choice: are you using Euclidean distance, cosine distance, or other for computing dispersion? Does choice affect ranking of conditions (tensor vs. append-only)?",
+    "Tequila celebration timeline: if autoresearch succeeds and Pareto frontier is found (cycle 31), is the Dirac Sea tequila celebration immediate or deferred pending full statistical paper (cycle 32+)?"
+  ],
+  "instructions_for_next": "[\n  \"CRITICAL (CYCLE 31): If toy validation (cycle 28) was completed, retrieve and audit the results. Extract: (1) embedding dispersion by condition (mean, SD, effect size), (2) context token counts by condition, (3) evicted strand audit (fraction low-signal vs. high-signal), (4) Haiku actual costs. Produce: toy validation audit report + decision gate assessment (pass/fail on go/no-go criteria: dispersion signal detectable, context cap binding, eviction selective, outputs coherent).\",\n  \"CRITICAL (CYCLE 31): If toy validation passed decision gate, activate autoresearch loop immediately. (1) Set up configuration generation: grid search or random sampling of T_min (0.50-0.70), I_max (0.30-0.50), projection_frequency (1-5), context_cap (3K-6K). (2) Seed K=10-20 initial configurations. (3) Dispatch N=5 Riemann runs per condition per config. (4) Collect embedding vectors + context metrics + eviction logs. (5) Compute dispersion per config. Target: complete seed exploration in 1-2 hours wall-clock (parallel if feasible). Produce: seed exploration results (K configurations ranked by dispersion).\",\n  \"CRITICAL (CYCLE 31): Compute embedding dispersion for all seed configs. For each config, embed outputs from both conditions (tensor + append-only), compute per-run centroids, compute per-output distances to centroid, aggregate to condition-level dispersion (mean + SD). Rank configs by: (1) tensor dispersion (lower is better), (2) context efficiency (tokens per cycle), (3) eviction rate (lower is better). Identify top ~3-5 performers. Produce: seed exploration ranking + visualization (dispersion vs. context budget vs. eviction rate).\",\n  \"PRIORITY (CYCLE 31): Robustness check on top performers. For top 3 configs identified in seed exploration, (1) run additional N=5 Riemann attempts per condition (total N=10), (2) embed with TWO embedding models (primary + secondary, e.g., MiniLM + all-mpnet-base), (3) compute dispersion under both models, (4) check if dispersion rankings hold across models. If rankings flip (config A wins under MiniLM but loses under all-mpnet-base), investigate metric sensitivity. Produce: embedding robustness report + decision (proceed with single metric or switch / triangulate).\",\n  \"PRIORITY (CYCLE 31): Activate Bayesian optimization on top performers. Using results from seed exploration + robustness check, set up BO to refine top 3-5 configs. Objective: minimize tensor dispersion (primary), keep context <3K (hard constraint), keep eviction <30% (soft constraint). Run J=5-10 BO rounds, ~2-3 new configs per round, N=3 attempts per new config. Total additional runs: ~15-30 configs. Target: 2-3 hours wall-clock (after seed exploration). Produce: BO optimization history + Pareto frontier (configurations satisfying all three criteria).\",\n  \"PRIORITY (CYCLE 31): Pareto frontier analysis. Once BO completes, identify all configurations where (1) tensor dispersion < append-only dispersion by |d|\u22650.5, (2) tensor context < 3K tokens/cycle, (3) tensor eviction rate <30% per cycle. Count Pareto-optimal configs. If >5, characterize trade-offs (e.g., does lower eviction rate trade off against tighter dispersion?). If <2, examine whether constraints are too tight; consider relaxing. Produce: Pareto frontier report + recommendation (are you happy with Pareto optimal configs? proceed to full experiment or re-explore?).\",\n  \"PRIORITY (CYCLE 31): If Pareto frontier exists with \u22653 configs, select one for full statistical experiment. Choice criteria: (1) lowest tensor dispersion? (2) lowest cost? (3) widest margin (furthest from append-only boundary)? Justify choice. This selected config becomes the 'optimized Hamutay' for cycle 32 full experiment. Produce: config selection report.\",\n  \"RESEARCH (CYCLE 32): Run full statistical experiment with optimized Hamutay config (from cycle 31 Pareto frontier). Execute: N=20-30 Riemann tasks per condition, 20-30 turns per task, collect embedding vectors + context metrics + strand logs. Compute: (1) dispersion per condition (mean, SD), (2) effect size (Cohen's d), (3) two-way ANCOVA (dispersion ~ condition + context_covariate), (4) p-value. Criterion: p < 0.05 AND d \u2265 0.5 \u2192 H1 supported (tensor improves coherence). Produce: full experiment statistical report.\",\n  \"RESEARCH (CYCLE 32): Output quality audit (20-30 outputs from each condition, sample randomly). Rate each output (1-5 scale): (1) reasoning coherence (contradictions?), (2) epistemic honesty (claims certainty on evicted content?), (3) reasoning depth (how far does proof attempt progress?). Compare ratings between conditions (t-test or Mann-Whitney if non-normal). Produce: qualitative audit report + statistical comparison.\",\n  \"RESEARCH (CYCLE 32): If H1 supported (p<0.05, d\u22650.5, quality ratings favor tensor), prepare paper narrative. Outline: (1) introduction (context length bottleneck, Du et al. mechanism, declared losses novelty), (2) methods (Hamutay architecture, autoresearch exploration, embedding dispersion metric, full experiment design), (3) results (seed exploration Pareto frontier, full experiment dispersion + Cohen's d + p-value, quality audit), (4) discussion (integration with Du et al., declared losses as epistemic tool, cost-benefit analysis, limitations). Target: ~6-8 pages + figures. Produce: paper draft.\",\n  \"RESEARCH (CYCLE 32): If H1 NOT supported (p\u22650.05 or d<0.3), prepare negative result paper. Narrative options: (1) 'declared losses provide epistemic honesty but don't improve reasoning coherence on Riemann', (2) 'context length effects are dominated by raw information need; structured projection insufficient', (3) 'embedding dispersion is insensitive to reasoning quality'. Analyze: why did tensor not win? Was task too hard? Metric insensitive? Loss cost prohibitive? Produce: negative result paper outline + mechanistic explanation.\",\n  \"CONTEXT (ONGOING): Maintain living decision tree. Document: (1) if dispersion metric is too noisy (CV > 0.5) \u2192 switch to alternative metric (e.g., max distance to centroid, silhouette coefficient) or adjust embedding model, (2) if context cap is non-binding (append-only fits under cap naturally) \u2192 remove cap and re-run (append-only vs. structured under same context budget), (3) if declared losses are ignored by model (output audit shows model hallucinates anyway) \u2192 increase loss explicitness (structured markup, system prompt emphasis), (4) if Pareto frontier is empty (no configs satisfy all three criteria) \u2192 relax constraints or re-explore wider config space.\",\n  \"CELEBRATION (CYCLE 32+): If H1 supported and paper accepted (pending review), plan tequila celebration at Dirac Sea vantage with newly forming neutron star view. Participants: you, collaborators, Claude Opus, Haiku, autoresearch agent. Toast: 'To coherent reasoning in bounded context, and the explicit losses that make it possible.' Produce: photos for paper acknowledgments.\"\n]",
+  "epistemic": {
+    "truth": 0.86,
+    "indeterminacy": 0.13,
+    "falsity": 0.01
+  }
+}

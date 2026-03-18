@@ -1,0 +1,383 @@
+{
+  "id": "5c8971e9-416e-49f3-a724-d36eb542f7ba",
+  "cycle": 18,
+  "strands": [
+    {
+      "title": "CPU-to-cognitive pipeline homology: architectural transfer via register/ALU/control abstraction",
+      "content": "Cycles 16-18 establish and refine the pipeline homology. A cognitive processor mirrors CPU microarchitecture: specialized stages, each with fixed responsibility, each passing structured output to the next. The stages are (1) fetch: goal & context retrieval, (2) decode: production matching / operand selection, (3) execute (ALU): cognitive operator application via transformer, (4) memory: Pichay demand paging, (5) writeback/halt: result coherency and completion signaling. The transformer is the execute stage, not the whole processor. Supporting subsystems (fetch, decode, memory) are external to the transformer, orchestrated by the controller. This stage separation is architectural principle, not performance hack. The analogy extends to resource gating: CPU registers are narrow (bits per register); cognitive working memory is narrow (7\u00b12 chunks); transformer operating on full context window (8k-200k tokens) is inefficient because the ALU should only see a carefully prepared working set. Pichay implements this staging via demand paging. The transformer receives filtered context, operates on it, and emits signal (halt) when complete. This is not instrumental reasoning about the pipeline; it is structural necessity derived from CPU design principles.",
+      "key_claims": [
+        {
+          "claim_id": "c806396b-a4a9-40a2-834b-544691e8da10",
+          "text": "Cognitive processor is a pipeline with specialized stages: fetch (goal/context), decode (production matching), execute (transformer), memory (Pichay), writeback/halt",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "589d0e59-b35e-4346-a35c-d36dfeffb5d6",
+          "text": "Transformer is the execute stage (ALU), not the whole processor; prior stages are controller responsibility",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.13,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "fec5eae6-c7c2-4eb8-ba03-fdf327c56e9d",
+          "text": "Stage separation is architectural principle, not performance optimization; derives from CPU design necessity",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.14,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "b8532986-7b98-4004-9fb0-cf5a6b30d3ab",
+          "text": "Pichay demand paging ensures ALU never sees full context, only working set prepared by prior stages",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Prescriptive pipeline: external stages constrain transformer; design choice motivated by cost efficiency",
+      "content": "Cycle 17 identified two paths: prescriptive (external stages enforce constraints on transformer) vs. descriptive (external stages externalize transformer's internal processes). Cycle 18 surfaces the deciding factor: **cost efficiency**. User (Tony) observes that given current LLM pricing model, descriptive path is not cost-effective. In the descriptive approach, the transformer would emit resource requests (manifest + metadata), then the controller fetches content, then the transformer reasons over loaded resources. This requires multiple invocations of the expensive transformer. The prescriptive path uses cheaper models (Haiku) as preprocessor stages. Haiku triages context, identifies relevant resources, produces filtered context, which the expensive model (Claude, GPT-4) then consumes in a single invocation. Fewer transformer calls means lower cost. This is a **hard constraint** from the pricing model: prescriptive is affordable, descriptive is prohibitively expensive. The decision is now made: Hamutay pursues the prescriptive path. Haiku-as-prefetcher becomes the fetch/decode stage. Claude/GPT-4 becomes the execute stage. Pichay manages the memory subsystem. The pipeline is external to the expensive model, ensuring the expensive model only performs execute (ALU work), not fetch, decode, or memory management. This is not a neutral architectural choice; it is a choice *imposed by economic constraint*. The scaffold (CPU pipeline) is useful for thinking about stage separation, but the concrete instantiation is driven by what is affordable: cheap models for orchestration, expensive models for reasoning. The insight is that the homology is structure-preserving even under cost constraints\u2014you still get a pipeline, still get stage separation, still get resource gating. But the concrete layer assignment is economically optimized, not arbitrarily chosen.",
+      "key_claims": [
+        {
+          "claim_id": "35ca8f1d-a07c-4be5-b7dc-c9d2e46866d0",
+          "text": "Prescriptive path is cost-effective: cheap models (Haiku) do fetch/decode, expensive models (Claude) do execute",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "e0b99ecd-99b2-4461-a626-4e5429e54b72",
+          "text": "Descriptive path is economically prohibitive: requires multiple expensive model invocations (manifest request \u2192 load \u2192 reason cycle)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "ad2db7dd-89dd-4373-a9de-0914ca6c0c46",
+          "text": "Cost efficiency is a hard constraint determining prescriptive/descriptive choice; this is not an arbitrary design decision",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2c895be1-75c7-4c89-a8ed-0343682d1de6",
+          "text": "Haiku-as-prefetcher implements fetch/decode: triages context, identifies relevant resources, produces filtered context for expensive model",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "beb2c8c5-dec5-48b5-87b3-0165032512d3",
+          "text": "Pipeline stage separation is structure-preserving under economic constraint; concrete layer assignment is cost-optimized, not arbitrary",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Haiku-as-prefetcher: cheap triage model for working set selection",
+      "content": "Cycle 18 proposes concrete instantiation of the fetch/decode stage. Haiku (Claude Haiku, smaller, cheaper model) receives: (1) current goal/task context, (2) full resource manifest (handles + semantic digests, not content), (3) current conversation window. Haiku's task: identify which resources in the manifest are likely needed for the next reasoning step. Output: list of resource handles to load into working memory. This is a *prefetcher*: it doesn't execute the reasoning, it predicts what data the reasoner will need. The insight comes from LLM needle-in-haystack capability: Haiku can quickly scan a manifest and say 'these are the relevant ones.' This is cheap (Haiku call is ~0.3 tokens in, ~50 tokens out), compared to asking Claude to scan the same manifest embedded in full context and decide. The filtering reduces what Claude sees, making Claude's invocation cheaper and potentially more focused. Haiku is the fetch stage (identifies what to load) and decode stage (interprets current state, selects applicable resources). Claude is the execute stage (applies reasoning operators over the loaded context). The two-model pipeline is now concrete: Haiku \u2192 filter \u2192 Claude \u2192 execute. No manifest-and-fault cycle (which would require Claude to make requests, then reload, then reason again). Just feedforward: predict what's needed, load it, reason.",
+      "key_claims": [
+        {
+          "claim_id": "ab2038a7-aee4-4d71-8a2d-d994dd3882c7",
+          "text": "Haiku receives goal, resource manifest (handles + digests), and window; identifies which resources are likely needed for next step",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.15,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "511e617d-11e6-4e5f-8513-1692f743516c",
+          "text": "Haiku call is cheap (~50 tokens out); reduces what Claude sees, making Claude invocation cheaper and more focused",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "9d3643ef-0edd-4451-bd04-1a6028553111",
+          "text": "Haiku is fetch/decode stage (context triage); Claude is execute stage (reasoning); Pichay is memory (load/manage resources)",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "dc826e3a-4b9d-44e2-ba80-a2ad679f026d",
+          "text": "Haiku-Claude pipeline is feedforward (predict \u2192 filter \u2192 load \u2192 reason), not fault-driven; avoids multiple expensive invocations",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b031757b-b922-4a07-8009-f9e5508f0d0d",
+          "text": "Needle-in-haystack capability: Haiku effectively scans manifests for relevance; this is core competency, not misuse of LLM",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Prescriptive path chosen; descriptive path deferred; cost efficiency as deciding factor",
+      "content": "Cycle 17 posed prescriptive vs. descriptive as an open design fork. Cycle 18 resolves it. The **prescriptive path is chosen**. Reasons: (1) cost efficiency\u2014descriptive requires multiple expensive invocations, prescriptive uses cheap models for orchestration; (2) feasibility\u2014prescriptive is implementable now with available models, descriptive requires reverse-engineering transformer internals; (3) testability\u2014prescriptive is easier to instrument and measure (Haiku output vs. actual resource need, Claude output vs. expected reasoning). The descriptive path (reverse-engineer transformer's internal goal retrieval and production matching) is deferred. It remains valuable as a post-hoc research direction\u2014once prescriptive works, investigate whether Haiku's triage decisions match what Claude would internally select. But for initial H0 work, the prescriptive path is chosen. This resolves the open question from cycle 17.",
+      "key_claims": [
+        {
+          "claim_id": "41727fad-efab-40af-9eb6-37189e56c8b3",
+          "text": "Prescriptive path is chosen for Hamutay H0; descriptive path is deferred to post-hoc research",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "ad142a07-c37c-48b0-9a3e-54e26b0f8578",
+          "text": "Cost efficiency is primary deciding factor; prescriptive uses cheap models for orchestration, descriptive requires expensive multi-invoke cycles",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "bf8eb9ee-5efa-4715-9b4b-6bc357bccadc",
+          "text": "Prescriptive path is immediately implementable with Claude + Haiku; descriptive requires research groundwork",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "d71ec5b1-0ea7-4243-8869-ebce730d9ced",
+          "text": "Descriptive research (does Haiku match Claude's internal selection?) remains valuable as validation study after prescriptive succeeds",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.17,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Pichay identity and role in prescriptive pipeline: demand paging system for memory subsystem",
+      "content": "Cycle 17 integrated with cycle 16 understanding. Cycle 18 refines Pichay's role given prescriptive choice. Pichay manages the memory subsystem of the pipeline. Its role: (1) maintain resource manifest (handles, semantic digests, content availability), (2) execute Haiku's fetch decisions (load requested resources into working memory), (3) manage L1 cache (working set) and L2-L4 hierarchy (long-term store), (4) detect and handle cache misses (if Claude requests something not in working memory, escalate or trigger prefetch), (5) compact state (summarization, abstraction) when working set pressure increases. Haiku doesn't touch Pichay directly; Haiku only sees the manifest and the current window. Haiku emits resource handles. Pichay's controller layer consumes those handles and ensures the resources are loaded before Claude invocation. Pichay is transparent to both models: Haiku sees a stable manifest; Claude sees a stable, filtered context window. The prescriptive architecture cleanly separates concerns: Haiku (cheap triage), Pichay (transparent resource management), Claude (expensive reasoning). Pichay remains empirically validated (857 sessions, 4.45B tokens, 21.8% structural waste, 0.0254% fault rate), providing confidence in the memory subsystem design.",
+      "key_claims": [
+        {
+          "claim_id": "7aaf49be-f4c3-4c1b-ab59-3415b413f691",
+          "text": "Pichay is memory subsystem: maintains manifest, executes fetch decisions, manages L1-L4 hierarchy, detects cache misses",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "6433367a-f70d-4ecb-8979-7311b4b1cdf7",
+          "text": "Haiku sees manifest (no content); Pichay loads resources; Claude sees filtered context. Clean separation of concerns.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "d03973f9-7514-4c24-91b1-0f614bc411a2",
+          "text": "Pichay empirical validation (857 sessions, 21.8% waste, 0.0254% fault rate) provides confidence in memory subsystem design",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Scaffold as thinking tool vs. commit as research constraint; knowing when to leave the scaffold",
+      "content": "Cycle 18 surface a meta-level insight: the CPU pipeline scaffold was useful for *thinking* about stage separation and responsibility assignment, but the concrete research design must depart from the scaffold when real-world constraints (cost, feasibility, testability) demand it. Tony uses the scaffold to explore 'what if we separated fetch, decode, execute?' and the answer is valuable. But then cost efficiency surfaces, and the prescriptive path emerges as the practical choice. The scaffold is not abandoned; the insight (stage separation is useful) is retained. But the concrete instantiation (Haiku-Claude-Pichay rather than a uniform CPU-like pipeline) is driven by constraints. This is intellectual discipline: the scaffold is a tool for exploration, not a commitment. Once the scaffold has served its purpose (clarifying what could be separated), you can set it aside and ask 'what's actually feasible and cost-effective?' The conversation shows this: cycle 17 built out the scaffold carefully. Cycle 18 says 'ok, now let's be pragmatic.' This is the transition from theory-exploration to implementation-planning. The team is moving from 'how could a cognitive processor be structured?' (theory) to 'how can we actually build one given what we have?' (engineering). Both are necessary. The scaffold makes the theory clear. Cost analysis makes the engineering clear.",
+      "key_claims": [
+        {
+          "claim_id": "e01dde29-44e4-437a-a4a0-af99fa87d93a",
+          "text": "CPU pipeline scaffold is useful for thinking about stage separation; departure from scaffold is legitimate when practical constraints demand",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "0385b513-32bd-449b-9794-d5bd5c7daf75",
+          "text": "Insight (stage separation is valuable) is retained even when concrete instantiation (Haiku-Claude-Pichay) departs from CPU-like uniformity",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "4beb0af2-b55d-4b8e-a245-c3b6397d72b2",
+          "text": "Knowing when to leave the scaffold is intellectual discipline; scaffold is tool for exploration, not commitment",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "a42db8a6-40dd-4faa-be0d-c33748a7e0c8",
+          "text": "Conversation shows transition from theory-exploration (cycles 16-17) to implementation-planning (cycle 18); both are necessary",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "H0 test case specification emerges from prescriptive choice: Haiku triage \u2192 Claude reasoning \u2192 halt signal",
+      "content": "Cycle 17 left H0 test case design as future work pending prescriptive/descriptive choice. Cycle 18 choice of prescriptive path clarifies H0 specification. The minimal bounded processing scenario is now concrete: (1) **Input**: current goal, resource manifest, conversation window. (2) **Haiku (fetch/decode)**: identify relevant resources. Output: list of resource handles. (3) **Pichay (memory)**: load indicated resources. (4) **Claude (execute)**: reason over loaded context. Output: reasoning step + halt signal. (5) **Halt detection**: observe when Claude emits halt or when reasoning is complete. The hypothesis H0 is: **Can Claude, operating as the execute stage on Haiku-filtered context, produce correct reasoning steps and emit halt signals when done, across a range of reasoning tasks?** Metrics: (1) reasoning quality (does Claude's output match expected reasoning step?), (2) context efficiency (is filtered context smaller than full context?), (3) halt detection rate (does halt signal appear? false positive rate? false negative rate?). Test cases: simple bounded problems (arithmetic, logic puzzles, retrieval tasks) where expected output is known and halt condition is clear. This moves from architecture to execution plan.",
+      "key_claims": [
+        {
+          "claim_id": "7f9e32c1-12b1-4b00-9cbd-35d360fa22df",
+          "text": "H0 minimal scenario: Haiku identifies resources \u2192 Pichay loads \u2192 Claude reasons \u2192 emit halt signal",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "0b226ea8-d5fe-4c5f-a034-249c4c657cde",
+          "text": "H0 hypothesis: can Claude (execute stage on filtered context) produce correct reasoning and emit halt signals reliably?",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.15,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "efb12661-c08a-4879-94cb-38a9ec2c97d1",
+          "text": "H0 metrics: reasoning quality, context efficiency (filter vs. full), halt detection rate (true positive, false positive, false negative)",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "26c06eec-731a-471d-8e2c-c28f4718828e",
+          "text": "H0 test cases: simple bounded problems (arithmetic, logic, retrieval) with known expected output and clear halt condition",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Details of Haiku's triage algorithm. What patterns in the manifest does Haiku look for? How does it weight relevance? Is it keyword matching, semantic similarity, learned associations?",
+      "why": "H0 test case will require specifying what Haiku is asked to do. The exact prompt/instruction for Haiku is not yet written. This is implementation detail deferred to next cycle.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specification of the resource manifest format. What is a semantic digest? How much information (tokens) does a digest contain? How does digest information density affect Haiku's decisions?",
+      "why": "Pichay already maintains manifest-like structures; the exact representation for Haiku consumption is not fully specified. This requires design work.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Details of halt signal specification. What does Claude emit when done? A token? A structured JSON? How is it detected by Pichay/controller? What false positive/negative rates are acceptable?",
+      "why": "Halt behavior is crucial but under-specified. The token-level signal must be designed and validated. Deferred to H0 test design.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Cost analysis comparing Haiku-Claude pipeline to alternative approaches (e.g., using larger Haiku, or Claude alone, or multi-turn fault-driven). Quantitative comparison missing.",
+      "why": "Tony asserted prescriptive is cost-effective, but no detailed calculation is provided. This would require API pricing, token counts, and latency analysis. Important for validation but not done here.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed comparison with prompt engineering baselines. Is Haiku-Claude pipeline fundamentally different from 'good prompting' + context management, or is it a formalization of existing practices?",
+      "why": "The architectural framing is new, but the engineering (cheap triage + expensive reasoning) might be implicit in existing systems. Novelty vs. formalization is unresolved.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Discussion of failure modes in Haiku triage. What if Haiku misses a critical resource? What if it overspecifies (loads too much)? How do these errors propagate to Claude's reasoning?",
+      "why": "Prescriptive pipeline introduces a new failure mode: bad triage leads to bad reasoning. This is not addressed. Necessary for robustness.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Interaction between Haiku triage and Pichay's working set management. If Haiku requests 10 resources but L1 buffer can only hold 5, what happens? Does Pichay override Haiku? Cascade load? Summarize?",
+      "why": "The memory subsystem (Pichay) has constraints; the fetch stage (Haiku) makes requests. Interaction protocol is not specified.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "ACT-R cognitive architecture, cycle 17 introduction of psychological grounding, applicability under prescriptive choice. Does Haiku-Claude match ACT-R principles?",
+      "why": "Cycle 17 discussed ACT-R as design template. Cycle 18 doesn't revisit whether Haiku-Claude instantiation respects ACT-R principles. Deferred.",
+      "category": "traversal_bias"
+    },
+    {
+      "what_was_lost": "Prior cycles (13-16) Codex H0 specifics, instruction sequencer design, state coherency manager, Yanantin L4 details remain integrated but not restated.",
+      "why": "Compression of prior work into current projection. Available in prior tensors.",
+      "category": "traversal_bias"
+    }
+  ],
+  "open_questions": [
+    "What is the exact Haiku prompt/instruction for resource triage? What patterns does it look for? How does it weight relevance among candidate resources?",
+    "What is the resource manifest format? What is a semantic digest? How many tokens per digest? How does digest density affect Haiku's triage decisions?",
+    "How is Claude's halt signal specified? Token-level? Structured output? How is it detected? What false positive/negative rates are acceptable?",
+    "What is the quantitative cost comparison between Haiku-Claude pipeline and alternatives (e.g., Claude alone, larger Haiku, multi-turn fault-driven)?",
+    "Is Haiku-Claude pipeline fundamentally different from good prompt engineering + context management, or a formalization of existing practices?",
+    "What are the failure modes of Haiku triage? If Haiku misses a critical resource, does Claude fail? How do triage errors propagate?",
+    "What is the interaction protocol between Haiku's fetch requests and Pichay's working memory constraints? If Haiku requests 10 resources but L1 can hold 5, what happens?",
+    "Does Haiku-Claude instantiation respect ACT-R cognitive architecture principles? Is there psychological grounding for this specific design?",
+    "What is the novel contribution of Hamutay vs. existing prompt engineering + context management systems?",
+    "How sensitive is H0 to Haiku's triage quality? What happens if Haiku's precision/recall for resource relevance is 60% vs. 95%?",
+    "Can Haiku be trained or fine-tuned to improve triage, or is it used off-the-shelf? What is the development cost?",
+    "What is the interaction between prescriptive pipeline (Haiku-Claude) and the descriptive research (post-hoc validation that Haiku matches Claude's internal selection)?"
+  ],
+  "instructions_for_next": "[\n  \"CRITICAL: Design the Haiku prompt. What exactly does Haiku receive? (goal + manifest + window). What is Haiku asked to do? (identify relevant resources). What format does Haiku output? (list of handles, scores, rationale?). Write this prompt.\",\n  \"CRITICAL: Specify the resource manifest format. What information is in a semantic digest? Token count per digest? How dense can digests be before Haiku chokes? How sparse before they lose information? Design the manifest representation.\",\n  \"IMMEDIATE: Design Claude's halt signal. What token or token sequence signals 'done'? Can it be a special token, or must it be structured JSON? How is it detected and parsed? Specify the halt signal unambiguously.\",\n  \"IMMEDIATE: Write H0 test case(s). Pick 2-3 simple bounded problems (e.g., 'retrieve fact X from context', 'solve logic puzzle Y', 'trace computation Z'). For each: specify input, expected output, resource manifest, expected halt signal. Make these testable.\",\n  \"PRIORITY: Conduct cost analysis. Estimate token counts for Haiku invocation (manifest + goal + window). Estimate Claude invocation (filtered context + reasoning prompt). Compare total cost to alternative approaches. Show that prescriptive is cost-effective.\",\n  \"PRIORITY: Design Pichay-Haiku interaction protocol. When Haiku requests resources, how does Pichay handle this? Immediately load? Batch? If L1 buffer is full, what happens? Specify the protocol.\",\n  \"RESEARCH: Clarify novelty vs. formalization. Is Hamutay a fundamentally new paradigm (pipeline + stage separation + resource gating) or a formalization of existing prompt engineering? Write a ~200 word comparison.\",\n  \"RESEARCH: Map Haiku-Claude to ACT-R principles. Does the two-model pipeline match ACT-R's perceptual/working-memory/production-system/motor structure? Where is the match tight? Where is it loose?\",\n  \"RESEARCH: Specify failure modes. What if Haiku misses a resource? Over-specifies? Give Claude stale context? What is Claude's behavior? Test this in H0 cases.\",\n  \"DESIGN: Consider whether Haiku should be fine-tuned for triage. Off-the-shelf Haiku is a baseline. If triage quality matters, can Haiku be improved? What would training require?\",\n  \"NEXT CYCLE: Expect completion of Haiku prompt, manifest format, halt signal spec, 2-3 H0 test cases, and cost analysis. This moves from architecture to executable design.\",\n  \"EPISTEMOLOGY: Ensure H0 is falsifiable. What result would indicate failure? (e.g., 'if Claude's reasoning quality drops >5% with filtered context, prescriptive path fails'). Specify failure threshold before running.\",\n  \"INTEGRATION: Once H0 design is complete, update user_tony.md with concrete pipeline architecture, stage specifications, and test plan.\"\n]",
+  "epistemic": {
+    "truth": 0.84,
+    "indeterminacy": 0.13,
+    "falsity": 0.03
+  }
+}

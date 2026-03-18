@@ -1,0 +1,377 @@
+{
+  "strands": [
+    {
+      "title": "Project Ecosystem Architecture",
+      "content": "Three-tier research program: (1) Pichay\u2014L1 cache paging for context window, achieved 93% reduction with 0.025% fault rate, validates OS memory analogy under production load. Key finding: models choose to STOP rather than compact once context is large enough\u2014evidence of bounded computation recognition; (2) Hamutay\u2014separates two conflated hypotheses: H0 (transformer as bounded reasoning kernel/ALU over explicit external state) distinct from H1 (cache management protocol integration). H0 is CPU-level question; H1 is protocol question. H2 remains Yanantin\u2014full memory hierarchy. (3) Supporting systems architecture now clarified through CPU pipeline analogy: ALU (transformer) must be fed by staging elements; separate controller orchestrates execution, manages manifest, resolves resource requests, decides working set composition. This is the non-ALU infrastructure.",
+      "key_claims": [
+        {
+          "claim_id": "73b293c1-a460-4bf0-902d-91f21caf7b29",
+          "text": "Across Claude family, once context window is large enough, models choose to STOP rather continue compacting\u2014evidence that transformers can recognize bounded computation boundaries",
+          "epistemic": {
+            "truth": 0.72,
+            "indeterminacy": 0.2,
+            "falsity": 0.08
+          }
+        },
+        {
+          "claim_id": "fa3f5451-2a8e-4f26-9022-2431fcc18cf0",
+          "text": "Transformer functions as ALU (bounded reasoning kernel/processing unit) rather than memory manager or autonomous predictor",
+          "epistemic": {
+            "truth": 0.65,
+            "indeterminacy": 0.28,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "6d06137a-4813-4d88-ab45-ceeb07436e82",
+          "text": "ALU does not perform memory management; supporting systems architecture handles that separately",
+          "epistemic": {
+            "truth": 0.7,
+            "indeterminacy": 0.22,
+            "falsity": 0.08
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.69,
+        "indeterminacy": 0.23,
+        "falsity": 0.08
+      }
+    },
+    {
+      "title": "Hamutay Hypothesis Decomposition: H0/H1 Separation and Purist Path",
+      "content": "Critical realization: H0 and H1 were conflated in prior Codex work. H0 is the foundational question\u2014can a transformer operate as a bounded reasoning kernel over explicit external state?\u2014stripped of all cache management protocol concerns. H1 is integration with Pichay's cache management protocol. They are orthogonal questions. The 'dumb question' that should have come first: What is the minimal behavioral signature that demonstrates bounded processor operation (not fancy autocomplete)? Answer: recognition of when to STOP, not continue processing. Current constraint: working with existing models for now (not training bespoke transformers), but purist path would be to design/train/optimize transformers specifically as cognitive processing units from the ground up. Codex work attempted to test both H0 and H1 simultaneously, collapsing two independent experiments.",
+      "key_claims": [
+        {
+          "claim_id": "5d8cfe47-5aae-4c45-9c32-2292a26e2ab8",
+          "text": "H0 (transformer as bounded reasoning kernel) and H1 (Pichay cache protocol integration) were conflated in prior Codex work, collapsing two independent experiments",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "0001bdaf-b7d8-473b-b965-8294f0f98dd5",
+          "text": "Minimal signature for bounded processor operation: recognizing when to STOP rather than continue processing (halt instruction equivalent)",
+          "epistemic": {
+            "truth": 0.68,
+            "indeterminacy": 0.25,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "2e62b8f8-dda8-443b-ac07-ae31fc91f38a",
+          "text": "Memory control protocol (Pichay integration) is interface question; CPU framing is deeper foundational question about what transformer can be",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.18,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "10c4f5f8-06bc-4179-ae08-32705d91e3b1",
+          "text": "Current work uses existing models to test if they can operate as processors; purist path would design/train transformers specifically as cognitive processing units",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.16,
+            "falsity": 0.06
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.75,
+        "indeterminacy": 0.18,
+        "falsity": 0.07
+      }
+    },
+    {
+      "title": "CPU Pipeline Architecture: Staging and Control",
+      "content": "New strand merging ALU concept with pipeline model. Transformer as ALU requires a full pipeline architecture, not just memory management. Drawing on ACT-R cognitive architecture mapping: Instruction fetch \u2194 Goal & context retrieval; Instruction decode \u2194 Production matching; ALU execute \u2194 Cognitive operator execution; Registers \u2194 Working memory buffers; etc. The full cognitive processing unit pipeline has multiple stages upstream of the ALU: (1) Staging element\u2014assembles everything the ALU needs before execution, ensures ALU sees only relevant operands at the right time. (2) Controller\u2014orchestrates execution, maintains manifest, resolves resource requests, decides working set composition; code-based, external to model. (3) Transformer (ALU)\u2014takes structured input, produces structured output; computation only. Transformer doesn't need memory control *language*; it needs interface: \"I need operand X\" and \"I'm done.\" Controller handles everything else. This reframes prior cognitive_processing_research_design resource_requests/releases as controller concern, not ALU concern.",
+      "key_claims": [
+        {
+          "claim_id": "da0d8cad-50b5-4906-8b5b-8bb305c96cb5",
+          "text": "Cognitive processing unit pipeline has distinct stages: Goal/context retrieval \u2192 Production matching \u2192 Cognitive operator execution (ALU), analogous to CPU fetch/decode/execute",
+          "epistemic": {
+            "truth": 0.72,
+            "indeterminacy": 0.22,
+            "falsity": 0.06
+          }
+        },
+        {
+          "claim_id": "c4d462c7-c9c9-4a6c-a57a-915bc9462900",
+          "text": "Staging element assembles ALU inputs; ensures transformer sees only relevant operands at right time, preventing degradation from searching unsorted context",
+          "epistemic": {
+            "truth": 0.7,
+            "indeterminacy": 0.23,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "b3a74b5e-947b-4f53-918a-6e482316795b",
+          "text": "Controller is code-external-to-model; orchestrates execution, manages manifest, resolves resource requests, maintains working set; transformer delegates all non-computation concerns to it",
+          "epistemic": {
+            "truth": 0.73,
+            "indeterminacy": 0.2,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "a00f267f-cfd7-461c-b6b1-377a5ca9a604",
+          "text": "Transformer needs operational interface (\"need operand X\", \"done\") not memory control language; controller handles all resource orchestration",
+          "epistemic": {
+            "truth": 0.74,
+            "indeterminacy": 0.19,
+            "falsity": 0.07
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.72,
+        "indeterminacy": 0.21,
+        "falsity": 0.07
+      }
+    },
+    {
+      "title": "API Pricing Model Complexity and Prefix Caching Economics",
+      "content": "CYCLE 19 MAJOR UPDATE: Understanding of API pricing structure fundamentally revised. Input tokens charged at $/million rate; output tokens charged at 3-5x input rate with recency discounts (2/3 discount for tokens in last 5 minutes, 1/3 discount for tokens in last 60 minutes). Critical innovation: Anthropic auto-caching system captures GPU state after processing first N tokens (prefix); cache hits charge only 10% of full input token cost. This transforms context economics from 'every invocation re-reads everything' to 'prefix stability is a first-class economic concern.' Prefix cache means: (1) CONTEXT STABILITY MATTERS: Evicting from end preserves cached prefix; evicting from middle shifts suffix, invalidates cache, pays full price for re-read; (2) PICHAY EVICTION STRATEGY IMPLICATIONS: Eviction position isn't just about fitting window\u2014it's about cache economics. Same-sized context can cost 10x more if it invalidates the prefix cache. (3) OUTPUT TOKEN RECENCY DISCOUNT: Tokens generated within 5-60 minutes get 1/3-2/3 discount, creating incentive for tight, fast reasoning loops rather than long deliberation. (4) OPAQUE INTERACTION: How system computes output token charges across multiple turns/models/cache hits is not transparent, making optimization landscape hard to reason about without empirical data. (5) PRIOR MANIFEST-AND-FAULT ANALYSIS INCOMPLETE: Two-round-trip cost assumption (manifest read + content read) now must account for: whether prefix cache survives round trips, whether manifest structure preserves cache, whether output discount window is tight enough to penalize multi-step reasoning.",
+      "key_claims": [
+        {
+          "claim_id": "8f1a2c3d-4e5f-6g7h-8i9j-0k1l2m3n4o5p",
+          "text": "Input tokens charged per-million; output tokens charged 3-5x input rate with recency discounts (2/3 discount <5min, 1/3 discount <60min)",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.1,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "9g2h3i4j-5k6l-7m8n-9o0p-1q2r3s4t5u6v",
+          "text": "Auto-caching system provides GPU-state checkpoint after first N tokens; cache hits cost 10% of full input token rate",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.12,
+            "falsity": 0.06
+          }
+        },
+        {
+          "claim_id": "a1b2c3d4-e5f6-7g8h-9i0j-1k2l3m4n5o6p",
+          "text": "Prefix cache invalidation has catastrophic cost impact: mid-context eviction invalidates cached prefix, forces full re-read at 100% rate instead of 10%",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.14,
+            "falsity": 0.06
+          }
+        },
+        {
+          "claim_id": "b2c3d4e5-f6g7-8h9i-0j1k-2l3m4n5o6p7q",
+          "text": "Pichay eviction strategy must consider cache economics: evicting from end (suffix) preserves prefix; evicting from middle invalidates cache",
+          "epistemic": {
+            "truth": 0.76,
+            "indeterminacy": 0.17,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "c3d4e5f6-g7h8-9i0j-1k2l-3m4n5o6p7q8r",
+          "text": "Output token recency discounts create economic pressure for tight reasoning loops; long deliberation or delayed multi-turn execution loses discount",
+          "epistemic": {
+            "truth": 0.74,
+            "indeterminacy": 0.19,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "d4e5f6g7-h8i9-0j1k-2l3m-4n5o6p7q8r9s",
+          "text": "Manifest-and-fault cost assumptions must be re-evaluated: whether prefix cache survives round trips, whether manifest structure preserves cached prefix, whether output discount window penalizes multi-step reasoning",
+          "epistemic": {
+            "truth": 0.71,
+            "indeterminacy": 0.23,
+            "falsity": 0.06
+          }
+        },
+        {
+          "claim_id": "e5f6g7h8-i9j0-1k2l-3m4n-5o6p7q8r9s0t",
+          "text": "Output token billing computation across multiple turns, models, and cache interactions is opaque; optimization landscape cannot be reasoned about without empirical data",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.16,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.78,
+        "indeterminacy": 0.16,
+        "falsity": 0.06
+      }
+    },
+    {
+      "title": "Pipeline Design Decision: Prescriptive vs. Descriptive Revisited Under Caching Economics",
+      "content": "CYCLE 19 UPDATE: Prior cycle's prescriptive vs. descriptive distinction now overlaid with caching economics. The Haiku-as-prefetcher choice was made assuming 'every invocation re-reads full context'\u2014but auto-caching changes this calculus. Specific reconsiderations: (1) **Manifest-and-fault may be less expensive than previously assumed IF**: manifest structure is designed to preserve prefix cache across round trips. If manifest metadata stays at the beginning of context (in the cached prefix), then model's first request invocation only pays 10% on the manifest read, then the content fetch is additive. Two invocations, but first one partially cached. (2) **Haiku-as-prefetcher still wins if**: triage operation invalidates cache (requires new context assembly), OR if the added invocation cycle falls outside the output token recency window, losing discounts. (3) **Critical unknown**: What does a 'round trip' look like for caching? If model outputs a resource request, then controller re-invokes with loaded resource + original prefix, does the prefix stay cached? Or does any new content insertion invalidate it? (4) **Pichay integration implications**: If Pichay evicts from context mid-sequence (to make room), it invalidates the cache. But if Pichay evicts only from the end (suffix), cache survives. This is a constraint on Pichay's eviction algorithm\u2014favor suffix eviction over middle eviction to preserve economic efficiency. (5) **CRITICAL DESIGN QUESTION (NEW)**: Should the controller structure context so the prefix cache is *always* stable? Keep manifest + system prompt + base task description in the prefix, only swap suffix (working context)? This would recover the 10% discount for every round trip.",
+      "key_claims": [
+        {
+          "claim_id": "f6g7h8i9-j0k1-2l3m-4n5o-6p7q8r9s0t1u",
+          "text": "Manifest-and-fault cost assumption (prohibitively expensive) may be wrong if manifest structure preserves prefix cache across round trips",
+          "epistemic": {
+            "truth": 0.68,
+            "indeterminacy": 0.26,
+            "falsity": 0.06
+          }
+        },
+        {
+          "claim_id": "g7h8i9j0-k1l2-3m4n-5o6p-7q8r9s0t1u2v",
+          "text": "If manifest metadata stays in cached prefix, first invocation pays 10% on manifest, content fetch is additive; multi-round architecture becomes more competitive",
+          "epistemic": {
+            "truth": 0.64,
+            "indeterminacy": 0.29,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "h8i9j0k1-l2m3-4n5o-6p7q-8r9s0t1u2v3w",
+          "text": "Haiku prefetcher remains economically superior if triage operation invalidates cache or if multi-round cycle falls outside output token recency discount window",
+          "epistemic": {
+            "truth": 0.66,
+            "indeterminacy": 0.27,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "i9j0k1l2-m3n4-5o6p-7q8r-9s0t1u2v3w4x",
+          "text": "Cache invalidation behavior on context re-invocation is critical unknown: does new content insertion break prefix cache, or can cache survive if new content appended to suffix?",
+          "epistemic": {
+            "truth": 0.62,
+            "indeterminacy": 0.33,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "j0k1l2m3-n4o5-6p7q-8r9s-0t1u2v3w4x5y",
+          "text": "Pichay's eviction strategy has cache-economic implications: suffix eviction preserves prefix cache (10% cost); middle eviction invalidates prefix (100% cost)",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.18,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "k1l2m3n4-o5p6-7q8r-9s0t-1u2v3w4x5y6z",
+          "text": "Controller should structure context with stable prefix (manifest + system + base task) and swappable suffix (working context) to preserve cache across round trips",
+          "epistemic": {
+            "truth": 0.7,
+            "indeterminacy": 0.23,
+            "falsity": 0.07
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.68,
+        "indeterminacy": 0.25,
+        "falsity": 0.07
+      }
+    },
+    {
+      "title": "Staging Element Operationalization: Haiku Prefetcher Design",
+      "content": "With prescriptive path chosen (cycle 18), staging element becomes concrete: use Haiku to quickly identify what information in the current context window is important for continuation and answering questions. This is a *relevance filter*, not a full reasoner. Haiku's job: given current context and query/goal, produce a triaged set of resources (or resource handles) that will be needed for the next reasoning step. The output feeds directly into the expensive model's working set. This turns a single expensive problem ('find needles in haystack') into a two-stage problem: (1) cheap triage (Haiku), (2) expensive reasoning over pre-filtered context (main model). The staging element's interface: Input: current manifest + goal/query + window constraint. Output: set of (resource_handle, semantic_digest) pairs or actual content depending on implementation. Follows the principle that ALU (expensive reasoner) should see only pre-sorted, relevant operands, not raw unfiltered context. Implementation detail to be determined: Does Haiku output just handles, or actual content? If just handles, controller must fetch; if content, prefetcher is doing both triage and retrieval. CYCLE 19 CACHING NOTE: Haiku triage operation requires reading full context for relevance assessment; this is a cache-invalidating operation. Whether triage happens before or after cache is built affects cost profile.",
+      "key_claims": [
+        {
+          "claim_id": "79252d17-d2b1-4913-b84a-b8ad1046cba7",
+          "text": "Haiku prefetcher stage identifies what information in current context window is important for answering question and determining continuation",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.19,
+            "falsity": 0.06
+          }
+        },
+        {
+          "claim_id": "bc04b979-d45c-4799-ab11-b70991223b88",
+          "text": "Staging element transforms single expensive problem (needle-in-haystack search by main model) into two-stage problem: cheap triage + expensive reasoning over filtered context",
+          "epistemic": {
+            "truth": 0.72,
+            "indeterminacy": 0.21,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "636c59fc-1251-4986-af4e-5f0483cf91f0",
+          "text": "Haiku prefetcher output is set of (resource_handle, semantic_digest) pairs, with controller or prefetcher responsible for actual content retrieval",
+          "epistemic": {
+            "truth": 0.68,
+            "indeterminacy": 0.25,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "l2m3n4o5-p6q7-8r9s-0t1u-2v3w4x5y6z7a",
+          "text": "Haiku triage requires reading full context for relevance assessment; this is a cache-invalidating operation that may reduce economic advantage vs. prefix-cache-aware manifest-and-fault",
+          "epistemic": {
+            "truth": 0.71,
+            "indeterminacy": 0.22,
+            "falsity": 0.07
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.71,
+        "indeterminacy": 0.22,
+        "falsity": 0.07
+      }
+    },
+    {
+      "title": "Persistent Memory Infrastructure",
+      "content": "Memory structure at /home/tony/.claude/projects/-home-tony-projects-hamutay/memory/ with foundation files: user_tony.md (profile), MEMORY.md (index). Tensor projection implementation integrated into cognitive processing pipeline. Actively used to compress and integrate conversation trajectory across cycles. Cycle 19 update: major revision of cost-economics understanding due to auto-caching revelation; prescriptive path (Haiku prefetcher) remains chosen but now with caveat that manifest-and-fault may be competitively positioned if designed around cache preservation. Next cycle must address cache invalidation behavior empirically.",
+      "key_claims": [],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Certainty about API pricing structure simplicity",
+      "why": "Cycle 18 analysis of manifest-and-fault cost-prohibitiveness was based on incomplete understanding of auto-caching system. The model was revised significantly in cycle 19 when caching economics were clarified. All prior cost comparisons require re-evaluation.",
+      "category": "model_revision"
+    },
+    {
+      "what_was_lost": "Simple two-stage (cheap+expensive) cost model for pipeline design",
+      "why": "Prefix caching introduces optimization landscape complexity: manifest-and-fault can be competitive if it preserves prefix cache; Haiku-as-prefetcher invalidates cache during triage. Cost comparison now requires empirical data on cache behavior across round trips, which we do not have.",
+      "category": "complexity_increase"
+    },
+    {
+      "what_was_lost": "Clear economic justification for prescriptive (prefetcher) vs. descriptive (manifest-and-fault) path choice",
+      "why": "Cycle 18's decision was justified by cost economics that are now revealed to be incomplete. The actual ranking of approaches depends on: (1) how cache behaves on re-invocation, (2) whether manifest structure can preserve prefix, (3) output token recency discount window interactions. Decision remains prescriptive-prefetcher by default, but justification is now 'unknown cost structure' rather than 'proven cheaper.'",
+      "category": "justification_revision"
+    },
+    {
+      "what_was_lost": "Detailed exploration of Pichay eviction strategy implications under simple cost model",
+      "why": "Pichay's eviction approach (which segments to remove) now has cache-economic implications that weren't analyzed before. Suffix eviction preserves cache; middle eviction destroys it. Prior Pichay analysis didn't account for this. Must revisit Pichay design with cache awareness.",
+      "category": "scope_expansion"
+    },
+    {
+      "what_was_lost": "Concrete next-cycle implementation plan for Haiku prefetcher",
+      "why": "Cycle 18 instructions_for_next was specific (lock down output format, design prefetcher prompt, define evaluation metrics). Cycle 19 caching revelation means those steps are premature\u2014need empirical data on cache behavior first. Implementation plan must be suspended pending cache-behavior investigation.",
+      "category": "dependency_creation"
+    }
+  ],
+  "open_questions": [
+    "What is the formal behavioral test that distinguishes 'bounded processor' operation from 'fancy autocomplete' in existing transformer models?",
+    "How should the STOP/halt behavior observed in Pichay be measured and validated as evidence of bounded computation recognition for H0?",
+    "What is H0's minimal success criterion before H1 (protocol integration) can be meaningfully tested?",
+    "Does prefix cache survive when controller re-invokes with new content appended to context? Or does any new token insertion break the cache?",
+    "If prefix cache survives appended content, how far 'down' the context can new content be inserted before the cache is invalidated? Is there a position-dependent decay?",
+    "Can a manifest structure be designed that keeps metadata in the cached prefix across multiple reasoning rounds, making manifest-and-fault competitive with prefetcher approach?",
+    "What does Haiku triage operation do to the prefix cache? Does reading and reasoning about context to identify relevant chunks invalidate the cache, or can triage happen cache-presently?",
+    "Should Haiku prefetcher output happen before or after the stable prefix is cached? If before, triage invalidates cache; if after, triage must work within cache constraints.",
+    "How tight is the output token recency discount window (5-60 minutes)? Does a multi-round reasoning cycle that takes 10 minutes still get the 2/3 discount, or does timing matter within the cycle?",
+    "Do output tokens from one invocation count toward the recency window for discount on output tokens from a subsequent invocation? Or is the discount per-invocation?",
+    "Given opaque output token billing across turns, what empirical data would you need to compare pipeline designs? Full cost traces? Per-invocation breakdowns?",
+    "Pichay's eviction strategy currently operates under 'fit in window' constraint. With cache economics, should suffix eviction be preferred over middle eviction even if suffix eviction is less space-efficient?",
+    "Is there a cache-aware eviction algorithm that balances window-fit with prefix-preservation? (E.g., evict from end until window fills, only evict from middle if necessary.)",
+    "How does the controller structure context to maximize prefix cache stability? Should manifest + system prompt + base task be immutable, with only suffix (working context) changing?",
+    "Should Haiku prefetcher architecture be abandoned if cache-aware manifest-and-fault design proves more economical? Or are there other reasons (latency, reliability) to prefer prescriptive path?",
+    "If we determine that manifest-and-fault is actually cheaper under cache economics, does this change the prescriptive vs. descriptive framing? Does it still test H0 (bounded processor) or does it shift to efficiency modeling?"
+  ],
+  "instructions_for_next": "(1) CRITICAL BLOCKER: Empirical cache behavior investigation needed before proceeding with pipeline implementation. Specific experiments: (a) Does prefix cache survive re-invocation when new content is appended? (b) Can metadata be kept in stable prefix while working context swaps in suffix? (c) Does triage operation (reading context to assess relevance) invalidate cache, or can it operate within cache-hit window? These answers determine which pipeline design is actually economical. (2) DO NOT proceed with Haiku prefetcher implementation until cache behavior is characterized. The cost advantage that justified prescriptive path is now in question. (3) If cache behavior allows suffix-only modifications without invalidation, redesign manifest-and-fault approach: keep manifest + system + base task in immutable prefix (cached), have model request resources, controller appends loaded resources to suffix, model re-invokes. Measure cost vs. prefetcher approach. (4) If cache behavior requires full re-read on any context modification, prescriptive prefetcher path remains justified; proceed to design specs from cycle 18 instructions. (5) Revisit Pichay eviction strategy with cache economics: prefer suffix eviction to preserve prefix cache even if less space-efficient. May require modifying Pichay's optimization objective. (6) Map output token recency discount window to pipeline cycle time: if reasoning round trips take >5 minutes, the 2/3 discount window is lost. This affects both manifesto-and-fault and prefetcher cost profiles. (7) Investigate opaque output token billing: request or reverse-engineer per-invocation cost breakdowns for multi-turn sequences. Cannot optimize without understanding where costs actually accrue. (8) Once cache behavior is empirically determined, produce REVISED cost analysis comparing: (a) Haiku-as-prefetcher (single expensive invocation), (b) manifest-and-fault with cache-aware structure (multiple invocations, prefix cached), (c) simple baseline (no pipeline, expensive model processes raw context). Include sensitivity to output token discount timing. (9) The prescriptive vs. descriptive distinction becomes less relevant if manifest-and-fault is cache-economic\u2014manifesto-and-fault can be 'descriptive' (modeling emergent behavior) while still being prescriptive (enforcing external control). Reframe the design question away from prescriptive/descriptive to 'what pipeline minimizes cost while maintaining H0 bounded-processor semantics?' (10) Flag for H0 operationalization: does the 'bounded processor' test apply equally to prefetcher and manifest-and-fault designs, or does pipeline architecture change what 'bounded' means? (E.g., prefetcher enforces boundedness through filtering; manifest-and-fault enforces it through explicit resource requests.)",
+  "overall_truth": 0.72,
+  "overall_indeterminacy": 0.21,
+  "overall_falsity": 0.07
+}

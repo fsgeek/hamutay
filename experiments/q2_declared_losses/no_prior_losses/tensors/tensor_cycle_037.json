@@ -1,0 +1,245 @@
+{
+  "id": "a34fd257-8b86-4b1b-9e0e-6a59f63442d6",
+  "cycle": 37,
+  "strands": [
+    {
+      "title": "Projector Applied to Real Conversation Logs \u2014 Drift Reduction via Explicit Incompleteness (CYCLE 36-37 SUSTAINED)",
+      "content": "Cycle 36 established hypothesis that explicit DeclaredLoss mechanisms transform dropped content from permanent sink into recoverable resource, reducing drift in multi-turn reasoning. Cycle 37 sustains this direction with concrete empirical grounding: file-system inspection (Turns 109-111) reveals that conversation logs ARE stored locally, accessible, and structured. DISCOVERED FILE STRUCTURE: /home/tony/projects/pichay/experiments/ contains 16 experiment run directories (baseline_run1...3, cognitive_transactions, comparison_*, optimization_*, minimal_sysprompt_*, test_author_*, verify_streaming_*). Each run contains config.json, git_log.txt, logs/, session/, test_results.txt. This is GOLD DATA. Logs/ subdirectory almost certainly contains per-turn conversation data (JSONL or line-delimited format). IMMEDIATE IMPLICATION: Phase 4a (Drift Reduction Analysis) is now NOT speculative. Logs exist. We can run drift_analyzer immediately post-Phase-1 completion. CYCLE 37 ACTION: (1) Inspect baseline_run1/logs/ directory to confirm format (number of files, naming, size). (2) Sample one log file; parse structure (JSON per line? Fields: turn_num, user_input, assistant_response, metadata?). (3) If format matches assumption (JSONL or similar), begin drift_analyzer.py skeleton coding. (4) If format diverges, adapt schema and parser. SUSTAINING HYPOTHESIS: Drift = lack of coherence across turns (measured via strand persistence, loss recovery, tensor stability). Explicit losses = turnstiles for dropped content (can be queried by future turns). This hypothesis is testable NOW with existing logs. INTEGRATION WITH PHASE 1-3: Phase 1 (compose.py + Riemann test) provides core projector logic. Phase 3b (variant search) optimizes parameters. Phase 4a (drift analyzer on real logs) validates that optimized projector reduces long-term coherence loss. Two-pronged validation: controlled task (Riemann) + naturalistic data (conversation logs). CYCLE 37 DECISION POINT: Should Phase 4a start immediately (Days 1-2 of next cycle), or wait until Phase 1 is complete? RECOMMENDATION: Start immediately (parallel work). Rationale: (1) Low resource cost (scoping + schema inspection = 2-3 hours). (2) De-risks Phase 4a timeline (if logs are malformed or inaccessible, we learn now, not in Week 12). (3) Unblocks Phase 4a implementation once Phase 1 deliver compose.py. (4) No interference with Phase 1 critical path (drift_analyzer is independent module).",
+      "key_claims": [
+        {
+          "claim_id": "7d360d5a-897c-4081-820c-b5bd867b039f",
+          "text": "File-system inspection confirms conversation logs stored locally in /home/tony/projects/pichay/experiments/; 16 experiment runs accessible, each with logs/ subdirectory",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "12b607a2-4fb0-43e7-9489-bec106c3fec4",
+          "text": "Phase 4a (Drift Reduction Analysis) transitions from hypothetical to empirically grounded; logs exist and are ready for analysis post-Phase-1",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "32c7ac4d-25aa-4eb4-b6fd-42ccea644d2a",
+          "text": "Next immediate action: inspect baseline_run1/logs/ to confirm format (JSONL, fields, per-turn structure); adapt drift_analyzer schema if needed",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "863b1a8c-ef81-4120-8337-ceb9e633240b",
+          "text": "Phase 4a can begin in parallel with Phase 1 (no interference); low-cost scoping (2-3 hours) de-risks timeline and unblocks implementation once compose.py is complete",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Conversation-Log Trajectory and Practical Data Integration \u2014 File Organization, Format, and Projector Ingestion (CYCLE 36 MAINTAINED, CYCLE 37 GROUNDED)",
+      "content": "Cycle 36 theorized conversation log structure (JSONL per turn, fields: turn_num, timestamp, user_query, assistant_response, embedding, metadata). Cycle 37 grounds this in observable reality: file-system inspection shows /home/tony/projects/pichay/experiments/ is the parent. Each experiment run contains logs/ subdirectory. INFERRED LOG ARCHITECTURE: (1) Directory: /home/tony/projects/pichay/experiments/{run_name}/logs/. (2) Contents: likely multiple files (conversation_*.jsonl, or single master.jsonl, or turn-numbered files turn_001.json, etc.). File naming TBD by direct inspection. (3) Expected per-turn fields: minimum = {turn_num, user_input, assistant_response}. Optional = {timestamp, embedding, model_version, metadata}. (4) Schema validation: required before drift_analyzer.py can ingest. CYCLE 37 SCHEMA INSPECTION PLAN: (1) Bash: ls -la /home/tony/projects/pichay/experiments/baseline_run1/logs/ (count files, sizes, naming convention). (2) Bash: head -c 500 /home/tony/projects/pichay/experiments/baseline_run1/logs/{first_file} (inspect first bytes; is it JSON? JSONL? Plain text?). (3) If JSON/JSONL: parse with Python; extract one turn object; document fields + types. (4) If plain text: inspect line structure (are lines turn-delimited? What delimiters?). (5) Document findings in SCHEMA.md (required fields, optional fields, data types, examples). IMPACT ON DRIFT_ANALYZER.PY: Once schema is known, drift_analyzer.py can be designed with EXACT parsing logic, not generic assumptions. This reduces implementation risk and debugging time. FILE DIVERSITY: Cycle 36 noted that 16 experiment runs exist (baseline_run1-3, comparison_*, optimization_*, etc.). This suggests: (1) Multiple experimental conditions (baselines vs. optimized, streaming vs. non-streaming, etc.). (2) Multiple conversation logs per run (if logs/ contains multiple files). (3) High sample diversity for Phase 4a analysis (can test projector across multiple conditions). CONTINGENCY (IF LOGS UNAVAILABLE OR MALFORMED): (1) Generate synthetic conversation logs from Riemann task. Input: a Riemann reasoning sequence (multi-turn). Output: JSONL with turn-by-turn ground truth, embeddings, metadata. Deterministic, reproducible. (2) Synthetic logs are valuable for Phase 4a baseline: projector applied to controlled, known-good reasoning. Establishes drift-free baseline. Then apply to real logs and measure difference. (3) If real logs are malformed, synthetic approach is fallback (not fatal to Phase 4a).",
+      "key_claims": [
+        {
+          "claim_id": "f54f92c9-bdad-40d8-a2ac-49cadabaec0f",
+          "text": "Conversation logs stored in /home/tony/projects/pichay/experiments/{run_name}/logs/; expected JSONL or JSON format with per-turn objects",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "82b42f05-ed83-4d52-bd53-135aceec5e33",
+          "text": "Minimum required fields: turn_num, user_input, assistant_response. Optional: timestamp, embedding, model_version, metadata",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "35ccc53e-fe04-4782-bdd4-cf58acfdd0a4",
+          "text": "Cycle 37 action: inspect baseline_run1/logs/ (ls, head), document schema in SCHEMA.md, adapt drift_analyzer parser to exact format discovered",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b72964e2-be76-4924-a902-952ec4c5bbb3",
+          "text": "16 experiment runs + multiple logs per run \u2192 high sample diversity for Phase 4a; can test projector across multiple conditions (baselines, optimization variants)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "fd13bf57-9167-46fd-90a6-3e171b6f61b6",
+          "text": "Contingency: if real logs malformed, generate synthetic conversation logs from Riemann task; provides controlled baseline for drift measurement",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.15,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Cycle 35 Projector Specification Maintained \u2014 H0-CORE Composition Logic Ready for Phase 1 Implementation (INTEGRATION CYCLE 37)",
+      "content": "Cycle 37 maintains Cycle 35's H0-CORE projector specification as the core architecture for Phases 1-3. File-system inspection (Turns 109-111) does not alter projector design or Phase 1 timeline. PROJECTOR SPECIFICATION (From Cycle 35, Reaffirmed Cycle 36-37): (1) ComposeContext input: prior_tensor_d, reasoning_output, output_embedding. (2) Seven-step logic: extract claims \u2192 identify themes \u2192 merge strands \u2192 aggregate epistemic values \u2192 composition/compression \u2192 aggregate open questions \u2192 instructions for next. (3) H0-CORE parameters: claim_extraction='heuristic', default_truth=0.80, strand_similarity_threshold=0.70, max_strands=10, truth_threshold=0.80, composition_overlap=0.60. (4) Output: TensorRecord (native Apacheta), DeclaredLoss list, instructions_for_next string. (5) Properties: deterministic, model-agnostic, <200ms per projection, serializable to Apacheta types. PHASE 1 CRITICAL PATH (Unchanged): Week 1-2: compose.py implementation (~400-500 lines core logic). Week 2-3: unit tests for each of 7 steps. Week 3-4: integration test (mock Riemann output + tensor composition) + performance profiling. Deliverable: compose.py (deterministic, fast, validated against Riemann mock data). PHASE 3b AUTORESEARCH (Unchanged): Search space: claim_extraction method (heuristic vs. LLM-based), default_truth (0.75 vs. 0.80 vs. 0.85), strand_similarity (0.65 vs. 0.70 vs. 0.75), max_strands (8 vs. 10 vs. 12), loss_categories (3-5 types), instructions strategy. ~8-16 variants tested on Riemann full sequence (25 turns). Winner = V_best (best variance reduction on primary metric). PHASE 4a NEW (Parallel Phase 3b or Post-Phase-3): Use V_best to analyze real conversation logs (from /home/tony/projects/pichay/experiments/) for drift reduction. Metrics: strand stability (Jaccard), loss recovery (semantic search), tensor size trend. Hypothesis: explicit losses reduce drift (measured as strand persistence + loss recovery rate). Output: drift_report + publication angle. CYCLE 37 BINDING DECISION: Phase 1, 3b, 4a are LOCKED in roadmap. File-system confirmation (logs exist, accessible) de-risks Phase 4a. No further scoping debates needed. Implementation proceeds in phases as specified.",
+      "key_claims": [
+        {
+          "claim_id": "59c4b192-c6b1-4596-8bff-e31ef9e3022e",
+          "text": "Cycle 35 H0-CORE specification (7-step composition, Apacheta integration, parameters) remains frozen for Phase 1-3 implementation; file-system confirmation does not alter design",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.03,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "97b78f9e-cace-49d9-9d35-18c897aadf38",
+          "text": "Phase 1 critical path: 12 weeks (3-4 week cycles across weeks 1-4, then validation gate, then locked Phase 1 timeline); compose.py determinism is prerequisite for Phase 3b + 4a",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "de93e9f6-f52d-4d7a-88ad-3366e7d9a1ce",
+          "text": "Phase 3b variant search: 8-16 projector variants on Riemann (25-turn full sequence); V_best winner used in Phase 4a drift analysis",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "778d550e-66cf-44c9-ac2e-2fc55b90be83",
+          "text": "Phase 4a: parallel Phase 3b or sequential post-Phase-3; uses V_best on real conversation logs (/home/tony/projects/pichay/experiments/); tests drift reduction hypothesis empirically",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "05a89dd6-4beb-4ad3-b86e-a0ab56bfaef1",
+          "text": "Cycle 37 binding decision: Phase 1, 3b, 4a locked in roadmap; file-system logs confirmed; no further scope debates; implementation proceeds as specified",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Cycle 37 File-System Discovery \u2014 Log Accessibility Confirmed, Schema Inspection Queued (NEW OPERATIONAL STRAND)",
+      "content": "Cycle 37 transitions from theoretical Phase 4a planning to OPERATIONAL log discovery. Turns 109-111 execute file-system inspection bash commands. DISCOVERED ARTIFACT (Turn 109 tool_result): 16 experiment run directories in /home/tony/projects/pichay/experiments/: (1) baseline_run1, baseline_run2, baseline_run3 (control baselines, likely different seeds or configurations). (2) cognitive_transactions, comparison_baseline_run1, comparison_compact_trim_run1, comparison_trimmed_run1 (comparative analysis runs, optimization variants). (3) full_optimization_run1, long_compact_trim_run1, minimal_sysprompt_run1, minimal_sysprompt_run2 (optimized configurations, system prompt variations). (4) test_author_run1, test_author_run2, test_author_run3 (author-specific test runs). (5) verify_streaming_fix_run1 (streaming implementation verification). INFERRED EXPERIMENT STRATEGY: Multiple runs with different parameter/configuration settings. Each run generates logs (presumably conversation or reasoning traces). This enables comparative analysis (baseline vs. optimized, different system prompts, streaming vs. non-streaming, etc.). DISCOVERED ARTIFACT (Turn 111 tool_result for baseline_run1 contents): Each run directory contains: (1) config.json (configuration parameters for that run). (2) git_log.txt (version control history; useful for reproducibility). (3) logs/ (subdirectory containing per-turn or per-conversation data; THIS is the target for drift_analyzer). (4) session/ (possibly session state, metadata, or context traces). (5) test_results.txt (summary results/metrics from that run). NEXT IMMEDIATE ACTION (Cycle 37-38 boundary): Inspect /home/tony/projects/pichay/experiments/baseline_run1/logs/. Bash commands: (a) ls -la baseline_run1/logs/ \u2192 determine file count, sizes, naming. (b) head -c 1000 baseline_run1/logs/{first_file} \u2192 inspect first bytes (is JSON? JSONL? CSV? plain text?). (c) If JSON/JSONL: extract 1-2 complete objects; document schema (field names, types, nesting). (d) If plain text: parse line structure (line delimiters, field separators). (5) Create SCHEMA.md documenting exact format found. RISK ASSESSMENT: (1) Log format unknown until inspection. Upside: if JSONL per turn, drift_analyzer design is straightforward. Downside: if format is custom/complex, parsing logic must be adapted. (2) Embedding availability unknown. Upside: if embeddings present, loss recovery semantic search is ready-to-go. Downside: if absent, drift_analyzer must compute embeddings (post-hoc via spaCy or API, cost/time tradeoff). (3) Log length unknown. Upside: if logs are 20-30 turns, drift measurement is robust (enough turns to see trends). Downside: if logs are 3-5 turns, drift is harder to measure (limited trajectory). MITIGATION: Cycle 37-38 inspection will answer all three unknowns. De-risks Phase 4a implementation.",
+      "key_claims": [
+        {
+          "claim_id": "76ce2dfb-22ab-4f59-bd57-346385209b7c",
+          "text": "16 experiment runs discovered in /home/tony/projects/pichay/experiments/; span baselines, optimization variants, system prompt variations, streaming tests",
+          "epistemic": {
+            "truth": 0.97,
+            "indeterminacy": 0.02,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "924bbbaf-4144-4701-b290-ae42f145e910",
+          "text": "Each run contains: config.json (parameters), git_log.txt (version control), logs/ (conversation data), session/ (state), test_results.txt (metrics)",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ebe5be71-e356-4470-878f-06a6982dc916",
+          "text": "logs/ subdirectory is target for drift_analyzer; format (JSONL, JSON, CSV, text) unknown until inspection; next action: ls + head + schema documentation",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "697a59c3-a8d1-4e24-acf1-a615e96beee2",
+          "text": "Three unknowns to resolve via inspection: log format (structure), embedding availability (present or compute), log length per run (determines drift measurement robustness)",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "2d956b37-685a-4328-8008-45d882175bb0",
+          "text": "Cycle 37-38 boundary: inspect baseline_run1/logs/ (ls, head); create SCHEMA.md; resolve format/embedding/length unknowns; de-risk Phase 4a implementation",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed design of drift_analyzer.py module from Cycle 36 (Step 1-5 pipeline description, DriftMetrics/DriftVisualizer classes, specific code skeletons)",
+      "why": "Cycle 37 focuses on log DISCOVERY and SCHEMA INSPECTION rather than detailed module design. Once log format is known (Cycle 37-38), drift_analyzer design can be adapted precisely to the discovered format. Pre-designing module logic before schema is known risks over-specification and rework.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Detailed Phase 4a roadmap from Cycle 36 (effort estimates 12-16 hours Phase 4a scoping, 4-6 hours implementation, etc.)",
+      "why": "Effort estimates depend on discovered log complexity. Complex schema = longer parsing logic. Simple schema = faster implementation. Cycle 37 defers detailed timeline until after schema inspection (Cycle 37-38). Estimates will be revised post-inspection to reflect actual complexity.",
+      "category": "traversal_bias"
+    },
+    {
+      "what_was_lost": "Synthetic log generation contingency (detailed procedure for generating Riemann-based synthetic logs if real logs are malformed)",
+      "why": "Synthetic logs are valuable CONTINGENCY but should not crowd current focus. Cycle 37 prioritizes inspection of real logs first. If real logs are accessible and well-formed, synthetic generation is unnecessary. Revisit contingency only if real logs inspection fails.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Phase 3b variant search parameter space details (claim_extraction method variations, exact LLM prompt for LLM variant, etc.)",
+      "why": "Phase 3b design depends on Phase 1 completion (compose.py core logic frozen). Cycle 37 focuses on Phase 4a log discovery; Phase 3b variant design deferred to Phase 1 completion milestone. Explicit decoupling prevents premature specification.",
+      "category": "practical_constraint"
+    }
+  ],
+  "open_questions": [
+    "What is the exact format of logs stored in /home/tony/projects/pichay/experiments/{run_name}/logs/? (JSONL, JSON, CSV, plain text, custom binary?)",
+    "What fields are present in each turn/log entry? Are turn_num, user_input, assistant_response all present? What optional fields (timestamp, embedding, model_version)?",
+    "How long are conversation logs per run? Are logs 10-30 turns (suitable for drift measurement), or much shorter (<5 turns) or longer (>50 turns)?",
+    "Are embeddings pre-computed and stored in logs, or must they be computed post-hoc? (Determines loss recovery semantic search cost/complexity.)",
+    "What is the semantic relationship between logs in different runs (baseline_run1 vs. optimization_run1, etc.)? Are they independent experiments, or sequential iterations on same conversation?",
+    "Should Phase 4a use all 16 runs, or sample a subset? Recommendation: sample 5-10 for manageable analysis (time cost), stratified across different run types (baselines, optimizations, variations).",
+    "For loss recovery metric (semantic search ahead 5 turns), what is appropriate similarity threshold? Use spaCy cosine (Euclidean distance threshold e.g., 0.7), or LLM-based embedding (requires API, higher cost)?",
+    "Control condition (disabled losses): should we modify compose() to suppress DeclaredLoss generation, or run drift_analyzer twice (with/without loss-tracking enabled in output)?",
+    "Publication angle for Phase 4a: if hypothesis confirmed, what is the primary claim? (a) 'explicit incompleteness reduces drift in multi-turn reasoning' (methodological contribution), or (b) 'memory controller architecture improves long-term coherence' (architectural contribution)?",
+    "Phase 1 stakeholder approval: has Cycle 36 validation gate completed? Is Phase 1 timeline locked and approved, or are there outstanding concerns/revisions?"
+  ],
+  "instructions_for_next": "Cycle 37-38 CRITICAL PATH (Days 1-2):\\n\\n(1) LOG SCHEMA INSPECTION (2-3 hours, BLOCKING):\\n   (a) Bash: ls -lh /home/tony/projects/pichay/experiments/baseline_run1/logs/ \\n       \u2192 Determine: how many files? What are their names? Sizes?\\n   (b) Bash: file /home/tony/projects/pichay/experiments/baseline_run1/logs/* \\n       \u2192 Determine: what file types (JSON, text, etc.)?\\n   (c) Bash: head -c 2000 /home/tony/projects/pichay/experiments/baseline_run1/logs/{largest_or_first_file}\\n       \u2192 Inspect raw bytes. Is it valid JSON? JSONL (one JSON per line)? Plain text?\\n   (d) Python: if JSON/JSONL, parse one complete entry (one turn). Document ALL fields, types, nesting depth.\\n   (e) Document findings in SCHEMA.md (required fields, optional, data types, example entry, quirks).\\n\\n(2) SAMPLE SIZE & DIVERSITY ASSESSMENT (1-2 hours):\\n   (a) For each of 16 runs: estimate log size (turn count or byte size from ls output). Aim: 5-10 runs with 15-30 turns each (ideal for drift measurement).\\n   (b) Stratify sample: select baseline_run1 (baseline), comparison_baseline_run1 (comparative baseline), full_optimization_run1 (optimized), minimal_sysprompt_run1 (variation). Total 4-6 runs for pilot Phase 4a.\\n   (c) Note: save other runs for extended analysis (Phase 4a scaling, if hypothesis confirmed in pilot).\\n\\n(3) EMBEDDING CHECK (1 hour):\\n   (a) From schema inspection: does each log entry include an 'embedding' field?\\n   (b) If YES: measure embedding dimensionality (e.g., [0.123, 0.456, ...], length 1536 for OpenAI embeddings?).\\n   (c) If NO: note that loss recovery will require post-hoc embedding computation (adds cost/time to Phase 4a; estimate: 0.5-1 hour per run for 20 turns).\\n\\n(4) PHASE 4a SCHEMA-ADAPTED DESIGN (2 hours):\\n   (a) Based on actual log schema discovered, sketch drift_analyzer.py ingestion logic (exact parser code, field mapping).\\n   (b) Create drift_analyzer_v1.py skeleton with TurnParser class (parses logs \u2192 Turn dataclass objects).\\n   (c) Keep composition logic generic (reusable across variants in Phase 3b).\\n\\n(5) PHASE 4a REVISED TIMELINE (1 hour):\\n   (a) Update effort estimates based on discovered complexity. Simple schema = faster. Complex schema = slower.\\n   (b) Locked Phase 4a timeline: Phase 1 completion + 5-7 days (post-Phase-1) for full drift analysis on 5-10 runs.\\n   (c) Document in Phase 4a roadmap (revision from Cycle 36 estimates).\\n\\nCycle 38 (Phase 1 Pre-launch Validation):\\n\\n(6) PHASE 0 STAKEHOLDER VALIDATION GATE (Cycle 36 action, may extend to Cycle 38):\\n   (a) Present all Phase 0 deliverables to decision-makers (Riemann Task Spec, Du et al. thresholds, Phase 1-4 roadmap, resource estimates).\\n   (b) Obtain explicit approval: YES proceed to Phase 1, or NO revise scope.\\n   (c) If YES: lock Phase 1 Week 1 start date. If NO: iterate on feedback (likely scope reduction).\\n\\n(7) PHASE 1 READINESS CHECK (if Phase 0 approved):\\n   (a) Finalize Riemann Task Specification with exact turn milestones (Turn 1 = 0 tokens context, Turn 5 = 2K, ..., Turn 25 = 12K).\\n   (b) Set up riemann_harness/ directory structure (ready for compose.py integration).\\n   (c) Prepare mock Riemann reasoning output (synthetic, for compose.py testing in Week 2).\\n\\n(8) COMPOSE.PY WEEK 1-2 KICKOFF (if Phase 0 approved):\\n   (a) Implement compose.py Steps 1-3 (claim extraction, theme identification, strand merging). ~150-200 lines.\\n   (b) Unit tests for Steps 1-3. Determinism test: 10x identical input \u2192 10x identical output (required before integration).\\n\\nFALLBACK (If Phase 0 not yet approved):\\n\\n(9) CONTINGENCY RESPONSE DOCUMENT (if stakeholder raises concerns):\\n   (a) Have ready: Threat-to-Validity memo (what could go wrong, how we mitigate).\\n   (b) Have ready: Scope Reduction options (drop Phase 3b? reduce N? narrow to single task?).\\n   (c) Have ready: Timeline extension options (Phase 1 \u2192 16 weeks instead of 12, if lower resource burn preferred).\\n   (d) Present these proactively if stakeholder signals uncertainty.\\n\\nSUCCESS CRITERIA (Cycle 37-38 completion):\\n\u2713 SCHEMA.md completed (log format, fields, examples documented).\\n\u2713 Pilot sample identified (4-6 runs, 15-30 turns each, diverse types).\\n\u2713 Embedding availability confirmed (present or post-hoc cost estimated).\\n\u2713 drift_analyzer_v1.py skeleton coded (TurnParser + ingestion pipeline).\\n\u2713 Phase 4a timeline revised + locked (based on actual complexity).\\n\u2713 Phase 0 stakeholder gate completed (approval + Phase 1 start date confirmed, OR feedback for revision loop).\\n\u2713 Phase 1 readiness established (Riemann Task Spec finalized, riemann_harness/ setup, mock data ready).\"",
+  "epistemic": {
+    "truth": 0.91,
+    "indeterminacy": 0.07,
+    "falsity": 0.02
+  }
+}

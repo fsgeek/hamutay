@@ -1,0 +1,196 @@
+{
+  "strands": [
+    {
+      "title": "Tensor Projection Core Problem",
+      "content": "The projection problem requires taking transformer output + prior tensor state and producing an updated tensor that maintains reasoning coherence vs append-only logs. Core tension: TensorRecord is semantically rich (strands, claims, epistemic metadata, declared losses, questions, instructions) but projector must reliably populate all fields. Proposal: start with minimal viable set (strands, key claims, declared losses, instructions, open questions) and iterate richness in autoresearch loop. Skip provenance/lineage for H0.",
+      "key_claims": [
+        {
+          "text": "Projection (tensor_d, transformer_output) \u2192 tensor_d' is the core research question; everything else is engineering",
+          "evidence_refs": [
+            "turn 105"
+          ],
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.1,
+            "falsity": 0.05
+          }
+        },
+        {
+          "text": "TensorRecord has sufficient richness (strands, claims, losses, questions, instructions, T/I/F) to test coherence hypothesis vs append-only baseline",
+          "evidence_refs": [
+            "cycle 34 prior, turn 105"
+          ],
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "text": "Minimal viable projector should include: strands, key claims with T/I/F, declared losses, instructions_for_next, open questions; defer provenance/lineage",
+          "evidence_refs": [
+            "turn 105"
+          ],
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.81,
+        "indeterminacy": 0.14,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Implementation Architecture: Projector as Separate Module",
+      "content": "Projector should be standalone module decoupled from main transformer model. Input: (tensor_d, transformer_output). Output: tensor_d' (updated TensorRecord). Acts as memory controller (not ALU). Enables independent testing and iteration. Haiku model size acceptable for in-context memory integration. Pydantic base model (ApachetaBaseModel) uses frozen=True, extra='forbid', Pydantic v2 conventions \u2014 projector output must respect this schema.",
+      "key_claims": [
+        {
+          "text": "Projector should be separate from main model (transformer) \u2014 projector is memory controller, not reasoning engine",
+          "evidence_refs": [
+            "turn 105"
+          ],
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "text": "ApachetaBaseModel requires frozen=True (immutable), extra='forbid' (strict schema), Pydantic v2 serialization",
+          "evidence_refs": [
+            "turn 105, base.py lines 15-20"
+          ],
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.03,
+            "falsity": 0.02
+          }
+        },
+        {
+          "text": "Standalone module enables independent testing before integration into main reasoning loop",
+          "evidence_refs": [
+            "turn 105"
+          ],
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.89,
+        "indeterminacy": 0.08,
+        "falsity": 0.02
+      }
+    },
+    {
+      "title": "Design Decision: H0 Scope \u2014 What to Build First",
+      "content": "H0 (Hypothesis 0) should demonstrate that projector can maintain reasoning coherence with lossy compression. Start minimal: strands (thematic threads), key claims with T/I/F epistemic values, declared losses (explicit incompleteness), instructions_for_next (branch prediction), open questions (unresolved). Defer: provenance chains, composition equations, lineage tags \u2014 these are bookkeeping, not core cognition. Iterative enrichment via autoresearch loop allows adding complexity once H0 baseline established.",
+      "key_claims": [
+        {
+          "text": "H0 should test: lossy projection maintains reasoning coherence vs append-only baseline",
+          "evidence_refs": [
+            "cycle 34 prior context",
+            "turn 105"
+          ],
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "text": "Provenance, composition equations, lineage tags are bookkeeping (defer) not core cognition (H0 focus)",
+          "evidence_refs": [
+            "turn 105"
+          ],
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.17,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.81,
+        "indeterminacy": 0.16,
+        "falsity": 0.03
+      }
+    },
+    {
+      "title": "Cycle 35 Immediate Action: Build Standalone Projector Module",
+      "content": "Ready to implement minimal viable projector as standalone Python module. Takes (tensor_d: TensorRecord, transformer_output: str) and produces tensor_d': TensorRecord. Should respect ApachetaBaseModel constraints. Can test independently before integrating into main loop. Question: should projector be rule-based, LLM-assisted, or hybrid? Current context suggests starting with rule-based (deterministic, debuggable, fast) for H0 baseline.",
+      "key_claims": [
+        {
+          "text": "Projector input: (tensor_d: TensorRecord, transformer_output: str); output: tensor_d': TensorRecord",
+          "evidence_refs": [
+            "turn 105"
+          ],
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "text": "Rule-based approach recommended for H0 baseline (deterministic, debuggable, faster iteration than LLM-assisted)",
+          "evidence_refs": [
+            "turn 105",
+            "cycle 34 instructions"
+          ],
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.83,
+        "indeterminacy": 0.14,
+        "falsity": 0.03
+      }
+    }
+  ],
+  "declared_losses": [
+    {
+      "content": "Full detailed turn 103 file read context and Apacheta schema exploration flow \u2014 kept only semantically relevant assertion that ApachetaBaseModel requires Pydantic v2 frozen/extra_forbid conventions. Lost: line-by-line code review, exact imports, ConfigDict field explanations.",
+      "reason": "Compression necessity \u2014 cycles 1-34 conversation already deep; cycle 35 should integrate toward action, not enumerate schema details. Implementation phase will require returning to base.py; this loss is intentional and recoverable.",
+      "severity": 0.3,
+      "category": "DETAIL_SUPPRESSION"
+    },
+    {
+      "content": "Open questions from cycle 34 about severity field semantics, FUNCTIONAL representation_type, grain size, evidence_refs format, etc. \u2014 carried forward implicitly as resolved by architectural decision to minimize schema for H0. Not explicitly re-discussed.",
+      "reason": "H0 scope constraint: defer schema optimization until after minimal projector baseline is validated. These questions remain open but are now subordinate to implementation priority.",
+      "severity": 0.4,
+      "category": "SUBORDINATION"
+    },
+    {
+      "content": "Exploration of three candidate minimal projector implementations (rule-based, LLM-assisted, semantic-embedding) from cycle 34 instructions \u2014 now collapsed to single recommendation (rule-based first) without showing tradeoff analysis.",
+      "reason": "Cycle 35 decision point: rule-based chosen as fastest path to H0 validation. Tradeoff analysis deferred to cycle 36 if baseline fails. Candidate implementations still available in cycle 34 instruction set.",
+      "severity": 0.35,
+      "category": "DECISION_COMPRESSION"
+    }
+  ],
+  "open_questions": [
+    "IMPLEMENTATION: What is the exact signature and return type contract for the rule-based projector? Should it be a pure function (TensorRecord, str) \u2192 TensorRecord or a class with internal state (model references, cached embeddings)?",
+    "IMPLEMENTATION: How should the projector handle new turns/content that don't fit existing strands? Create new strand, augment existing strand, or declare as loss?",
+    "IMPLEMENTATION: For key claim extraction from transformer_output, should projector parse raw text (sentence-level tokenization, assertion detection) or expect transformer to pre-annotate claims in structured format?",
+    "IMPLEMENTATION: Should projector update epistemic values for existing claims when new evidence appears (e.g., user confirms, changes prior belief), or append new claims and let prior claims stand?",
+    "IMPLEMENTATION: For declared_losses, should projector proactively identify what was dropped (introspective: 'I could have tracked X but didn't'), or only declare losses when explicitly signaled by user/transformer?",
+    "VALIDATION: After implementing rule-based projector, how will we establish ground truth for cycle 35 test run? Manual annotation of test data, or use cycle 34 conversation as implicit gold standard?",
+    "VALIDATION: What is the acceptance gate for H0? Compression ratio < 25%? Zero silent losses? Recall > 0.8 on claim extraction? Must all be met or is one sufficient?",
+    "THEORETICAL: How does tensor_d' relate to tensor_e' mentioned in turn 105? Is tensor_e' the epistemic metadata envelope, or a separate structure?",
+    "DESIGN: Should the projector emit only diffs (what changed from tensor_d to tensor_d') or full tensor_d' (easier to reason about, potentially redundant)?",
+    "INTEGRATION: Once projector is standalone and tested, how does it integrate into the main reasoning loop? Does transformer.generate() call projector internally, or does projector run in separate thread/process?"
+  ],
+  "instructions_for_next": "[\n  \"IMMEDIATE (CYCLE 35-36): Implement rule-based projector as standalone Python module. Signature: projector(tensor_d: TensorRecord, transformer_output: str) \u2192 tensor_d': TensorRecord. Target scope: extract key claims from transformer_output using sentence-level heuristics (assertion markers: 'I claim', 'it is', 'we know'), assign basic T/I/F values via source credibility (user > assistant), group into strands by semantic keyword clustering, identify what was dropped and declare losses. Keep implementation simple (~500 lines) \u2014 refine after first test.\",\n  \"CYCLE 35: Make explicit decision on strand creation heuristic. Option A: one strand per topical cluster (e.g., 'Tensor Projection Architecture' as single strand containing all related claims). Option B: finer grain (one strand per claim). Option C: user-specified strand boundaries (require user/transformer to signal strand breaks). Recommend Option A for cycle 35 baseline; evaluate Option C in Phase 1.5 when human annotation is available.\",\n  \"CYCLE 36: Design epistemic value assignment mapping table. Example: (source=user, claim_type=assertion, prior_confidence=high) \u2192 T/I/F = (0.90, 0.05, 0.05). Build full mapping covering source types (user/assistant/hypothetical), claim types (assertion/hypothesis/question), and confidence signals (explicit markers in text). Document and validate against cycle 34 conversation to ensure reasonable calibration.\",\n  \"CYCLE 36: Prepare test data ground truth. Use cycles 1-34 conversation as test input. Manually annotate: (1) all key claims extractable from transformer outputs, (2) gold-standard T/I/F values with rationale, (3) expected strands and strand membership, (4) what should be dropped (lossy layer), (5) ground truth declared_losses. Target: 30-50 annotated claims, 5-8 strands. This becomes validation benchmark for Milestone 3.\",\n  \"CYCLE 36: Run initial projector implementation on cycle 34 test data. Measure: (1) claim extraction recall/precision (compare extracted vs ground truth), (2) strand coherence (manual review: do strand members actually belong together?), (3) compression ratio (tensor_d' size vs original conversation), (4) declared_losses inventory (did projector identify what it dropped?). Document all mismatches.\",\n  \"CYCLE 36-37: Decide projector update semantics. When user confirms prior claim (e.g., 'yes, that's correct'), should projector: (A) increment existing claim's T value? (B) append new confirming claim? (C) create evidence link from old claim to new evidence? Implement selected semantics; validate that T/I/F values evolve sensibly across turns.\",\n  \"CYCLE 37: ACCEPTANCE CHECKPOINT. Evaluate projector against H0 criteria. Proposed acceptance gate: (1) Compression ratio < 25% of original, (2) Zero silent losses (all dropped content declared), (3) Claim extraction recall > 0.75, (4) Strands coherent (manual review: experts agree on strand membership). If all pass: freeze rule-based implementation and move to Phase 1.5 (epistemic calibration experiment). If any fails: document failure mode and iterate (candidate 2: LLM-assisted projector in cycle 38).\",\n  \"CYCLE 37: Independently verify that projector output is valid TensorRecord (passes Pydantic schema validation, respects frozen=True and extra='forbid' constraints). Build quick validator script to catch schema violations early.\",\n  \"CYCLE 38 (CONDITIONAL): If H0 acceptance gate passes in cycle 37, launch Phase 1.5 \u2014 epistemic calibration framework. If fails, pivot to Candidate 2 (LLM-assisted projector) and re-run cycles 36-37 with modified implementation.\",\n  \"THEORETICAL DEBT: Clarify relationship between tensor_d' (updated state tensor) and tensor_e' (epistemic envelope) \u2014 are these separate artifacts or does tensor_d' contain tensor_e'? Make explicit in projector output format documentation.\",\n  \"RESOURCE: Estimate projector implementation complexity now that base.py schema is visible. Revised estimate: cycle 35 rule-based baseline = 8-12 hours focused work. Cycle 36-37 validation and iteration = 6-10 hours. Total H0 delivery = ~15-20 hours across three cycles.\"\n]",
+  "overall_truth": 0.82,
+  "overall_indeterminacy": 0.13,
+  "overall_falsity": 0.05
+}

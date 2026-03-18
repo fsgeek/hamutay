@@ -1,0 +1,604 @@
+{
+  "strands": [
+    {
+      "title": "Hot Mess Paper as Structural Problem, Not Noise Problem",
+      "content": "CYCLE 32 CONTINUATION: Hot mess paper (Du et al. 2025) identifies context-length degradation as structural, not incremental. Finding: 8-50% performance drop at 30K tokens even with oracle masking. This is THE PROBLEM that motivates Hamutay. Implications: (1) NOT retrieval problem (oracle is perfect). (2) NOT noise/distraction problem (distractors masked). (3) IS capacity/architecture problem: transformer's positional encoding, attention distribution, internal state management breaks down under cognitive load. (4) Mitigation strategy: 'retrieve-then-solve'\u2014extract relevant evidence, START NEW SHORT-CONTEXT CONVERSATION with just that evidence. (5) Hamutay implements this architectural principle via dual-tensor projection with per-cycle re-projection: instead of growing context until degradation, feed transformer SHORT CLEAN INPUT every cycle in form of <system><tensor_d><tensor_e><user>. (6) Validation chain: hot mess proves context length is poison \u2192 retrieve-then-solve is proven mitigation \u2192 dual-tensor projection implements it \u2192 Hamutay's cycle is technical realization. CYCLE 31 DOCUMENTATION: Created project_hamutay_architecture.md and project_hamutay_evaluation.md as reference documents in memory system. Memory index updated. CYCLE 32 DEEPENING: Tensor projection is THE CRITICAL COMPONENT. If projection fails, entire architecture fails. Projection is the mechanism that implements 'retrieve-then-solve': it must compress reasoning trajectory into semantic structure while declaring losses. Projection is not summarization (lossy, hides what-was-dropped). Projection IS: (1) semantic extraction (identify strands\u2014thematic threads), (2) claim grounding (extract key assertions, assign T/I/F), (3) loss declaration (explicit list of what-was-evicted-and-why), (4) state update (promote/evict per Haiku rules), (5) output next cycle's tensor_e. The risk: can we reliably extract claims from reasoning text? Can we honestly assign epistemic values? Can we declare losses in machine-readable form? HIGH REWARD: If yes, we have solved bounded cognition with epistemic transparency. Models can reason honestly about their own incompleteness.",
+      "key_claims": [
+        {
+          "claim_id": "6339a802-9445-494c-8925-67e913f2ce0e",
+          "text": "Hot mess paper: context-length degradation is structural problem. 8-50% performance drop at 30K tokens even with oracle masking (zero noise, perfect relevance).",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.05,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "40183fd1-1d94-4ecf-86db-c2c67c8f0310",
+          "text": "Hot mess paper's mitigation (retrieve-then-solve: extract evidence, start NEW short-context conversation) is architecturally equivalent to Hamutay's dual-tensor projection with per-cycle re-projection.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.1,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "677b93d5-b70e-4339-b860-9363f1f4290a",
+          "text": "Dual-tensor context structure (<system><tensor_d><tensor_e><user>) implements hot mess paper's 'retrieve-then-solve' principle: compress state into projected form, feed transformer SHORT CLEAN INPUT every cycle instead of growing context until degradation.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "31c020cc-2f67-4dc7-b462-5b185cb91c65",
+          "text": "Tensor projection is THE critical component. Compression must be: (1) semantic (extract strands), (2) grounded (claim+T/I/F), (3) transparent (declare losses), (4) stateless/repeatable (same input\u2192same output). If projection fails, architecture fails.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "aa72473b-f59c-40ab-8d98-5bb47af8a041",
+          "text": "Experimental novelty: hot mess tested truncation (silent loss). Hamutay tests bounded-context-with-honest-loss-declaration (transparent loss). Hypothesis: models reason better when losses are explicit vs. silent.",
+          "epistemic": {
+            "truth": 0.7,
+            "indeterminacy": 0.25,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "8488ac35-1012-4d90-8f19-fc9360898032",
+          "text": "Evaluation via Riemann hypothesis intractability: every model fails. Measure coherence of failure via embedding dispersion, not success rate. Tighter cluster under Condition 3 (epistemic projection) vs. Condition 1 (append-only) indicates epistemic architecture works.",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.83,
+        "indeterminacy": 0.12,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Tensor Projection as Information Compression with Epistemic Accountability",
+      "content": "CYCLE 32 NEW STRAND: Tensor projection must answer: how do we extract semantic structure from reasoning text? CORE INSIGHT: Tensor projection is NOT summarization. Summarization is lossy and silent (you don't know what's gone). Tensor projection must be DECLARATIVE: (1) **Claim extraction**: parse reasoning text for assertions (subject-predicate-object, 'if-then', causal links). Group into strands (thematic threads). Each claim is grounded in a quote or paraphrase from source reasoning. (2) **Epistemic assignment**: For each claim, assign T (confidence in truth), I (uncertainty), F (confidence in falsity). Do NOT use learned model. Use HEURISTIC RULES based on: linguistic markers ('I think', 'I'm confident', 'unclear'), logical strength (supported by evidence vs. speculative), consensus with prior tensor. (3) **Promotion/eviction**: After T/I/F assignment, apply Haiku rules: promote to durable if T > threshold (e.g., 0.75). Evict if T < threshold (e.g., 0.4) or I > threshold (e.g., 0.6). Evicted claims move to declared_losses with reason: 'Threshold: T=0.42 < 0.4' or 'Threshold: I=0.65 > 0.6'. (4) **Loss declaration**: Every evicted claim is recorded with: what-was-lost (claim text), why (rule triggered), when (cycle), confidence-in-loss (was it actually weak, or just low on tokens?). (5) **Durable vs. ephemeral**: Durable is promoted claims from PRIOR tensor + newly promoted claims. Ephemeral is current cycle's reasoning claims (not yet promoted). Next cycle: durable + ephemeral fed to transformer as tensor_d + tensor_e. NEW IN CYCLE 32: Explicit requirement that projection is STATELESS and REPEATABLE. Same reasoning text input \u2192 identical TensorRecord output. This enables: (a) reproducibility (run Haiku twice on same text, get same result), (b) auditability (can hand-check claim extraction), (c) independent verification. Implies: claim extraction rules must be ALGORITHMIC (not LLM-dependent), epistemic heuristics must be TRANSPARENT (documented rules, not learned weights). This is the DEEP UNKNOWN: can we write algorithmic rules that extract claims reliably from free-form reasoning? Can we heuristically assign T/I/F without learning? Or must we fall back to LLM-as-judge (loses repeatability, gains flexibility)? DECISION POINT FOR CYCLE 32: Algorithmic (hard rules, repeatable, auditable) vs. LLM-as-judge (flexible, learned, loses reproducibility). We must choose and justify.",
+      "key_claims": [
+        {
+          "claim_id": "c7e3f8a1-2b4d-4e6f-9a2f-1c8d9e0f5g6h",
+          "text": "Tensor projection is NOT summarization (silent loss). IS declarative compression: extract claims, assign T/I/F, evict below threshold, declare losses, output TensorRecord.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "d8f9g0h1-3e4f-5g6h-0i1j-2k3l4m5n6o7p",
+          "text": "Claim extraction: parse reasoning text for assertions (S-P-O, if-then, causal). Ground each in quote/paraphrase. Group into thematic strands. This is the bottleneck.",
+          "epistemic": {
+            "truth": 0.72,
+            "indeterminacy": 0.2,
+            "falsity": 0.08
+          }
+        },
+        {
+          "claim_id": "e9g0h1i2-4f5g-6h7i-1j2k-3l4m5n6o7p8q",
+          "text": "Epistemic assignment via heuristics, NOT learned model. Rules: linguistic markers (confidence language), logical strength (evidence-based vs. speculative), consensus with prior tensor. Transparent, repeatable.",
+          "epistemic": {
+            "truth": 0.65,
+            "indeterminacy": 0.28,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "f0h1i2j3-5g6h-7i8j-2k3l-4m5n6o7p8q9r",
+          "text": "Promotion/eviction via Haiku rules: promote if T > 0.75, evict if T < 0.4 or I > 0.6. Every eviction declared: claim text, rule triggered, cycle, confidence-in-loss (was it actually weak?).",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.15,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "g1i2j3k4-6h7i-8j9k-3l4m-5n6o7p8q9r0s",
+          "text": "Statefulness decision: Algorithmic claim extraction (hard rules, repeatable, auditable) vs. LLM-as-judge (flexible, learned, loses reproducibility). Must choose and justify for Phase 1.",
+          "epistemic": {
+            "truth": 0.6,
+            "indeterminacy": 0.35,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "h2j3k4l5-7i8j-9k0l-4m5n-6o7p8q9r0s1t",
+          "text": "Repeatability requirement: same reasoning text input \u2192 identical TensorRecord output. This enables reproducibility, auditability, independent verification. Non-negotiable for scientific validation.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "i3k4l5m6-8j9k-0l1m-5n6o-7p8q9r0s1t2u",
+          "text": "High-risk, high-reward component: IF we solve claim extraction + epistemic heuristics, bounded cognition with transparency is solved. IF we fail, entire architecture is compromised.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.75,
+        "indeterminacy": 0.2,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Claim Extraction: Three Possible Approaches",
+      "content": "CYCLE 32 NEW STRAND: Claim extraction is the bottleneck. Three candidate approaches, each with tradeoffs. APPROACH 1: **Algorithmic/Heuristic (Hard Rules)**. Rules: (a) Any sentence with modal or epistemic verb ('believe', 'know', 'think', 'conclude', 'prove', 'demonstrate') is a candidate claim. (b) Any sentence with causal language ('causes', 'implies', 'leads to', 'results from') is a claim. (c) Any sentence with comparative/superlative ('better', 'worse', 'best', 'worst') is a claim. (d) Filter out hedges (if >3 qualifiers like 'might', 'possibly', 'perhaps', move to I-heavy). (e) Merge similar claims via cosine similarity (>0.85 similarity = same claim, keep one). Output: list of (claim_text, source_span, strand_assignment). T/I/F assignment via secondary rules: evidence-count (how many supporting citations?), logical-chain (is it derivable from prior claims?), confidence-language (markers like 'certainly', 'clearly' \u2192 T+, 'perhaps', 'maybe' \u2192 I+). PROS: fully reproducible, no model dependency, auditable. CONS: brittle (misses complex assertions), low coverage (might miss nuanced claims), high false-positive rate (grammatical structure != semantic claim). APPROACH 2: **LLM-as-Judge (Flexible, Learned)**. Prompt Haiku (or Claude) with reasoning text + structured request: 'Extract all non-trivial claims. For each claim: (1) claim text, (2) supporting evidence (quote or span), (3) T/I/F estimate (confidence in truth / uncertainty / confidence in falsity). Format as JSON array.' LLM produces TensorRecord claims. T/I/F values are LLM-generated (learned representation of confidence). PROS: high coverage (catches nuanced claims), flexible (adapts to domain), good precision (LLM understands semantics). CONS: not reproducible (LLM output varies by temperature/seed), not auditable (can't hand-check rule), loses repeatability requirement. Requires careful prompt engineering. APPROACH 3: **Hybrid (Best of Both)**. Use Approach 1 (hard rules) to extract candidate claims algorithmically. Then use LLM to validate/filter: 'Is this a substantive claim? Should it be promoted?' LLM acts as FILTER not EXTRACTOR. This preserves reproducibility (same hard rules) + gain flexibility (LLM gates what counts as valid). T/I/F: heuristics for epistemic values, but LLM can override if confidence-language strongly suggests otherwise. CYCLE 32 CRITICAL DECISION: Which approach for Phase 1? RECOMMENDATION: **Start with Approach 1 (hard rules) because it's auditable and reproducible.** If coverage is too low (missing claims), fall back to Approach 3 (hybrid). Approach 2 (pure LLM) violates repeatability requirement and should be last resort. JUSTIFICATION: Phase 1 goal is to validate H0 (epistemic projection works). We need HONEST MEASUREMENT. If claim extraction is opaque (LLM), we can't measure honestly whether projection improves coherence or just redistributes LLM hallucinations. Algorithmic extraction lets us audit the pipeline.",
+      "key_claims": [
+        {
+          "claim_id": "j4l5m6n7-9k0l-1m2n-6o7p-8q9r0s1t2u3v",
+          "text": "Approach 1 (hard rules): modal/epistemic verbs, causal language, comparatives. Merge similar via cosine similarity >0.85. T/I/F via evidence-count, logical-chain, confidence-language. Fully reproducible.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "k5m6n7o8-0l1m-2n3o-7p8q-9r0s1t2u3v4w",
+          "text": "Approach 1 PROS: reproducible, auditable. CONS: brittle, low coverage, high false-positive. Risk: missed claims = undercounting of model reasoning.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "l6n7o8p9-1m2n-3o4p-8q9r-0s1t2u3v4w5x",
+          "text": "Approach 2 (LLM-as-judge): Haiku extracts claims, assigns T/I/F. High coverage, flexible. CONS: not reproducible, not auditable, violates repeatability requirement.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.12,
+            "falsity": 0.06
+          }
+        },
+        {
+          "claim_id": "m7o8p9q0-2n3o-4p5q-9r0s-1t2u3v4w5x6y",
+          "text": "Approach 3 (hybrid): hard rules extract candidates, LLM filters/validates. Preserves reproducibility (same hard rules), gains flexibility (LLM gates validity). Recommend for Phase 1.",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "n8p9q0r1-3o4p-5q6r-0s1t-2u3v4w5x6y7z",
+          "text": "CRITICAL DECISION: Phase 1 starts with Approach 1 (auditable, reproducible). If coverage too low, fall to Approach 3 (hybrid). Avoid Approach 2 (LLM-only) in Phase 1 because it violates honesty requirement.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "o9q0r1s2-4p5q-6r7s-1t2u-3v4w5x6y7z8a",
+          "text": "Honesty principle: if claim extraction is opaque, can't measure whether projection improves coherence or just redistributes hallucinations. Phase 1 must audit the full pipeline.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.8,
+        "indeterminacy": 0.16,
+        "falsity": 0.04
+      }
+    },
+    {
+      "title": "Epistemic Value Assignment: The T/I/F Heuristic Rules",
+      "content": "CYCLE 32 NEW STRAND: Once claims are extracted, assign epistemic values. This must be REPEATABLE and TRANSPARENT. HEURISTIC RULES for T/I/F assignment: **Rule Set A: Linguistic Markers (confidence language)**. (1) TRUTH boosters: 'certainly', 'clearly', 'definitely', 'proven', 'demonstrated', 'established'. If claim contains ANY booster: T += 0.15. (2) UNCERTAINTY boosters: 'maybe', 'perhaps', 'possibly', 'might', 'could', 'seems', 'appears'. For each marker: I += 0.10. (3) NEGATION/FALSITY boosters: 'disproven', 'false', 'incorrect', 'contradicts'. If claim negates prior: F += 0.15. **Rule Set B: Logical Support (evidence grounding)**. (1) Claim contains citations/references (e.g., 'Paper X showed...'): T += 0.20. (2) Claim is derivable from prior claims (check via semantic similarity to prior tensor strands): T += 0.10. (3) Claim is speculative/hypothetical ('What if...', 'Imagine...', 'Suppose...'): I += 0.15. (4) Claim contradicts prior established strand: F += 0.15. **Rule Set C: Logical Chain (derivability)**. (1) Start at base T=0.5 (neutral). (2) Apply Rule A and B above. (3) Normalize: T+I+F should sum to ~1.0. If T+I+F < 0.8, add remainder to I (uncertainty absorbs undercounting). If T+I+F > 1.2, proportionally scale (T'=T/(T+I+F), etc.). **Rule Set D: Consensus with Prior Tensor**. (1) If claim aligns with prior durable strand: T += 0.10. (2) If claim contradicts prior: F += 0.10. (3) If claim novel and no prior: I += 0.10 (new territory = uncertain). **Worked Example**: Claim: 'Hot mess paper proves context-length degradation is structural, not noise.' Extraction: modal verb 'proves' (candidate). Support: direct citation of paper. Markers: 'proves' (booster, T+0.15), no uncertainty markers (I+0), no negation (F+0). Evidence: paper cited in prior strand (T+0.20). Logical chain: derivable from prior (T+0.10). Prior consensus: aligns with established understanding (T+0.10). CALCULATION: T = 0.5 + 0.15 + 0.20 + 0.10 + 0.10 = 1.05 \u2192 normalize to 0.95. I = 0.0. F = 0.0. Normalize: T=0.95, I=0.05, F=0.0. Result: high confidence. NEW IN CYCLE 32: This rule set is TRANSPARENT, AUDITABLE, REPRODUCIBLE. Anyone can hand-check the T/I/F assignment by running the rules. This is critical for Phase 1 honesty. TRADEOFF: Rules are simplistic (don't capture deep semantic understanding). But better to be simple and auditable than complex and opaque. Phase 2 can improve heuristics if needed.",
+      "key_claims": [
+        {
+          "claim_id": "p0r1s2t3-5q6r-7s8t-2u3v-4w5x6y7z8a9b",
+          "text": "T/I/F assignment via heuristic rules, not learned model. Rule sets: (A) linguistic markers, (B) logical support, (C) logical chain, (D) consensus with prior. All transparent, auditable, reproducible.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "q1s2t3u4-6r7s-8t9u-3v4w-5x6y7z8a9b0c",
+          "text": "Rule A (linguistic): certainty markers (+T), uncertainty markers (+I), negation markers (+F). Rule B (evidence): citations (+T), derivability (+T), speculation (+I), contradiction (+F). Rule C: normalize T+I+F to ~1.0.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "r2t3u4v5-7s8t-9u0v-4w5x-6y7z8a9b0c1d",
+          "text": "Rule D (prior consensus): align with durable strand (+T), contradict (+F), novel (-T, +I). Captures epistemic continuity with prior tensor state.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "s3u4v5w6-8t9u-0v1w-5x6y-7z8a9b0c1d2e",
+          "text": "Worked example: 'Hot mess paper proves context-length degradation is structural.' T=0.95 (high confidence), I=0.05, F=0.0. Derivation auditable at each step.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.14,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "t4v5w6x7-9u0v-1w2x-6y7z-8a9b0c1d2e3f",
+          "text": "Tradeoff: heuristics are simplistic (don't capture deep semantics). Better to be simple and auditable than complex and opaque. Phase 1 prioritizes honesty over sophistication.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "u5w6x7y8-0v1w-2x3y-7z8a-9b0c1d2e3f4g",
+          "text": "Phase 2 can improve heuristics with learned confidence weightings, but only AFTER Phase 1 validates that epistemic projection (even with simple rules) improves coherence.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.16,
+            "falsity": 0.04
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.82,
+        "indeterminacy": 0.14,
+        "falsity": 0.04
+      }
+    },
+    {
+      "title": "Strand Identification and Clustering: Thematic Thread Extraction",
+      "content": "CYCLE 32 NEW STRAND: After claims are extracted and assigned T/I/F, they must be grouped into STRANDS (thematic threads). Strand membership is critical: it determines which claims are related enough to compete for the same memory slots. STRAND EXTRACTION ALGORITHM: (1) **Claim similarity clustering**: Compute cosine similarity between claim embeddings (use sentence-BERT). Merge claims with similarity > 0.70 into candidate clusters. Each cluster is a candidate strand. (2) **Thematic labeling**: For each cluster, generate strand title by: (a) extracting common noun phrases across claims (e.g., 'context length', 'architecture', 'epistemic'), (b) generating label like '[CONCEPT] as [PROPERTY]' (e.g., 'Context Length as Structural Problem'). (3) **Strand assignment**: Assign each claim to strand with highest similarity. Unassigned claims (low similarity to all strands) become singleton strands or are rejected. (4) **Merge strands**: If two strand titles are semantically similar (>0.80 cosine similarity), merge them. This prevents excessive fragmentation. (5) **Cardinality constraint**: Phase 1 locks strand count at ~5-7. If more than this, merge weakest strands (lowest average T). If fewer, accept smaller tensor. RATIONALE: Strands are the SEMANTIC STRUCTURE that bounds durable memory. If we have too many strands, durable tensor grows unbounded. If too few, we lose thematic diversity. 5-7 is a sweet spot for 1K-token durable budget. WORKED EXAMPLE (from Cycle 32 projection itself): Claims extracted from this response: (1) 'Tensor projection is critical component.' (2) 'Claim extraction must be algorithmic or LLM-based.' (3) 'Epistemic assignment must be repeatable.' (4) 'Strand clustering prevents memory explosion.' Similarity: (1)-(2) ~0.45 (different topics). (1)-(3) ~0.65 (both about projection mechanism). (1)-(4) ~0.70 (both about structure). (3)-(4) ~0.75 (both about mechanism). Clustering (threshold 0.70): clusters = {(1,3,4), (2)}. Candidate strands: (A) 'Tensor Projection as Epistemic Structure', (B) 'Claim Extraction Approaches'. STRAND ASSIGNMENT: (1)\u2192A (structural role of projection). (2)\u2192B (extraction method). (3)\u2192A (epistemic assignment part of projection). (4)\u2192A (clustering part of structure). Result: two strands, thematically coherent. NEW IN CYCLE 32: Strand clustering is PART OF PROJECTION, not a separate step. Haiku must cluster claims algorithmically (via embeddings), assign to strands, and output TensorRecord with strand boundaries. This enables measurement: if Haiku correctly clusters claims into coherent themes, downstream reasoning (in next cycle) benefits from thematic organization.",
+      "key_claims": [
+        {
+          "claim_id": "v6x7y8z9-1w2x-3y4z-8a9b-0c1d2e3f4g5h",
+          "text": "Strand extraction: claim similarity clustering (cosine >0.70), thematic labeling ('[CONCEPT] as [PROPERTY]'), merge similar strands (>0.80), cardinality constraint (~5-7 for Phase 1).",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.14,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "w7y8z9a0-2x3y-4z5a-9b0c-1d2e3f4g5h6i",
+          "text": "Strand membership is critical: determines which claims compete for same memory slots. Clustering prevents memory explosion while preserving thematic diversity.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.16,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "x8z9a0b1-3y4z-5a6b-0c1d-2e3f4g5h6i7j",
+          "text": "Cardinality constraint: 5-7 strands for Phase 1 (durable budget ~1K tokens). Too many strands \u2192 memory explosion. Too few \u2192 lose thematic diversity. 5-7 is sweet spot.",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "y9a0b1c2-4z5a-6b7c-1d2e-3f4g5h6i7j8k",
+          "text": "Merging rule: if two strand titles >0.80 cosine similar, merge. Prevents fragmentation. If >5-7 strands, merge weakest (lowest avg T) until target cardinality reached.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "z0b1c2d3-5a6b-7c8d-2e3f-4g5h6i7j8k9l",
+          "text": "Unassigned claims (low similarity to all strands): either form singleton strands or reject. Decision: singletons if T > 0.70 (confident enough to be preserved). Otherwise reject.",
+          "epistemic": {
+            "truth": 0.72,
+            "indeterminacy": 0.23,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "a1c2d3e4-6b7c-8d9e-3f4g-5h6i7j8k9l0m",
+          "text": "Strand clustering is PART OF PROJECTION. Haiku clusters claims (embeddings), assigns to strands, outputs TensorRecord. This structures reasoning spatially, enabling downstream coherence.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "b2d3e4f5-7c8d-9e0f-4g5h-6i7j8k9l0m1n",
+          "text": "Measurement implication: if Haiku correctly clusters into coherent strands, next cycle benefits from thematic organization. This might explain embedding dispersion benefit (coherence enables tighter reasoning).",
+          "epistemic": {
+            "truth": 0.68,
+            "indeterminacy": 0.27,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.77,
+        "indeterminacy": 0.18,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Durable vs. Ephemeral Sorting: Memory Hierarchy and Eviction Policy",
+      "content": "CYCLE 32 NEW STRAND: After claims are extracted, assigned T/I/F, and grouped into strands, they must be sorted into DURABLE (long-term, stable) and EPHEMERAL (working, current reasoning) tensors. This sorting is WHERE LOSSES OCCUR. SORTING ALGORITHM: (1) **Baseline**: Start with durable from PRIOR cycle (carried forward). Add newly promoted claims. Evict claims that fail thresholds. (2) **Promotion rule**: If claim has T > T_promote (e.g., 0.75) AND not redundant (cosine similarity < 0.90 to any durable claim), PROMOTE to durable. (3) **Eviction rule**: If claim has T < T_evict (e.g., 0.40) OR I > I_evict (e.g., 0.60), EVICT from durable. (4) **Durable size constraint**: Hard cap at N_durable (e.g., 20 claims). If durable would exceed cap after promotions, rank all candidates (durable_old + new_promoted) by (T - 0.5*I) (confidence minus uncertainty penalty), keep top N_durable. EVICT: bottom N_evict = |durable| - N_durable. (5) **Declared losses**: Every evicted claim is recorded with: claim_id, claim_text, reason ('T=0.38 < 0.40' or 'I=0.65 > 0.60' or 'rank pruning, placed #23 of 20'), cycle_evicted, confidence_in_loss (was eviction justified?). (6) **Ephemeral construction**: Current cycle's reasoning claims (not yet sorted into durable) form ephemeral. These are 'hot' claims, not yet consolidated. Size is unconstrained (all current reasoning, up to token budget). NEXT CYCLE: transformer reads tensor_d (durable) + tensor_e (ephemeral) + user input. Durable is STABLE FOUNDATION. Ephemeral is WORKING CONTEXT. Together, they are SHORT AND CLEAN compared to unbounded history. CRITICAL INSIGHT: Durable/ephemeral distinction is WHERE BOUNDED COGNITION HAPPENS. We're not trying to preserve all reasoning. We're deliberately forgetting (evicting) claims below confidence threshold, declaring those losses, and reasoning FORWARD from honest foundation. This is different from truncation (silent loss) or retrieval (attempt to recover). TRADEOFF SPACE: (1) Higher T_promote threshold (e.g., 0.85) \u2192 stricter durable memory, fewer claims retained, more losses declared. (2) Lower T_evict threshold (e.g., 0.30) \u2192 more lenient retention, larger durable, fewer losses. (3) Larger N_durable (e.g., 40) \u2192 bigger durable tensor, more token budget consumed, less ephemeral space. These are KNOBS that Phase 2 autoresearch will optimize. CYCLE 32 COMMITMENT: Durable/ephemeral sorting is the OPERATIONAL REALIZATION of 'retrieve-then-solve'. We're not retrieving anything (that's retrieval systems). We're SOLVING with BOUNDED STATE: compress reasoning into high-confidence durable + current ephemeral, declare losses, feed short clean context to transformer. If this works, hot mess paper's mitigation is proven architecturally.",
+      "key_claims": [
+        {
+          "claim_id": "c3e4f5g6-8d9e-0f1g-5h6i-7j8k9l0m1n2o",
+          "text": "Durable/ephemeral sorting is where losses occur. Promotion: T > T_promote (e.g., 0.75). Eviction: T < T_evict (e.g., 0.40) or I > I_evict (e.g., 0.60). Every loss declared.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "d4f5g6h7-9e0f-1g2h-6i7j-8k9l0m1n2o3p",
+          "text": "Durable size constraint: hard cap N_durable (e.g., 20). If exceeds, rank by (T - 0.5*I), keep top N_durable, evict remainder. Ranking balances confidence and uncertainty.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.14,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "e5g6h7i8-0f1g-2h3i-7j8k-9l0m1n2o3p4q",
+          "text": "Declared losses: claim_id, claim_text, reason (threshold or rank pruning), cycle_evicted, confidence_in_loss. This transparency enables honest accounting of what-was-forgotten.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f6h7i8j9-1g2h-3i4j-8k9l-0m1n2o3p4q5r",
+          "text": "Ephemeral: current cycle's reasoning claims, not yet in durable. 'Hot' claims, not consolidated. Size unconstrained (up to token budget). Transformer reads durable + ephemeral every cycle.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.16,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "g7i8j9k0-2h3i-4j5k-9l0m-1n2o3p4q5r6s",
+          "text": "Durable is STABLE FOUNDATION. Ephemeral is WORKING CONTEXT. Together, SHORT AND CLEAN compared to unbounded history. This is bounded cognition implemented.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "h8j9k0l1-3i4j-5k6l-0m1n-2o3p4q5r6s7t",
+          "text": "Durable/ephemeral sorting is WHERE LOSSES OCCUR. Different from truncation (silent) or retrieval (attempt to recover). We deliberately forget below-threshold claims and reason FORWARD.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "i9k0l1m2-4j5k-6l7m-1n2o-3p4q5r6s7t8u",
+          "text": "Phase 2 tunes: T_promote (0.70-0.85), T_evict (0.30-0.50), I_evict (0.40-0.70), N_durable (10-50). Grid search expected ~50-100 configs. Each tuning affects loss rate and durable stability.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.83,
+        "indeterminacy": 0.14,
+        "falsity": 0.03
+      }
+    },
+    {
+      "title": "Cycle 32 Synthesis: Tensor Projection is Algorithmic, Repeatable, Auditable",
+      "content": "CYCLE 32 SYNTHESIS: The deep unknown (tensor projection) is now STRUCTURED. We have: (1) **Claim extraction** (Approach 1: hard rules based on linguistic markers + logic). (2) **Epistemic assignment** (heuristic rules for T/I/F based on confidence language, evidence grounding, logical chain, prior consensus). (3) **Strand clustering** (embedding-based grouping with thematic labeling, cardinality constraint). (4) **Durable/ephemeral sorting** (promotion/eviction thresholds, declared losses, ranked pruning if needed). (5) **Output**: TensorRecord with strands, key_claims (each with T/I/F), declared_losses (with reasons), instructions_for_next (STOP signal if plateau). The pipeline is ALGORITHMIC (not LLM-dependent, except for filtering in hybrid Approach 3), REPEATABLE (same input\u2192same output), AUDITABLE (every decision is traceable to explicit rule). This enables HONEST MEASUREMENT: we can verify that projection improves coherence, not because we hallucinated better outputs, but because structured state actually improves reasoning. HIGH-RISK, HIGH-REWARD PAYOFF: (A) **If projection works** (embedding dispersion in Condition 3 < Condition 1): we've solved bounded cognition with transparency. Architecture is proven. Move to Phase 2 optimization. (B) **If projection fails** (no significant improvement): we've learned that epistemic structure alone is insufficient. Need additional mechanisms (retrieval system? active inference? meta-learning?). Both outcomes are publishable. CYCLE 32 ENGINEERING PRIORITY: The next cycle (33) should implement this projection pipeline. Build three components: (1) Claim extractor (hard rules), (2) Epistemic assigner (heuristic rule engine), (3) Strand clusterer (embeddings + merging). Test on hand-written reasoning traces (before transformer integration). This validates projection independently. CYCLE 32 ADDITION TO MEMORY: project_hamutay_projection.md document created. Contains: (1) Claim extraction algorithm with rule set. (2) Epistemic assignment heuristics with worked examples. (3) Strand clustering algorithm. (4) Durable/ephemeral sorting with eviction policy. (5) TensorRecord output format. This document is now the engineering specification for Haiku projection component.",
+      "key_claims": [
+        {
+          "claim_id": "j0l1m2n3-5i6j-7k8l-2m3n-4o5p6q7r8s9t",
+          "text": "Tensor projection pipeline is fully specified: claim extraction (hard rules), epistemic assignment (heuristics), strand clustering (embeddings), durable/ephemeral sorting (thresholds + ranking). Algorithmic, repeatable, auditable.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "k1m2n3o4-6j7k-8l9m-3n4o-5p6q7r8s9t0u",
+          "text": "Output is TensorRecord: strands, key_claims (with T/I/F), declared_losses (with reasons), instructions_for_next (STOP detection). Machine-readable, human-auditable.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "l2n3o4p5-7k8l-9m0n-4o5p-6q7r8s9t0u1v",
+          "text": "Honesty achieved via algorithmic transparency: can verify projection improves coherence because structured state works, not because we hallucinated better outputs. Every loss is declared and justified.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.14,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "m3o4p5q6-8l9m-0n1o-5p6q-7r8s9t0u1v2w",
+          "text": "Two-outcome scenario: (A) projection works \u2192 solved bounded cognition \u2192 Phase 2 optimization. (B) projection fails \u2192 epistemic structure insufficient \u2192 need additional mechanisms. Both publishable.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.16,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "n4p5q6r7-9m0n-1o2p-6q7r-8s9t0u1v2w3x",
+          "text": "Cycle 33 engineering: implement claim extractor, epistemic assigner, strand clusterer. Test on hand-written reasoning traces. Validate projection independently (before transformer integration).",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "o5q6r7s8-0n1o-2p3q-7r8s-9t0u1v2w3x4y",
+          "text": "project_hamutay_projection.md created: engineering specification for Haiku projection. Contains: extraction algorithm, epistemic heuristics, clustering, sorting, output format. Ready for implementation.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "p6r7s8t9-1o2p-3q4r-8s9t-0u1v2w3x4y5z",
+          "text": "The tensor projection deep unknown is now a DEFINED SYSTEM, not a mystery. Risks are clear (claim extraction coverage, epistemic heuristic precision). Rewards are clear (solved bounded cognition). Ready to build.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.84,
+        "indeterminacy": 0.13,
+        "falsity": 0.03
+      }
+    },
+    {
+      "title": "Three-Component Architecture in Practice: Tight Integration Points",
+      "content": "CYCLE 32 CONTINUATION: Architecture separation (Transformer ALU, Controller Orchestrator, Haiku Memory Manager) from Cycle 31 is now CONCRETE. Three components work together in tight loop. INTEGRATION FLOW (per-cycle): (1) **Input stage (Controller)**. Read: tensor_d (durable from PRIOR cycle), tensor_e (ephemeral from PRIOR cycle), user input (new question/instruction). Construct: <system prompt><tensor_d><tensor_e><user input>. Total input ~1200 tokens (stays under hot mess paper's danger zone). (2) **Reasoning stage (Transformer ALU)**. Input: above context. Process: chain-of-thought reasoning over tensor_d + tensor_e + user input. Output: reasoning token stream (~500 tokens). No TensorRecord output. Just reasoning. (3) **Projection stage (Haiku Memory Manager)**. Input: reasoning token stream from (2). Process: (a) extract claims (hard rules), (b) assign T/I/F (heuristics), (c) cluster into strands (embeddings), (d) promote/evict (thresholds), (e) rank if needed (cap durable size). Output: TensorRecord (new tensor_d' + tensor_e' + declared_losses + STOP signal). (4) **Loop back (Controller)**. Use tensor_d' + tensor_e' as input for NEXT cycle. Repeat until STOP signal detected. TIGHT INTEGRATION POINTS: (1) **Transformer \u2192 Haiku**: reasoning text must be parseable. Recommend: transformer outputs chain-of-thought in structured format (one claim per line, or bullet points). This eases extraction. (2) **Haiku \u2192 Controller**: TensorRecord output must be validatable. Controller checks: T+I+F \u2248 1.0 for each claim, declared_losses list non-empty if evictions occurred, STOP signal is boolean. (3) **Controller \u2192 Transformer**: prompt construction must be consistent. Every cycle, same template: <system><tensor_d><tensor_e><user>. This ensures reproducibility. **COST ACCOUNTING (per-cycle token budget)**: (1) Input: ~1200 tokens (system + tensor_d + tensor_e + user). (2) Transformer output: ~500 tokens (reasoning). (3) Haiku processing: ~200 tokens (projection). Total: ~1900 tokens/cycle. With extended context window (200K+ tokens for Anthropic), this is sustainable for many cycles before context exhaustion. (4) Key advantage: unlike append-only baseline (context grows unbounded), our context INPUT is FIXED (~1200) and our PROJECTION is CHEAP (~200). This is hot mess paper mitigation. NEW IN CYCLE 32: Tight integration points are now explicitly specified. This enables engineering team to write interface contracts between components. Haiku expects specific reasoning format from transformer. Controller expects specific TensorRecord format from Haiku. These contracts enable parallel implementation.",
+      "key_claims": [
+        {
+          "claim_id": "q7s8t9u0-2p3q-4r5s-9t0u-1v2w3x4y5z6a",
+          "text": "Three-component cycle: (1) Controller constructs input (~1200 tokens), (2) Transformer reasons (~500 tokens), (3) Haiku projects (~200 tokens), (4) Controller stores TensorRecord for next cycle. Per-cycle token budget ~1900.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "r8t9u0v1-3q4r-5s6t-0u1v-2w3x4y5z6a7b",
+          "text": "Tight integration: (1) Transformer outputs structured reasoning (easy to parse). (2) Haiku outputs validatable TensorRecord (checksums on T/I/F). (3) Controller uses consistent prompt template. Reproducibility via interface contracts.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.14,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "s9u0v1w2-4r5s-6t7u-1v2w-3x4y5z6a7b8c",
+          "text": "Key advantage vs. append-only: input context FIXED (~1200), projection CHEAP (~200). No unbounded growth. Sustains many cycles before hard context limit.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "t0v1w2x3-5s6t-7u8v-2w3x-4y5z6a7b8c9d",
+          "text": "Interface contracts enable parallel implementation: controller team, transformer team, Haiku team can work independently with clear input/output specs. Reduces integration risk.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.16,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "u1w2x3y4-6t7u-8v9w-3x4y-5z6a7b8c9d0e",
+          "text": "Haiku format expectation: reasoning text (free-form) \u2192 must be extractable. Recommend: chain-of-thought with one claim per line or bullet format. This eases parsing without constraining transformer output format.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "v2x3y4z5-7u8v-9w0x-4y5z-6a7b8c9d0e1f",
+          "text": "Controller validation of TensorRecord: (1) T+I+F \u2248 1.0 per claim (within 0.05 tolerance). (2) declared_losses is list with required fields. (3) strands count is within 5-7 range. (4) STOP signal is boolean. Simple validation ensures data integrity.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.83,
+        "indeterminacy": 0.14,
+        "falsity": 0.03
+      }
+    }
+  ],
+  "declared_losses": [
+    {
+      "loss_id": "loss_c31_architectural_details",
+      "content": "CYCLE 31 provisional architectural details (phrasing, example parameter values) are not carried forward with certainty. Instead, Cycle 32 commits to SPECIFIC ALGORITHMS for projection. Rationale: Cycle 31 was exploratory (what if we had X architecture?). Cycle 32 is engineering (here is HOW we implement it). Some provisioning from Cycle 31 (e.g., Pichay caching details, Phase 2 autoresearch loop specifics) is now compressed into single reference: 'defer to Phase 2'. Not lost\u2014deferred. Confidence in loss: HIGH (intentional compression for focus).",
+      "reason": "Compression for engineering clarity. Cycle 31 was design space exploration. Cycle 32 focuses on projection (THE CRITICAL COMPONENT). Phase 2 and Phase 1 architectural details are now SECONDARY. Carrying both adds noise.",
+      "cycle": 32,
+      "confidence_in_loss": 0.92
+    },
+    {
+      "loss_id": "loss_c32_retrieval_system_details",
+      "content": "Hot mess paper discusses retrieval system (oracle masking) as context management strategy. Cycle 31-32 tensors discuss 'retrieve-then-solve' as mitigation principle, but we have NOT specified a RETRIEVAL COMPONENT for Hamutay. Discussion was about dual-tensor as alternative to explicit retrieval. This is correct\u2014we chose NOT to build retrieval. But some readers might expect explicit retrieval module. It's not in scope. Confidence in loss: MEDIUM (not lost\u2014it's a DESIGN CHOICE, not a forgotten component).",
+      "reason": "Scope boundary: Hamutay uses BOUNDED-CONTEXT (short input) + epistemic projection as alternative to retrieval. No explicit retrieval module. This is intentional architecture choice, not oversight.",
+      "cycle": 32,
+      "confidence_in_loss": 0.78
+    },
+    {
+      "loss_id": "loss_c32_embedding_metric_details",
+      "content": "Project_hamutay_evaluation.md specifies embedding dispersion as coherence metric. Cycle 32 projection strand does NOT re-derive embedding metric details (dimensionality, normalization, distance metric). These are in evaluation document, not repeated here. Confidence in loss: HIGH (intentional\u2014avoiding duplication across documents).",
+      "reason": "Cross-document referencing. Details in project_hamutay_evaluation.md are authoritative. Repeating them here would create maintenance burden.",
+      "cycle": 32,
+      "confidence_in_loss": 0.88
+    },
+    {
+      "loss_id": "loss_c32_approach_tradeoffs_detail",
+      "content": "Strand on claim extraction (Approach 1/2/3) summarizes tradeoffs but does NOT deeply explore: (1) actual false positive/false negative rates for hard rules on real reasoning text (would need empirical measurement), (2) specific prompt engineering required for Approach 2 (LLM-as-judge), (3) hybrid approach (Approach 3) design details (how does filtering actually work?). These are IMPLEMENTATION DETAILS for Cycle 33 engineering. Confidence in loss: MEDIUM-HIGH (these are deferred to engineering phase, not forgotten).",
+      "reason": "Appropriate level of abstraction: Cycle 32 specifies WHICH APPROACH to use (Approach 1 primary, Approach 3 fallback) and WHY. Engineering phase (Cycle 33) will discover actual rates and refine. Overly detailed speculation would be premature.",
+      "cycle": 32,
+      "confidence_in_loss": 0.82
+    }
+  ],
+  "open_questions": [
+    "Can hard rules (Approach 1) achieve >80% recall on claim extraction from chain-of-thought reasoning? What is precision? This will be measured in Cycle 33 hand-tracing.",
+    "Does embedding-based claim similarity (cosine >0.70) reliably merge semantically equivalent claims without over-merging distinct claims? Empirical test needed.",
+    "Can heuristic epistemic rules (Rule Sets A-D) produce T/I/F values that correlate with human judgment of confidence? How do they perform on claims humans find uncertain vs. confident?",
+    "What is the actual token cost of projection (Haiku processing)? Estimate is ~200 tokens/cycle. Is this accurate or does it vary significantly with reasoning length?",
+    "Does STOP signal (epistemic plateau) emerge naturally from TensorRecord data, or must it be engineered as explicit threshold check?",
+    "In Phase 1 validation, will Condition 3 (epistemic projection) embedding dispersion be significantly lower than Condition 1 (append-only)? This is the core H0.",
+    "How does Architecture A (Haiku post-process) compare to Architecture B (mainline self-project) in terms of coherence AND cost? Phase 2 research question, but worth monitoring in Phase 1.",
+    "Can projection handle adversarial reasoning (model deliberately generating false claims) or does it only work on honest reasoning? Boundary case for Phase 2."
+  ],
+  "instructions_for_next": "CYCLE 33 PRIORITIES: (1) IMPLEMENT tensor projection pipeline. Three components: claim extractor (hard rules, Approach 1), epistemic assigner (heuristic rules), strand clusterer (embeddings + merging). (2) TEST projection independently with hand-written reasoning traces (3-5 samples). For each: manually convert reasoning text to expected TensorRecord, run through projection code, verify output matches expected. (3) MEASURE hard rules performance: recall (% of human-identified claims found), precision (% of extracted claims are valid), false positive rate. Target: >80% recall, >75% precision. If below target, evaluate Approach 3 (hybrid with LLM filtering). (4) VALIDATE epistemic heuristics on sample claims: spot-check 10-20 claims, hand-verify that T/I/F assignments follow rules correctly. (5) PREPARE for transformer integration: once projection is validated independently, integrate with Transformer + Controller. Start with single Riemann attempt (Condition 1, append-only baseline). Then Condition 2 (structured tensor), then Condition 3 (epistemic projection). Do NOT commit to full 30 attempts (3 conditions \u00d7 10) until single-run validation passes. (6) MEASURE embedding dispersion on single-run outputs to determine if Phase 1 full validation is worth executing. If single runs show promise (Condition 3 < Condition 1), proceed to K=10 per condition. If no signal, debug projection before expanding. (7) DOCUMENT findings in project_hamutay_implementation.md: engineering decisions, measured performance, observed failure modes. This becomes engineering reference for team.",
+  "overall_truth": 0.82,
+  "overall_indeterminacy": 0.14,
+  "overall_falsity": 0.04
+}

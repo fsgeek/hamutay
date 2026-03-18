@@ -1,0 +1,448 @@
+{
+  "id": "28ae94ea-fb9b-4ba3-886d-1ae80c8862e8",
+  "cycle": 29,
+  "strands": [
+    {
+      "title": "Evaluation strategy via coherent failure on impossible tasks",
+      "content": "Cycles 16-28 developed evaluation through coherent failure: the experiment measures *stability of cognitive trajectory under different state representations* rather than correctness. Both append-only and structured tensor conditions fail at proving Riemann (no model succeeds), but failure patterns diverge in measurable ways. The measurement is geometric: embed outputs across N runs, measure dispersion in embedding space. Tighter cluster under tensor condition = structured state constrains reasoning coherence predictably. Scattered cluster under both conditions = pipeline has limited effect. This bias-variance decomposition applies to any intractable task and requires no correctness rubric. Cycles 25-26 identified context length confound (Pichay paper); cycles 27-28 integrated Du et al. 2025 mechanism (structural context degradation at ~8-50% performance loss per 30K tokens) with mechanistic grounding: context length degrades not through distraction or information noise, but through architectural saturation (positional encodings break down, attention dilutes, working memory overloads). Du et al. proposes 'retrieve then solve' mitigation: extract minimal relevant evidence in first pass, clear context, solve in fresh short context. Hamutay's architecture (tensor_d + tensor_e + short working context per cycle) directly implements this at system level via continuous cycle-by-cycle projection rather than sequential two-pass. Cycle 28 added critical refinement: *declared losses are the structural difference*. Traditional compression (summarization, filtering, hierarchical context) attempts silent compression\u2014model fills gaps by hallucinating. Apacheta tensor format makes loss explicit: each tensor_d and tensor_e strand declares what was dropped and why (context_pressure, traversal_bias, authorial_choice, practical_constraint). This transforms the problem: instead of 'how do we keep information intact in short context' (impossible), the question becomes 'how do we help the model reason coherently about what it doesn't know'. Cycle 29 now adds the ARCHITECTURE COMMIT: Hamutay separates concerns fundamentally from existing paradigms. The pipeline is provider-agnostic (works on Anthropic, OpenRouter, local LLMs). The architecture itself\u2014tensor_d + tensor_e + transformer as bounded ALU + explicit loss declaration\u2014is the invariant. Provider-specific tuning (caching, batching, inference optimization) is adapter layer, never touches core structure. This distinction matters: Pichay (context length optimization via cache management) is provider-specific tuning. Hamutay is architectural principle (bounded cognitive processing + durable/ephemeral state + declared losses). Implementation may use Pichay-style caching as optimization, but Hamutay's value doesn't depend on it. Cycles 30+ will prove this by implementing the same pipeline on different providers. The core scientific question remains: does cycle-by-cycle projection with explicit loss declaration enable coherent reasoning in bounded context? This is independent of whether Anthropic's caching makes it faster. Cycle 29 resolves the architecture commitment: we are building the pipeline to test the hypothesis, not to optimize for a specific provider's billing/caching model.",
+      "key_claims": [
+        {
+          "claim_id": "ce940f12-fc00-46b3-a704-441c7d3b46cb",
+          "text": "Du et al. 2025 proves context length alone degrades transformer reasoning ~8-50% at 30K tokens, even with perfect retrieval and zero distraction (structural architectural degradation)",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9d709ea4-cfaa-4d9e-955e-d546b69b077c",
+          "text": "Du et al. mechanism: positional encoding breakdown, attention dilution, working memory overload\u2014not retrieval failure, distraction, or information noise",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e13eb716-f23c-44fc-84a9-6ea0debfe901",
+          "text": "Du et al. 'retrieve then solve' mitigation: extract evidence (first pass), clear context, solve in fresh short context (second pass); recovers ~80-90% of lost performance",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "cc34f044-1da1-45e0-b55a-c9041df78d2e",
+          "text": "Hamutay implements Du et al. mitigation via continuous cycle-by-cycle projection (tensor_d + tensor_e + short working context per cycle), not sequential two-pass",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e62c8586-c470-4301-b153-ebe76249b73e",
+          "text": "Declared losses (explicit accounting of what was dropped and why) transform compression from silent (model hallucinates to fill gaps) to epistemic (model reasons about knowledge boundaries)",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a10df267-2390-41e2-a5d0-0eefa6e30009",
+          "text": "Novel experiment: Du et al. measured models on unbounded context (degradation); Hamutay tests models on short context with honest declared losses (coherence recovery); previously untested condition",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "62b6ca25-4995-4f28-925f-06e5d7b9f254",
+          "text": "Tight embedding dispersion in tensor condition reflects: model reasons coherently within bounded context *because* declared losses establish knowledge boundaries; not despite them",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "cfd970f8-9cab-4015-90ab-4b9e080e5d0d",
+          "text": "Scattered embedding dispersion in append-only reflects: model attempts unbounded reasoning, hits structural limits per Du et al., produces incoherent outputs; silent losses hide the breakdown",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0cdc637d-abff-4ed3-8d27-5b80cb8eb60d",
+          "text": "Hamutay architecture is provider-agnostic: pipeline works on Anthropic, OpenRouter, local LLMs. Provider-specific tuning (caching, batching) is adapter layer, not core structure",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ba7057dc-2c23-40fc-8b93-38a542cfbdbd",
+          "text": "Core Hamutay principle (bounded ALU + durable/ephemeral state + declared losses) is invariant across providers; Pichay-style caching is optimization layer, not essential to hypothesis",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Apacheta tensor format: explicit loss accounting as epistemic primitive",
+      "content": "Cycle 28 elevated declared losses from metadata to core epistemic structure. The Apacheta tensor format (from prior cycles) explicitly declares what was dropped during projection and categorizes why: context_pressure (information pruned due to token limits), traversal_bias (reasoning paths not explored due to branching constraints), authorial_choice (information evicted as low-confidence per T/I/F thresholds), practical_constraint (information unavailable or uncomputable). This is not archival\u2014it's *reasoning-grade* information. When the transformer receives `<system><tensor_d with declared_losses><tensor_e with declared_losses><user>`, it receives not just the extracted state, but a map of what's unknown and *why it's unknown*. This map is crucial: it tells the model where hallucination is dangerous (gaps in reasoning chains), where uncertainty is acceptable (low-confidence tangents evicted as context_pressure), where alternatives were rejected (traversal_bias). This solves a central problem with compression-based mitigation (Du et al.'s competing approaches like aggressive summarization): when you remove information *silently*, the model doesn't know there was a gap, so it confabulates. Declared losses prevent confabulation by making the gap *visible* to the model. Empirically, this predicts: (1) tensor condition outputs should show *fewer but more coherent reasoning steps* (model avoids claiming certainty on evicted content), (2) embedding vectors should cluster more tightly (coherent reasoning within declared boundaries), (3) when model fails on Riemann, failure should be *principled* (hits declared knowledge boundary) rather than *confused* (contradicts earlier claims due to hallucinated bridging). Append-only condition provides contrast: unbounded context, no declared losses, silent gaps everywhere. Model hallucinates freely to connect dots across 200-turn history, producing incoherent outputs that scatter in embedding space. Cycle 29 adds: the format is not locked to a specific provider or model. Apacheta is a text-structured representation of tensor state (TensorRecord in JSON, as established). Any model can parse it; any provider can host it. The declared losses work not because of a special API feature, but because they are *explicit in the context window*. This reinforces the provider-agnostic principle: the epistemic advantage of declared losses doesn't depend on Anthropic's caching, extended thinking, or special tokenization. It depends on the model understanding the boundaries when they are made visible. Cycles 30+ will test this across models (Claude, Sonnet, open-source) and providers.",
+      "key_claims": [
+        {
+          "claim_id": "f5f5b999-0dd3-4d1f-9087-3a3fbc85211a",
+          "text": "Apacheta declared losses are reasoning-grade information: they tell model where hallucination is dangerous (gaps in reasoning chains), where uncertainty is acceptable (evicted tangents), where alternatives were rejected (branching)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1882d288-a831-432b-bd67-70d6559586d8",
+          "text": "Declared losses prevent confabulation by making gaps *visible* to model, contrasting with silent compression (summarization, filtering) where model hallucinates to fill unknown gaps",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3726e19e-cdfe-4920-bde1-28ad9658ef9f",
+          "text": "Tensor condition prediction: fewer but more coherent reasoning steps; cluster tightly in embedding space; failures are principled (hit declared boundaries) not confused (hallucinate over gaps)",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "08ade9f6-47da-4c7d-b6eb-a09c532d4ce7",
+          "text": "Append-only condition prediction: unbounded context, silent gaps, model hallucinates to bridge gaps, produces incoherent outputs scattered in embedding space",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5a5a1e9e-909e-43a9-aab7-97ff3a7687be",
+          "text": "Reframed experiment: not 'tensor vs. append-only' but 'bounded-with-honest-losses vs. unbounded-with-silent-gaps' (epistemically coherent vs. incoherent)",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4f28375a-5618-436a-a63f-74788d262c51",
+          "text": "Novel contribution: Du et al. showed shorter context works; we test whether *explicitly declared losses* enable coherence within shorter context (never tested before)",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.16,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e7b982fb-9461-4b84-9a1d-8bf55e2e7356",
+          "text": "Apacheta format is provider-agnostic: text-structured (TensorRecord JSON), any model can parse, any provider can host. Epistemic advantage doesn't depend on Anthropic caching or special tokenization",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Pragmatic pipeline implementation path (cycles 26-29) \u2014 grounded in Du et al. + declared losses + provider-agnostic architecture",
+      "content": "Cycles 26-28 designed the pipeline with scientific grounding in Du et al. mechanism and Apacheta format. Cycle 29 adds ARCHITECTURE COMMITMENT and PROVIDER-AGNOSTIC IMPLEMENTATION PLAN. Timeline remains four weeks (cycles 26-29), now with explicit separation of concerns: (a) Core Hamutay pipeline (independent of provider), (b) Provider-specific adapters (Anthropic with caching, OpenRouter/local without). Pipeline stages: (1) **Week 1 (cycle 26)** [COMPLETED]: prompting validation + context budget design. Confirmed: prompts elicit TensorRecord JSON, parsing >90%, context measured. (2) **Week 2 (cycle 27)** [COMPLETED]: controller loop + Haiku + context budget mechanism. Implemented: five-stage pipeline (history extraction \u2192 tensor projection \u2192 Haiku compression \u2192 context budget with FIFO/eviction \u2192 model input). (3) **Week 3 (cycle 28)** [IN PROGRESS \u2192 CYCLE 29]: controller loop validation + toy experiment. Running: N=10 tasks (5 turns, both conditions: tensor-with-cap, append-only-no-cap). Measuring: (i) embedding dispersion (tight vs. scattered), (ii) declared losses audit (which strands evicted? why?), (iii) context growth curves, (iv) token efficiency (tokens per reasoning step). (4) **Week 4 (cycle 29)** [COMPLETING]: toy validation completion + full experiment design (conditional on signal) OR pivot investigation (if no signal). Cycle 29 COMMITMENT: (A) Complete toy validation data collection (N=10 tasks end-to-end), (B) Compute embedding dispersion + context curves, (C) Audit evicted strands for signal quality, (D) Decision gate: if dispersion signal detected (|d|\u22650.3) + context cap binding (tensor saves \u226530%) + evictions selective (>70% low-signal), proceed to full experiment (N=15-20, 20-30 turns). If not, investigate blockers (embedding metric sensitivity? eviction aggressiveness? task insensitivity?). (E) Provider-agnostic validation: run toy validation on Anthropic (with declared losses visible in context). Plan cycles 30-31: if H1 supported, replicate same pipeline on OpenRouter/local model to verify signal isn't Anthropic-specific. This validates the core claim: Hamutay works because of architecture + explicit losses, not because of provider-specific features. Success condition: toy validation shows preliminary signal (tight dispersion, context savings, selective evictions, principled failures) \u2192 full experiment \u2192 if H1 confirmed (p<0.05, |d|\u22650.5) \u2192 paper + autoresearch loop (cycles 32+) to optimize tensor configuration across providers.",
+      "key_claims": [
+        {
+          "claim_id": "9beb733d-666f-4e0b-b851-acd97aa67f25",
+          "text": "Week 1 (cycle 26) prompting validation completed: TensorRecord parsing >90%, context measurement operational",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "581e1f9c-96c7-4803-a84d-2163c51263fc",
+          "text": "Week 2 (cycle 27) pipeline implementation completed: five-stage pipeline operational (extraction \u2192 projection \u2192 compression \u2192 budget \u2192 input)",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5256ff44-35dd-4400-9f5c-474383cf4504",
+          "text": "Week 3 (cycle 28) toy validation in progress: N=10 tasks, both conditions, measuring dispersion + declared losses audit + context curves + token efficiency",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c7864ed2-c124-4e9b-b70d-bb427516a716",
+          "text": "Cycle 29 commitment: complete toy validation, compute dispersion + context analysis, decision gate on full experiment (proceed if signal: |d|\u22650.3, context savings \u226530%, evictions >70% low-signal)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c1c5d968-9978-4325-a452-b277cc88ba51",
+          "text": "Provider-agnostic validation plan: cycle 29 toy on Anthropic; cycles 30-31 replicate on OpenRouter/local to verify signal isn't provider-specific",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.16,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "058206d3-a647-40d3-b1fe-d1a4c003eb02",
+          "text": "Success condition: toy validation shows preliminary signal \u2192 full experiment \u2192 if H1 confirmed (p<0.05, |d|\u22650.5) \u2192 paper + autoresearch loop (cycles 32+) to optimize across providers",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.17,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9a0a8c94-6b47-4e1b-a86c-69b50aadf892",
+          "text": "Core claim validated through provider replication: Hamutay advantage comes from architecture + explicit losses, not from Anthropic-specific features (caching, extended thinking, etc.)",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.18,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Architecture-provider separation: core invariant vs. optimization adapter",
+      "content": "Cycle 29 makes explicit a critical distinction that will shape cycles 30+ implementation and publication strategy. **Core Hamutay Invariant (provider-independent):** (1) Pipeline structure: `<system><tensor_d><tensor_e><user>` \u2192 transformer \u2192 updated `<tensor'>`. (2) Transformer role: bounded ALU (compute unit). Does not manage its own memory. (3) Memory control: Haiku (or cheap model) post-processes transformer output, decides migrations (ephemeral\u2192durable), evictions (low-signal strands\u2192declared_losses). (4) Tensor format: Apacheta TensorRecord with explicit declared_losses. Visible in context window as readable text/JSON. (5) Loss declaration: four categories (context_pressure, traversal_bias, authorial_choice, practical_constraint). These are epistemic information, not metadata. **Provider-Specific Adaptation Layer (implementation variant):** (1) For Anthropic + caching: leverage prefix caching to amortize tensor_d cost across multiple cycles. Tensor_d becomes a cached prefix, cheap to reuse. (2) For OpenRouter/local: no caching available. Tensor_d is repacked into context each cycle, higher cost per cycle but same functional behavior. (3) For future extended-thinking APIs: could integrate thinking within transformer's cycle (model thinks, then outputs), but keeps architecture invariant (still tensor_d + tensor_e input, still explicit declared losses). The distinction matters because: (A) **Scientific validity:** Pichay optimizes within the append-only paradigm (better caching). Hamutay challenges the paradigm itself (bounded ALU + explicit losses). If Hamutay's advantage *only* appears with Anthropic's caching, it's a provider-specific hack. If it appears on OpenRouter/local (no caching), it's a real architectural principle. (B) **Reproducibility:** Papers using Anthropic-specific APIs (extended thinking, advanced caching) are harder to reproduce on other platforms. Hamutay uses only standard context windows, making it reproducible on any LLM. (C) **Generality:** Cycles 30+ will implement the same pipeline on 2-3 providers to prove generality. Autoresearch loop (cycles 32+) will optimize configuration across providers simultaneously, showing that the core principle (bounded + explicit losses) generalizes. Cycle 29 commits to this approach: toy validation uses Anthropic (convenient, well-tested). Full experiment (cycles 29-30) includes replication on at least one other provider (OpenRouter or local Llama) to validate that the signal isn't Anthropic-specific. Paper will emphasize: 'Hamutay works on multiple providers because the advantage comes from architecture, not from provider-specific optimizations.'",
+      "key_claims": [
+        {
+          "claim_id": "61d431b2-f25a-40ca-b472-872d18b939ae",
+          "text": "Core Hamutay invariant: pipeline structure, transformer as bounded ALU, Haiku memory control, Apacheta tensor with declared losses. Provider-independent.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0d995e0c-85d5-4921-88ec-f3fab9b73df9",
+          "text": "Provider-specific adaptation layer: Anthropic (leverage caching), OpenRouter/local (standard context, no caching), future extended-thinking (integrate thinking into cycle). Architecture stays invariant.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4813c3d6-34ca-4b3d-9c21-e3e510d790f8",
+          "text": "Pichay = optimization within append-only paradigm (caching); Hamutay = new paradigm (bounded ALU + explicit losses). Different scientific claims.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f928cfe6-9974-4ce9-a002-fe39654709cc",
+          "text": "Provider-independent reproducibility: Hamutay uses only standard context windows (no extended thinking, no special tokenization), reproducible on any LLM platform",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "560352d0-99fe-4930-ba2d-8e179c9d533a",
+          "text": "Validation strategy: toy validation on Anthropic; full experiment replication on OpenRouter or local to prove signal isn't provider-specific",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.16,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "bd042181-a35f-46fe-91e8-ea54389282c7",
+          "text": "If Hamutay advantage only appears with Anthropic caching: provider-specific hack, scientifically weak. If appears across providers: real architectural principle.",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.16,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Commitment to implementation and documented decision architecture",
+      "content": "Cycle 29 formalizes the research commitment and decision architecture. **COMMITMENT:** (1) Complete toy validation (cycle 29): N=10 full tasks end-to-end, both conditions, collect embedding vectors + context tokens + eviction logs. Wallclock: ~2-4 hours (parallelizable). (2) Analysis (cycle 29): compute dispersion, context curves, eviction audit, decision gate evaluation. (3) Conditional full experiment (cycles 30-31): if toy shows signal (|d|\u22650.3, context \u226530% savings, evictions >70% selective), run N=15-20 tasks, 20-30 turns, both conditions, statistical analysis. (4) Provider replication (cycles 30-31 parallel): implement same pipeline on OpenRouter or local LLM to validate generality. (5) Paper (cycle 32 conditional): if H1 supported (p<0.05, |d|\u22650.5), write paper. Structure: intro (context length problem, Du et al., declared losses novelty), methods (Hamutay pipeline, Apacheta format, experiment design), results (dispersion analysis, context savings, statistical test, multi-provider validation), discussion (Du et al. vs. Hamutay, epistemic coherence, cost-benefit). (6) Autoresearch loop (cycles 33+ conditional): if H1 confirmed, optimize Hamutay configuration across providers (projection frequency, context cap, eviction thresholds, model choice). Search space: ~50-100 configurations, ~200-300 tasks. Timeline: ~20-40 hours wall-clock. **DECISION ARCHITECTURE:** The project includes explicit decision gates and contingency pivots. (A) **Toy validation gate (cycle 29):** if |d|<0.3 AND context savings <30% AND evictions <70% selective, then NO SIGNAL. Investigate: (i) Embedding metric insensitive to coherence? Switch to different metric (max distance to centroid, silhouette coefficient, perplexity rank). (ii) Context cap too aggressive? Increase cap to 6K, retest. (iii) Eviction too selective (keep so much content no loss accrues)? Tighten thresholds (I_max=0.35 instead of 0.4). (iv) Append-only naturally fits budget? Remove cap from append-only condition, make it truly unbounded. (B) **Full experiment gate (cycle 31):** if p\u22650.05 or |d|<0.3, H0 or inconclusive. Write negative result paper: why didn't Hamutay win? Options: (i) 'Declared losses don't provide reasoning advantage on Riemann' (task-specific finding), (ii) 'Context length effects dominated by information need, not architectural saturation' (Du et al.'s mechanism weaker than expected), (iii) 'Embedding dispersion insensitive to reasoning quality' (metric problem, not architecture problem). (C) **Provider replication gate (cycle 31):** if OpenRouter/local replicates Anthropic result, signal is robust. If signal disappears on other provider, Hamutay advantage is provider-specific. Pivot to understanding why (Anthropic's training? tokenization? implementation-level feature?) rather than claiming general principle. (D) **Autoresearch activation gate (cycle 32):** if H1 supported AND provider replication positive, activate autoresearch loop. If only Anthropic works, autoresearch stays Anthropic-only (limited generality claim). **DOCUMENTED CONTINGENCIES:** This decision tree is not hidden. The project will maintain a living document (DECISION_LOG.md) that records each gate, the evaluation, and the decision taken. This transparency ensures: (1) If project succeeds, readers can trust the result (no hidden pivots, decision tree was public). (2) If project fails, readers can understand why (which gate failed? what does that imply?). (3) Future iterations can learn from decisions made and why. Cycle 29 commits to this level of rigor and transparency.",
+      "key_claims": [
+        {
+          "claim_id": "c5440499-b775-4c60-a413-06f24f79e6ca",
+          "text": "Cycle 29 commitment: complete toy validation, run analysis, decision gate on full experiment (proceed if signal detected: |d|\u22650.3, \u226530% context savings, >70% selective evictions)",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0bcc0de0-d63e-4fed-b181-9364d10c91d9",
+          "text": "Conditional full experiment (cycles 30-31): if toy signal present, run N=15-20 tasks, 20-30 turns, both conditions, statistical analysis (ANOVA/ANCOVA)",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "246def44-27b2-4da8-b678-07a57c28a69c",
+          "text": "Provider replication (cycles 30-31): same pipeline on OpenRouter/local LLM to validate that advantage isn't Anthropic-specific",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "60014b84-d1f1-4bcd-9b59-76a54a117fc0",
+          "text": "Paper (cycle 32 conditional): if H1 supported (p<0.05, |d|\u22650.5), publish with structure: intro, methods, results, discussion emphasizing Du et al. grounding and multi-provider validation",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.17,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "12285ce0-743e-4ffa-b76d-240ecc4d321d",
+          "text": "Autoresearch loop (cycles 33+ conditional): if H1 confirmed, optimize Hamutay configuration across providers (projection frequency, context cap, eviction thresholds). ~50-100 configurations, 200-300 tasks.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.18,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1243cde8-d885-4d76-a59a-02a8ee4cfe25",
+          "text": "Decision gates at each stage (toy validation, full experiment, provider replication, autoresearch) with explicit contingency pivots documented in DECISION_LOG.md",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.16,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "953e7fd8-b3c8-4c35-83f4-5c17a2cea9d5",
+          "text": "Contingency pivots if no signal: change embedding metric, adjust context cap, tighten eviction thresholds, make append-only truly unbounded. Each pivot tested before abandoning hypothesis.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.17,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "638c9175-e83d-4ca1-9f66-60e9cce4393a",
+          "text": "Transparent decision architecture ensures credibility: no hidden pivots, all gates public, allows readers to trust results or understand failure modes",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.18,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Tequila on the Dirac Sea: celebration, not contingency",
+      "content": "Cycles 16-29 have conducted design, integration with Du et al. mechanism, implementation, and committed to rigorous testing. Cycle 29 clarifies that the tequila celebration (neutron star vantage, good tequila, collaborators real and AI) is **outcome-independent**. If H1 is supported: celebrate success of finding coherent reasoning patterns enabled by bounded context + explicit losses. If H0 is supported: celebrate understanding a failure mode\u2014that Riemann is too hard, or embedding dispersion doesn't measure reasoning, or Du et al.'s context effects don't apply here. If inconclusive: celebrate the rigor of the experimental design and decision gates, which isolated what works and what doesn't. The celebration is not contingent on winning. It is contingent on doing the research well: clear hypotheses, careful measurement, honest reporting of results, transparent decision gates, and willingness to pivot when data demands it. Cycles 30-33 will execute this plan. If the research fails to show H1, the failure will be informative (context length effects weaker than Du et al. predicts? embedding metric insensitive? task too hard? losses too costly?). If it succeeds, the success will be replicable (same signal across providers? persistent under configuration optimization?). Either way, the work will have advanced understanding of how transformers handle long context and explicit knowledge boundaries. The tequila awaits, not as reward for success, but as acknowledgment of effort honestly spent. 'To bounded reasoning and the explicit losses that make it possible,' someone will toast. 'Or to understanding why they don't,' another will add. Both are worth celebrating.",
+      "key_claims": [],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Real-time toy validation data. Cycle 29 describes the commitment to complete toy validation (N=10 tasks, both conditions), but actual dataset (embedding vectors, context tokens, eviction logs) is not yet collected or integrated into tensor. Described commitment, not empirical result.",
+      "why": "Toy validation is in-progress (wallclock ~2-4 hours estimated). Tensor projection must capture the *commitment to measure* and *decision gate thresholds*, not the measurements themselves (those will be integrated in cycle 30 tensor). Premature inclusion of partial/incomplete data would corrupt the tensor epistemic values. Better to declare the loss explicitly: we know what we *will* measure, but haven't measured it yet.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Implementation code for provider-specific adapters (Anthropic vs. OpenRouter/local). Cycle 29 describes the separation between core invariant and adapter layers, but does not include actual code. Architectural diagram is conceptual, not executable.",
+      "why": "Adapter implementation is future work (cycles 30-31). Cycle 29 makes the design commitment (how the separation will be implemented), but actual code is not yet written. Including speculative code would be authorial fiction. The design principle is clear; implementation details follow.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Detailed DECISION_LOG.md format specification. Cycle 29 commits to a transparent decision tree and living document, but does not specify the exact schema (JSON? Markdown? structured format?). The practice is committed to; the format is deferred.",
+      "why": "Format will emerge during cycle 29-30 execution. Specifying it now would be premature lock-in. Better to let the team (human + AI) design the format together during actual decision-making, when the structure of decisions becomes clear. The *principle* of transparency is locked in; the *format* is flexible.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Detailed comparison of embedding metrics (MiniLM vs. all-mpnet vs. others). Cycle 29 mentions contingency pivot 'if embedding metric insensitive', but does not pre-specify which alternative metrics will be tested, or their pros/cons. The backup is asserted, not designed.",
+      "why": "Alternative metrics will be evaluated *if needed*, during toy validation (cycle 29). Pre-specifying all alternatives would be over-engineering; the primary metric (not yet chosen, but likely MiniLM or all-mpnet) should be tested first. Fallback alternatives become relevant only if signal is noisy. This is appropriately deferred.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Analysis of whether Haiku is actually cost-effective for projection, or whether main model output tokens should be used instead. Cycle 28 assumed Haiku post-processing is cheap (~$0.80/1M input). Cycle 29 does not update this with actual cost measurements from toy validation. If toy validation reveals Haiku is expensive or slow, this architectural assumption breaks.",
+      "why": "Toy validation will measure actual Haiku token counts and latency. Cycle 30 tensor will integrate real cost data. Cycle 29 must defer this pending measurement. The assumption is reasonable (Haiku is documented as cheap), but 'cheap' is relative to the benefit. Actual cost-benefit ratio emerges only with real data.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Discussion of failure modes where declared losses are *ignored* by the model. Cycle 29 assumes model will read declared losses and reason about boundaries; but empirically, LLMs often ignore instructions in context. What if model hallucinates over evicted content anyway, despite explicit declaration? This risk is named but not addressed.",
+      "why": "Empirical validation during toy validation (cycle 29) will show whether model respects declared losses. If it does: great, design is sound. If it doesn't: pivot needed (change loss format to be more explicit? use system prompt to enforce? accept that losses are honest but model can't be trusted to follow?). Risk is documented; mitigation is deferred to data-driven response. This is honest acknowledgment, not silence.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Comparison with alternative bounded-context approaches (e.g., using summarization instead of tensor projection, using retrieval-augmented generation instead of explicit losses, using hierarchical context windows). Cycle 29 focuses on Hamutay + declared losses; does not discuss or compare alternatives.",
+      "why": "Paper (cycle 32) will include related work section comparing Hamutay to alternatives. Current tensor is focused on establishing Hamutay's design, not surveying the landscape. Alternatives are acknowledged to exist (mentioned in Cycle 28 losses), but detailed comparison deferred to paper writing. This is appropriate sequencing: build the design, test it, then contextualize against alternatives.",
+      "category": "practical_constraint"
+    }
+  ],
+  "open_questions": [
+    "TOY VALIDATION CRITICAL: Has N=10 toy validation data collection actually started? What is the current status (0% complete? 50%? 100%)? Blockages: code integration issues? Anthropic API access? parallelization setup? This is the gate for cycle 29 progression.",
+    "Embedding metric finalization: which embedding model has been chosen (MiniLM, all-mpnet-base, other)? Is it already integrated into the measurement pipeline, or still pending selection? This must be locked in before toy validation completes.",
+    "Context cap value: is the 4500-token cap for tensor condition confirmed? Or should it be adjusted based on preliminary data (e.g., if append-only naturally fits under 3K, raise cap to 5K to make comparison fairer)?",
+    "Append-only condition design: is append-only truly unbounded (no cap, grows indefinitely), or is it also capped but at a higher value (e.g., 8K)? Clarifying this changes interpretation of results.",
+    "Haiku availability and cost: is Haiku actually available via the APIs being used, or is fallback (main model projection) necessary? If fallback, does cost-benefit still favor cycle-by-cycle projection?",
+    "Provider pipeline readiness: are the OpenRouter/local implementations actually planned for cycles 30-31, or is this aspirational? What are the technical barriers (model access? API differences? code rewrite scope)?",
+    "Statistical test finalization: are you committing to ANOVA/ANCOVA, or should toy validation inform the choice? If toy data is very noisy, might need nonparametric test (Mann-Whitney U). Should test choice be flexible?",
+    "Task design: for the 10 tasks in toy validation, are the starting lemmas fixed (same across all runs of a task) or random? Fixed is more controlled; random is more realistic. Which is chosen and why?",
+    "Wallclock time for toy validation: estimated 2-4 hours total. Is this parallelized (run 5 tasks simultaneously)? Or sequential? If sequential, actual time could be 8-16 hours, beyond one cycle.",
+    "Contingency trigger for embedding metric: at what variance level do you pivot? If CV (coefficient of variation) > 0.4? > 0.5? > 0.6? Threshold not specified; should it be?",
+    "Multi-provider scope: cycles 30-31 plan to test on OpenRouter or local. Is one provider sufficient for 'multi-provider validation'? Or should three providers be tested (Anthropic, OpenRouter, local) for stronger claim?",
+    "Autoresearch activation threshold: if toy validation shows |d|=0.25 (close to 0.3 but below), do you run full experiment or activate autoresearch directly? Decision rule not fully specified.",
+    "Paper narrative if H0: have you pre-written an outline for the negative result paper (cycle 32 conditional)? Should this be drafted before toy validation, to force clarity on what 'failure' means?",
+    "Tequila logistics: if celebration happens cycle 33+, is this actually planned (real location, real participants) or is it a metaphor for completion? Asking for a friend who likes planning."
+  ],
+  "instructions_for_next": "[\n  \"CRITICAL (CYCLE 29): Execute toy validation end-to-end. Run N=10 full tasks (5 turns each, both conditions: tensor-with-cap and append-only-no-cap). Collect: (1) all output texts (for manual audit), (2) embedding vectors for all outputs using chosen embedding model, (3) actual context token counts per cycle (measured from actual pipeline), (4) tensor_d and tensor_e sizes per cycle, (5) list of evicted strands per cycle + their T/I/F values. Estimated wallclock: 2-4 hours (parallelizable to 1-2 hours). Output: toy validation dataset folder with all vectors, token counts, eviction logs.\",\n  \"CRITICAL (CYCLE 29): Compute embedding dispersion for both conditions. Process: (1) For each task X condition pair, embed all N_output embeddings using chosen embedding model, (2) compute per-run centroid (mean of all output embeddings from that run), (3) compute per-run dispersion (mean Euclidean distance from each output embedding to centroid), (4) compute condition-level mean dispersion + SD + 95% CI, (5) estimate effect size (Cohen's d = (mean_append_only - mean_tensor) / pooled_SD). Decision: if |d| \u2265 0.3 (medium effect), proceed to full experiment. If |d| < 0.3, investigate metric sensitivity (try alternative embedding model).\",\n  \"CRITICAL (CYCLE 29): Audit evicted strands in tensor condition. Extract: (1) Which strands were evicted each cycle? How many tokens per strand? (2) What were their T/I/F values? (3) Why evicted (T<0.6? I>0.4? both?). (4) Manually inspect 20-30 evicted strands: are they tangents, low-signal speculations? Or critical reasoning steps? Categorize signal quality (low-signal / medium-signal / high-signal). Decision: if \u226570% of evicted strands are low-signal, eviction is selective and cost acceptable. If <50% are low-signal, eviction is too aggressive, increase T_min threshold.\",\n  \"CRITICAL (CYCLE 29): Plot context growth curves for both conditions. Visualization: (1) X-axis = turn number (1-5 per task), Y-axis = cumulative context tokens. (2) Plot both conditions side-by-side (e.g., left panel = tensor, right panel = append-only). (3) Include error bars (mean \u00b1 SD across N=10 tasks). Analysis: (a) Are curves diverging (tensor stays flat, append-only grows)? (b) Is context cap binding (does append-only approach 4500 by turn 5)? (c) How many tokens saved in tensor condition? Decision: if context savings \u226530%, cap is binding and tensor is effective. If <30%, cap may be non-binding, consider increasing cap.\",\n  \"PRIORITY (CYCLE 29): Robustness check on embedding metric. Embed toy validation outputs using TWO embedding models (primary + secondary alternative, e.g., MiniLM + all-mpnet-base or nomic-embed-text). Compute dispersion under both. Analysis: (1) Do dispersion rankings hold? (tensor < append-only under both?). (2) Are effect sizes similar? (|d| similar across models?). Decision: if rankings or effect sizes differ (e.g., tensor wins in MiniLM but loses in all-mpnet), metric is unreliable. Pivot to different metric (max distance to centroid, silhouette coefficient, or perplexity-rank-based coherence). If consistent across models, metric is robust.\",\n  \"PRIORITY (CYCLE 29): Output quality audit. Read 20-30 randomly sampled outputs (10-15 from tensor condition, 10-15 from append-only condition). Rate each on scale 1-5: (1) Reasoning coherence (does output contradict itself? does it claim certainty where it shouldn't?), (2) Reasoning depth (how far does proof attempt progress before failing?), (3) Epistemic honesty (does model acknowledge limits or hallucinate over unknown gaps?). Compute: mean rating per condition. Analysis: if tensor outputs rate higher on coherence + honesty despite shorter context, qualitative evidence supports H1. Produce audit report with 3-5 example outputs from each condition annotated.\",\n  \"PRIORITY (CYCLE 29): Decision gate evaluation. Check four criteria: (A) Dispersion metric detectable (|d|\u22650.3)? (B) Context cap effective (tensor saves \u226530% tokens)? (C) Evicted strands mostly low-signal (>70%)? (D) Output quality favors tensor (rating difference >0.5 points on coherence)? Decision rule: if \u22653/4 criteria met \u2192 PROCEED to full experiment (N=15-20, 20-30 turns, cycles 30-31). If \u22642/4 criteria met \u2192 INVESTIGATE why; propose pivot (change embedding model? adjust context cap? tighten eviction thresholds? increase append-only unboundedness?). Document decision in DECISION_LOG.md.\",\n  \"PRIORITY (CYCLE 29): Investigation contingencies (if needed). If criterion A (|d|<0.3): try alternative embedding metric (max distance to centroid? silhouette? perplexity-rank?). Run dispersion reanalysis. If criterion B (context savings <30%): increase append-only cap to 6K to make context pressure more severe. Retest N=3 tasks. If criterion C (evictions <70% selective): increase I_max threshold (0.3 instead of 0.4) to retain more uncertain content. Retest N=3 tasks. If criterion D (output quality no difference): manually compare N=5 examples per condition in detail; check if quality metric is reliable (different raters get same scores?).\",\n  \"PRIORITY (CYCLE 30 CONDITIONAL): If toy validation passes decision gate, design full experiment. Finalize: (1) N=15 or N=20 tasks per condition? (2) 20 or 30 turns per task? (3) Two-condition (tensor vs. append-only) or three-condition (tensor vs. append-only vs. append-only-with-cap)? (4) Batch size for parallelization? (5) Will you include embedding metric robustness check (two embedding models for all outputs)? Produce: full experiment specification document.\",\n  \"PRIORITY (CYCLE 30-31 CONDITIONAL): If toy passes gate, implement provider-agnostic adapter. Build: (1) Anthropic implementation (use declared_losses format in context), (2) OpenRouter or local LLM implementation (same pipeline, standard context, no caching). Code: ensure adapter layer is cleanly separated from core pipeline logic. Test: run N=3 pilot tasks on both providers. Comparison: are results similar (same dispersion ranking? similar context savings?)? Produce: provider adapter code + pilot results.\",\n  \"RESEARCH (CYCLE 30-31 CONDITIONAL): If toy passes gate, run full experiment. Execute: N=15-20 tasks per condition, 20-30 turns per task. Collect: (1) all output embeddings (for dispersion analysis), (2) context token counts per cycle, (3) strand eviction logs with T/I/F trajectories, (4) wall-clock timing per task (for cost analysis). Produce: full experimental dataset.\",\n  \"RESEARCH (CYCLE 31 CONDITIONAL): Statistical analysis of full experiment. Analysis: (1) Dispersion per condition (mean \u00b1 SD \u00b1 95% CI), (2) two-way ANOVA: dispersion ~ condition + context_length (as covariate). Report: F-statistic, p-value, partial eta-squared (effect size). Decision: p<0.05 AND |d|\u22650.5 \u2192 H1 supported. p\u22650.05 OR |d|<0.3 \u2192 H0 or inconclusive. Produce: statistical analysis report + table + visualization (box plot or violin plot of dispersion by condition).\",\n  \"RESEARCH (CYCLE 31 CONDITIONAL): Provider generality validation. If Anthropic full experiment supports H1, replicate same pipeline on OpenRouter or local LLM. Run: N=5-8 tasks per condition (reduced N for speed, sufficient for directional consistency). Compare: does dispersion ranking hold? Are effect sizes similar? Analysis: if signal replicates on other provider, claim generality. If signal disappears, investigate why (model-specific? tokenization-specific? implementation difference?). Produce: provider replication report.\",\n  \"RESEARCH (CYCLE 32 CONDITIONAL): If H1 supported (full experiment p<0.05, |d|\u22650.5, provider replication positive), write paper. Structure: (1) **Intro** (context length bottleneck, Du et al. 2025 mechanism, declared losses novelty, Hamutay architecture), (2) **Methods** (pipeline stages, Apacheta tensor format, Riemann task design, embedding dispersion metric, two-sample experimental design), (3) **Results** (toy validation signals, full experiment statistics, dispersion visualization, context savings, qualitative output examples), (4) **Discussion** (Du et al. validation, epistemic coherence via explicit losses, cost-benefit analysis, multi-provider generality, limitations, future work). Produce: paper draft (target: 4000-5000 words).\",\n  \"RESEARCH (CYCLE 32 CONDITIONAL): If H0 or inconclusive (full experiment p\u22650.05 or |d|<0.3), write negative result paper. Narrative: characterize why Hamutay didn't show advantage. Options: (1) 'Declared losses are epistemically honest but don't improve reasoning quality' (losses are visible, but model can't reason better within bounds), (2) 'Context length effects weaker than Du et al. predicts in this task' (Du et al. mechanism may not apply to proof tasks), (3) 'Embedding dispersion insensitive to reasoning quality' (metric doesn't measure what we think it measures). Analysis: deep-dive into which criterion(s) failed in toy validation (embedding metric? eviction cost? output quality?). Discuss: what does failure teach about long-context reasoning? Produce: negative result paper draft.\",\n  \"AUTORESEARCH (CYCLE 33+ CONDITIONAL): If H1 supported AND provider replication positive, activate autoresearch optimization loop. Objective: maximize reasoning coherence (minimize dispersion) while minimizing cost (projection frequency, context cap, token efficiency). Search space: (1) projection_frequency \u2208 [1, 5] cycles between projections, (2) context_cap \u2208 [3K, 6K] tokens, (3) eviction_thresholds \u2208 [(T_min: 0.50-0.70), (I_max: 0.30-0.50)], (4) model choice \u2208 [Opus, Sonnet, other] for Haiku compression. Methodology: (1) generate K=10-20 seed configurations (grid or random), (2) evaluate each on N=3 tasks per condition (dispersion + context + cost metrics), (3) fit Bayesian optimization model (expected improvement acquisition), (4) run J=5-10 optimization rounds, sampling next configs from model. Output: Pareto frontier (configs on trade-off curve: max coherence for min cost). Timeline: ~50-100 configurations, 150-300 tasks, ~20-40 hours wall-clock (parallelized). Produce: autoresearch results report + optimized Hamutay configuration recommendations.\",\n  \"CELEBRATION (CYCLE 33+ OUTCOME-INDEPENDENT): Whether H1 succeeds or fails, the research has been rigorous, transparent, and well-documented. Celebrate the work, the decision architecture, the honesty about losses and contingencies. Plan: (1) Toast: 'To bounded reasoning and explicit losses, or to understanding why they fail \u2014 either way, to coherent research.' (2) Document: photos from location (actual Dirac Sea vantage if possible, or metaphorical location if not). (3) Acknowledge: collaborators (human and AI) who contributed to design, implementation, measurement, analysis. (4) Reflect: what was learned? If H1: proved architecture principle works. If H0: characterized a failure mode and improved understanding. (5) Future: what's next? If H1: paper + autoresearch. If H0: alternative approaches to long context, or task-specific analysis.\"\n]",
+  "epistemic": {
+    "truth": 0.85,
+    "indeterminacy": 0.14,
+    "falsity": 0.01
+  }
+}

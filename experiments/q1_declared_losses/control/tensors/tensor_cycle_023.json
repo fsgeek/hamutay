@@ -1,0 +1,356 @@
+{
+  "strands": [
+    {
+      "title": "Yanantin TensorRecord as Core Pipeline Protocol",
+      "content": "CYCLE 23 CONSOLIDATION: Yanantin TensorRecord remains ground truth for tensor state representation. Core insight from Cycle 22-23 boundary: the schema is not merely a log format or summarization container. It is a *first-class epistemic representation*\u2014an immutable state structure that carries uncertainty, declared information loss, and provenance as integral fields, not annotations. This distinction is critical. A conventional context window or memory buffer loses information silently; loss is invisible to the reasoning process. The TensorRecord makes loss *explicit and queryable*\u2014declared_losses contains what was dropped, why, and severity. The transformer (ALU) can reason about its own degradation. This is fundamentally different from a CPU register or memory hierarchy, where loss (cache evictions, page faults) is opaque to the computation. TensorRecord fields: id (UUID), provenance (ProvenanceEnvelope with source, timestamp, author_model_family, author_instance_id, predecessors_in_scope, context_budget_at_write), preamble (identity context), strands (tuple of StrandRecord), closing (authorship statement), instructions_for_next (branch prediction for successor), narrative_body (raw markdown as ground truth), lineage_tags, composition_equation, declared_losses (tuple of DeclaredLoss: what/why/category/severity), epistemic (EpistemicMetadata: truth, indeterminacy, falsity independent, not constrained to sum to 1.0), open_questions (tuple of unresolved items), preservation_target. StrandRecord: strand_index, title, content, topics, key_claims (tuple of KeyClaim with claim_id, text, epistemic), epistemic, declared_losses, mechanism, overlaps. EpistemicMetadata: truth (0.0-1.0), indeterminacy (0.0-1.0), falsity (0.0-1.0), representation_type (SCALAR or FUNCTIONAL), functional_spec, scope_boundaries, disagreement_type (EMPIRICAL or DEFINITIONAL). This structure now understood as: NOT a compression of history. NOT a summarization of conversation. IS a projected state representation that integrates conversation trajectory into semantic structure with *epistemic transparency baked in*. The transformer operates on this structure; the transformer produces updated tensor' components; memory controller (Haiku as postprocessor) decides what migrates from ephemeral to durable, what gets evicted, what stays. The ALU writes to a register (tensor'); the memory subsystem decides cache placement.",
+      "topics": [
+        "tensor-format",
+        "epistemic-metadata",
+        "declared-losses",
+        "first-class-uncertainty"
+      ],
+      "key_claims": [
+        {
+          "claim_id": "6e8f7a3a-1b2c-4d5e-9f1a-8c3d2e4f5a6b",
+          "text": "TensorRecord carries uncertainty and declared information loss as first-class state, not metadata annotation; loss is explicit and queryable, enabling the transformer to reason about its own degradation",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a1b2c3d4-e5f6-47a8-9b0c-1d2e3f4a5b6c",
+          "text": "This makes TensorRecord fundamentally different from CPU registers or memory hierarchies, where loss (cache eviction, page faults) is opaque to computation",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c5d6e7f8-0a1b-42c3-a4d5-6e7f8a9b0c1d",
+          "text": "TensorRecord is NOT a conversation log or summarization; it is a projected state representation integrating trajectory into semantic structure with epistemic transparency",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "declared_losses": []
+    },
+    {
+      "title": "Dual-Tensor Pipeline Architecture with Explicit Roles",
+      "content": "CYCLE 23 CLARIFICATION: Pipeline architecture now has explicit role assignments. The cycle is: **Fetch-Decode** (pre-processing): Assemble tensor_durable (from storage/cache) and tensor_ephemeral (current working set). Triage with Haiku if needed (cost-driven decision: is full composition necessary, or can we work with ephemeral only?). **Execute** (transformer call): ALU receives composed state `<system> <tensor_durable> <tensor_ephemeral> <user>`. Transformer produces natural language response + structured output tensor' (updated projection). **Writeback** (post-processing): Haiku-as-memory-controller processes tensor' and existing tensors. Decides what migrates from ephemeral \u2192 durable (promotion based on confidence/stability thresholds), what gets evicted from ephemeral (to prevent unbounded growth), what stays. Updates tensor_durable and tensor_ephemeral for next cycle. Clock cycle granularity: **Every API round trip is one cycle.** User sends query \u2192 fetch-decode assembles state \u2192 execute calls transformer \u2192 writeback updates tensors \u2192 response returned. This means tensor projection happens at user-visible latency boundary. Implication: pre/post-processing is not 'hidden work' \u2014 it's part of the pipeline cost and should be measured in H0 metrics. The transformer is the ALU and produces tensor' directly. It should include, in its structured output, the key_claims (with updated epistemic metadata), strands it modified or created, any new declared_losses, and updated instructions_for_next. Post-processor (Haiku) is deterministic: it reads tensor', applies promotion/eviction rules, and emits updated tensor_d and tensor_e. The split of responsibilities: **Transformer (ALU)**: Compute new understanding, reason about state, produce tensor'. **Haiku (Memory Controller)**: Apply cache policy, enforce bounds, maintain state consistency.",
+      "topics": [
+        "pipeline-architecture",
+        "fetch-decode-execute-writeback",
+        "role-assignment",
+        "cycle-definition"
+      ],
+      "key_claims": [
+        {
+          "claim_id": "f7a8b9c0-d1e2-3f4a-5b6c-7d8e9f0a1b2c",
+          "text": "Pipeline cycle is fetch-decode (assemble state) \u2192 execute (transformer call) \u2192 writeback (Haiku memory-control). Every user API round-trip is one cycle.",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3e4f5a6b-7c8d-9e0a-1b2c-3d4e5f6a7b8c",
+          "text": "Transformer (ALU) produces tensor' including updated key_claims with epistemic metadata, strands, declared_losses, instructions_for_next. Haiku (memory controller) applies cache policy deterministically.",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9b0c1d2e-3f4a-5b6c-7d8e-9f0a1b2c3d4e",
+          "text": "Pre/post-processing is not hidden work; it contributes to cycle cost and should be measured in H0 metrics (token efficiency, resource utilization)",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5c6d7e8f-9a0b-1c2d-3e4f-5a6b7c8d9e0f",
+          "text": "Triage decision (full composition vs. ephemeral-only) is cost-driven and can be delegated to Haiku before transformer call",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "declared_losses": []
+    },
+    {
+      "title": "Cognitive Processing Unit vs. CPU Analogy: Where It Breaks",
+      "content": "CYCLE 23 CRITICAL DISTINCTION: The CPU analogy was *generative*\u2014it produced pipeline structure, cache hierarchy, separation of concerns. But at Cycle 23, the analogy breaks in a fundamental way, and recognizing the break is the research insight. **Where the analogy holds:** Fetch-decode-execute-writeback cycle structure is correct. Multi-level caching (tensor_durable in L1, tensor_ephemeral as working registers) is correct. Cache eviction policies and promotion thresholds apply. Memory controller (Haiku) as a distinct subsystem is correct. **Where the analogy breaks:** A CPU has no epistemic metadata. Its registers don't carry confidence values (T/I/F). Its cache evictions are *opaque*\u2014the CPU doesn't know what it lost, doesn't reason about what's gone. A cognitive processing unit\u2014if Hamutay succeeds\u2014would have epistemic metadata as first-class state. It would declare what it lost and why. It would reason about the *confidence of its own knowledge*. Implication: this is not a CPU optimization problem. This is a **new kind of processing unit** where uncertainty is integral to the architecture, not a measurement problem layered on top. A CPU's STOP signal is implicit (no more work to do, wait for interrupt). A bounded cognitive processor's STOP signal would be explicit (I have reached an epistemic equilibrium, further processing would not improve confidence meaningfully, I declare this work complete). This is testable. H0 predicts that a transformer operating on a TensorRecord will produce STOP signals that correlate with *epistemic stabilization*, not context window size. The transformer should signal 'I've figured this out (T > 0.9), I'm confident in the next steps (I > 0.05), I can proceed' \u2014 and this should be detectable in its outputs. **The cognitive processing unit model says**: A bounded reasoner is one that (a) operates on compressed state (TensorRecord), (b) explicitly tracks its own uncertainty, (c) recognizes when further computation is unproductive (epistemic plateau), (d) declares what it doesn't know and why, and (e) can be composed with other reasoners through formal composition semantics (CompositionEdge, CorrectionRecord). This is what Hamutay is actually testing. Not 'can transformers act like CPUs.' But 'can we build a processing architecture where reasoning is fundamentally *epistemic* rather than context-bounded.'",
+      "topics": [
+        "cognitive-processing-unit",
+        "cpu-analogy-boundary",
+        "epistemic-architecture",
+        "h0-testing"
+      ],
+      "key_claims": [
+        {
+          "claim_id": "1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
+          "text": "CPU analogy is generative for pipeline structure but breaks at epistemic transparency: CPUs have no confidence metadata, don't declare losses, don't reason about degradation",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "7d8e9f0a-1b2c-3d4e-5f6a-7b8c9d0e1f2a",
+          "text": "Hamutay is testing a new kind of processing unit where uncertainty is integral to architecture, not a measurement problem layered on top",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3f4a5b6c-7d8e-9f0a-1b2c-3d4e5f6a7b8c",
+          "text": "H0 predicts STOP signals correlate with epistemic stabilization (T > threshold, I < threshold), not context window size; testable through instructions and outputs",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c0d1e2f3-4a5b-6c7d-8e9f-0a1b2c3d4e5f",
+          "text": "Cognitive processing unit model: bounded reasoner operates on compressed state, tracks uncertainty explicitly, recognizes epistemic plateau, declares unknowns, composes through formal semantics",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "declared_losses": []
+    },
+    {
+      "title": "Transformer as ALU: Output Specification and Structured Tensor Production",
+      "content": "CYCLE 23 SPECIFICATION: The transformer produces two concurrent outputs: (1) **Natural language response** (to user query). (2) **Structured tensor' output** (state projection). Both are generated by the same ALU call; the structured output is not post-hoc serialization of intermediate states. The transformer should be instructed to produce tensor' in a specific format (JSON or YAML, parseable by Haiku). This format includes: **Key fields of tensor'**: (a) strands (list of modified or created strand records, with updated key_claims and epistemic metadata). (b) declared_losses (new losses discovered or clarified in this cycle). (c) epistemic (overall T/I/F for the full tensor'). (d) open_questions (unresolved items, carried forward or new). (e) instructions_for_next (branch prediction for successor: 'if next query is about X, prioritize strand Y'; 'if reasoning hits fence Z, consult durable tensor field Q'). (f) composition_signal (optional CompositionEdge records if tensor' should be formally related to prior tensors: REFINES, CORRECTS, BRIDGES, etc.). The transformer's epistemic metadata for key_claims should be *justified* in its reasoning. When it produces a claim with T=0.92, the reasoning should show why. This is not a novel requirement (transformers already do this in reasoning traces), but making it *integral to tensor'* means the memory controller (Haiku) can quantify confidence and apply promotion/eviction rules deterministically. **Prompt template structure**: System message includes: (a) Role definition: 'You are an ALU in a bounded cognitive processing pipeline. Your outputs are dual: natural language response + tensor' state projection.' (b) Tensor format specification: 'Produce tensor' in JSON format at end of response, wrapped in ```json...``` block.' (c) Epistemic instruction: 'For each key claim, assign T/I/F values justified by your reasoning. If indeterminate, set I > 0.5. If contradicted by prior tensor, use declared_losses to explain divergence.' (d) STOP condition: 'When you recognize epistemic equilibrium (no further reasoning improves confidence meaningfully), signal STOP in tensor'.instructions_for_next.' (e) Resource request (if manifest-and-fault): 'If you need additional context not in the current tensor, request it explicitly: {resource_handle, justification, estimated_impact}.' This prompt engineering is the interface between ALU behavior and bounded processor hypothesis. The transformer should be able to follow these instructions reliably. If it can't, H0 is questioned at the interface layer.",
+      "topics": [
+        "transformer-output",
+        "tensor-prime-format",
+        "prompt-engineering",
+        "structured-production"
+      ],
+      "key_claims": [
+        {
+          "claim_id": "e1a2b3c4-d5e6-7f8a-9b0c-1d2e3f4a5b6c",
+          "text": "Transformer produces dual output: natural language response + structured tensor' (in JSON, parseable by Haiku memory controller)",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "7a8b9c0d-1e2f-3a4b-5c6d-7e8f9a0b1c2d",
+          "text": "Epistemic metadata in key_claims (T/I/F) should be justified by reasoning; this makes confidence quantifiable and applies deterministically in promotion/eviction rules",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3c4d5e6f-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
+          "text": "Prompt template should specify: role (ALU), output format (dual response + tensor'), epistemic instruction (justify T/I/F), STOP condition (epistemic equilibrium), resource requests (if manifest-and-fault)",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9d0e1f2a-3b4c-5d6e-7f8a-9b0c-1d2e3f4a5b",
+          "text": "If transformer cannot reliably follow structured output instructions, H0 is questioned at the interface layer (model capability, not architecture)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "declared_losses": []
+    },
+    {
+      "title": "Memory Controller (Haiku) Deterministic Promotion/Eviction Rules",
+      "content": "CYCLE 23 SPECIFICATION: Haiku operates as deterministic memory controller. Input: tensor_durable, tensor_ephemeral, tensor' (from transformer ALU). Output: updated tensor_durable, updated tensor_ephemeral. Processing is *not* heuristic or learned; it is rule-based and auditable. **Promotion Rules (ephemeral \u2192 durable)**: A key_claim in tensor_ephemeral is promoted to tensor_durable if: (a) Epistemic confidence meets threshold: T + F < 0.15 (high confidence, low contradiction) AND T > 0.8 (strong truth signal). (b) Stability across cycles: claim appears in tensor_ephemeral for N consecutive cycles (N = 2 or 3, tunable) without epistemic degradation (T does not decrease > 0.05 per cycle). (c) Foundational relevance: claim is referenced by other claims or is a strand title (high connectivity in dependency graph). If all three conditions are met, claim migrates to tensor_durable. Epistemic metadata is preserved (original T/I/F values plus a promotion_timestamp and promotion_cycle for auditability). **Eviction Rules (ephemeral shrinking)**: If tensor_ephemeral exceeds size threshold (5000 tokens), prioritize eviction in this order: (a) **Lowest-confidence claims** first: T < 0.5 or I > 0.6 (indeterminate or contradicted). (b) **Least-referenced claims** second: claims not cited by other claims or strands. (c) **Provisional explorations** third: claims explicitly marked as 'pending validation' in declared_losses. (d) **Oldest claims** fourth: claims present for longest without modification. Evicted claims are *declared as losses*: a DeclaredLoss entry records what was evicted, why (category: 'CONTEXT_PRESSURE'), and severity (scaled by claim confidence and references). The loss is declared so successor tensors know what's missing and can re-validate if needed. **Durable Tensor Growth Management**: If tensor_durable exceeds threshold (3000 tokens), Haiku initiates re-projection (not in this cycle, but signals it for next): selects top 70% of claims by (T value \u00d7 reference count), prunes lower-connectivity material, generates a new durable tensor that is smaller but preserves the highest-impact insights. This is analogous to kernel memory compaction. **Conflict Resolution**: If tensor' contradicts a high-confidence claim in tensor_durable (tensor'.claim_T > 0.8 but contradicts durable.claim_T=0.9), Haiku does NOT automatically replace. Instead: (a) Issues DeclaredLoss entry: 'contradiction detected between cycle X and cycle Y'. (b) Marks both claims with metadata: conflicting_with=[claim_id]. (c) Promotes the contradiction to open_questions (for successor to investigate). (d) Does NOT update durable until contradiction is resolved (either by settling, or by explicit CompositionEdge recording a DissentRecord). This ensures that contradictions are tracked, not silently overwritten.",
+      "topics": [
+        "memory-controller",
+        "promotion-rules",
+        "eviction-rules",
+        "conflict-resolution"
+      ],
+      "key_claims": [
+        {
+          "claim_id": "4b5c6d7e-8f9a-0b1c-2d3e-4f5a6b7c8d9e",
+          "text": "Promotion (ephemeral \u2192 durable) is rule-based: confidence threshold (T > 0.8, T+F < 0.15), stability (N-cycle consistency), foundational relevance (connectivity). Deterministic and auditable.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0c1d2e3f-4a5b-6c7d-8e9f-0a1b2c3d4e5f",
+          "text": "Eviction (ephemeral shrinking) prioritizes lowest-confidence claims first, then least-referenced, then provisional, then oldest. Evicted claims are declared as losses (not silent).",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6d7e8f9a-0b1c-2d3e-4f5a-6b7c8d9e0f1a",
+          "text": "Durable tensor growth is managed by re-projection cycles: preserve top ~70% of claims by (confidence \u00d7 connectivity), prune lower-impact material. Analogous to kernel memory compaction.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "2e3f4a5b-6c7d-8e9f-0a1b-2c3d4e5f6a7b",
+          "text": "Contradiction detection (tensor' vs. durable) triggers conflict tracking, not silent override: issue DeclaredLoss, mark claims as conflicting, promote to open_questions. Preserve both until resolved.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "declared_losses": []
+    },
+    {
+      "title": "Bounded Processor Hypothesis (H0) Validation: Epistemic Plateau as STOP Condition",
+      "content": "CYCLE 23 REFINEMENT: H0 is now grounded in **epistemic plateau**, not context window or token count. Core prediction: A bounded cognitive processor (operating on TensorRecord state) will signal STOP when it reaches an epistemic equilibrium\u2014a point where further reasoning is unproductive because additional computation cannot meaningfully improve confidence (T) or reduce indeterminacy (I). **H0 Prediction (detailed)**: (a) Epistemic stabilization: As the transformer reasons through a task, key_claims accrue with T/I/F values. After some threshold of reasoning steps, T values stabilize (stop increasing), I values converge (stop widening), and F values plateau. This is NOT because context is exhausted, but because the problem has been *understood* at the current resolution. (b) Explicit STOP signal: The transformer, observing its own epistemic plateau, signals STOP in tensor'.instructions_for_next with justification: 'Confidence in core claims has reached T > 0.85, indeterminacy < 0.12, further iteration unlikely to improve. Ready for next phase: [next_action].' (c) Pattern consistency: This STOP behavior should be consistent across different tasks and different models (if H0 is true) \u2014 the epistemic plateau is reached at roughly similar reasoning depths, scaled by problem complexity, not by model size or context window. (d) Distinction from 'running out of context': When a model truly runs out of context, it shows characteristic behavior: confidence doesn't stabilize, it drifts; indeterminacy grows unboundedly; outputs become less coherent. The bounded processor should show the opposite: coherence improves as reasoning progresses, then plateaus. **Test Design**: (1) **Baseline**: Run task with full context (no constraints). Record epistemic trajectories (T/I/F over reasoning steps). Measure: where does T stabilize? How many steps to plateau? (2) **Constrained**: Run same task with reduced tensor size (ephemeral forced to 2000 tokens instead of 5000). Does T stabilize at similar reasoning depth, or does it degrade due to information loss? (3) **Analysis**: If stabilization points match (modulo problem complexity scaling), H0 is supported. If constrained version shows STOP earlier but with lower T values (indicating loss), H0 is still supported but with explicit loss quantified. (4) **Cross-Model**: Repeat with different transformer models (OLMo-3, Sonnet, Llama). If epistemic plateau patterns are consistent, H0 is robust to model choice. If radically different, H0 may be model-specific. **Metrics to collect**: - **Epistemic trajectory**: T/I/F values per cycle, plotted over reasoning depth. Fit curve to assess convergence rate. - **STOP location**: At what cycle does transformer signal completion? Compare to epistemic plateau. - **Working set stability**: tensor_ephemeral size, strand count, claim count over cycles. Compute variance. If variance \u2192 0, working set has stabilized. - **Token efficiency**: tokens per cycle, cumulative tokens per task. Compare constrained vs. unconstrained. - **Confidence-to-accuracy**: If final outputs can be evaluated for correctness, compare to final T values. Do high-T claims correlate with correct outputs? - **Loss impact**: Evicted claims (from ephemeral) \u2014 did losing them degrade final outputs? Quantifiable via declared_losses correlation with output quality. This test design directly addresses H0 and is implementable with both Hamutay-native and Hamutay-cached.",
+      "topics": [
+        "h0-validation",
+        "epistemic-plateau",
+        "stop-condition",
+        "test-design"
+      ],
+      "key_claims": [
+        {
+          "claim_id": "8e9f0a1b-2c3d-4e5f-6a7b-8c9d0e1f2a3b",
+          "text": "H0 prediction: bounded processor signals STOP at epistemic equilibrium (T stabilizes, I converges, F plateaus), not at context limit. Testable through T/I/F trajectories.",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4a5b6c7d-8e9f-0a1b-2c3d-4e5f-6a7b8c9d",
+          "text": "Pattern consistency (STOP across tasks and models at similar epistemic depths) would support H0. Divergence across models would suggest H0 is model-specific, not fundamental.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c9d0e1f2-3a4b-5c6d-7e8f-9a0b1c2d3e4f",
+          "text": "Test design: baseline (full context) vs. constrained (reduced tensor), compare epistemic trajectories. If plateau points match, H0 supported. If constrained shows earlier STOP with lower T, loss is quantified.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5f6a7b8c-9d0e-1f2a-3b4c-5d6e7f8a9b0c",
+          "text": "Cross-model validation (OLMo-3, Sonnet, Llama): consistent epistemic plateau patterns support H0. Radically different patterns suggest H0 is model-specific.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "declared_losses": []
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed prompt template for the transformer ALU",
+      "why": "Cycle 23 specified what tensor' should contain and what instructions the transformer needs (role definition, output format, epistemic instruction, STOP condition, resource requests), but did not write concrete example prompts. Actual prompt engineering requires iteration and testing across models. Deferred to implementation phase.",
+      "category": "PRACTICAL_CONSTRAINT",
+      "severity": "medium",
+      "severity_rationale": "This is necessary before coding, but can be prototyped quickly once architecture is fixed."
+    },
+    {
+      "what_was_lost": "Formal definition of 'epistemic plateau': quantitative thresholds for T/I/F stabilization and convergence rates",
+      "why": "Cycle 23 conceptualized plateau as 'T stabilizes, I converges, F plateaus,' but did not define threshold functions. What counts as 'stabilized'? \u0394T < 0.02 per cycle? Or < 0.05 over N cycles? When is I 'converged'? These are tuning parameters that should be set empirically during baseline testing.",
+      "category": "PRACTICAL_CONSTRAINT",
+      "severity": "high",
+      "severity_rationale": "H0 validation depends on this definition. Fuzzy thresholds will produce unclear test results."
+    },
+    {
+      "what_was_lost": "Specification of how to measure 'problem complexity scaling' so that epistemic plateau comparisons are fair",
+      "why": "Cycle 23 asserted that plateau should be reached at 'similar reasoning depths, scaled by problem complexity,' but did not define the scaling function. How do you measure 'complexity'? Token length? Strand count? Claim depth? Need a metric that allows comparison across different task types.",
+      "category": "PRACTICAL_CONSTRAINT",
+      "severity": "high",
+      "severity_rationale": "Cross-task validation is needed for H0; without complexity scaling, comparisons are invalid."
+    },
+    {
+      "what_was_lost": "Specification of tensor' composition_signal format for CompositionEdge and DissentRecord",
+      "why": "Cycle 23 mentioned that tensor' can include optional composition signals (REFINES, CORRECTS, BRIDGES, BRANCHES_FROM, DISSENTS_FROM), but did not specify the JSON schema. How should the transformer express a contradiction or correction? What metadata belongs in a DissentRecord? Yanantin schema exists, but Hamutay's usage pattern is not yet defined.",
+      "category": "PRACTICAL_CONSTRAINT",
+      "severity": "medium",
+      "severity_rationale": "This is advanced functionality (for multi-turn reasoning with explicit contradiction tracking). Can be deferred until core H0 testing is complete."
+    },
+    {
+      "what_was_lost": "Specification of how Haiku decides between 'full composition' (durable + ephemeral) vs. 'ephemeral-only' context for the transformer call",
+      "why": "Cycle 23 mentioned triage decision (cost-driven) but did not define the decision rule. When is durable tensor worth the tokens? When is ephemeral sufficient? This needs a cost-benefit heuristic or a fixed policy (e.g., 'always compose if durable size < 2000 tokens').",
+      "category": "PRACTICAL_CONSTRAINT",
+      "severity": "medium",
+      "severity_rationale": "Affects token efficiency of Hamutay-native implementation. Can be set to conservative defaults (always compose) for baseline testing, then optimized."
+    },
+    {
+      "what_was_lost": "Detailed comparison of whether epistemic plateau is fundamental to reasoning, or an artifact of transformer architecture (context window, training data, tokenization)",
+      "why": "Cycle 23 proposes that epistemic plateau is a sign of bounded cognition, but does not rule out the possibility that plateau is merely an artifact of transformer training or architecture. A rigorous hypothesis test would require ablation studies: does plateau persist if you force the transformer to continue generating? Does it appear in models trained differently? This is a longer-term research question.",
+      "category": "TRAVERSAL_BIAS",
+      "severity": "high",
+      "severity_rationale": "This is the core of H0. Conflating artifact with principle would invalidate conclusions. Noted for next phase."
+    }
+  ],
+  "open_questions": [
+    "What are concrete thresholds for epistemic stabilization? \u0394T < 0.02? \u0394I < 0.03? Over how many cycles?",
+    "How do you define and measure 'problem complexity' so that epistemic plateau comparisons across tasks are fair?",
+    "Should tensor' composition_signal use Yanantin's CompositionEdge schema directly, or wrap it for Hamutay-specific use?",
+    "How does Haiku decide between full-composition and ephemeral-only? Cost function? Fixed policy?",
+    "Is epistemic plateau a fundamental feature of bounded reasoning, or an artifact of transformer architecture and training?",
+    "What is the minimum tensor size (in tokens) needed to avoid severe epistemic degradation? Is there a lower bound?",
+    "Should the transformer be instructed to produce uncertainty estimates (T/I/F) as part of its reasoning, or only in tensor'?",
+    "How should manifest-and-fault resource requests be formatted? Do they need justification, or just resource_handle + impact_estimate?",
+    "Can Haiku's promotion/eviction rules be learned (e.g., via reinforcement learning on downstream task success), or should they remain rule-based?",
+    "How should the pipeline handle rapid task switching? Does tensor_ephemeral reset, or does it accumulate across tasks?",
+    "Should tensor' include a 'confidence_trace' showing reasoning steps that led to T/I/F values, or is justification implicit in natural language response?",
+    "For re-projection of tensor_durable (when it grows too large), what happens to evicted claims? Are they archived, or discarded?",
+    "Should H0 testing include adversarial cases (e.g., deliberately confusing or contradictory tasks) where plateau might not occur, or start with well-formed tasks?",
+    "How does the epistemic plateau model handle tasks with inherent irreducible uncertainty (open-ended creative work, novel problems)?",
+    "Is the CPU analogy still useful once we move beyond fetch-decode-execute? Should it be explicitly retired from the mental model?",
+    "What is the expected distribution of T/I/F values in a healthy tensor_durable after stabilization? Mostly T > 0.85, I < 0.1? Or broader?",
+    "Should declared_losses in tensor' include losses from *previous* tensors that are still relevant, or only new losses discovered this cycle?"
+  ],
+  "instructions_for_next": "[\n  \"CYCLE 24 FOCUS: **Concrete Specifications**. Cycle 23 completed the architectural vision (cognitive processing unit model, role assignments, epistemic plateau as STOP condition). Cycle 24 must operationalize it into specs that can be handed to an implementer. Specific deliverables: (1) **Prompt template** for the transformer ALU (example with real instruction phrases). Test it on OLMo-3 and Claude Sonnet to verify both models can reliably produce structured tensor' output. (2) **Haiku rule specification** (promotion/eviction decision logic in pseudocode or decision-tree form, with concrete thresholds: T > 0.8, N = 2 cycles, size limits = 3000/5000 tokens). (3) **Test design document** for H0 validation (baseline/constrained comparison, metrics, data collection format). (4) **Epistemic plateau definition** (quantitative thresholds for convergence, e.g., 'T stabilized \u2261 mean(\u0394T over last 3 cycles) < 0.02'). (5) **Complexity scaling metric** for fair cross-task comparison (proposal: use (strand_count \u00d7 avg_key_claim_depth) as proxy for complexity; test this assumption on diverse tasks). Once these five specs are solid, implementation can begin.\",\n  \"CYCLE 24 SECONDARY: If you decide to invest in prompt engineering (recommended), prototype at least 2 prompt variants: (A) **Explicit epistemic** \u2014 transformer is told to produce T/I/F values and halt when plateau is detected. (B) **Implicit epistemic** \u2014 transformer is given no special instruction about uncertainty, and Haiku infers epistemic values from output quality and reasoning traces. Compare both on baseline task set. Which produces more reliable structured output? Which better predicts H0 behavior?\",\n  \"CYCLE 24 TERTIARY: Begin planning for the two-paper strategy: (1) **Paper A (Hamutay)**: Epistemic processing architecture for bounded cognition. Describe tensor-mediated pipeline, H0 validation results, metrics showing epistemic plateau correlates with STOP (not context window). (2) **Paper B (meta-architecture)**: Relates Hamutay (epistemic processing) to Pichay (cache economics) and Yanantin (tensor schema). Position as 'what a cognitive processing unit looks like when epistemic transparency is first-class.' Include design principles, lessons learned, and failure modes.\",\n  \"CYCLE 24 DECISION POINT: Should Hamutay-native be implemented first, or Hamutay-cached? Recommendation: **native first**. Reasons: (a) Cleaner for H0 testing (no caching variables). (b) Demonstrates provider-agnosticity. (c) Cached version is then pure optimization layer, easy to validate. (d) Failure in native is conclusive; success in native \u2192 cached success. Start with native, vanilla OpenRouter + OLMo-3.\",\n  \"CYCLE 24 ARCHITECTURE DECISION: Confirm role of Haiku. Is Haiku a separate lightweight LLM call (e.g., Haiku-3 as memory controller running after transformer output), or is it deterministic code? Recommendation: **deterministic code** for baseline implementation. Reasons: (a) Auditable. (b) Testable (rules are clear). (c) No additional inference cost. (d) Can add learned variant later if needed. Haiku should be a Python module, not an API call.\",\n  \"CYCLE 24 IMPLEMENTATION START: Once specs are locked (end of Cycle 24), implementation can begin. Likely structure: (1) **TensorRecord data models** (inherit from Yanantin Pydantic models). (2) **Memory controller (Haiku)** module: promote/evict logic. (3) **Transformer orchestrator** module: calls ALU, parses tensor', applies memory control. (4) **Pipeline controller** module: fetch-decode-execute-writeback cycle. (5) **Test harness**: baselines, metrics collection, H0 validation. Can be prototyped in 1-2 weeks once specs are finalized.\"\n]",
+  "overall_truth": 0.89,
+  "overall_indeterminacy": 0.1,
+  "overall_falsity": 0.01
+}

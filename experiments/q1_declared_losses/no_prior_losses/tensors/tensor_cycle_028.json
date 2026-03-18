@@ -1,0 +1,152 @@
+{
+  "strands": [
+    {
+      "title": "Context Length as Structural Bottleneck",
+      "content": "Du et al. 2025 demonstrates that performance degradation scales with context length even when retrieval is perfect and all irrelevant tokens are masked. At 30K tokens, performance drops 8-50% despite zero distraction. This is not a retrieval or noise problem\u2014it's a fundamental architectural constraint. The transformer's ability to reason degrades as input size grows, independent of information quality. Positional encoding and attention distribution break down under context pressure.",
+      "key_claims": [
+        {
+          "claim": "Context length causes architectural reasoning degradation independent of information quality",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.1,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.85,
+        "indeterminacy": 0.1,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Mitigation: Tensor Projection + Retrieve-then-Solve Pipeline",
+      "content": "Decouple retrieval from reasoning: first pass extracts relevant evidence, second pass solves with only that evidence in short, clean context. The durable/ephemeral tensor split embodies this: durable tensor is compressed projected state (not raw history), ephemeral tensor is clean working set for this reasoning step. Context is re-projected every cycle, not appended until degradation. The core hypothesis: a lossy but well-formed projection that explicitly declares what was discarded will sustain coherent reasoning better than a bloated lossless context. This addresses the hot mess paper's finding by keeping working context short.",
+      "key_claims": [
+        {
+          "claim": "Explicit loss declaration enables models to reason about incompleteness rather than hallucinate",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim": "Durable/ephemeral tensor split can decouple state compression from working reasoning context",
+          "epistemic": {
+            "truth": 0.7,
+            "indeterminacy": 0.25,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.75,
+        "indeterminacy": 0.2,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Autoresearch Loop as Optimization Mechanism",
+      "content": "Karpathy's autoresearch framework: agent modifies train.py \u2192 runs 5-minute experiment \u2192 evaluates single metric \u2192 decides keep/discard \u2192 repeats (~12 exp/hr, ~100 overnight on single GPU). Adapted for tensor projection: modify projection strategy \u2192 run batch of hypothesis attempts \u2192 measure embedding dispersion of failure modes \u2192 decide keep/discard \u2192 repeat. Tunable parameters: cycle cost (Haiku vs. main model), projection algorithm, durable/ephemeral split ratio, declared losses granularity. program.md directives steer which exploration space is open vs. locked.",
+      "key_claims": [
+        {
+          "claim": "Autonomous optimization loop can find tensor projection strategies that balance compactness and coherence",
+          "epistemic": {
+            "truth": 0.65,
+            "indeterminacy": 0.3,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.65,
+        "indeterminacy": 0.3,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Declared Losses as First-Class Artifact",
+      "content": "Most compression is silent\u2014you don't know what's gone. The Apacheta tensor format makes loss explicit: every projection declares what semantic content was discarded and why. This allows the transformer to reason about what it *doesn't know* instead of hallucinating to fill gaps. This is not just bookkeeping; it may be the critical difference between compact garbage and compact reasoning. Du et al. never tested what happens when you give a model a short context that honestly declares its incompleteness. That's an unexplored experimental axis that could vindicate the entire approach.",
+      "key_claims": [
+        {
+          "claim": "Explicit loss declaration is essential to preventing hallucination under lossy compression",
+          "epistemic": {
+            "truth": 0.7,
+            "indeterminacy": 0.25,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.7,
+        "indeterminacy": 0.25,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Implementation Ready: Cycle Cost Tuning + Empirical Exploration",
+      "content": "The approach is coherent. Foundations are solid. Two remaining dimensions: (1) Clock cycle cost: every projection step incurs a cost (Haiku post-processing is cheap, main model output tokens are expensive). This is a tunable parameter the autoresearch loop can explore. (2) Empirical exploration: the only path forward is to build and test. The autoresearch loop will discover what works through systematic variation of projection strategy, measuring success via embedding dispersion of failure modes and declared loss coherence. Hypothesis space is large but structured; program.md directives constrain the search.",
+      "key_claims": [
+        {
+          "claim": "The tensor projection + declared losses + autoresearch loop is implementable and testable",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.8,
+        "indeterminacy": 0.15,
+        "falsity": 0.05
+      }
+    }
+  ],
+  "declared_losses": [
+    {
+      "content_lost": "Detailed specification of program.md directives (what exploration space is open/locked)",
+      "reason": "Requires empirical discovery through implementation; cannot be fully specified before first experiments run",
+      "criticality": "medium",
+      "recovery_path": "instructions_for_next will guide specification during implementation"
+    },
+    {
+      "content_lost": "Precise definition of embedding dispersion metric (how to measure tight vs. scattered clustering)",
+      "reason": "Metric quality depends on failure mode topology, which is unknown until first test runs",
+      "criticality": "high",
+      "recovery_path": "First iteration will produce baseline; metric refinement feeds back into loop"
+    },
+    {
+      "content_lost": "Quantitative relationship between tensor compression ratio and reasoning coherence",
+      "reason": "This is the core empirical question; cannot be answered without systematic experiments",
+      "criticality": "critical",
+      "recovery_path": "Autoresearch loop will generate this relationship through variation + measurement"
+    },
+    {
+      "content_lost": "Transfer properties of retrieve-then-solve principle from RAG to pure reasoning domains",
+      "reason": "Remains unexplored; requires experiments on non-retrieval hypothesis reasoning",
+      "criticality": "medium",
+      "recovery_path": "Design first pure-reasoning test case with Riemann hypothesis attempts; measure context sensitivity"
+    },
+    {
+      "content_lost": "Detailed handoff protocol between autoresearch loop and Hamutay proof system",
+      "reason": "Integration specification deferred until implementation phase; not yet architected",
+      "criticality": "medium",
+      "recovery_path": "Architecture phase will define state format and verification contract"
+    }
+  ],
+  "open_questions": [
+    "Does explicit loss declaration actually prevent hallucination under lossy projection, or is it just a transparency tool? (Empirical test: run same reasoning task with/without declared losses, measure coherence.)",
+    "What is the optimal durable/ephemeral tensor ratio for Riemann hypothesis space exploration? (Empirical test: autoresearch loop varies ratio, measures embedding dispersion vs. reasoning steps completed.)",
+    "How should embedding dispersion metric be operationalized? Is it measured over failed attempts only, successful only, or both? Does 'tight clustering' correlate with reasoning quality? (Empirical discovery: first test batch will show structure.)",
+    "What is the cycle cost vs. benefit tradeoff? (Empirical test: measure wall-clock time per cycle vs. reasoning steps saved by projection.)",
+    "Can the autoresearch loop run on a single GPU with wall-clock time budget (5 min analogue), or does Riemann hypothesis complexity demand adaptive time budgets?",
+    "What prevents the loop from optimizing toward trivial solutions (e.g., always returning 'unknown')? (Guard rails: constraints on declared_losses diversity, minimum working context size, etc.)",
+    "How does tensor projection integrate with Hamutay proof verification? (Architecture question, deferred to implementation phase.)"
+  ],
+  "instructions_for_next": "[\n  \"BUILD PHASE 1: Implement minimal Apacheta tensor projection (durable/ephemeral split with explicit declared_losses). No autoresearch loop yet. Just: take conversation chunk \u2192 project to tensor \u2192 unproject to verify coherence. Measure: size reduction, information retention, declared loss coherence.\",\n  \"BUILD PHASE 1.5: Design and run first 'hot mess paper' control experiment. Take a 30K token conversation, project it to 5K durable + 2K ephemeral with full declared losses. Run Riemann hypothesis reasoning task with short-context transformer. Measure reasoning steps completed vs. baseline (unprojected). Hypothesis: declared losses prevent hallucination.\",\n  \"BUILD PHASE 2: Implement autoresearch loop shell. Define: what train.py equivalent is (tensor projection code to vary), what 5-minute analogue is (number of Riemann attempts? per-attempt timeout?), what metric is (embedding dispersion, declared loss coherence ratio, steps-to-failure?). Start with grid search over 2-3 projection strategy parameters.\",\n  \"THEORY PHASE: Formalize embedding dispersion metric. How to compute it from failure mode trajectories? Does it correlate with reasoning quality in early experiments? Refine metric based on Phase 1.5 results.\",\n  \"DESIGN PHASE: Write draft program.md directives. What is open to variation (durable/ephemeral ratio? loss granularity? compression algorithm?)? What is locked (tensor format, declared_losses requirement, measurement protocol)?\",\n  \"INTEGRATION PHASE: Design handoff protocol between tensor projection loop and Hamutay proof system. How does optimizer pass candidate strategies to verifier? How does verifier feedback loop back to optimizer?\",\n  \"DECISION GATE: After Phase 1.5, evaluate whether explicit loss declaration actually prevents hallucination. If yes, proceed to full autoresearch loop. If no, investigate what other property (loss coherence? structured incompleteness?) matters. Do not proceed to Phase 2 with broken core hypothesis.\"\n]",
+  "overall_truth": 0.78,
+  "overall_indeterminacy": 0.18,
+  "overall_falsity": 0.04
+}

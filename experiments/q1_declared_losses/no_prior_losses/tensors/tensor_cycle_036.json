@@ -1,0 +1,239 @@
+{
+  "strands": [
+    {
+      "title": "Tensor Projection Core Problem",
+      "content": "The projection problem requires taking transformer output + prior tensor state and producing an updated tensor that maintains reasoning coherence vs append-only logs. Core tension: TensorRecord is semantically rich (strands, claims, epistemic metadata, declared losses, questions, instructions) but projector must reliably populate all fields. Proposal: start with minimal viable set (strands, key claims, declared losses, instructions, open questions) and iterate richness in autoresearch loop. Skip provenance/lineage for H0. NEW: Real-world validation pathway opened \u2014 projector will be tested against vast trove of prior conversations to measure stability, drift, and compressibility.",
+      "key_claims": [
+        {
+          "claim_id": "3669cfdd-3685-48bb-8d03-f6bb94695d02",
+          "text": "Projection (tensor_d, transformer_output) \u2192 tensor_d' is the core research question; everything else is engineering",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.1,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "b2196f6f-c85d-4879-8d0d-19fb99bfe61e",
+          "text": "TensorRecord has sufficient richness (strands, claims, losses, questions, instructions, T/I/F) to test coherence hypothesis vs append-only baseline",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "3a215a4e-08cd-4b2b-8ee0-7fe58f17ae4f",
+          "text": "Minimal viable projector should include: strands, key claims with T/I/F, declared losses, instructions_for_next, open questions; defer provenance/lineage",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.08,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "8c3d2e1a-9f42-4d6c-b1e8-2a5c3d4e5f6a",
+          "text": "Running projector against conversation logs enables empirical testing of drift hypotheses and declares explicit validation strategy",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.13,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.84,
+        "indeterminacy": 0.11,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Implementation Architecture: Projector as Separate Module",
+      "content": "Projector should be standalone module decoupled from main transformer model. Input: (tensor_d, transformer_output). Output: tensor_d' (updated TensorRecord). Acts as memory controller (not ALU). Enables independent testing and iteration. Haiku model size acceptable for in-context memory integration. Pydantic base model (ApachetaBaseModel) uses frozen=True, extra='forbid', Pydantic v2 conventions \u2014 projector output must respect this schema.",
+      "key_claims": [
+        {
+          "claim_id": "f291358e-9354-41b9-869e-16e82352e34e",
+          "text": "Projector should be separate from main model (transformer) \u2014 projector is memory controller, not reasoning engine",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.09,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "d151ef0f-7f6e-49be-85c5-dd5357dc5210",
+          "text": "ApachetaBaseModel requires frozen=True (immutable), extra='forbid' (strict schema), Pydantic v2 serialization",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.05,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "b7b8dd7c-fa05-48ca-bbe2-43c4170db9f2",
+          "text": "Standalone module enables independent testing before integration into main reasoning loop",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.1,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.87,
+        "indeterminacy": 0.08,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Design Decision: H0 Scope \u2014 What to Build First",
+      "content": "H0 (Hypothesis 0) should demonstrate that projector can maintain reasoning coherence with lossy compression. Start minimal: strands (thematic threads), key claims with T/I/F epistemic values, declared losses (explicit incompleteness), instructions_for_next (branch prediction), open questions (unresolved). Defer: provenance chains, composition equations, lineage tags \u2014 these are bookkeeping, not core cognition. Iterative enrichment via autoresearch loop allows adding complexity once H0 baseline established.",
+      "key_claims": [
+        {
+          "claim_id": "fff27329-8ef8-4436-bf1d-95b6bed02d15",
+          "text": "H0 should test: lossy projection maintains reasoning coherence vs append-only baseline",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.14,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "02704605-3908-4dbc-86e4-f2033c38e763",
+          "text": "Provenance, composition equations, lineage tags are bookkeeping (defer) not core cognition (H0 focus)",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.8,
+        "indeterminacy": 0.15,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Cycle 35-36 Actionable: Build Standalone Projector Module",
+      "content": "Ready to implement minimal viable projector as standalone Python module. Takes (tensor_d: TensorRecord, transformer_output: str) and produces tensor_d': TensorRecord. Should respect ApachetaBaseModel constraints. Can test independently before integrating into main loop. Starting with rule-based approach (deterministic, debuggable, fast) for H0 baseline. NEW: Real-world test harness opening \u2014 will run projector against actual conversation logs from vast repository (/home/tony/projects/pichay/experiments/) to validate projection stability, strand drift, and compression efficiency.",
+      "key_claims": [
+        {
+          "claim_id": "4075934f-e02d-480c-8aee-d7f473ed5e27",
+          "text": "Projector input: (tensor_d: TensorRecord, transformer_output: str); output: tensor_d': TensorRecord",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.05,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "e2122443-70ed-40ed-9d3c-604a5397fd49",
+          "text": "Rule-based approach recommended for H0 baseline (deterministic, debuggable, faster iteration than LLM-assisted)",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.16,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "a7c2d3e4-f5g6-h7i8-j9k0-l1m2n3o4p5q6",
+          "text": "Real-world validation against conversation logs will measure projection stability, declared_losses as drift reduction mechanism, and compression ratio",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.17,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.82,
+        "indeterminacy": 0.13,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "NEW: Declared Losses as Drift Anchors \u2014 Hypothesis Emerging",
+      "content": "User introduced genuinely novel hypothesis (cycle 106): declared losses (explicit accounting of what was dropped) could reduce model drift over long conversation chains. Reasoning: silent loss creates undetectable divergence because the model forgets it forgot. Explicit declared_losses in tensor_d' act as checkpoints \u2014 future projections can either re-acquire dropped content (if relevant) or deliberately leave it dropped with awareness. This transforms declared_losses from bookkeeping (what we couldn't fit) into active mechanism for coherence preservation. Next projector could use prior declared_losses to inform what NOT to re-acquire unless user signals importance.",
+      "key_claims": [
+        {
+          "claim_id": "b9c3d4e5-f6a7-b8c9-d0e1-f2g3h4i5j6k7",
+          "text": "Declared losses (explicit incompleteness) can function as drift anchors if future projections use them to guide coherence maintenance",
+          "epistemic": {
+            "truth": 0.72,
+            "indeterminacy": 0.22,
+            "falsity": 0.06
+          }
+        },
+        {
+          "claim_id": "c0d1e2f3-a4b5-c6d7-e8f9-g0h1i2j3k4l5",
+          "text": "Silent loss (unaccounted forgetting) is the root of long-horizon drift; making losses explicit enables corrective feedback",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.19,
+            "falsity": 0.06
+          }
+        },
+        {
+          "claim_id": "d1e2f3g4-h5i6-j7k8-l9m0-n1o2p3q4r5s6",
+          "text": "Projector at turn N+1 can inspect declared_losses from turn N and decide whether to re-acquire or maintain conscious discard",
+          "epistemic": {
+            "truth": 0.68,
+            "indeterminacy": 0.25,
+            "falsity": 0.07
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.72,
+        "indeterminacy": 0.22,
+        "falsity": 0.06
+      }
+    }
+  ],
+  "declared_losses": [
+    {
+      "loss_id": "loss_cycle36_001",
+      "what": "Detailed technical specification of conversation log format (JSON schema, indexing, metadata fields)",
+      "why": "User issued bash command to explore /home/tony/projects/pichay/experiments/ but projector cannot execute or observe output. Format discovery deferred until assistant explores and reports back.",
+      "impact": "Projector implementation will need to await format specification; cannot begin integration with real logs until data schema is known",
+      "severity": "HIGH"
+    },
+    {
+      "loss_id": "loss_cycle36_002",
+      "what": "Specific criteria for 'vast trove of conversations' \u2014 how many turns, how many conversation threads, temporal span, average conversation length",
+      "why": "User mentioned 'vast trove' but no quantification provided. Critical for validating compression ratio, strand stability, and statistical significance of drift measurements.",
+      "impact": "Cannot design test strategy or set acceptance thresholds until data volume is known (e.g., 50 conversations vs 5000 conversations changes validation approach)",
+      "severity": "MEDIUM"
+    },
+    {
+      "loss_id": "loss_cycle36_003",
+      "what": "Detailed mechanism for 'drift reduction' via declared_losses \u2014 how does projector at turn N+1 use prior losses to guide re-acquisition decision?",
+      "why": "Hypothesis is conceptually sound but operationalization is deferred. No algorithm sketched for loss-guided coherence maintenance.",
+      "impact": "Core novelty (declared_losses as drift anchor) remains design-stage; implementation strategy not yet specified. Will require design iteration before testing.",
+      "severity": "MEDIUM"
+    }
+  ],
+  "open_questions": [
+    "IMPLEMENTATION: What is the exact signature and return type contract for the rule-based projector? Should it be a pure function (TensorRecord, str) \u2192 TensorRecord or a class with internal state (model references, cached embeddings)?",
+    "IMPLEMENTATION: How should the projector handle new turns/content that don't fit existing strands? Create new strand, augment existing strand, or declare as loss?",
+    "IMPLEMENTATION: For key claim extraction from transformer_output, should projector parse raw text (sentence-level tokenization, assertion detection) or expect transformer to pre-annotate claims in structured format?",
+    "IMPLEMENTATION: Should projector update epistemic values for existing claims when new evidence appears (e.g., user confirms, changes prior belief), or append new claims and let prior claims stand?",
+    "IMPLEMENTATION: For declared_losses, should projector proactively identify what was dropped (introspective: 'I could have tracked X but didn't'), or only declare losses when explicitly signaled by user/transformer?",
+    "VALIDATION: After implementing rule-based projector, how will we establish ground truth for cycle 36 test run? Manual annotation of test data, or use prior cycles as implicit gold standard?",
+    "VALIDATION: What is the acceptance gate for H0? Compression ratio < 25%? Zero silent losses? Recall > 0.8 on claim extraction? Must all be met or is one sufficient?",
+    "THEORETICAL: How does tensor_d' relate to tensor_e' mentioned in turn 105? Is tensor_e' the epistemic metadata envelope, or a separate structure?",
+    "DESIGN: Should the projector emit only diffs (what changed from tensor_d to tensor_d') or full tensor_d' (easier to reason about, potentially redundant)?",
+    "INTEGRATION: Once projector is standalone and tested, how does it integrate into the main reasoning loop? Does transformer.generate() call projector internally, or does projector run in separate thread/process?",
+    "DATA_EXPLORATION: What is the format and structure of conversation logs in /home/tony/projects/pichay/experiments/? JSON, JSONL, pickle, custom format? What metadata is available (timestamp, speaker, turn_id, model_version)?",
+    "VALIDATION_STRATEGY: For 'vast trove' validation, should projector run on all conversations (exhaustive) or sample subset (e.g., random 10%, stratified by length/date)? What sample size yields statistically significant results for drift/stability measurements?",
+    "DRIFT_HYPOTHESIS: How do we operationalize 'strand convergence' vs 'strand drift'? Possible metrics: (a) euclidean distance between strand embeddings at turn N and N+K, (b) cosine similarity of strand_content strings, (c) manual coherence judgment, (d) claim membership stability (does claim X consistently belong to strand Y?). Which metric(s) should we use?",
+    "DECLARED_LOSSES_MECHANISM: If projector declares loss of topic X at turn N, and topic X re-emerges at turn N+5, should projector: (a) add to existing loss record (append), (b) create new strand for X with annotation ('re-emerged from prior loss'), (c) mark loss as 'resolved' and remove from declared_losses, or (d) track loss trajectory separately? Design needed.",
+    "REAL_WORLD_READINESS: Before running projector on thousands of real conversations, should we add circuit-breaker logic (e.g., max processing time, max strand count, max claims per tensor)? Failure modes unknown until tested at scale.",
+    "PHASE_BOUNDARY: Does 'run projector against vast conversation trove' trigger Phase 1.5 (empirical validation) or is it still Phase 1 (H0 baseline)? Or does it constitute its own phase boundary (Phase 1.75: real-world scaling)?"
+  ],
+  "instructions_for_next": "[\n  \"IMMEDIATE (CYCLE 36): Explore /home/tony/projects/pichay/experiments/ and report back: (1) conversation log file format (JSON/JSONL/other), (2) schema/fields available per turn, (3) total count of conversations and turns, (4) date range, (5) any existing metadata (model version, conversation length, topics). This unblocks projector implementation with real data format.\",\n  \"CYCLE 36: Make explicit decision on strand creation heuristic for rule-based projector. Option A: one strand per topical cluster (semantic keyword clustering). Option B: finer grain (one strand per claim). Option C: user-specified strand boundaries. Recommend Option A for cycle 36 baseline; will need to validate strand coherence on real data.\",\n  \"CYCLE 36: Design epistemic value assignment mapping table. Create mapping: (source_type, claim_type, confidence_signal) \u2192 (truth, indeterminacy, falsity). Example: (source='user', type='assertion', confidence='high') \u2192 (0.85, 0.08, 0.07). Build full mapping and document rationale. Validate calibration against cycles 1-35 conversation.\",\n  \"CYCLE 36-37: Implement rule-based projector as standalone Python module (~500-800 lines target). Scope: (1) claim extraction from transformer_output using sentence-level heuristics and assertion markers, (2) strand assignment via keyword clustering, (3) epistemic value assignment via mapping table, (4) explicit loss declaration for dropped content, (5) instruction generation for next cycle. Test schema validation (Pydantic frozen=True, extra='forbid').\",\n  \"CYCLE 37: Prepare test dataset. Select 3-5 representative conversations from /home/tony/projects/pichay/experiments/ (varied lengths: short, medium, long; varied topics). Manually annotate gold standard: (1) key claims extractable from each assistant turn, (2) gold T/I/F epistemic values with rationale, (3) expected strands and strand membership, (4) what should be dropped (lossy layer), (5) ground truth declared_losses. Target: ~50-100 annotated claims, 6-10 strands. This becomes validation benchmark.\",\n  \"CYCLE 37: Run rule-based projector on test dataset. Measure: (1) claim extraction recall/precision vs gold standard, (2) strand coherence (manual review: do members belong together?), (3) compression ratio (tensor_d' size vs original conversation text), (4) declared_losses inventory (is projector identifying what it drops?), (5) epistemic value calibration (do assigned T/I/F values match gold standard rationales?). Document all mismatches and failure modes.\",\n  \"CYCLE 37: Design lost-guided re-acquisition mechanism for cycle N+1 projector. Question: when strand/claim appears again after being dropped, how does projector use prior declared_losses to decide whether to re-acquire? Sketch algorithm: (a) Strand reappears \u2192 check declared_losses for prior instance, (b) If prior loss found \u2192 compare content similarity (cosine or heuristic), (c) If similarity > threshold AND user hasn't signaled importance \u2192 keep dropped (conscious discard), (d) Otherwise \u2192 re-acquire with annotation ('reacquired after loss at turn X'). Validate this logic with toy examples before implementing.\",\n  \"CYCLE 37: ACCEPTANCE CHECKPOINT for H0. Evaluate rule-based projector against acceptance criteria. Proposed gates: (1) Compression ratio < 20% of original conversation text, (2) Zero silent losses (all dropped content must be declared), (3) Claim extraction recall > 0.75 vs gold standard, (4) Strand coherence score > 0.70 (manual review on 1-5 scale, averaged across raters). If all pass: freeze rule-based baseline and proceed to Phase 1.5. If any fail: document failure mode and decide on iteration (improve heuristics, pivot to LLM-assisted, or reduce scope).\",\n  \"CYCLE 37: Build validator script to ensure projector output is valid TensorRecord (passes Pydantic schema, respects frozen=True and extra='forbid' constraints, all required fields populated). Add to CI/test suite.\",\n  \"CYCLE 38 (CONDITIONAL): If H0 acceptance checkpoint passes, begin Phase 1.5 \u2014 empirical validation on real conversation logs. Run projector on representative sample from /home/tony/projects/pichay/experiments/ (suggest: stratified sample of 10-15% of conversations, selected to cover length/topic diversity). Measure: (1) projection stability (strands drift or converge?), (2) declared_losses as drift reduction mechanism (do explicit losses actually improve coherence?), (3) compression ratios on real data, (4) any unexpected failure modes at scale.\",\n  \"CYCLE 38: If H0 acceptance checkpoint fails, conduct RCA (root cause analysis). Determine whether failure is: (a) rule-based heuristics too brittle (pivot to LLM-assisted), (b) scope too ambitious (reduce to smaller feature set), or (c) acceptance criteria unrealistic (revise thresholds). Document decision and restart cycles 36-37 with updated approach.\",\n  \"THEORETICAL: Clarify what 'declared_losses as drift reduction' actually means operationally. Currently it's a conceptual hypothesis. Convert to testable prediction: e.g., 'projectors with declared_losses will show 30% less strand drift than projectors without, measured by embedding distance across turn windows.' This becomes Phase 1.5 experiment objective.\",\n  \"RESOURCE: Reassess time budget in light of real-world data integration. Prior estimate was 15-20 hours for rule-based H0. Adding data exploration, test dataset annotation, and real-data validation likely increases to 25-35 hours total for H0+Phase1.5. If constraint is tighter, consider reducing real-world validation to smaller sample or deferring to Phase 2.\"\n]",
+  "overall_truth": 0.8,
+  "overall_indeterminacy": 0.15,
+  "overall_falsity": 0.05
+}

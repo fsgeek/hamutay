@@ -1,0 +1,330 @@
+{
+  "strands": [
+    {
+      "title": "Tensor Projection Core Problem",
+      "content": "The projection problem requires taking transformer output + prior tensor state and producing an updated tensor that maintains reasoning coherence vs append-only logs. Core tension: TensorRecord is semantically rich (strands, claims, epistemic metadata, declared losses, questions, instructions) but projector must reliably populate all fields. Proposal: start with minimal viable set (strands, key claims, declared losses, instructions, open questions) and iterate richness in autoresearch loop. CRITICAL UPDATE (cycle 37): Real-world data source discovered and accessible \u2014 /home/tony/projects/pichay/experiments/ contains 15+ experiment runs. CYCLE 38 DATA RESOLUTION: Data schema is now CONFIRMED. Both logs/ and session/ contain JSONL format (JSON-Lines, one turn per line). Primary structure: logs/proxy_*.jsonl contains raw proxy/LLM interaction logs, session/*.jsonl contains conversation transcripts (user \u2194 assistant). This unblocks projector design and implementation \u2014 schema is tractable, parser is straightforward (Python json + iteration). Projection pipeline can now ingest real structured data.",
+      "key_claims": [
+        {
+          "claim_id": "52611213-9112-47e1-986f-c42870c8a12c",
+          "text": "Projection (tensor_d, transformer_output) \u2192 tensor_d' is the core research question; everything else is engineering",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.14,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "8712ab7d-3304-4fca-9181-e50942280226",
+          "text": "TensorRecord has sufficient richness (strands, claims, losses, questions, instructions, T/I/F) to test coherence hypothesis vs append-only baseline",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "29d9cfde-35cf-46ee-a225-17d8544a4c71",
+          "text": "Minimal viable projector should include: strands, key claims with T/I/F, declared losses, instructions_for_next, open questions; defer provenance/lineage",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.16,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "cffbc994-d59b-4ecb-a330-f065922ef33f",
+          "text": "Running projector against conversation logs enables empirical testing of drift hypotheses and declares explicit validation strategy",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.15,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "b2e2a137-007a-48b9-a6e6-468297488864",
+          "text": "Real conversation logs are now confirmed accessible at /home/tony/projects/pichay/experiments/ with structured metadata (config.json, logs/, session/, test_results.txt); data exploration is BLOCKING prerequisite",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ebe5f1a2-7c4d-4e8f-b7d1-a3f2c8e9d1b2",
+          "text": "Data schema CONFIRMED (cycle 38): logs/ and session/ both use JSONL (JSON-Lines) format; one JSON object per line; parser is straightforward (Python json + file iteration)",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.83,
+        "indeterminacy": 0.13,
+        "falsity": 0.04
+      }
+    },
+    {
+      "title": "Implementation Architecture: Projector as Separate Module",
+      "content": "Projector should be standalone module decoupled from main transformer model. Input: (tensor_d, transformer_output). Output: tensor_d' (updated TensorRecord). Acts as memory controller (not ALU). Enables independent testing and iteration. Haiku model size acceptable for in-context memory integration. Pydantic base model (ApachetaBaseModel) uses frozen=True, extra='forbid', Pydantic v2 conventions \u2014 projector output must respect this schema. STATUS (cycle 37): Architecture frozen, ready for implementation once data schema is understood. STATUS (cycle 38): Data schema now understood (JSONL format). Architecture remains frozen. Next action: design input/output adapters to transform JSONL turn content into TensorRecord-compatible format.",
+      "key_claims": [
+        {
+          "claim_id": "c532ba67-4eab-464c-b23b-8b1b22fc231e",
+          "text": "Projector should be separate from main model (transformer) \u2014 projector is memory controller, not reasoning engine",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "25d8b370-a202-4aba-9b96-0cc5f2489a9c",
+          "text": "ApachetaBaseModel requires frozen=True (immutable), extra='forbid' (strict schema), Pydantic v2 serialization",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "5ac443e8-cde6-481c-9360-1df1b491d215",
+          "text": "Standalone module enables independent testing before integration into main reasoning loop",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f4a2e1c3-9b5d-4a6f-c8e2-d1a3f7b9e4c6",
+          "text": "JSONL format (one JSON object per line) in both logs/ and session/ requires simple sequential parser: open file, iterate lines, json.loads() each, accumulate into conversation trajectory",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.84,
+        "indeterminacy": 0.12,
+        "falsity": 0.04
+      }
+    },
+    {
+      "title": "Design Decision: H0 Scope \u2014 What to Build First",
+      "content": "H0 (Hypothesis 0) should demonstrate that projector can maintain reasoning coherence with lossy compression. Start minimal: strands (thematic threads), key claims with T/I/F epistemic values, declared losses (explicit incompleteness), instructions_for_next (branch prediction), open questions (unresolved). Defer: provenance chains, composition equations, lineage tags. Iterative enrichment via autoresearch loop allows adding complexity once H0 baseline established. UPDATED (cycle 37): Data availability unblocks direct validation. CYCLE 38 CONSTRAINT: Actual test data is JSONL with unknown field structure \u2014 must first inspect sample turn to determine what fields are present, what can be extracted as claims, what metadata is available for epistemic calibration.",
+      "key_claims": [
+        {
+          "claim_id": "834290d3-8a64-492e-b797-1fa8d2b3352c",
+          "text": "H0 should test: lossy projection maintains reasoning coherence vs append-only baseline",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.16,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "eab82db2-40e1-4ba9-9e93-9d6abcc41f91",
+          "text": "Provenance, composition equations, lineage tags are bookkeeping (defer) not core cognition (H0 focus)",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.14,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "a8b3f2d1-5c6e-4a9f-b8d7-c2e5f4a1d9b6",
+          "text": "JSONL field discovery is BLOCKING: must inspect actual sample turn from proxy_*.jsonl and session/*.jsonl to determine extractable content structure before claim heuristics can be designed",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.81,
+        "indeterminacy": 0.15,
+        "falsity": 0.04
+      }
+    },
+    {
+      "title": "Cycle 35-38 Actionable: Build Standalone Projector Module \u2014 DATA SCHEMA DISCOVERED",
+      "content": "Ready to implement minimal viable projector as standalone Python module. Takes (tensor_d: TensorRecord, transformer_output: str) and produces tensor_d': TensorRecord. Should respect ApachetaBaseModel constraints. Can test independently before integrating into main loop. Starting with rule-based approach (deterministic, debuggable, fast) for H0 baseline. CRITICAL UPDATE (cycle 37): Real-world test harness is ACTIVE and ACCESSIBLE. CYCLE 38 BREAKTHROUGH: Data schema is CONFIRMED as JSONL. Both logs/ and session/ contain line-delimited JSON. File listing shows: logs/proxy_20260302_024551.jsonl (proxy/LLM logs) and session/d5da3c7a-3c3c-4047-a4ee-276be57567c1.jsonl (conversation transcripts). Next critical step: Read first 50 lines of both files to understand field schema and content structure. This will directly inform projector design.",
+      "key_claims": [
+        {
+          "claim_id": "572c1d55-63bd-4998-91a2-ac63a431c6d0",
+          "text": "Projector input: (tensor_d: TensorRecord, transformer_output: str); output: tensor_d': TensorRecord",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c46db839-81bf-4e32-a316-0f0115167ed4",
+          "text": "Rule-based approach recommended for H0 baseline (deterministic, debuggable, faster iteration than LLM-assisted)",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.18,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "58349bc5-7c72-4fc4-81cb-4ea931597e07",
+          "text": "Real-world validation against experiment logs will measure projection stability, declared_losses as drift reduction mechanism, and compression ratio",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "4997a9a6-068e-46ab-9016-62e6392d13e9",
+          "text": "Data structure confirmed: /home/tony/projects/pichay/experiments/ contains 15 runs with config.json, git_log.txt, logs/, session/, test_results.txt; logs and session are JSONL format (one object per line)",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.85,
+        "indeterminacy": 0.12,
+        "falsity": 0.03
+      }
+    },
+    {
+      "title": "NEW (Cycle 38): JSONL Field Schema Discovery \u2014 Blocking Constraint",
+      "content": "Action sequence initiated to discover actual field structure of JSONL data. Step 1 (COMPLETED): Listed session/ and logs/ directories \u2014 confirmed JSONL filenames: session/d5da3c7a-3c3c-4047-a4ee-276be57567c1.jsonl (conversation) and logs/proxy_20260302_024551.jsonl (proxy logs). Step 2 (INITIATED): Read first 50 lines of proxy_20260302_024551.jsonl to discover field schema. PENDING RESULT: Once fields are visible (e.g., timestamp, role, content, metadata, model_version, etc.), projector can be designed with concrete extraction heuristics. This is BLOCKING for moving from architecture \u2192 implementation. Expected to unblock within this cycle (cycle 38) or next (cycle 39).",
+      "key_claims": [
+        {
+          "claim_id": "d2e3f4a5-b6c7-d8e9-f0a1-b2c3d4e5f6a7",
+          "text": "JSONL field schema is UNKNOWN but discoverable via direct file inspection; required before claim heuristics, strand creation, epistemic calibration can be designed",
+          "epistemic": {
+            "truth": 0.98,
+            "indeterminacy": 0.01,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e3f4a5b6-c7d8-e9f0-a1b2-c3d4e5f6a7b8",
+          "text": "Both logs/proxy_*.jsonl and session/*.jsonl contain JSONL format; unclear if field structure is identical or specialized (logs may have proxy metadata, session may have conversation role/speaker info)",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f4a5b6c7-d8e9-f0a1-b2c3-d4e5f6a7b8c9",
+          "text": "Projected JSONL field candidates (to be confirmed): timestamp, role/speaker, content, model_metadata, turn_id, parent_turn_id, or similar structural fields",
+          "epistemic": {
+            "truth": 0.6,
+            "indeterminacy": 0.35,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.81,
+        "indeterminacy": 0.17,
+        "falsity": 0.02
+      }
+    },
+    {
+      "title": "Declared Losses as Drift Anchors \u2014 Hypothesis Persisting",
+      "content": "User introduced genuinely novel hypothesis (cycle 106): declared losses (explicit accounting of what was dropped) could reduce model drift over long conversation chains. Reasoning: silent loss creates undetectable divergence because the model forgets it forgot. Explicit declared_losses in tensor_d' act as checkpoints \u2014 future projections can either re-acquire dropped content (if relevant) or deliberately leave it dropped with awareness. This transforms declared_losses from bookkeeping (what we couldn't fit) into active mechanism for coherence preservation. Next projector could use prior declared_losses to inform what NOT to re-acquire unless user signals importance. STATUS (cycle 38): Hypothesis remains testable. Once JSONL schema is known and projector is implemented, will design metrics to measure declared_losses accumulation and strand drift correlation on multi-turn conversations in baseline_run1/2/3.",
+      "key_claims": [
+        {
+          "claim_id": "6c5e53c6-6cdd-4bd3-b033-378c95bcd61f",
+          "text": "Declared losses (explicit incompleteness) can function as drift anchors if future projections use them to guide coherence maintenance",
+          "epistemic": {
+            "truth": 0.72,
+            "indeterminacy": 0.24,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "6bebe5dc-ac4f-4be7-aed4-65f1132c4240",
+          "text": "Silent loss (unaccounted forgetting) is the root of long-horizon drift; making losses explicit enables corrective feedback",
+          "epistemic": {
+            "truth": 0.74,
+            "indeterminacy": 0.22,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "b0d89108-49a5-4a4f-a723-853fdd37a6bc",
+          "text": "Projector at turn N+1 can inspect declared_losses from turn N and decide whether to re-acquire or maintain conscious discard",
+          "epistemic": {
+            "truth": 0.68,
+            "indeterminacy": 0.28,
+            "falsity": 0.04
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.71,
+        "indeterminacy": 0.25,
+        "falsity": 0.04
+      }
+    }
+  ],
+  "declared_losses": [
+    {
+      "loss_description": "Full content of proxy_20260302_024551.jsonl not yet available; only confirmed its existence and filename. First 50 lines were requested but result not yet returned in this cycle. This means projector field-schema design is deferred.",
+      "loss_type": "PENDING_DATA",
+      "impact": "Cannot finalize claim extraction heuristics, strand initialization strategy, or epistemic calibration until actual JSONL structure is visible. Blocking for next cycle.",
+      "recovery_path": "Execute file read operation; parse JSON objects; document field names and sample values; design extraction rules based on actual schema."
+    },
+    {
+      "loss_description": "Distinction between logs/proxy_*.jsonl and session/*.jsonl purposes/structures unknown. Are they mirrors of same conversation, or complementary logs? Unclear which should be primary source for projector.",
+      "loss_type": "SCHEMA_AMBIGUITY",
+      "impact": "Projector may ingest wrong data source or miss important metadata present only in one file. Design decision deferred until both files are inspected.",
+      "recovery_path": "Read both files; compare structure and content; determine whether session/ is human-readable transcript vs logs/ is structured metadata, or vice versa."
+    },
+    {
+      "loss_description": "Conversation length and temporal span of baseline_run1 unknown. Instructions for cycle 37 requested quantification of total turns, but this data not yet collected in cycle 38.",
+      "loss_type": "INCOMPLETE_DATASET_CHARACTERIZATION",
+      "impact": "Cannot estimate whether baseline_run1 is 5-turn conversation (projection trivial) or 50+ turn conversation (projection significant). Affects validation difficulty assessment.",
+      "recovery_path": "Count lines in session/*.jsonl and logs/*.jsonl; estimate turn count; check git_log.txt and config.json for temporal metadata."
+    },
+    {
+      "loss_description": "Instructions in cycle 37 cycle 37-38 recommend parsing config.json and test_results.txt for hyperparameters and metrics. These files not yet examined in cycle 38. Metrics baseline unknown.",
+      "loss_type": "MISSING_EXPERIMENT_METADATA",
+      "impact": "Cannot contextualize projector design against experiment objectives, hyperparameters, or expected performance baselines. Projector may not align with actual run's intent.",
+      "recovery_path": "Read config.json to understand hyperparameters and settings; read test_results.txt to see what metrics are tracked (compression? accuracy? coherence?)."
+    },
+    {
+      "loss_description": "Manual annotation strategy deferred. Instructions recommend selecting 3-5 turns from baseline_run1 and manually extracting gold claims and epistemic values for validation. This has not been executed.",
+      "loss_type": "DEFERRED_VALIDATION_SETUP",
+      "impact": "Without gold annotations, projector claim extraction and epistemic assignment cannot be precision/recall tested. Validation baseline will be ad-hoc rather than principled.",
+      "recovery_path": "Once JSONL schema is understood, select representative turns, manually annotate claims (text, confidence), assign T/I/F values with rationale, use as precision/recall benchmark for rule-based claim extraction."
+    }
+  ],
+  "open_questions": [
+    "JSONL_SCHEMA (BLOCKING): What are the field names and structure of JSON objects in logs/proxy_20260302_024551.jsonl? Sample fields (to be confirmed): timestamp, role, content, model_version, metadata, turn_id?",
+    "JSONL_SCHEMA (BLOCKING): What are the field names and structure of JSON objects in session/d5da3c7a-3c3c-4047-a4ee-276be57567c1.jsonl? Is it identical to logs/, or different (e.g., includes speaker roles, user_input, assistant_output as separate fields)?",
+    "RELATIONSHIP: Are logs/proxy_*.jsonl and session/*.jsonl two different views of the same conversation (parallel logs), or do they represent different phases (e.g., logs=raw LLM API calls, session=processed conversation)? Should projector ingest one or both?",
+    "CONVERSATION_METRICS: How many turns (total lines) are in baseline_run1? Is it 5 turns (simple test case) or 50+ turns (complex multi-turn conversation)? Affects validation difficulty.",
+    "CONVERSATION_METRICS: What is the temporal span? Does baseline_run1 cover minutes, hours, or days? Are timestamps present in JSONL? Do git_log.txt or config.json indicate experiment duration or run date?",
+    "CONFIG_METADATA: What hyperparameters and settings are in config.json? Are there projector-relevant parameters (temperature, max_tokens, context_window, model_version) that should inform H0 design?",
+    "CONFIG_METADATA: What metrics are recorded in test_results.txt? Are they per-turn metrics (allowing turn-by-turn validation), or only final aggregate scores (limiting validation granularity)?",
+    "CLAIM_EXTRACTION: Once JSONL content field is visible, what patterns should trigger claim detection? Full sentences? Assertions with high confidence? All unique statements? Heuristic strategy must be grounded in actual content observed.",
+    "STRAND_INITIALIZATION: Should strand clusters be pre-defined (e.g., 'technical', 'theoretical', 'validation') or discovered dynamically via content clustering? Rule-based approach suggests pre-defined, but real data may reveal natural topical structure.",
+    "EPISTEMIC_CALIBRATION: Should T/I/F values be assigned deterministically (e.g., all assistant outputs default to 0.7 truth / 0.2 indeterminacy / 0.1 falsity) or via heuristics (e.g., modal verbs 'might' \u2192 higher indeterminacy, negations \u2192 higher falsity)? Needs real data examples.",
+    "IMPLEMENTATION_PRIORITY: Should cycle 38 focus on (a) full data exploration (schema, metrics, counts) then design projector spec, or (b) quick JSONL schema discovery then start stub implementation? Which unblocks faster?",
+    "VALIDATION_BASELINE: Should H0 be validated on all of baseline_run1, or a sampled subset (e.g., first 10 turns, then turns 20-30, then final 10)? Affects implementation scope.",
+    "DECLARED_LOSSES_SEMANTICS: For initial H0 implementation, should declared_losses only track dropped claims (quota overflow), or also track dropped strands, questions, and instructions? Start minimal or comprehensive?",
+    "INSTRUCTION_GENERATION: Should instructions_for_next be hand-written by projector (if X then recommend Y) or deterministic rules (if strands > 5 recommend consolidation)? Rule-based requires concrete heuristics.",
+    "DATA_QUALITY: Are logs guaranteed complete (no missing turns, no formatting errors)? Any known issues (truncation, encoding, dropped fields) documented in experiment metadata?"
+  ],
+  "instructions_for_next": "[\n  \"IMMEDIATE (CYCLE 38, BLOCKING): Read full sample from JSONL files to discover schema. Execute: (1) `head -3 /home/tony/projects/pichay/experiments/baseline_run1/logs/proxy_20260302_024551.jsonl` and (2) `head -3 /home/tony/projects/pichay/experiments/baseline_run1/session/d5da3c7a-3c3c-4047-a4ee-276be57567c1.jsonl`. Print raw JSON (not parsed). Understand: field names, nesting depth, value types (string, int, list, nested object).\",\n  \"CYCLE 38: Once JSONL schema visible, document field mapping. Create table: Field Name \u2192 Type \u2192 Example Value \u2192 Projector Relevance (e.g., 'content' \u2192 string \u2192 'The answer is...' \u2192 PRIMARY INPUT FOR CLAIMS). Identify which fields are turn structure (speaker, timestamp, ID) vs content (message text, model output).\",\n  \"CYCLE 38: Quantify baseline_run1 conversation. Execute: `wc -l /home/tony/projects/pichay/experiments/baseline_run1/session/d5da3c7a-3c3c-4047-a4ee-276be57567c1.jsonl` and `wc -l /home/tony/projects/pichay/experiments/baseline_run1/logs/proxy_20260302_024551.jsonl`. If line counts differ, investigate why (log granularity differences, metadata overhead, etc.). Report: estimated turn count, inferred conversation length (brief vs extended multi-turn).\",\n  \"CYCLE 38: Read config.json and test_results.txt. Execute: `cat /home/tony/projects/pichay/experiments/baseline_run1/config.json` and `cat /home/tony/projects/pichay/experiments/baseline_run1/test_results.txt`. Document: (a) hyperparameters (model name, temperature, max_tokens, any projection-related settings), (b) declared metrics (accuracy, coherence, compression, latency), (c) baseline scores (against which H0 projector will be benchmarked).\",\n  \"CYCLE 38: Inspect one full turn from both files. Extract: (1) First complete JSON object from logs/proxy_*.jsonl, pretty-print with all fields visible. (2) First complete JSON object from session/*.jsonl, pretty-print. (3) Compare: are they describing the same turn or different aspects? Are roles/speakers consistent?\",\n  \"CYCLE 38-39: Design rule-based claim extraction heuristics based on JSONL content field. Rules should be: (a) deterministic (no learning, pure string/regex patterns), (b) grounded in actual content observed in sample turns, (c) conservative (prefer precision over recall for H0 \u2014 better to miss a claim than hallucinate one). Examples: sentence-final assertions, modal-strong statements, declarations with punctuation markers.\",\n  \"CYCLE 38-39: Design strand initialization strategy. If baseline_run1 is 5-10 turns (short), use hand-coded strands (e.g., 'implementation', 'validation', 'architecture'). If 50+ turns, sample 5-10 turns, extract raw content, use keyword clustering (TF-IDF or simple unigram frequency) to identify natural topics. Start with whatever is fastest for H0 baseline.\",\n  \"CYCLE 38-39: Design epistemic assignment heuristics. Collect 5-10 sample assertions from baseline_run1 content. For each, manually assign T/I/F with justification (e.g., 'modal verb might \u2192 +0.15 indeterminacy'). Aggregate patterns. Build simple decision tree: if contains [negation, modal uncertainty, conditional] \u2192 adjust T/I/F toward indeterminacy; if factual claim \u2192 higher truth; etc. Start conservative (most claims \u2192 0.6-0.8 truth, 0.15-0.25 indeterminacy, 0.05-0.15 falsity).\",\n  \"CYCLE 39 (CONDITIONAL on schema discovery): Implement minimal projector skeleton (300-400 lines Python). Must include: (1) JSONL parser (open, iterate, json.loads()), (2) Claim extractor (apply heuristics to content field), (3) Strand mapper (assign claims to strands), (4) Epistemic assigner (apply T/I/F rules), (5) TensorRecord emitter (Pydantic model creation), (6) Declared losses accumulator (any dropped content \u2192 declared). Test against first 3 turns of baseline_run1 only. Target: can ingest turn 1 \u2192 output valid TensorRecord1; ingest turn 2 + TensorRecord1 \u2192 output TensorRecord2; ingest turn 3 + TensorRecord2 \u2192 output TensorRecord3. No validation of correctness yet, just schema compliance and end-to-end flow.\",\n  \"CYCLE 39: Build projector test harness for baseline_run1. Script should: (1) load session/d5da3c7a... or logs/proxy_... (determined by schema), (2) initialize tensor_d = empty TensorRecord, (3) for each turn T_i: extract content, call projector(tensor_d, content) \u2192 tensor_d', (4) log each tensor_d' to file (JSON), (5) at end, compute: compression_ratio = (total_original_bytes / total_tensor_bytes), strand_count_evolution = [t0.strands.count, t1.strands.count, ...], claim_count_evolution = [...], loss_accumulation = sum(declared_losses).\",\n  \"CYCLE 39: Manually annotate 3-5 representative turns from baseline_run1 as gold standard. For each turn, document: (a) raw content (copy from JSONL), (b) gold claims you extract manually (text + rationale), (c) gold epistemic assignment (T/I/F + reasoning), (d) gold strand assignments (which thematic cluster?). Save as JSON or markdown. Use as precision/recall benchmark for rule-based projector later.\",\n  \"CYCLE 39: Run projector on baseline_run1 end-to-end. Measure: (1) Compression ratio (target < 20% of original conversation bytes), (2) Claim extraction precision/recall vs gold manual annotations, (3) Declared losses count and content (what is being dropped?), (4) Strand stability (do the 3-5 gold strands persist, merge, or drift?), (5) Any crashes, validation errors, or edge cases. Document all mismatches.\",\n  \"CYCLE 39: ACCEPTANCE CHECKPOINT v2. Rule-based projector on baseline_run1 must pass: (1) Pydantic validation (all outputs are valid TensorRecord), (2) Compression ratio < 20%, (3) Claim extraction recall >= 0.65 vs gold annotations (precision >= 0.70), (4) All dropped content explicitly declared (zero silent losses), (5) Strand coherence manual score >= 3.5/5.0 (ask: do strands make semantic sense?). If all pass: freeze rule-based impl, proceed to Phase 1.5.\",\n  \"CYCLE 39: If ACCEPTANCE CHECKPOINT fails on any metric, diagnose. Common failure modes: (a) claim extraction too aggressive (precision low) \u2192 tighten heuristics, (b) too conservative (recall low) \u2192 broaden heuristics, (c) compression not sufficient \u2192 need higher lossy ratio or strand merging, (d) strand drift \u2192 need better topical stability. Iterate up to 2-3 cycles, then move to Phase 1.5 with best-effort implementation if time-bound.\",\n  \"CYCLE 39-40: Phase 1.5 Pilot (if ACCEPTANCE CHECKPOINT passes). Run projector on all 15 experiment runs. Measure: (1) Compression ratio across all runs (should be consistent \u00b110%), (2) Strand drift metric (cosine similarity of concatenated strand_content from turn N to turn N+K). (3) Declared losses as % of original content (should be < 20%). (4) Any run-specific failure modes (e.g., does minimal_sysprompt_run1 behave differently than baseline?). Document findings.\",\n  \"CYCLE 40: Design drift metric for hypothesis testing. Operationalize: For each strand S in run R, take turn T_0 and turn T_K (K=5, 10, or full conversation). Compute cosine similarity of concatenated strand_content between T_0 and T_K. Average across strands. Plot similarity evolution over turns. HYPOTHESIS: Projector with declared_losses shows higher strand stability (cosine similarity increasing or stable) vs naive append-only (similarity decreasing, indicating drift). Quantify: does declared_losses reduce drift by >= 20%?\",\n  \"DOCUMENTATION: Create cycle 38 artifact: Field schema document. Contents: (1) JSONL field mapping for both logs/ and session/, (2) Sample JSON objects (pretty-printed), (3) Conversion rules (raw JSON \u2192 TensorRecord input), (4) Any data quality notes (missing fields, encoding issues, truncation), (5) Selected 3-5 turns with manual gold annotations. Archive as reference.\",\n  \"RESOURCE_CHECK: Reassess time budget after schema discovery. If JSONL is simple (5-10 fields, flat structure), implementation stays on track (~28h total). If schema is complex (deep nesting, many metadata fields), add 3-5h for parser development. Report blocker if exceeds time budget.\"\n]",
+  "overall_truth": 0.83,
+  "overall_indeterminacy": 0.13,
+  "overall_falsity": 0.04
+}

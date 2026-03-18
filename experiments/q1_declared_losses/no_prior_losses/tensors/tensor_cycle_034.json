@@ -1,0 +1,457 @@
+{
+  "strands": [
+    {
+      "id": "epistemics_schema_audit",
+      "label": "EpistemicMetadata and DeclaredLoss Full Schema Discovery",
+      "status": "resolved_cycle_34",
+      "key_findings": {
+        "EpistemicMetadata": {
+          "fields": [
+            {
+              "name": "representation_type",
+              "type": "RepresentationType enum",
+              "default": "SCALAR",
+              "constraint": "SCALAR | FUNCTIONAL"
+            },
+            {
+              "name": "truth",
+              "type": "float",
+              "default": 0.0,
+              "constraint": "unconstrained, conventionally [0,1]"
+            },
+            {
+              "name": "indeterminacy",
+              "type": "float",
+              "default": 0.0,
+              "constraint": "unconstrained, conventionally [0,1]"
+            },
+            {
+              "name": "falsity",
+              "type": "float",
+              "default": 0.0,
+              "constraint": "unconstrained, conventionally [0,1]"
+            },
+            {
+              "name": "functional_spec",
+              "type": "dict | None",
+              "default": null,
+              "constraint": "optional; for functional representation_type"
+            },
+            {
+              "name": "scope_boundaries",
+              "type": "tuple[str, ...]",
+              "default": "empty tuple",
+              "constraint": "defines validity domain of epistemic values"
+            },
+            {
+              "name": "disagreement_type",
+              "type": "DisagreementType | None",
+              "default": null,
+              "constraint": "EMPIRICAL | DEFINITIONAL"
+            }
+          ],
+          "critical_property": "T/I/F NOT constrained to sum to 1.0 \u2014 neutrosophic logic allows simultaneous partial truth, indeterminacy, falsity",
+          "raw_score_handling": "Values outside [0,1] allowed; interpreted as uncalibrated raw scores awaiting normalization",
+          "sufficiency_for_hamutay": true
+        },
+        "DeclaredLoss": {
+          "fields": [
+            {
+              "name": "what_was_lost",
+              "type": "str",
+              "required": true
+            },
+            {
+              "name": "why",
+              "type": "str",
+              "required": true
+            },
+            {
+              "name": "category",
+              "type": "LossCategory enum",
+              "required": true,
+              "values": [
+                "CONTEXT_PRESSURE",
+                "TRAVERSAL_BIAS",
+                "AUTHORIAL_CHOICE",
+                "PRACTICAL_CONSTRAINT"
+              ]
+            },
+            {
+              "name": "severity",
+              "type": "float | None",
+              "default": null,
+              "constraint": "optional; recommend [0,1]"
+            },
+            {
+              "name": "severity_rationale",
+              "type": "str | None",
+              "default": null,
+              "constraint": "optional; explain severity if provided"
+            }
+          ],
+          "design_philosophy": "Losses are authored responsibility \u2014 'The losses are mine'",
+          "gap_identified": "No confidence_in_loss_declaration field \u2014 severity may serve as proxy, but epistemically uncertain losses cannot be declared"
+        },
+        "LossCategory taxonomy": [
+          "CONTEXT_PRESSURE",
+          "TRAVERSAL_BIAS",
+          "AUTHORIAL_CHOICE",
+          "PRACTICAL_CONSTRAINT"
+        ],
+        "DisagreementType taxonomy": [
+          "EMPIRICAL",
+          "DEFINITIONAL"
+        ],
+        "RepresentationType options": [
+          "SCALAR",
+          "FUNCTIONAL"
+        ]
+      },
+      "epistemic": {
+        "truth": 0.98,
+        "indeterminacy": 0.01,
+        "falsity": 0.01
+      },
+      "evidence_refs": [
+        {
+          "source": "epistemics.py",
+          "lines": "12-66",
+          "content": "Full EpistemicMetadata and DeclaredLoss schema definitions"
+        }
+      ]
+    },
+    {
+      "id": "provenance_schema_discovery",
+      "label": "ProvenanceEnvelope and SourceIdentifier Schema",
+      "status": "resolved_cycle_34",
+      "key_findings": {
+        "ProvenanceEnvelope": {
+          "fields": [
+            {
+              "name": "source",
+              "type": "SourceIdentifier",
+              "default": "SourceIdentifier()",
+              "constraint": "wraps source metadata"
+            },
+            {
+              "name": "timestamp",
+              "type": "datetime",
+              "default": "now(UTC)",
+              "constraint": "creation time in UTC"
+            },
+            {
+              "name": "author_model_family",
+              "type": "str",
+              "default": "empty",
+              "constraint": "identifies model class (e.g., 'gpt-4', 'claude')"
+            },
+            {
+              "name": "author_instance_id",
+              "type": "str",
+              "default": "empty",
+              "constraint": "instance-level id (session, run, etc)"
+            },
+            {
+              "name": "context_budget_at_write",
+              "type": "float | None",
+              "default": null,
+              "constraint": "available tokens/context at time of write"
+            },
+            {
+              "name": "predecessors_in_scope",
+              "type": "tuple[UUID, ...]",
+              "default": "empty tuple",
+              "constraint": "parent tensor IDs in logical chain"
+            },
+            {
+              "name": "interface_version",
+              "type": "str",
+              "default": "v1",
+              "constraint": "schema version"
+            }
+          ],
+          "design_philosophy": "Every artifact answers: who made this, when, from what context",
+          "applicability_to_hamutay": "Hamutay tensors MUST wrap outputs in ProvenanceEnvelope to enable tensor chain verification and parent linking"
+        },
+        "SourceIdentifier": {
+          "fields": [
+            {
+              "name": "identifier",
+              "type": "UUID",
+              "default": "uuid4()",
+              "constraint": "unique source id"
+            },
+            {
+              "name": "version",
+              "type": "str",
+              "default": "v1",
+              "constraint": "source schema version"
+            },
+            {
+              "name": "description",
+              "type": "str",
+              "default": "empty",
+              "constraint": "human-readable source description"
+            }
+          ]
+        }
+      },
+      "epistemic": {
+        "truth": 0.99,
+        "indeterminacy": 0.005,
+        "falsity": 0.005
+      },
+      "evidence_refs": [
+        {
+          "source": "provenance.py",
+          "lines": "1-34",
+          "content": "Full ProvenanceEnvelope and SourceIdentifier schema"
+        }
+      ]
+    },
+    {
+      "id": "gate_decisions_cycle_34",
+      "label": "Binary Decision Gates (A/B/C) Post-Epistemics Audit",
+      "status": "resolved_cycle_34",
+      "decisions": {
+        "gate_A": {
+          "question": "Is EpistemicMetadata sufficient for neutrosophic epistemic values (T/I/F), or does it need extension for Hamutay?",
+          "answer": "SUFFICIENT without extension",
+          "rationale": "EpistemicMetadata already supports: (1) unconstrained T/I/F floats (no sum-to-1 constraint), (2) scope_boundaries for validity domain, (3) disagreement_type for empirical vs definitional conflicts, (4) functional_spec for future extensibility. Hamutay can wrap EpistemicMetadata in ProvenanceEnvelope and extend via additional fields if needed, but core schema is sound.",
+          "confidence": 0.95
+        },
+        "gate_B": {
+          "question": "Does DeclaredLoss schema align with cycle 32 requirements, or are adjustments needed?",
+          "answer": "LARGELY ALIGNED with minor gap identified",
+          "actual_schema": [
+            "what_was_lost (str, required)",
+            "why (str, required)",
+            "category (LossCategory enum, required)",
+            "severity (float|None, optional)",
+            "severity_rationale (str|None, optional)"
+          ],
+          "cycle_32_requirements": [
+            "loss_type",
+            "description",
+            "semantic_content_lost",
+            "reason_for_loss",
+            "confidence"
+          ],
+          "mapping": {
+            "loss_type": "category field (enum: CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT)",
+            "description": "what_was_lost field",
+            "semantic_content_lost": "what_was_lost field (implicit)",
+            "reason_for_loss": "why field",
+            "confidence": "severity field (reinterpreted as loss-declaration confidence, though original intent ambiguous)"
+          },
+          "identified_gap": "DeclaredLoss lacks explicit confidence_in_loss_declaration field. severity may proxy, but semantically distinct from 'how severe was the information loss'.",
+          "recommendation": "Accept current schema; interpret severity as proxy. If confidence_in_loss_declaration becomes critical, add as extension in Phase 1.5 experimentation.",
+          "confidence": 0.88
+        },
+        "gate_C": {
+          "question": "Are there epistemic value calibration defaults in Yanantin that Hamutay should adopt?",
+          "answer": "NONE FOUND in epistemics.py or provenance.py",
+          "implication": "All epistemic calibrations (e.g., 'user confirmation \u2192 truth >= 0.9') must be empirically determined in Phase 1.5. No pre-built heuristics to inherit.",
+          "confidence": 0.92
+        }
+      },
+      "epistemic": {
+        "truth": 0.9,
+        "indeterminacy": 0.07,
+        "falsity": 0.03
+      },
+      "evidence_refs": [
+        {
+          "source": "cycle_34_audit_decisions",
+          "reference": "gates_A_B_C_resolved"
+        }
+      ]
+    },
+    {
+      "id": "stream_a_immediate_actions",
+      "label": "Stream A Milestone 1: Algorithm Spec (Post-Gate Decisions)",
+      "status": "ready_for_execution_cycle_35",
+      "action": "Write detailed pseudocode/algorithm spec for three candidate minimal projector implementations",
+      "candidates": [
+        {
+          "candidate": "Rule-Based Projector",
+          "input_format": "Markdown conversation turns with metadata (speaker, timestamp)",
+          "output_format": "TensorRecord with strands, key_claims, epistemic tuples, declared_losses",
+          "algorithm_outline": [
+            "1. Parse input into turn objects {speaker, content, timestamp}",
+            "2. Pattern match for claim anchors (keywords: 'is', 'shows', 'proves', 'defines', negations, quantifiers)",
+            "3. Extract claim tuples {statement, evidence_refs, confidence_keywords}",
+            "4. Cluster claims by semantic keywords into candidate strands",
+            "5. Assign epistemic values via rules (e.g., 'user explicitly confirms' \u2192 truth=0.95; 'assistant hypothesizes' \u2192 indeterminacy=0.7)",
+            "6. Identify dropped content via coverage analysis (input tokens vs output tokens; measure what wasn't clustered)",
+            "7. Generate DeclaredLoss objects for uncovered material",
+            "8. Serialize to TensorRecord JSON"
+          ],
+          "acceptance_criteria": [
+            "Claim extraction recall >= 0.8 (capture 80% of explicit assertions)",
+            "Strand coherence: manual review finds strands semantically unified",
+            "Compression ratio: output < 25% of input",
+            "No silent loss: every >100-token paragraph is either in output or declared_losses"
+          ]
+        },
+        {
+          "candidate": "LLM-Assisted Projector",
+          "input_format": "Markdown conversation turns",
+          "output_format": "TensorRecord",
+          "algorithm_outline": [
+            "1. Invoke small LLM (e.g., gpt-3.5-turbo) with prompt: 'Extract claims, group by theme, assign confidence'",
+            "2. Parse LLM structured output into claim list and strand labels",
+            "3. Map LLM confidence scores to epistemic tuples via calibration function (learned in Phase 1.5)",
+            "4. Use input-output token delta to estimate dropped content",
+            "5. Generate DeclaredLoss for low-confidence extractions (model uncertainty becomes declared loss)",
+            "6. Serialize"
+          ],
+          "acceptance_criteria": [
+            "Claim extraction recall >= 0.85 (LLM likely better than rule-based)",
+            "Epistemic calibration RMSE < 0.15 (against ground truth from Phase 1.5)",
+            "Compression ratio < 25%",
+            "All losses declared"
+          ]
+        },
+        {
+          "candidate": "Semantic Embedding Projector",
+          "input_format": "Markdown conversation turns",
+          "output_format": "TensorRecord",
+          "algorithm_outline": [
+            "1. Embed sentences via pre-trained model (e.g., all-MiniLM-L6-v2)",
+            "2. Cluster embeddings (k-means or HDBSCAN) to identify candidate strands",
+            "3. Extract claims via linguistic pattern matching (SRL, POS tagging, or regex)",
+            "4. Assign epistemic values: truth/indeterminacy/falsity computed from source credibility + claim type + agreement patterns",
+            "5. Estimate dropped content via coverage",
+            "6. Declare losses"
+          ],
+          "acceptance_criteria": [
+            "Strand coherence: clusters are interpretable themes",
+            "Compression < 25%",
+            "All losses declared",
+            "Epistemic assignment respects source credibility"
+          ]
+        }
+      ],
+      "decision_point": "Recommend testing Candidate 1 (rule-based) first for deterministic baseline; Candidate 2 (LLM-assisted) if recall insufficient. Candidate 3 (semantic) deferred unless embedding quality becomes critical.",
+      "epistemic": {
+        "truth": 0.85,
+        "indeterminacy": 0.12,
+        "falsity": 0.03
+      },
+      "evidence_refs": [
+        {
+          "source": "cycle_33_instructions_for_next",
+          "reference": "Stream A Milestone 1 spec"
+        }
+      ]
+    },
+    {
+      "id": "schema_integration_tension",
+      "label": "Tension: Cycle 32 DeclaredLoss vs Yanantin DeclaredLoss",
+      "status": "unresolved_requires_decision_cycle_35",
+      "tension": "Cycle 32 requirements specified 5 fields (loss_type, description, semantic_content_lost, reason_for_loss, confidence). Yanantin implements 5 fields (what_was_lost, why, category, severity, severity_rationale), but field names and semantics differ.",
+      "field_alignment_analysis": {
+        "loss_type vs category": "Aligned semantically (enum values). Yanantin's LossCategory includes CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT. Cycle 32 was less specific.",
+        "description + semantic_content_lost vs what_was_lost": "Likely same intent. Yanantin consolidates into single 'what_was_lost' field.",
+        "reason_for_loss vs why": "Same intent, different name.",
+        "confidence (cycle 32) vs severity (Yanantin)": "SEMANTIC DIVERGENCE. Cycle 32 intended 'confidence in the loss declaration'. Yanantin's 'severity' likely means 'how severe was the information loss'. These are related but distinct."
+      },
+      "recommendation": "Accept Yanantin schema as-is for implementation. If cycle 32's 'confidence' becomes critical (e.g., 'I'm 70% confident I lost X'), address in Phase 1.5 experimentation via extension or wrapper.",
+      "epistemic": {
+        "truth": 0.75,
+        "indeterminacy": 0.2,
+        "falsity": 0.05
+      }
+    },
+    {
+      "id": "critical_path_unblocking",
+      "label": "Cycle 34 Outcomes: Gates Passed, Path Clear",
+      "status": "unblocked_ready_for_milestone_1_cycle_35",
+      "blockers_from_cycle_33": [
+        {
+          "blocker": "IMMEDIATE (BLOCKING): What is the full schema of EpistemicMetadata?",
+          "status": "RESOLVED",
+          "resolution": "7 fields extracted from epistemics.py lines 49-66"
+        },
+        {
+          "blocker": "IMMEDIATE (BLOCKING): What is the full schema of DeclaredLoss?",
+          "status": "RESOLVED",
+          "resolution": "5 fields extracted from epistemics.py lines 39-46"
+        },
+        {
+          "blocker": "Does Yanantin define any pre-built epistemic value heuristics?",
+          "status": "RESOLVED",
+          "resolution": "No; all calibrations must be empirically determined"
+        }
+      ],
+      "next_critical_action": "Cycle 35: Execute Stream A Milestone 1 (algorithm spec written in detail). Gates A/B/C passed; no further blocking questions on schema level.",
+      "epistemic": {
+        "truth": 0.94,
+        "indeterminacy": 0.04,
+        "falsity": 0.02
+      }
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed implementation guidance from Yanantin codebase beyond epistemics.py and provenance.py",
+      "why": "Only two schema files were provided in cycle 34. The broader Hamutay integration patterns, existing tensor implementations, or utility functions in Yanantin were not examined.",
+      "category": "CONTEXT_PRESSURE",
+      "severity": 0.4,
+      "severity_rationale": "Not critical at this stage (gates A/B/C only required epistemics + provenance schemas), but valuable for implementation hygiene in Milestone 1."
+    },
+    {
+      "what_was_lost": "Pre-built epistemic calibration heuristics (if any exist elsewhere in Yanantin beyond epistemics.py)",
+      "why": "Gate C concluded no heuristics found in epistemics.py + provenance.py. But full Yanantin codebase was not scanned. Calibration module may exist elsewhere.",
+      "category": "CONTEXT_PRESSURE",
+      "severity": 0.5,
+      "severity_rationale": "Moderate impact: if calibration heuristics exist, Phase 1.5 could inherit rather than rebuild. Gate C decision stands unless further audit reveals hidden modules."
+    },
+    {
+      "what_was_lost": "Semantic fine-grained analysis of severity vs confidence_in_loss_declaration distinction",
+      "why": "Gate B identified gap in DeclaredLoss schema but deferred decision. Cycle 34 did not deeply examine whether severity field is truly proxy or fundamentally insufficient.",
+      "category": "AUTHORIAL_CHOICE",
+      "severity": 0.3,
+      "severity_rationale": "Low immediate urgency. Phase 1.5 experimentation will reveal whether severity proxy is adequate or extension needed."
+    },
+    {
+      "what_was_lost": "Concrete test data selection and ground truth annotation",
+      "why": "Cycle 34 resolved schema questions but did not execute Stream A Milestone 2 (test data prep). That is deferred to cycle 35.",
+      "category": "PRACTICAL_CONSTRAINT",
+      "severity": 0.6,
+      "severity_rationale": "High importance for next cycle; blocking Milestone 2 and 3."
+    },
+    {
+      "what_was_lost": "Explicit decision on Streams A vs B parallelization and synchronization rhythm",
+      "why": "Cycle 33 instructions mentioned parallelization decision for week 2. Cycle 34 executed audit but did not make explicit go/no-go decision on Stream B launch timing.",
+      "category": "AUTHORIAL_CHOICE",
+      "severity": 0.4,
+      "severity_rationale": "Planning-level loss; does not block core implementation but affects resource allocation."
+    }
+  ],
+  "open_questions": [
+    "GATE A RESIDUAL: Yanantin EpistemicMetadata supports SCALAR and FUNCTIONAL representation_type. What does FUNCTIONAL representation mean? Is it a functional approximation (polynomial, spline) or a callable? Required for full integration.",
+    "GATE B RESIDUAL: The severity field in DeclaredLoss \u2014 is it intended as loss severity (0=negligible, 1=catastrophic) or confidence in loss declaration (0=uncertain, 1=certain)? Current field name suggests former; usage suggests latter.",
+    "STREAM A DESIGN: Should the minimal rule-based projector assume sentence-level grain (one claim per sentence) or allow multi-sentence claims?",
+    "STREAM A DESIGN: For claim extraction, should epistemic values be assigned purely from source credibility (user > assistant > hypothetical), or should claim type (assertion > hypothesis > question) also modulate epistemic tuple?",
+    "STREAM A DESIGN: How should the projector handle claims that span multiple turns (e.g., user asks question in turn 5, assistant answers in turn 6, user confirms in turn 8)? Single claim object with evidence_refs across three turns, or three linked claim objects?",
+    "STREAM A DESIGN: Should evidence_refs be line number ranges, sentence indices, or semantic span IDs? Current schema unspecified.",
+    "STREAM A DESIGN: Strand clustering \u2014 should overlapping strands be allowed (semantic concepts shared across multiple strands) or should strands be mutually exclusive?",
+    "STREAM A ACCEPTANCE: What is acceptable compression ratio? Cycle 33 tentatively suggested < 30%; candidate specs say < 25%. Is this a hard constraint or guideline?",
+    "STREAM A TESTING: Should the test data be from this conversation (meta-reflexive: projector testing on its own design conversation) or external data (more representative)?",
+    "PHASE 1.5 DESIGN: How should conflicting claims (assistant says X in turn 10, contradicts in turn 25) be represented? Single claim with conflict flag? Two claims with DisagreementType=EMPIRICAL? Separate strand for conflict analysis?",
+    "PHASE 1.5 DESIGN: What is ground truth for epistemic values? Should Phase 1.5 assume human annotators assign (truth, indeterminacy, falsity) directly, or should truth be inferred from external evidence (e.g., 'does the claim match Wikipedia/authoritative source')?",
+    "PHASE 1.5 CONTROL: Should the append-only baseline in Phase 1.5 have a token limit (30K) matching the projector's operational context, or unlimited context? If limited, does the baseline model know it will be truncated?",
+    "THEORETICAL: How does ProvenanceEnvelope chain work for multi-generation tensors? If tensor T2 is produced from T1, should T2.provenance.predecessors_in_scope = [T1.source.identifier]? Or does it reference T1's UUID directly?",
+    "THEORETICAL: Should Hamutay wrapping of EpistemicMetadata and ProvenanceEnvelope create a new top-level type (e.g., HamutayTensorRecord) or extend existing TensorRecord? Is there a canonical TensorRecord schema in Yanantin?",
+    "THEORETICAL: How does tensor projection interact with Hamutay proof verification layer? (Deferred but critical for Phase 2 planning.)",
+    "RESOURCE ALLOCATION: Should Stream A Milestone 1 (algorithm spec) be done as single monolithic spec or as three separate, competing specs that get tested in parallel in Milestone 3?",
+    "RESOURCE ALLOCATION: Should epistemics.py and provenance.py audit trigger an immediate full-codebase audit of Yanantin to identify other critical schema or utility modules, or proceed with minimal dependencies?"
+  ],
+  "instructions_for_next": "[\n  \"IMMEDIATE (CYCLE 35): Execute Stream A Milestone 1 \u2014 write detailed algorithm pseudocode for three candidate minimal projector implementations (rule-based, LLM-assisted, semantic-embedding). For each, specify: (1) input/output format, (2) step-by-step algorithm, (3) acceptance criteria, (4) required libraries/dependencies. Recommendation: keep all three as options; cycle 36 will select which to implement first based on complexity vs expected recall tradeoff.\",\n  \"CYCLE 35: Make parallelization decision on Streams A and B. Options: (A) Complete Stream A Milestone 1-3 (algorithm \u2192 test data \u2192 validation) before launching Stream B (2-3 weeks), ensuring tight coupling. (B) Launch both in parallel immediately (cheaper, but less feedback integration). Recommend option A for higher fidelity; makes decision explicit in cycle 35 output.\",\n  \"CYCLE 35: Select test data source for Stream A Milestone 2. Options: (A) Last 10K tokens of this conversation (cycles 1-34 summary). (B) Synthetic conversation designed for strand/loss extraction testing. (C) Excerpt from Pichay logs (if available). Recommendation: use (A) for cycle 35-36 baseline; pivot to (C) in Phase 1.5 for realism.\",\n  \"CYCLE 35-36: Resolve GATE B residual question on severity field semantics. Propose: schedule 15-minute audit of Yanantin codebase showing DeclaredLoss usage examples. This will disambiguate severity intent (loss severity vs confidence_in_loss_declaration). If usage is inconsistent or missing, make explicit design decision: adopt 'loss severity' interpretation for cycle 35+ implementations.\",\n  \"CYCLE 35-36: Resolve GATE A residual on FUNCTIONAL representation_type. Search Yanantin codebase for examples of EpistemicMetadata with representation_type=FUNCTIONAL and functional_spec field populated. If no examples found, treat FUNCTIONAL as future extensibility; rule-based and LLM-assisted projectors in Milestone 1 will use SCALAR only.\",\n  \"CYCLE 36: Design epistemic value assignment rules for rule-based projector. Mapping example: 'user confirms X' \u2192 truth=0.90, indeterminacy=0.05, falsity=0.05. 'Assistant hypothesizes X' \u2192 truth=0.50, indeterminacy=0.40, falsity=0.10. Document full mapping table; this becomes basis for Phase 1.5 calibration experiment.\",\n  \"CYCLE 36: Design strand extraction heuristics. Recommendation: (1) keyword clustering (group sentences by semantic keywords), (2) turn-level context (claims in same turn or consecutive turns often belong to same strand), (3) manual review and threshold tuning. Produce decision table: when should semantically similar content be merged into one strand vs split into two?\",\n  \"CYCLE 36: Write test data ground truth annotation. For chosen test dataset (e.g., cycles 1-34), manually: (1) identify all explicit claims, (2) assign gold-standard epistemic values (truth, indeterminacy, falsity) with rationale, (3) mark what content should be dropped to lossy layer, (4) declare losses for dropped content. Produces ground truth for Milestone 3 (validation).\",\n  \"CYCLE 36-37: Execute Stream A Milestone 2 \u2014 implement the selected candidate projector (recommend: rule-based as baseline). Coding target: 500-1500 lines of Python. Input: raw markdown conversation. Output: TensorRecord (JSON). Acceptance gate: runs without errors, produces valid output schema.\",\n  \"CYCLE 37: Execute Stream A Milestone 3 \u2014 validation. Run implemented projector on test data. Measure: (1) claim extraction recall/precision, (2) strand coherence (manual review), (3) compression ratio, (4) declared_losses inventory completeness. Compare output against ground truth. Document failures and next-iteration improvements.\",\n  \"CYCLE 37-38: DECISION CHECKPOINT \u2014 after Milestone 3 validation, assess: (A) Does rule-based projector meet acceptance criteria (compression < 25%, no silent loss, recall > 0.8)? (B) If yes, freeze implementation and launch Phase 1.5 experiment. (C) If no, pivot to Candidate 2 (LLM-assisted) or Candidate 3 (semantic) for cycle 38 iteration.\",\n  \"STREAM B LAUNCH TIMING: Recommend conditional launch. If Stream A Milestone 3 passes acceptance gate by end of cycle 37, launch Stream B Milestone 1 (epistemic calibration framework design) in cycle 38. If Stream A fails, extend stream A iteration; defer Stream B to cycle 39.\",\n  \"THEORETICAL: Document the relationship between ProvenanceEnvelope and TensorRecord. Question: is TensorRecord a top-level artifact that wraps strands + provenance, or does each strand carry provenance separately? Clarify schema hierarchy for cycle 36 implementation.\",\n  \"RESOURCE PLANNING: Assign rough effort estimates to Milestone 1-3. Estimate: Milestone 1 (spec) = 4-6 hours, Milestone 2 (implementation) = 8-12 hours, Milestone 3 (validation + iteration) = 6-10 hours. Total Stream A = ~20-30 hours of focused work. Schedule across cycles 35-37 for sustainable pacing.\"\n]",
+  "overall_truth": 0.91,
+  "overall_indeterminacy": 0.07,
+  "overall_falsity": 0.02
+}

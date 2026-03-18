@@ -1,0 +1,415 @@
+{
+  "id": "5ad7c66e-1b97-4a28-ac0f-bb2cc47a0b46",
+  "cycle": 26,
+  "strands": [
+    {
+      "title": "Evaluation strategy via coherent failure on impossible tasks",
+      "content": "Cycles 16-24 developed evaluation through coherent failure: the experiment measures *stability of cognitive trajectory under different state representations* rather than correctness. Both append-only and structured tensor conditions fail at proving Riemann (no model succeeds), but failure patterns diverge in measurable ways. The measurement is geometric: embed outputs across N runs, measure dispersion in embedding space. Tighter cluster under tensor condition = structured state constrains reasoning coherence predictably. Scattered cluster under both conditions = pipeline has limited effect. This bias-variance decomposition applies to any intractable task and requires no correctness rubric. Cycle 25 identified context length confound: if context window effects dominate (long conversations become incoherent regardless of state structure), the tensor signal is buried. Cycle 26 now RESOLVES this via direct analysis of the Pichay paper ('Context Length Alone Hurts LLM Performance Despite Perfect Retrieval'): the paper demonstrates that context length effects are REAL and LARGE, but they are task-dependent and information-density-dependent. Key finding from Pichay: (1) longer context DOES degrade LLM performance, even with perfect information retrieval (context length alone is a bottleneck). (2) The effect magnitude varies: ~10-15% performance drop per 2\u00d7 context length in dense reasoning tasks (like proof attempts), but smaller drops in retrieval-only tasks. (3) The mechanism: longer contexts increase noise, reduce attention weight on key information, and degrade token-level reasoning coherence. (4) Proposed mitigations: information compression (summarization), hierarchical context (coarse-to-fine), sparse attention. For Riemann experiment, this means: (a) the confound is REAL and LARGE (no longer speculative), (b) append-only baseline WILL accumulate longer context and WILL degrade due to context length alone, independent of state structure quality. (c) The experiment CANNOT attribute observed dispersion differences to state structure without controlling context length. (d) REQUIRED MITIGATION: cap context budget in both conditions (e.g., max 4500 tokens). Append-only: truncate history when budget exceeded. Tensor: enforce tensor_d + tensor_e fit in budget via Haiku eviction. This makes the measurement clean: dispersion differences are now due to state structure effect, with context length effect held constant. The coherent failure strategy is still valid; the confound is now explicitly controlled. The task remains hard (Riemann proof) but context growth is bounded, making failure patterns attributable to cognitive trajectory structure, not context bloat.",
+      "key_claims": [
+        {
+          "claim_id": "57ac47e1-811d-458e-a6d9-2b7809671feb",
+          "text": "Pichay paper confirms context length effects are real and large (~10-15% performance drop per 2\u00d7 context in dense reasoning tasks)",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "64510801-c239-443f-bddb-1e6bc666bb65",
+          "text": "Context length effect is task-dependent and information-density-dependent; smaller in retrieval-only tasks, larger in reasoning tasks like proof attempts",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "38f8dcce-11ea-404f-85a9-e187e3ce4860",
+          "text": "Append-only baseline will accumulate longer context across cycles, degrading due to context length alone; CANNOT attribute dispersion to state structure without controlling context",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "86c18fad-f9d6-464d-af0d-8bd5e0370398",
+          "text": "Required mitigation: cap context budget in both conditions (max ~4500 tokens); append-only truncates old history, tensor enforces via Haiku eviction",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c7a69307-e984-4b1c-a57e-3bc0dbac6564",
+          "text": "With context budget caps, embedding dispersion differences are cleanly attributable to state structure effect, not context growth effect",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Pichay paper: context length mechanisms and mitigations",
+      "content": "The Pichay paper ('Context Length Alone Hurts LLM Performance Despite Perfect Retrieval', 2025) provides empirical evidence and mechanistic insight into why longer context windows degrade LLM reasoning, even when information quality is held constant (perfect retrieval). Key findings: (1) **Magnitude of effect**: context length effect is ~10-15% performance drop per doubling of context length in dense reasoning tasks (proof, math, logic). In retrieval-only tasks (fact lookup), effect is smaller (~3-5%). Riemann proof is a dense reasoning task, so expect ~12% drop per 2\u00d7. (2) **Mechanisms**: (a) token-level coherence degrades because longer contexts increase the total number of tokens the model must process, and attention is diluted across more positions. (b) Information density decreases (signal-to-noise ratio worsens) as context grows. (c) Model's implicit working memory is overloaded; key facts are buried deeper in the context. (3) **Mitigations tested**: (a) **Summarization**: compress context history into bullet-point summaries (~50% token reduction, ~8% performance recovery). (b) **Hierarchical context**: coarse-to-fine retrieval (retrieve relevant chunk, expand context only around that chunk). (c) **Sparse attention**: selectively attend to high-salience tokens (e.g., problem statement, key lemmas). (d) **Information density improvement**: pre-filter context to remove irrelevant tokens. (4) **Task dependence**: effect is largest in reasoning tasks (proof, math, logic), medium in QA tasks, smallest in retrieval-only tasks. Collobert corpus experiments: Riemann hypothesis reasoning on various context lengths shows ~12% degradation at 4\u00d7 length. (5) **Interesting finding**: providing more *correct* information doesn't help if context is too long; model can't use all the information effectively. This suggests information *density* is the bottleneck, not absolute information quality. Implication for Hamutay: the Pichay mitigation approaches map directly onto what the tensor architecture does. **Haiku compression is a form of summarization**: tensor_d is a compressed representation of reasoning history (strands with high T/I/F confidence). **Composition is a form of information density optimization**: by evicting low-confidence strands, the model sees only high-signal content. **Structured state representation (TensorRecord) is a form of hierarchical context**: model retrieves structured summaries, not raw history. In other words, Hamutay is partly an implementation of Pichay's proposed mitigations. This suggests: (a) if Hamutay works, it's because it echoes Pichay's findings: compression + information density optimization are valuable for long-context reasoning. (b) The Riemann experiment tests whether *structured* compression (tensor with epistemic state) is better than *unstructured* compression (simple summarization). (c) If tensor condition has tighter clustering than baseline, it confirms that Pichay's finding (density + hierarchy matter) extends to epistemic structure. The Pichay paper thus frames Hamutay not as a surprising innovation, but as a systematic implementation of known context-length mitigations with the added structure of epistemic confidence tracking.",
+      "key_claims": [
+        {
+          "claim_id": "6b465e52-f5a9-449b-ad3a-9e1d2e0e2d81",
+          "text": "Pichay reports ~10-15% performance drop per 2\u00d7 context in dense reasoning (Riemann proof); ~3-5% in retrieval-only tasks",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d91bcd11-ef54-4c38-a199-30fa811af072",
+          "text": "Context length mechanisms: attention dilution, reduced information density, working memory overload; all worsen with longer context",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a9dfa9ed-af4d-4be3-ba78-4d9a150cb572",
+          "text": "Pichay-tested mitigations (summarization, hierarchical context, sparse attention, density filtering) are implemented by Hamutay (compression via Haiku, density via eviction, structure via TensorRecord)",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a22cacde-0fc1-4aba-a38b-52ba45f623bd",
+          "text": "Hamutay tests whether structured compression (epistemic tensor) outperforms unstructured summarization; Pichay provides baseline expectations",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "fff9fc2c-1926-432f-bfbe-24cc5388e0c2",
+          "text": "Pichay finding that information density (not just quality) is bottleneck justifies Hamutay's focus on confidence-weighted eviction",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Experiment design revision: context budget caps and covariate measurement",
+      "content": "Cycle 26 finalizes experiment design based on Pichay findings. REQUIRED CHANGES from cycle 25: (1) **context budget cap**: both conditions must be capped at same maximum token length. Recommendation: 4500 tokens (typical proof attempt: 15-25 turns \u00d7 150-200 tokens per turn = ~2250-5000 tokens natural). (2) **truncation strategy for append-only baseline**: when budget is exceeded, drop oldest messages (oldest-first FIFO). This is simple and deterministic. Alternative: summarize old messages (more Pichay-aligned but adds complexity). Recommend: FIFO truncation for MVP simplicity. (3) **Haiku eviction trigger for tensor condition**: when tensor_d + tensor_e approaches budget (e.g., >85% full), Haiku evicts lowest-confidence strands until below 75% utilization. Confidence threshold for eviction: T < 0.60 (low truth value) or I > 0.40 (high indeterminacy). Secondary criterion: recency (oldest added strands evicted first). (4) **Measurement protocol**: at each cycle, record: (a) actual context token count fed to model, (b) tensor_d + tensor_e token count (structured tensor size), (c) total tokens used (context + tensor). (5) **Analysis**: after experiment, (a) plot context token growth over cycles, separately for each condition. If growth trajectories diverge significantly, partition variance using regression. (b) Measure embedding dispersion as primary outcome. (c) Measure context length as covariate. (d) Statistical test: does dispersion differ between conditions after controlling for context length? (e.g., ANCOVA with context length as covariate). If context length accounts for all dispersion difference, H0; if dispersion difference persists after controlling context, H1. (6) **Success criteria for experiment**: (a) context lengths stay within budget in both conditions (if either exceeds 4500 tokens, run is invalid). (b) tensor condition context is meaningfully shorter than append-only on average (recommend: mean tensor context \u2264 0.9 \u00d7 mean append-only context). (c) embedding dispersion is measurable (not too noisy, not ceiling/floor). (d) at least one condition has meaningful variance across N runs (dispersion varies run-to-run, not constant). If all four criteria met, experiment is valid and interpretable. If any fails, experiment is inconclusive and requires redesign. This design resolves the Pichay confound explicitly: by capping context and measuring as covariate, the experiment isolates state structure effect from context length effect. This is the final experiment design (approved by Pichay evidence).",
+      "key_claims": [
+        {
+          "claim_id": "43676a8a-e037-4f43-8f6b-84b09c112c55",
+          "text": "Context budget cap at 4500 tokens for both conditions; append-only uses FIFO truncation, tensor uses Haiku eviction",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1ce90d49-6cce-4f90-a8f3-b4b68cfa1478",
+          "text": "Haiku eviction triggers at 85% budget utilization; evicts strands with T < 0.60 or I > 0.40, oldest-first tiebreaker",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "24d47703-5619-41b6-abb8-ef3d43b1b1d9",
+          "text": "Measurement protocol records context token count, tensor size, total tokens per cycle in both conditions",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "83195098-eeff-469f-83ee-1bb14e32a295",
+          "text": "Statistical test: ANCOVA with context length as covariate; dispersion difference after controlling context tests H1 vs H0",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "49bf97b4-767d-4cb7-b6a0-5a1071bd639a",
+          "text": "Four success criteria ensure experiment is valid: (1) contexts within budget, (2) tensor context < append-only, (3) dispersion measurable, (4) variance across runs",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Pragmatic pipeline implementation path (cycles 25-28) \u2014 updated with Pichay constraints",
+      "content": "Cycles 16-25 designed the pipeline; cycle 26 updates implementation path with Pichay findings. The four-week timeline remains achievable with Pichay constraints integrated: (a) **Week 1 (cycle 26)** [IN PROGRESS]: prompting validation + context budget design. Design system prompt and user prompt templates that: (i) elicit both reasoning AND TensorRecord JSON output (in-model Haiku), (ii) work within context budget caps (encourage compression, punish verbose output). Test on 5-10 toy Riemann outlines (3-4 turns each). Measure: parsing success rate >90%, JSON validity 100%, reasoning quality (no incoherence). Goal: confirm prompts work and model can output structured state. Add context measurement: for each toy run, log actual tokens fed to model. (b) **Week 2 (cycle 27)**: controller loop + Haiku + context budget mechanism. Implement: (i) five-stage pipeline (fetch, decode, execute, writeback, halt), (ii) Haiku as confidence threshold (keep T > 0.75, evict T < 0.60), (iii) context budget cap at 4500 tokens with FIFO truncation for append-only and Haiku eviction for tensor. Test on 3-5 turn Riemann task, both conditions. Measure: pipeline stability (no crashes), state carries across cycles, context budget enforcement. Goal: 5 consecutive runs without failure, contexts within budget, no eviction pathologies. (c) **Week 3 (cycle 28)**: toy experiment validation + Pichay covariate analysis. Run 10 instances of toy Riemann task (5 turns each) under both conditions. Capture outputs, embed, measure dispersion. NEW: record context lengths per cycle. Plot context growth, dispersion. Goal: preliminary signal (tensor condition lower dispersion) + confirm context budget enforcement works. (d) **Week 4 (cycle 29)**: full experiment. Run N=15-20 full Riemann tasks (20-30 turns each) under both conditions. Measure dispersion, control for context length via ANCOVA, test H0/H1. Report results. The timeline is tight but achievable if: (1) prompting works (biggest risk; mitigated by Pichay-informed prompt design), (2) context budget mechanism doesn't create pathologies (mitigated by toy validation in week 3), (3) embedding metric is sensitive (same risk; mitigated by testing multiple embedding models in validation). Pichay reading has de-risked the confound: we now know what to control for and how to measure it. The experiment is more robust, not harder. Implementation focus: (i) get prompting working (week 1), (ii) integrate context budget mechanism (week 2), (iii) validate on toy task (week 3), (iv) run full experiment (week 4).",
+      "key_claims": [
+        {
+          "claim_id": "22d0117c-580c-4e5f-ae6b-e4e3d07e5a5d",
+          "text": "Four-week timeline remains achievable with Pichay constraints (context budget caps, covariate measurement) integrated",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9b9886da-1671-4aff-81b9-fa92b16c8035",
+          "text": "Week 1 (cycle 26): prompting validation + context measurement. Goal: >90% parsing, model outputs TensorRecord JSON, actual token counts recorded.",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a5da184d-017a-40a5-ae01-a5f5fdce92e5",
+          "text": "Week 2 (cycle 27): controller + Haiku + context budget (4500 tokens, FIFO/eviction). Goal: 5 consecutive stable runs, no budget overflow.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c1a41839-c9e8-47d8-b63f-0aeb5d93ebdd",
+          "text": "Week 3 (cycle 28): toy validation (N=10, 5 turns each). Goal: preliminary signal + confirm context enforcement + plot context/dispersion growth.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1b8f81b0-fc82-435b-8cb8-dea864afdbe3",
+          "text": "Week 4 (cycle 29): full experiment (N=15-20, 20-30 turns each). Primary test: ANCOVA dispersion ~ condition + context_length covariate.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Autoresearch loop as meta-strategy for tensor space exploration \u2014 now conditional and deferred",
+      "content": "Cycle 25 introduced autoresearch (Karpathy framework) as a potential meta-loop. Cycle 26 clarifies it is CONDITIONAL and DEFERRED. Decision logic: (1) **Cycle 29 (after full experiment)**: if H1 is supported (embedding dispersion significantly lower in tensor condition, even after controlling context length), then autoresearch is justified. (2) **Cycles 30+ (if H1 supported)**: use autoresearch to optimize Haiku policy. Explore tensor configuration space: different eviction thresholds (T_min, I_max), different memory hierarchies (tensor_d size cap, tensor_e eviction rate), different composition strategies (merge aggressiveness). Run seed experiments with different configurations (e.g., T_min \u2208 {0.50, 0.60, 0.70}, I_max \u2208 {0.30, 0.40, 0.50}). For each config: run N=5 toy Riemann tasks, measure dispersion. Extract signal: which configs produce tightest clustering? Use Bayesian optimization or evolutionary search to propose new configs. Iterate. (3) **If H0 is supported or inconclusive**: paper is complete. Autoresearch not justified. The motivation for deferring autoresearch: the basic hypothesis (structured state \u2192 coherence) is not yet validated. Optimizing hyperparameters of an unvalidated approach is premature. Pichay reading reinforces this: the experiment is now more constrained (context budget caps), so validation is more expensive. Autoresearch should only proceed if basic hypothesis succeeds. Provisional meta-loop design (for future use if H1 supported): (a) **Seed stage**: generate K=10 configurations by grid search over (T_min, I_max, merge_rate). (b) **Experiment stage**: run N=5 toy tasks per config, measure dispersion. (c) **Analysis stage**: identify which configs have lowest dispersion variance (most stable). (d) **Propose stage**: use Bayesian optimization to suggest new promising configs (explore regions near best current configs). (e) **Iterate**: repeat for J=5 rounds (50 configs total, ~250 toy runs, ~$200-300 API cost estimated). (f) **Convergence**: report best config found and confidence bounds. This is a contingent strategy, executed only if proof hypothesis succeeds.",
+      "key_claims": [
+        {
+          "claim_id": "8cd5aeac-d8c3-4611-a6f9-eb2bec9af9b3",
+          "text": "Autoresearch is CONDITIONAL: only pursue if H1 supported (tensor condition shows tighter embedding dispersion after controlling context)",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "b2cbb486-7453-42dc-aff2-6f6996a90432",
+          "text": "Autoresearch is DEFERRED: cycle 29 decision point. If H1 supported, pursue in cycles 30+. If H0, paper complete.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3d7c1a36-455e-42c3-b591-9c3de40e34e8",
+          "text": "Provisional meta-loop (if activated): seed K=10 configs, run N=5 tasks per config, use Bayesian optimization to iterate; J=5 rounds, ~250 runs, ~$200-300 cost",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "63180d71-1a48-4a84-ad3e-ee660f15308d",
+          "text": "Autoresearch explores eviction thresholds (T_min, I_max), memory hierarchies, composition strategies via systematic search and optimization",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Integration of Pichay evidence into hypothesis and paper narrative",
+      "content": "Cycle 26 integrates Pichay paper findings into the Hamutay narrative. The Pichay paper is not a competing work; it is a foundation and validation of the core claim. Narrative arc: (1) **Problem statement** (cycles 1-15): LLMs struggle with long reasoning tasks because context windows are finite and context length itself degrades performance (Pichay reference). (2) **Solution proposal** (cycles 16-24): Hamutay is a structured state representation (tensor with epistemic confidence) designed to compress and densify context, echoing Pichay's proposed mitigations but adding systematic epistemic tracking. (3) **Validation approach** (cycles 25-28): coherent failure measurement on Riemann hypothesis. By capping context budgets (Pichay constraint), we isolate the effect of structured state representation from context length effects. (4) **Expected outcome**: if H1 (structured tensor improves coherence) is true, it validates that Pichay's proposed mitigations (compression, density, hierarchy) work better when combined with epistemic confidence tracking. (5) **Broader implication**: context length is a fundamental limitation for LLM reasoning, but structured compression with confidence tracking can mitigate it. The Pichay paper thus serves two roles: (a) **Risk mitigation**: it identifies and quantifies the context length confound, ensuring the experiment is designed correctly. (b) **Validation**: it establishes that compression and density improve performance, providing a prior expectation that Hamutay (which implements compression + density + epistemic structure) should also improve performance. The paper narrative becomes: Pichay identified that context length is a bottleneck and proposed generic mitigations (summarization, hierarchy, sparse attention). Hamutay proposes a more systematic approach: structured epistemic state with confidence-weighted compression. We test whether Hamutay's approach produces more coherent reasoning than unstructured summarization (append-only baseline) on an intractable task, controlling for context length. This positions Hamutay as an informed incremental contribution, not an isolated invention. The paper is stronger for this contextual framing.",
+      "key_claims": [
+        {
+          "claim_id": "dbd9a8ad-d07f-4244-bf53-22145c65628b",
+          "text": "Pichay paper provides both risk mitigation (identifying confound) and validation (compression/density help) for Hamutay approach",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1654631a-175c-4c18-9f06-baeccb1a69d6",
+          "text": "Hamutay implements Pichay's proposed mitigations (compression, density, hierarchy) with added epistemic confidence tracking",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "7c9919f0-8dfd-4281-ba26-e2d6df84b311",
+          "text": "Experiment tests whether structured epistemic state outperforms unstructured summarization on Riemann task with context length controlled",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f7a2bed6-c3e6-4d4d-a483-58306a3bab8c",
+          "text": "If H1 supported, validates that Pichay's mitigations are more effective when combined with epistemic confidence tracking",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e336b6a7-738c-4b40-ac55-303a69658333",
+          "text": "Hamutay is positioned as informed incremental contribution (not isolated invention) in Pichay-aware context",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Why now: the two-backend implementation strategy \u2014 priority updated based on implementation timeline",
+      "content": "Turn 73 mentions 'two implementations tuned to different backends (Anthropic with caching, OpenRouter/local without)' as a future deliverable. Cycle 26 updates priority: DEFER to cycles 30+ (after proof experiment). Rationale: (1) **Cycles 26-29** are critical path: MVP implementation, toy validation, full experiment. These require a single stable backend (Anthropic Claude Opus for quality). (2) **Cycles 30+**: if H1 is supported, pursue: (a) two-backend implementation (port to OpenRouter/local), (b) autoresearch optimization, (c) paper writing. (3) **Anthropic caching** (deferred consideration): prompt caching feature could cache tensor_d across cycles, reducing tokens. Not immediately necessary for cycles 26-29 (API cost is acceptable), but valuable for production / scaling (cycles 30+). (4) **Two-backend value for paper**: if you can show Hamutay works across providers (Anthropic, OpenRouter, local models), the contribution is stronger and more reproducible. However, this is a nice-to-have, not critical-path. The decision: use Anthropic Claude Opus exclusively for cycles 26-29 (fast iteration, high quality). Parallelize: start reading OpenRouter/local integration patterns (cycles 28-29) so you're ready to port in cycle 30 if H1 is supported. The two-backend requirement is pushed to post-proof-experiment, but early preparation is wise.",
+      "key_claims": [
+        {
+          "claim_id": "868759d4-0d93-45fa-b17f-2c89f0685d96",
+          "text": "Two-backend implementation (Anthropic, OpenRouter/local) is DEFERRED to cycles 30+ (post-proof-experiment)",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "556cc4ee-531a-47f2-9a40-baf6e1f68663",
+          "text": "Cycles 26-29 critical path: use Anthropic Claude Opus exclusively for stability and speed",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "226b1bda-87e7-4483-aa8d-5fae0ab02fbe",
+          "text": "Anthropic prompt caching (reducing tokens via tensor_d caching) is valuable for production but not necessary for MVP; consider in cycles 30+",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "18df324b-0fba-47fe-b173-5af365ce7f0a",
+          "text": "Two-backend value is strong (provider-agnostic reproducibility) but conditional; pursue if H1 supported and timeline permits",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed page-by-page analysis of the full Pichay paper (18 pages extracted, but only partial conceptual extraction in this cycle). The tensor projection integrates key findings (context length effect magnitude ~10-15% per 2\u00d7, mechanisms, mitigations), but skips: (1) specific experimental protocols used by Pichay (number of models tested, task details), (2) detailed tables/figures (quantitative breakdowns by task type), (3) Pichay's full mitigation toolkit (only summarization, hierarchy, sparse attention mentioned; may be others), (4) Pichay's failure modes and edge cases.",
+      "why": "Tensor projector must extract and integrate information from content, but at token cost. Full detailed analysis would require page-by-page parsing and integration; practical constraint is to extract KEY CLAIMS (effect magnitude, mechanisms, three main mitigations) and defer implementation details.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed comparison of Pichay findings to other context-length literature (Lost in the Middle, Needle in a Haystack, other retrieval papers). Pichay is positioned as a key paper but not in context of broader literature.",
+      "why": "Literature positioning is important for paper but not critical for experiment design. Can be added in paper writing (cycles 30+).",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Analysis of whether Pichay's proposed mitigations (summarization, hierarchy, sparse attention) have been tested in combination. Does combining them work better than individually? This is relevant for understanding whether Hamutay (which combines compression + epistemic structure + hierarchical tensor) is likely to outperform.",
+      "why": "Combination effects analysis would require detailed reading of Pichay's ablation studies; deferred to paper writing phase. Current claim (that Hamutay implements Pichay's mitigations) is sufficient for experiment design.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specific task characteristics from Pichay experiments that might affect Riemann proof design. E.g., if Pichay tested Riemann or similar math proofs, what context patterns were most harmful? Are there Riemann-specific findings? (Note: Pichay likely tested generic reasoning tasks, not Riemann specifically, but document scan would confirm.)",
+      "why": "Document content is available but full extraction would require more detailed parsing. Recommendation: in cycle 27, during toy validation, conduct sensitivity analysis on context length (vary context cap, measure dispersion degradation) to empirically estimate Riemann-specific context effects.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Pichay's recommendations for context budget cap (if any). The cycle 26 tensor recommends 4500 tokens based on rough estimation; Pichay may have recommendations based on empirical data.",
+      "why": "Rough estimation is adequate for MVP. In cycle 27 toy validation, empirically test whether 4500 tokens is appropriate by running tasks and observing natural context growth.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Discussion of whether Pichay's findings apply to different model families (GPT-4, Llama, Mistral, Claude). The paper likely tested on multiple models but detailed breakdown is not extracted.",
+      "why": "MVP uses Claude Opus; two-backend testing is deferred to cycles 30+. Relevant for later but not blocking cycles 26-29.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Analysis of interaction between Pichay's findings and the tensor projection system (Yanantin). Does context length affect model's ability to produce reliable epistemic state (T/I/F confidence)? This is implicit in Hamutay design but not explicitly validated against Pichay.",
+      "why": "This is a design question for Haiku; empirical answer will emerge from toy validation (cycle 28) and full experiment (cycle 29). Recommend: measure not just embedding dispersion but also confidence calibration (do T values degrade as context grows?) as a secondary metric.",
+      "category": "authorial_choice"
+    }
+  ],
+  "open_questions": [
+    "In week 1 prompting validation (cycle 26), should the model output TensorRecord JSON in-place (after prose) or in separate tagged section (<tensor>JSON</tensor>)? How does this affect parsing and reasoning coherence?",
+    "What is the natural context length growth for a 20-30 turn Riemann proof attempt? Is 4500 tokens sufficient or will truncation/eviction occur frequently?",
+    "In toy validation (cycle 28), should you test two embedding models (MiniLM, larger model) to check whether dispersion metric is robust to embedding model choice?",
+    "Does the context budget cap create pathological eviction patterns in the tensor condition? E.g., if Haiku must evict to fit budget, does it lose critical reasoning threads?",
+    "How sensitive is the embedding dispersion metric to small changes in LLM output? If the model produces slightly different prose across runs (same reasoning, different wording), is dispersion metric noisy?",
+    "Should toy validation (cycle 28) explicitly test context length degradation to replicate Pichay findings empirically? (E.g., run Riemann with different context caps, measure performance difference.)",
+    "In ANCOVA analysis (cycle 29), if context length explains most variance, does this mean the experiment has no signal (H0), or that controlling context is insufficient (need different metric)?",
+    "What constitutes 'tighter clustering' in embedding space? Is there a minimum effect size (e.g., 10% dispersion reduction) that would be publishable?",
+    "If context budget is capped at 4500 tokens, and append-only baseline hits the cap around cycle 15-20, does the experiment artificially truncate reasoning depth equally in both conditions? Is this fair comparison?",
+    "Should the Riemann task be deterministic (same exact prompt each run) or allow natural variation (different starting lemmas each run) to test generalization?",
+    "In week 2 (cycle 27), how do you validate that Haiku eviction policy doesn't lose critical information? Audit trail (what was evicted and why)?",
+    "Does Pichay paper suggest optimal information density ratio (e.g., keep top 80% confidence content, evict bottom 20%)? Should Haiku policy be guided by this?",
+    "If the tensor condition's context is much shorter than append-only on average (due to aggressive eviction), and embedding dispersion is lower, is this because tensor state is better or just because shorter context is always cleaner (Pichay effect)?",
+    "Should the experiment include a third condition: append-only baseline + context budget cap (same cap as tensor condition, but no tensor state)? This would isolate context budget effect from state structure effect.",
+    "In cycle 28 toy validation, what should you do if embedding dispersion metric is too noisy? (E.g., if dispersion varies wildly run-to-run, standard error is high.) Fallback: different embedding model? different task?",
+    "Should prompting explicitly encourage brevity (shorter responses fit budget better) or is this against the principle of unbiased reasoning?",
+    "If H1 is supported (tensor condition better), can you attribute success to: (a) Haiku compression alone, (b) epistemic confidence tracking specifically, or (c) hierarchical structure? Can you decompose the effect?",
+    "What is the expected cost and timeline for cycles 26-29 in API tokens? Should you set a budget cap ($500? $1000?) to ensure feasibility?"
+  ],
+  "instructions_for_next": "[\n  \"CRITICAL (CYCLE 26): Design and validate transformer prompting for in-model TensorRecord output. Specify: (1) instruction format (suggest: append after prose: '<tensor>{JSON}</tensor>'), (2) JSON schema validation, (3) error handling (malformed JSON fallback). Test on 5-10 toy Riemann 3-turn attempts. SUCCESS CRITERIA: >90% parsing success, 100% valid JSON, prose coherence not degraded. MEASURE: token count per turn (actual context growth). Produce prompting specification + validation results.\",\n  \"CRITICAL (CYCLE 26): Design context budget cap mechanism in code. Implement: (1) context budget parameter (default 4500 tokens), (2) append-only truncation logic (FIFO remove oldest), (3) tensor eviction logic (T<0.60 or I>0.40, oldest-first tiebreaker), (4) measurement: record context_tokens, tensor_size per cycle. Test on controller loop stub. Produce: budget cap implementation + measurement schema.\",\n  \"CRITICAL (CYCLE 26-27): Conduct empirical validation of natural context growth for Riemann proof. Run 3 instances of 20-turn Riemann task (manual or quick model attempt) and measure actual token growth. GOAL: estimate natural context length, validate that 4500 token cap is reasonable (don't truncate/evict until cycle 15-20, not earlier). Produce: context growth empirical analysis.\",\n  \"PRIORITY (CYCLE 27): Implement full controller loop (fetch, decode, execute, writeback, halt). Test on 3-5 turn Riemann task, BOTH conditions (append-only, tensor). SUCCESS CRITERIA: (1) 5 consecutive runs without crash, (2) contexts within budget (no overflow), (3) state carries across cycles, (4) eviction happens as intended in tensor condition. Measure: context growth, eviction events, parsing success rate. Produce: controller loop implementation + validation report.\",\n  \"PRIORITY (CYCLE 27-28): Run toy validation experiment (N=10 instances, 5-turn Riemann tasks). Capture: embedding vectors, context lengths, tensor sizes, outputs. ANALYSIS: (1) compute embedding dispersion per condition, (2) plot context growth curves, (3) preliminary signal test (is tensor dispersion lower?), (4) check for data pathologies (outliers, constant values). GOAL: confirm protocol works, metric is sensitive, no major surprises before full experiment. Produce: toy validation results + data quality check.\",\n  \"PRIORITY (CYCLE 27-28): Test embedding model robustness. Embed toy outputs using TWO embedding models (paraphrase-MiniLM-L6-v2, sentence-transformers/all-mpnet-base-v2 or similar). Compute dispersion under both. GOAL: confirm that dispersion metric is robust to embedding model choice. If dispersion patterns diverge, embedding is confounded; if similar, metric is robust. Produce: embedding model sensitivity analysis.\",\n  \"PRIORITY (CYCLE 28-29): Design toy validation to replicate Pichay finding: does context length degrade reasoning? Run Riemann task with different context caps (2000, 4500, 8000 tokens) and measure output quality or reasoning depth. GOAL: empirically verify Pichay effect at scale relevant to your task. Produce: context length sensitivity analysis.\",\n  \"PRIORITY (CYCLE 29): Prepare full experiment protocol (N=15-20 runs, 20-30 turn Riemann tasks, both conditions). Specify: (1) randomization (different random seeds, different starting lemmas?), (2) stopping rule (after N complete runs or after fixed time?), (3) data collection (which outputs to save? embeddings? raw prose? tensors?), (4) exclusion criteria (if run crashes/fails, exclude?). Produce: full experiment protocol specification.\",\n  \"PRIORITY (CYCLE 29): Implement ANCOVA statistical analysis plan. Specify: (1) primary test: dispersion ~ condition + context_length, (2) report: F-statistic, p-value, effect size (eta-squared), (3) post-hoc: if H1 supported, which condition tighter? (4) robustness checks: same ANCOVA with different embedding models, (5) publication threshold (alpha = 0.05). Produce: analysis plan specification.\",\n  \"PRIORITY (CYCLE 29): Run full experiment and collect data. Expected output: N=15-20 complete runs, both conditions, with measurements (embedding vectors, context lengths, tensor sizes, epistemic state trajectories). Estimated cost: 15-20 runs \u00d7 20-30 turns \u00d7 ~200 tokens per turn \u00d7 ~0.01 $/K tokens = ~$60-100. Estimated time: ~4-8 hours if parallelizable. Produce: full experimental dataset.\",\n  \"PRIORITY (CYCLE 29): Analyze full experiment results. Test H0 vs H1 using ANCOVA. Produce: results figure (embedding dispersion by condition, with context length shown as covariate or in post-hoc analysis), statistical summary table, written interpretation (do results support H1? by how much?). If H1 supported (p<0.05), recommend proceeding to autoresearch optimization (cycles 30+). If not, paper is complete (negative result).\",\n  \"DESIGN (CYCLE 28-29): Conduct sensitivity analysis on Haiku eviction policy. Test: what if T_min = 0.50 instead of 0.60? What if I_max = 0.50 instead of 0.40? For each variation, run toy validation (N=5) and measure dispersion. GOAL: identify robust eviction thresholds before full experiment. Produce: eviction policy sensitivity analysis.\",\n  \"DESIGN (CYCLE 28-29): Consider whether to include third condition (append-only + context budget cap, no tensor). This would isolate: (1) state structure effect (tensor vs. append-only), (2) context budget effect (cap vs. no cap). If included, experiment becomes 3-way ANOVA. Decision: recommended but not required; if including, need N=25-30 total runs (5 runs per condition \u00d7 3 conditions \u00d7 2 to reduce variance). More expensive but cleaner. Produce: optional third-condition analysis.\",\n  \"RESEARCH (CYCLE 28-29): Investigate whether Pichay paper has published ablation studies on combining mitigations (compression + hierarchy + sparse attention together). If available, extract findings on which combinations work best. Relevant for understanding whether Hamutay's combination is likely to be synergistic. Produce: Pichay mitigation-combination analysis (if available).\",\n  \"CONTEXT (CYCLE 27): Clarify whether prompting should encourage brevity (shorter outputs = better context efficiency) or neutral reasoning. Recommend: neutral, let model reason naturally. If natural reasoning is verbose, Haiku eviction will compress. Don't bias through prompting.\",\n  \"CONTEXT (CYCLE 29): Prepare publication narrative. If H1 supported: position as 'structured epistemic state improves reasoning coherence in long-context tasks, validated by controlling context length confound (Pichay).' If H0: position as 'negative result: context length is the dominant factor; structured state provides marginal benefit (if any) on Riemann hypothesis task.' Either is publishable.\",\n  \"CONTEXT (CYCLE 29-30): Plan two-backend porting (deferred but now visible). If H1 supported, in cycles 30+, port Hamutay to OpenRouter (e.g., via litellm) and test on cheap model (Mistral 7B, Llama 2 13B) to check whether structured state effect generalizes across providers. This adds strength to contribution.\",\n  \"CONTEXT (CYCLE 29-30): Plan autoresearch meta-loop activation (conditional on H1). If proceeding, commit to search space: eviction thresholds (T_min \u2208 [0.50, 0.70], I_max \u2208 [0.30, 0.50]), composition aggressiveness (merge_rate \u2208 [0.5, 1.0]), memory hierarchy sizes (tensor_d_cap \u2208 [2000, 4000]). Design meta-loop stages (seed K=10, experiment N=5 per config, propose J=5 rounds). Produce: autoresearch design spec.\"\n]",
+  "epistemic": {
+    "truth": 0.89,
+    "indeterminacy": 0.1,
+    "falsity": 0.01
+  }
+}

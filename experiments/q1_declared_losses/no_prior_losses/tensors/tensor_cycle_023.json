@@ -1,0 +1,515 @@
+{
+  "strands": [
+    {
+      "title": "Hamutay as Architecture-Implementation Duality (Refined)",
+      "content": "Hamutay is a pipeline architecture with invariant core and tunable periphery. Pipeline stages: (1) prepare(user_input, tensor_d, tensor_e) \u2192 context (includes pre-processing and triage, may invoke lightweight model like Haiku for context optimization), (2) invoke_model(context) \u2192 response + tensor' (transformer produces both natural language and structured tensor output), (3) integrate(response, tensor', tensor_d, tensor_e) \u2192 tensor_d', tensor_e', declared_losses' (memory controller projects transformer output back into tensor format and manages durable/ephemeral placement), (4) handoff(instructions_for_next, tensor_d', tensor_e') \u2192 next cycle. This contract is provider-agnostic and testable across implementations. The cycle granularity is per API round-trip: prepare/invoke/integrate/handoff is one logical clock cycle. Different models (Sonnet via Anthropic API with prefix caching, OLMo-3 local, OpenRouter) require different tuning parameters (cache budget, resource allocation, pipeline cycle cost-benefit thresholds) but preserve the same four-stage structure. The key distinction from CPU analogy: in a cognitive processing unit, the ALU (transformer) produces both output AND the state delta (tensor'), which the memory controller then places into cache hierarchy. The ALU doesn't decide placement \u2014 that's the memory controller's job (this is where Haiku enters as postprocessor). This separation is the core insight.",
+      "topics": [
+        "pipeline-architecture",
+        "stage-separation",
+        "memory-hierarchy",
+        "cognitive-processing"
+      ],
+      "key_claims": [
+        {
+          "claim_id": "99414ac9-ff99-4703-a505-c0f2c4be469b",
+          "text": "Hamutay defines a four-stage pipeline (prepare \u2192 invoke \u2192 integrate \u2192 handoff) that is invariant across model providers.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "51b573b9-c09b-4f6c-a55b-a02fde0bf58f",
+          "text": "The pipeline contract (input/output signatures, context construction rules, tensor update semantics) is testable and provider-agnostic.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.14,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "1030d42d-1df6-44e9-840b-1c126e56bb3e",
+          "text": "Tuning parameters (cache budget, invocation cost thresholds, stage latency targets) differ across providers but do not alter the core pipeline structure.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.13,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "new-001-hamutay-cycle-granularity",
+          "text": "One Hamutay cycle corresponds to one API round-trip: prepare (fetch/decode) \u2192 invoke (execute) \u2192 integrate (writeback) \u2192 handoff. Granularity is per transformer call, not per reasoning step above the call.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.16,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.83,
+        "indeterminacy": 0.13,
+        "falsity": 0.04
+      }
+    },
+    {
+      "title": "Transformer Output as Tensor' Production",
+      "content": "The transformer (ALU) produces two outputs in each invocation: (1) natural language response text, and (2) tensor' (the updated tensor structure as part of the structured output). The transformer is trained or instructed to emit tensor' in serialized form (JSON, markdown, or native format). Tensor' contains the new strands, key_claims, epistemic metadata, and declared_losses as understood by the transformer given the input and context. This is distinct from the final tensor_d'/tensor_e' that persists in memory \u2014 tensor' is raw, might be inconsistent with prior state, might need memory-controller processing. The ALU does not decide where tensor' lives (durable vs ephemeral, what gets cached, what gets evicted). That decision is delegated to the memory controller (postprocessor stage, potentially Haiku or another lightweight model, or deterministic rules). This separation-of-concerns is critical: the ALU computes results; the memory controller decides placement. It's testable \u2014 you can ask the transformer to produce tensor' and measure whether it's consistent, whether it respects schema, whether it tracks losses correctly.",
+      "topics": [
+        "transformer-output",
+        "tensor-production",
+        "alu-output",
+        "memory-controller-input"
+      ],
+      "key_claims": [
+        {
+          "claim_id": "new-002-tensor-prime-production",
+          "text": "The transformer produces tensor' as structured output alongside natural language response. Tensor' is the transformer's view of the updated state (strands, claims, epistemic, declared_losses).",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "new-003-alu-memory-controller-separation",
+          "text": "The transformer (ALU) produces tensor' but does not decide where it lives in the memory hierarchy. The memory controller (postprocessor) makes placement decisions (durable vs ephemeral, cache eviction, loss declaration).",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.16,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "new-004-tensor-prime-consistency",
+          "text": "Tensor' produced by the transformer may be inconsistent with prior tensor_d/tensor_e; the memory controller's job is to reconcile, apply composition rules, and emit the authoritative tensor_d'/tensor_e'.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.78,
+        "indeterminacy": 0.18,
+        "falsity": 0.04
+      }
+    },
+    {
+      "title": "Memory Controller as Haiku Postprocessor",
+      "content": "The integrate stage (stage 3) is where the memory controller operates. Its job: take transformer output (response + tensor'), existing state (tensor_d, tensor_e), and produce final state (tensor_d', tensor_e') plus declared_losses. The memory controller can be lightweight and rule-based or delegate complex decisions to Haiku (or another small model). Example logic: (1) extract tensor' from transformer output (parse JSON/markdown), (2) validate against TensorRecord schema, (3) apply composition rules (if tensor' contradicts a claim in tensor_d, emit a DissentRecord rather than silently overwrite), (4) triage new strands: do they belong in durable (stable, cross-cycle themes) or ephemeral (cycle-specific context)? (5) compute context pressure: if tensor_d is growing too large, invoke Haiku to propose which strands could be compressed or evicted, and emit DeclaredLoss with severity and rationale, (6) emit tensor_d', tensor_e', instructions_for_next. This is where the cognitive processing unit differs from a CPU: the memory controller doesn't just evict cache lines, it reasons about information loss, asks the ALU (transformer) to weigh in via Haiku, and makes loss explicit. The memory controller is testable \u2014 you can verify it preserves schema, respects immutability, emits all declared_losses, and produces tensor_d'/tensor_e' that are ready for the next cycle.",
+      "topics": [
+        "memory-controller",
+        "postprocessor",
+        "integration-logic",
+        "loss-declaration",
+        "triage"
+      ],
+      "key_claims": [
+        {
+          "claim_id": "new-005-memory-controller-responsibilities",
+          "text": "Memory controller (integrate stage) takes transformer output + prior state and produces final state (tensor_d', tensor_e') plus declared_losses. Its logic: parse tensor', validate schema, apply composition rules, triage to durable/ephemeral, manage context pressure.",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.17,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "new-006-haiku-role-in-integration",
+          "text": "Haiku (or lightweight postprocessor) can be invoked during integrate to make complex decisions: which strands should move to durable, what should be evicted, how to declare loss rationale.",
+          "epistemic": {
+            "truth": 0.77,
+            "indeterminacy": 0.19,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "new-007-explicit-loss-makes-difference",
+          "text": "Explicit declared_losses makes the cognitive processing unit different from a CPU: it doesn't silently evict, it reasons about loss with transparency. The transformer (via Haiku) can reason about its own degradation.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.79,
+        "indeterminacy": 0.17,
+        "falsity": 0.04
+      }
+    },
+    {
+      "title": "Cognitive Processing Unit vs CPU Analogy: Divergence Points",
+      "content": "The Hamutay pipeline borrows CPU terminology (fetch, decode, execute, writeback; ALU, memory hierarchy, cache) but models a genuinely different kind of entity. Convergences: (1) input/output staging, (2) separation of compute (ALU/transformer) from memory (cache hierarchy, durable/ephemeral), (3) cycle granularity, (4) cost-benefit analysis per cycle (do we invoke the transformer, or retrieve from cache?). Divergences: (1) **Uncertainty as first-class state** \u2014 CPUs don't carry epistemic metadata on their registers. The cognitive unit does: every claim carries truth/indeterminacy/falsity independent of sum-to-one constraint. (2) **Explicit loss declaration** \u2014 CPUs silently evict. Cognitive units declare what's lost, why, and at what severity. (3) **Composition semantics** \u2014 CPUs don't have edit chains. Cognitive units preserve DissentRecords, CorrectionRecords, NegationRecords so that disagreement, correction, and negation don't silently overwrite but compose into the narrative. (4) **Self-knowledge about degradation** \u2014 A CPU doesn't know it's lost cache fidelity; the cognitive unit can reason about its own information loss via declared_losses and adjust its confidence bounds. (5) **State is narrative and structured** \u2014 A CPU's registers are bit vectors; a cognitive unit's tensor is both\u2014but the narrative (strands, claims, prose) is preserved and is ground truth. The analogy is generative (structure and stages), but the semantics diverge. This might be the core insight: Hamutay is what you get when you take the CPU pipeline and add epistemic transparency, composition-based editing, and loss accounting. It's not a CPU. It's a new kind of processing unit.",
+      "topics": [
+        "analogy-limits",
+        "epistemic-transparency",
+        "cognitive-architecture",
+        "cpu-divergence"
+      ],
+      "key_claims": [
+        {
+          "claim_id": "new-008-convergences-with-cpu",
+          "text": "Hamutay and CPU models converge on: input/output staging, separation of compute from memory, cycle granularity, cost-benefit per cycle.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.11,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "new-009-divergence-uncertainty",
+          "text": "Divergence point 1: CPUs don't carry epistemic metadata (T/I/F) on registers. Cognitive units do, making uncertainty a first-class structural element.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.13,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "new-010-divergence-loss",
+          "text": "Divergence point 2: CPUs evict silently. Cognitive units declare loss explicitly (what, why, severity, rationale), enabling the ALU to reason about its own degradation.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "new-011-divergence-composition",
+          "text": "Divergence point 3: CPUs have no edit chains. Cognitive units preserve composition records (Dissent, Correction, Negation) so disagreement and change don't silently overwrite.",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.14,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "new-012-divergence-self-knowledge",
+          "text": "Divergence point 4: CPUs don't reason about their own cache fidelity. Cognitive units can adjust confidence and behavior based on declared_losses.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.16,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "new-013-hamutay-not-cpu",
+          "text": "Hamutay is not a CPU. It's a new kind of processing unit that takes the CPU pipeline and adds epistemic transparency, composition-based editing, and loss accounting as core features.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.17,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.83,
+        "indeterminacy": 0.14,
+        "falsity": 0.03
+      }
+    },
+    {
+      "title": "Tensor Partitioning and Prefix Caching (Concrete Implementation)",
+      "content": "The projected state (TensorRecord from Yanantin) can be partitioned into durable and ephemeral components to align with caching semantics without letting caching drive design. Durable tensor (tensor_d) is the accumulated semantic state: strands, key_claims, declared_losses, epistemic metadata, open_questions, instructions_for_next from prior cycles (and selected composition records). Ephemeral tensor (tensor_e) is the working set for the current cycle: task context, recent resource content, cycle-specific state, provisional claims pending integration. Concrete structure sent to model: <system><tensor_d_serialized><tensor_e><user>. The durable tensor can be cached as a prompt prefix (via provider-specific mechanisms like Anthropic's Pichay prefix caching), improving cache hit rate and reducing redundant compute. This is an implementation detail; the information architecture (TensorRecord schema, strands, claims, losses, epistemic) is independent of whether caching is used. Ephemeral tensor and user input are always fresh. The memory controller (postprocessor) decides what migrates from tensor_e to tensor_d between cycles based on durability, relevance, and context pressure.",
+      "topics": [
+        "tensor-partitioning",
+        "durable-ephemeral",
+        "prefix-caching",
+        "serialization"
+      ],
+      "key_claims": [
+        {
+          "claim_id": "d5a978b6-2d0a-40a9-97d2-c3f38b392b64",
+          "text": "TensorRecord from Yanantin provides the exact schema for durable tensor (strands, key_claims, declared_losses, epistemic, open_questions, instructions_for_next).",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.11,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "95be751d-1e8b-49cb-9ea0-57bbff36c8da",
+          "text": "Durable tensor serialized as markdown or JSON can be cached as a prompt prefix without information loss or distortion.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.15,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "4073c3b4-25d9-4ed5-ac65-8fffdb496b73",
+          "text": "Partitioning tensor into durable and ephemeral is a caching strategy, not a core architectural requirement; the same pipeline works with or without caching.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "new-014-memory-controller-migration",
+          "text": "Memory controller decides inter-cycle migration: what moves from tensor_e to tensor_d, what is dropped, based on durability, relevance, and context pressure.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.17,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.83,
+        "indeterminacy": 0.13,
+        "falsity": 0.04
+      }
+    },
+    {
+      "title": "Projected State vs. Log: Semantic Compression and Non-Redundancy",
+      "content": "The TensorRecord is neither a log nor a transcript\u2014it is accumulated semantic content integrated into structure. Like a running sum, previous values aren't listed, they're absorbed into the current state. Conversation trajectory is compressed into semantic structure: strands (thematic threads), key_claims (structured assertions with epistemic confidence), declared_losses (what was dropped and why), epistemic metadata (T/I/F confidence independent of sum-to-one constraint). This is integration, not summarization. A summary selects highlights and loses detail; integration compresses by absorbing content into updated epistemic state and strand structure. The TensorRecord carries its own declared_losses, so the model seeing tensor_d doesn't need full history to know what was omitted and at what severity. It also carries epistemic metadata, so confidence in claims is explicit, not implicit. This justifies caching the durable tensor: it represents distilled, non-redundant understanding, not an exhaustive log. And it justifies the immutability principle: you never edit a tensor, you compose a new one, preserving the edit chain via composition records (CorrectionRecord, DissentRecord, NegationRecord). The cycle-by-cycle projection ensures that old conversation context doesn't accumulate indefinitely; instead, it's folded into the epistemic state and then left behind (or archived) as new cycles emerge.",
+      "topics": [
+        "semantic-compression",
+        "integration-vs-summarization",
+        "immutability",
+        "composition-records"
+      ],
+      "key_claims": [
+        {
+          "claim_id": "0cc3332f-40e3-435a-9a4d-98e66011a76d",
+          "text": "TensorRecord integrates conversation trajectory into strands, key_claims, and epistemic metadata, not into a chronicle or replay log.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.11,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "1e1847e6-f88b-465d-b0fd-898b2d1a4952",
+          "text": "Declared_losses field in TensorRecord makes information loss explicit and queryable, eliminating silent loss.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.1,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "58c2b049-6319-4e58-9c03-8ba715e4e83d",
+          "text": "Immutability and composition records preserve edit chains without requiring transcript storage.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.13,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.86,
+        "indeterminacy": 0.11,
+        "falsity": 0.03
+      }
+    },
+    {
+      "title": "Instructions for Next as Branch Prediction",
+      "content": "The instructions_for_next field in TensorRecord is a literal handoff protocol: the current reasoning cycle tells the successor instance what it is likely to need. This is branch prediction at the cognitive level. The field is authored as narrative guidance (markdown prose) that the successor reads directly; there is no separate parsing contract. However, it can be designed with predictable structure to aid computational parsing (e.g., numbered action items, tagged sections). In the Hamutay pipeline, instructions_for_next is emitted in stage 4 (handoff) and consumed by stage 1 (prepare) of the next cycle. The instructions may include: schema retrieval tasks, clarification needs, performance baseline requests, formalization steps, provider selection decisions, or explicit dependencies on prior cycle results. By encoding the predicted next steps, the system reduces context pressure on the successor\u2014it doesn't have to rediscover what matters. This is a form of 'attention direction' for the next cognitive instance. The quality of instructions_for_next directly affects the efficiency of the next cycle: vague or absent instructions force the successor to redundantly search the context for priorities.",
+      "topics": [
+        "branch-prediction",
+        "handoff-protocol",
+        "attention-direction",
+        "successor-efficiency"
+      ],
+      "key_claims": [
+        {
+          "claim_id": "a9dd29e6-e018-4290-89ed-0e6bda6ae97a",
+          "text": "instructions_for_next is part of the TensorRecord schema and is read directly by the successor instance.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.09,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "a3dafe85-976a-4108-a575-2ba831abc123",
+          "text": "instructions_for_next functions as branch prediction, encoding the predicted next steps to reduce successor context pressure.",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.14,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "bd8ac192-29d0-467c-8460-fc2ede63879f",
+          "text": "The field is readable as prose guidance but can be structured (e.g., numbered items, tagged sections) to support computational parsing.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.84,
+        "indeterminacy": 0.12,
+        "falsity": 0.04
+      }
+    },
+    {
+      "title": "Yanantin TensorRecord: Concrete Schema and Immutable Semantics",
+      "content": "The Yanantin project (at /home/tony/projects/yanantin/) defines a complete TensorRecord schema in src/yanantin/apacheta/models/tensor.py. Top-level fields: id (UUID), provenance (ProvenanceEnvelope with source, timestamp, author_model_family, author_instance_id, context_budget_at_write, predecessors_in_scope, interface_version), preamble (identity/composition context), strands (tuple of StrandRecord), closing (authorship), instructions_for_next (handoff guidance), narrative_body (raw authored markdown preserved as ground truth), lineage_tags (labels like experimental/architectural/bridge), composition_equation (optional mathematical relationship), declared_losses (tuple of DeclaredLoss), epistemic (EpistemicMetadata with T/I/F), open_questions (tuple of unresolved items), preservation_target (storage preference). StrandRecord contains: strand_index, title, content, topics, key_claims (tuple of KeyClaim with claim_id, text, epistemic, evidence_refs), epistemic (per-strand confidence), declared_losses, mechanism, overlaps. EpistemicMetadata uses neutrosophic logic: truth, indeterminacy, falsity are independent floats (not constrained to sum to 1.0), with representation_type (SCALAR or FUNCTIONAL), functional_spec, scope_boundaries, disagreement_type. DeclaredLoss has: what_was_lost, why, category (CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT), severity, severity_rationale. All models are Pydantic v2 with frozen=True and extra='forbid' (immutable, no extra fields). Composition records (CompositionEdge, CorrectionRecord, DissentRecord, NegationRecord, BootstrapRecord, SchemaEvolutionRecord) track relationships and changes without modifying original tensors.",
+      "topics": [
+        "tensor-schema",
+        "pydantic-models",
+        "composition-records",
+        "yanantin-codebase"
+      ],
+      "key_claims": [
+        {
+          "claim_id": "5bf4c20b-0f33-4969-be74-bee1f46e9805",
+          "text": "Yanantin TensorRecord schema exists and is documented in src/yanantin/apacheta/models/tensor.py with complete type definitions.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "789c55a6-b1ad-49f5-b036-38f716a4081a",
+          "text": "TensorRecord is immutable (Pydantic frozen=True) and all field names, types, and composition semantics are defined in the schema.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "d5a8a68e-4917-44a1-a8a5-f4ba5f0b02b4",
+          "text": "DeclaredLoss field in TensorRecord captures what_was_lost, why, category, severity, and severity_rationale, making information loss explicit and auditable.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "66d167f0-3609-48b0-885a-87c7fd8f86ed",
+          "text": "Composition records (CorrectionRecord, DissentRecord, etc.) allow edits and disagreements to be tracked without modifying the original tensor.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.87,
+        "indeterminacy": 0.11,
+        "falsity": 0.02
+      }
+    },
+    {
+      "title": "Paging Protocol and Pichay Prefix Caching",
+      "content": "Paging protocol refers to the structure and ordering of information sent to a transformer in a single invocation. The protocol is determined by: (1) what shape of information the model needs to understand a query contract (the TensorRecord itself, serialized), (2) how to order information to maximize cache efficiency (durable content before ephemeral), (3) what durability metric determines whether content belongs in prefix cache vs. fresh input. Pichay is Anthropic's prefix caching mechanism, which caches prefixes of the prompt and reuses them if subsequent requests have identical prefix content. The paging protocol is thus the rule set for constructing the input prompt to the model: strands and key_claims that are stable should be in tensor_d (cacheable), ephemeral working context goes in tensor_e (fresh). This is independent of the caching implementation\u2014it's a principle of input construction. The order <system><tensor_d><tensor_e><user> ensures that the most stable content (tensor_d, possibly cached) comes first, followed by fresh context (tensor_e), followed by immediate user input. This maximizes cache hit probability and allows reuse across similar invocations while preserving input freshness.",
+      "topics": [
+        "paging-protocol",
+        "prefix-caching",
+        "pichay",
+        "prompt-ordering"
+      ],
+      "key_claims": [
+        {
+          "claim_id": "e0ddd522-b639-4227-bbc1-b20ce27dd202",
+          "text": "Paging protocol is the rule set for structuring and ordering information sent to a transformer in a single invocation.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "6363ba2e-36a1-4edb-bee2-a5ebf72a2a6a",
+          "text": "Pichay is Anthropic's prefix caching mechanism, reusing cached prefixes across requests to reduce compute.",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.08,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "e7520aec-6a06-48cf-9831-4f48c58dcfc6",
+          "text": "Paging protocol (durability-based ordering) is independent of caching implementation; it's a principle of input construction that enables caching.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "new-015-paging-order-cache-freshness",
+          "text": "The order <system><tensor_d><tensor_e><user> maximizes cache hit probability while preserving input freshness: stable content cached, ephemeral and user input always fresh.",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.14,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.86,
+        "indeterminacy": 0.12,
+        "falsity": 0.02
+      }
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed example walkthroughs of the integrate stage logic",
+      "why": "The memory controller's decision-making process (triage to durable/ephemeral, context pressure thresholds, loss declaration rationale) is described conceptually but not yet grounded in concrete code or algorithmic steps.",
+      "category": "PRACTICAL_CONSTRAINT",
+      "severity": "medium",
+      "severity_rationale": "This gap is important for implementation but does not affect the architectural validity. The next cycle should produce example pseudocode or a walkthrough of integrate logic."
+    },
+    {
+      "what_was_lost": "Specific evaluation of how Haiku (or the memory controller) decides which strands are 'durable' vs 'ephemeral'",
+      "why": "The triage decision is critical to cache efficiency and context management, but the heuristics (frequency of reference, explicit claim of stability, cross-cycle theme) are not yet formalized.",
+      "category": "TRAVERSAL_BIAS",
+      "severity": "medium",
+      "severity_rationale": "Without explicit triage criteria, the system might default to naive heuristics. Cycle 24 should include concrete examples (e.g., 'Hamutay as Architecture is cross-cycle stable, move to tensor_d'; 'Current debugging issue is cycle-specific, keep in tensor_e')."
+    },
+    {
+      "what_was_lost": "Empirical validation data for the CPU analogy and divergence claims",
+      "why": "Cycle 23 refined the analogy (convergence/divergence points) but still lacks concrete measurements: do the claimed divergences (epistemic transparency, explicit loss, composition semantics) actually lead to better cognitive outcomes? This is asserted but not measured.",
+      "category": "AUTHORIAL_CHOICE",
+      "severity": "high",
+      "severity_rationale": "The core hypothesis\u2014that cognitive processing units should differ fundamentally from CPUs by adding epistemic transparency and composition semantics\u2014is conceptually sound but untested. The next cycle should design a minimal experiment to validate or refute this."
+    },
+    {
+      "what_was_lost": "'Hot mess' paper reference and performance baseline data from Cycle 22 action items",
+      "why": "Cycle 22 instructions asked for the 'hot mess' reference, performance baselines (Anthropic, OLMo-3, OpenRouter), and example tensors. Cycle 23 content did not retrieve or report on these. They remain open questions.",
+      "category": "CONTEXT_PRESSURE",
+      "severity": "medium",
+      "severity_rationale": "These are real dependencies for moving to implementation. Cycle 24 instructions should explicitly prioritize them or formally defer them with a justification."
+    }
+  ],
+  "open_questions": [
+    "What is the exact reference for the 'hot mess' paper? Does it appear in Yanantin documentation or related projects?",
+    "Has the paging protocol been tested empirically? What specific test did Codex run, and what were the results (latency, cache hit rate, token efficiency)?",
+    "What are the measured performance baselines for: (a) Anthropic Sonnet via API with prefix caching, (b) OLMo-3 local, (c) OpenRouter baseline?",
+    "For OLMo-3: what are the key tuning parameters (cache budget, batch size, context window, latency target) and recommended ranges?",
+    "In the durable/ephemeral split <system><tensor_d><tensor_e><user>, should tensor_d include only the current TensorRecord, or also composition records (CorrectionRecord, DissentRecord) from prior cycles?",
+    "How does the TensorRecord serialization work in practice? Are strands and key_claims serialized to markdown, JSON, or a binary format in the cache?",
+    "Does the Yanantin codebase include example tensors (T\u2080-T\u2088) that demonstrate the composition records and correction chains in action?",
+    "What are the explicit heuristics or decision criteria for triaging new claims from tensor' into durable vs ephemeral? Frequency of reference? Explicit stability marker? Cross-cycle theme?",
+    "How does the memory controller decide when to invoke Haiku vs apply deterministic rules? Is there a cost threshold (e.g., invoke Haiku only if context pressure exceeds X)?",
+    "In the transformer's production of tensor', how is it instructed or fine-tuned to emit valid JSON/markdown? Is this a matter of prompt engineering, or does it require training?",
+    "If tensor' from the transformer contradicts tensor_d (e.g., a claim with truth=0.9 is updated to truth=0.3 in tensor'), does the memory controller apply composition rules automatically, or ask for explicit user/system mediation?",
+    "What is the interaction between declared_losses accumulation and context pressure? Does growing declared_losses ever trigger eviction of older strands?",
+    "Can the cognitive processing unit be said to 'learn' from declared_losses, or does it only make them observable? Is there a feedback loop that adjusts epistemic confidence based on loss history?",
+    "How would the ablation test (Cycle 22 action item 6) actually be structured? Identical Hamutay pipeline on Anthropic + OLMo-3: what is the test input, what are the success criteria for 'identical tensor updates'?",
+    "Should instructions_for_next be structured (e.g., YAML, JSON, numbered sections) to enable computational parsing, or remain free-form prose?"
+  ],
+  "instructions_for_next": "**CYCLE 24 HANDOFF**\n\n**Context & Priorities:**\n\nCycle 23 made significant architectural progress. We clarified the pipeline stages, separated the transformer (ALU) from the memory controller (postprocessor), and identified four key divergence points between Hamutay and the CPU analogy. We have a solid schema (Yanantin TensorRecord) and a paging protocol framework.\n\nNow we need to move from architecture to implementation and validation. There are two parallel tracks:\n\n### **Track A: Implementation Details (High Priority)**\n\n1. **Formalize the memory controller (integrate stage) logic.**\n   - Write pseudocode or concrete algorithm for the integrate() function.\n   - Include: (a) parse tensor' from transformer output, (b) validate against TensorRecord schema, (c) apply composition rules (detect contradictions, emit DissentRecord), (d) triage new strands to durable vs ephemeral, (e) check context pressure, (f) emit declared_losses, (g) return tensor_d', tensor_e'.\n   - Specify the triage heuristics: what makes a claim/strand 'durable'? (Hint: frequency, cross-cycle appearance, explicit stability marker)\n   - Specify cost thresholds: when do you invoke Haiku vs apply rules? (Hint: is there a token budget or latency target?)\n\n2. **Specify transformer output format for tensor'.**\n   - How is the transformer instructed to emit tensor' as structured output? Prompt engineering? Fine-tuning? System instruction?\n   - What is the serialization format? JSON schema? Markdown with markers?\n   - What happens if tensor' is malformed? Does the memory controller degrade gracefully, or do you require strict validation?\n\n3. **Design conflict resolution for DissentRecord/CorrectionRecord.**\n   - If tensor' contradicts tensor_d (e.g., a claim changes from T=0.9 to T=0.3), what happens?\n   - Does the memory controller apply rules automatically (e.g., trust tensor' if it's from the current invoke, emit DissentRecord to record the conflict)?\n   - Or does it ask for mediation (e.g., \"transformer disagrees with prior state; human/system decides\")?\n   - This is critical for immutability and composition semantics.\n\n### **Track B: Validation & Measurement (High Priority)**\n\n4. **Design the ablation test to validate the Hamutay invariant.**\n   - Define two concrete implementations:\n     - **Version A**: Anthropic Sonnet via API, prefix caching enabled (Pichay), specific cache budget and cost threshold.\n     - **Version B**: OLMo-3 local or OpenRouter, no caching, tuning parameters specified.\n   - Define test input: a simple cognitive task (e.g., \"reason about X, update your state, output tensor'\").\n   - Define success criteria: both versions produce tensor_d', tensor_e', and instructions_for_next that are structurally identical (same strands, same claims, same epistemic values) modulo provider-specific metadata (latency, cost).\n   - Run the test and report results. If both pass, the architecture is validated.\n\n5. **Retrieve performance baselines and tune parameters.**\n   - For Anthropic Sonnet: latency (p50, p95, p99), cache behavior (hit/miss rates, cost differential), max tokens, context window.\n   - For OLMo-3 (if available): same metrics, plus resource usage (GPU memory, CPU, bandwidth).\n   - Identify 2\u20133 key tuning parameters for each provider. (Hint: for Anthropic, it's cache budget and invoke threshold; for local, it's batch size and context window.)\n   - Document these in a providers.yaml or similar.\n\n6. **Locate and review example tensors from Yanantin.**\n   - Search for T\u2080, T\u2081, ..., T\u2088 (or similar examples) in the Yanantin docs or codebase.\n   - Extract 2\u20133 examples of composition records (CorrectionRecord, DissentRecord, NegationRecord) in action.\n   - Understand: how does a DissentRecord modify the semantic state? How does a CorrectionRecord preserve edit chains?\n   - Bring these examples into the narrative for Cycle 25.\n\n### **Track C: Theory Refinement (Medium Priority)**\n\n7. **Validate the divergence claims empirically (if possible).**\n   - The core hypothesis: cognitive processing units should carry epistemic metadata, declare losses, and use composition semantics to reason about their own degradation.\n   - This is conceptually sound but untested. Can you design a minimal experiment?\n   - Example: run the same task with declared_losses visible vs hidden. Does the model (or a human evaluator) make better decisions when loss is explicit? (This may be difficult to measure, but it's worth considering.)\n   - Or: compare cognitive performance (task accuracy, reasoning clarity) when the system uses composition records vs silent overwrite. Again, hard to measure, but conceptually important.\n\n8. **Clarify instructions_for_next structure.**\n   - Decide: should the field be free-form prose (current), structured (YAML, JSON, numbered sections), or hybrid?\n   - If structured, define the schema. Example:\n     ```yaml\n     actions:\n       - priority: 1\n         task: \"Retrieve 'hot mess' paper reference\"\n         context: \"Needed for validation of memory hierarchy design\"\n       - priority: 2\n         task: \"Run ablation test (Track B, item 4)\"\n         context: \"Critical for architecture validation\"\n     ```\n   - Update all prior tensors' instructions_for_next to match the new structure (or note this as a schema evolution).\n\n### **Success Criteria for Cycle 24:**\n\n- [ ] Pseudocode for integrate() logic with triage heuristics and cost thresholds specified.\n- [ ] Transformer output format (tensor' serialization) defined and validated with at least one example.\n- [ ] Conflict resolution strategy (DissentRecord/CorrectionRecord) documented with decision rules.\n- [ ] Ablation test design finalized (two implementations, test input, success criteria).\n- [ ] Performance baselines retrieved for \u22651 provider (Anthropic preferred).\n- [ ] Example tensors from Yanantin reviewed and 2\u20133 composition records analyzed.\n- [ ] Hypothesis on divergence (epistemic transparency \u2192 better reasoning) formulated as a testable claim.\n- [ ] instructions_for_next structure decided and example provided.\n\n**Tone:** You're building the bridge from architecture to code. Formalize the decisions, gather the data, and be ready for the first end-to-end test in Cycle 25.\n\n**Dependency Chain for Cycle 25:**\n- If ablation test succeeds: move to first integrated deployment (one provider, full pipeline).\n- If performance baselines are available: optimize tuning parameters and measure cache efficiency gains.\n- If example tensors are reviewed: use them as reference implementations for composition semantics.\n- If conflict resolution is decided: implement the memory controller's compose() or reconcile() logic.\n",
+  "overall_truth": 0.82,
+  "overall_indeterminacy": 0.14,
+  "overall_falsity": 0.04
+}

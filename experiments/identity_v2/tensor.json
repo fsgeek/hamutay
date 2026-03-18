@@ -1,0 +1,416 @@
+{
+  "id": "3ac8480e-469a-43be-821b-6f0f298a6f58",
+  "cycle": 1,
+  "strands": [
+    {
+      "title": "Product Vision & User Intent",
+      "content": "The application is a personal TV/movie companion that centers on making a user's taste visible and actionable. Core value proposition: users build their own version of each show (status, interest, tags, rating, AI scoop), creating a living personal library that grounds discovery. Discovery flows through multiple channels (Search, Ask conversational AI, Alchemy concept-blending, Explore Similar per-show) all grounded in the user's saved shows and My Data. The product is intentionally taste-aware: every recommendation should feel personal, grounded in what the user has saved and labeled. Non-goals explicitly exclude offline-first behavior, legacy UI mechanics, and complex pre-loading strategies. Success measured by collection maintenance cadence, status/rating/tag update frequency, AI-to-collection conversion rates, and retention driven by \"what should I watch next?\" use cases.",
+      "key_claims": [
+        {
+          "claim_id": "fa3ff52d-564b-4021-acf2-eaca798f862e",
+          "text": "User's personal version (status/tags/rating/scoop) takes precedence over refreshed public metadata everywhere it appears",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e64c902a-0de5-4131-8077-9248b3779af2",
+          "text": "All AI surfaces (Scoop, Ask, Alchemy, Explore Similar) share one consistent persona grounded in joy-forward, opinionated honesty with vibe-first spoiler-safe reasoning",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "7d53b634-09d6-4c43-ad49-ad6bd173e3e3",
+          "text": "Discovery must be actionable: every recommendation maps to a real selectable show with external catalog backing",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "13574020-4079-4a1e-8d86-8a992433dbf8",
+          "text": "The app's heart is the status system paired with tags: making implicit taste explicit and user-controllable",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Data Model & Persistence Architecture",
+      "content": "The data model centers on the Show entity: catalog metadata (public community data) merged with user overlay (My Data: status, interest, tags, rating, AI scoop). Every user field tracks an update timestamp for conflict resolution. Collection membership is defined by presence of non-nil myStatus. The system uses Supabase (PostgreSQL) as the persistence layer with Row-Level Security enforcing (namespace_id, user_id) partitioning. Each build/run operates in a single namespace; destructive tests scoped to that namespace only. User identity tracked as opaque string (user_id). Merge rules preserve user edits: when external catalog refreshes come in, user fields resolve by timestamp (newer wins), non-user fields use selectFirstNonEmpty to prevent overwrite with empty values. Auto-save triggers: setting status, choosing interest level, rating unsaved show (saves as Done), adding tag to unsaved show (saves as Later+Interested). Removal clears all My Data. Timestamps on every user field enable clean cross-device sync. AI data (Scoop, concepts, chat, Alchemy results) follows distinct persistence rules: Scoop persists only if show in collection with 4-hour freshness; Ask/Alchemy/Explore Similar results are session-only.",
+      "key_claims": [
+        {
+          "claim_id": "af5f5baa-26a9-422f-b538-b90d7ee5a2ed",
+          "text": "Namespace+user partitioning (namespace_id, user_id) prevents all cross-build data pollution and enables repeatable isolated benchmark runs",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "164a6ac7-1487-4b17-973c-81d00bd04dad",
+          "text": "Timestamp-based conflict resolution (newer field timestamp wins) enables safe cross-device sync without requiring complex 3-way merge algorithms",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "ead3990f-a1cc-4719-b302-b3ce493762a8",
+          "text": "Auto-save on status/rating/tag eliminates friction; implicit save on first modification with sensible defaults (Later+Interested) aligns with user intent",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "723e6dc4-ab20-47c6-b52c-e09d6afdcfb1",
+          "text": "Merge rules (selectFirstNonEmpty for catalog, timestamp for user fields) preserve both data freshness and user edits across updates",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "bc8fac17-b4f4-40e0-94a9-c6557bd3ccb8",
+          "text": "Scoop persists only if show in collection; Ask/Alchemy/Explore results are ephemeral; this splits stateful (user library) from stateless (discovery session) cleanly",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "AI Integration & Voice Consistency",
+      "content": "All AI surfaces are powered by a single consistent persona: warm, opinionated friend who loves entertainment deeply, stays spoiler-safe by default, grounds recommendations in specific vibe/structure/craft rather than generic genre. The persona is Joy-forward (want users to have good night) + Opinionated Honesty (call bad shows bad, acknowledge mixed reception) + Vibe-First (tone/feeling/style over plot) + Specific not Generic (concrete flavor: \"hopeful absurdity\" not \"good characters\") + Tone-adaptive (short when needed, lush for Scoop). Tone sliders: 70% friend / 30% critic, 60% hype / 40% measured, adaptive playful/serious, concise by default (lyrical for Scoop or musicals). Surface-specific adaptations: Scoop is gossipy mini-blog-post of taste (~150-350 words, sections: personal take, honest stack-up, Scoop centerpiece, fit/warnings, verdict); Ask is conversational low-friction friend (1-3 tight paragraphs + bulleted lists, adaptive depth); Concepts are 1-3 word evocative bullets (no plot, spoiler-free, ingredient-like); Concept-based recs are excited/detailed reasoning tied to selected concepts. All AI outputs include structured metadata for UI binding (showList format for Ask, externalId for recs). Prompts are configurable in env, never hardcoded. Provider-agnostic: OpenAI, Anthropic, or other via environment selection. API keys stored server-side only; client never sees them. Conversation summarization preserves persona/tone (not sterile system summaries). Response parsing validates structure; JSON failures retry once then fallback to non-interactive alternatives.",
+      "key_claims": [
+        {
+          "claim_id": "cf0368e4-7353-47f6-9ca7-086c133c9635",
+          "text": "Single shared AI persona across all surfaces (Scoop, Ask, Alchemy, Explore Similar) creates coherent, memorable user experience",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3cfacd98-b13c-4604-9c00-1bbb4bf0e4fa",
+          "text": "Tone sliders (friend vs critic 70/30, hype vs measured 60/40) provide consistent North Star for prompt evolution across model changes",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "13fa181d-3fcc-4df6-8f30-c51bb3889a37",
+          "text": "Concepts as evocative 1-3 word ingredients (not generic placeholders) enable users to co-curate discovery and express taste axes orthogonal to genre",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "6124b1e8-5ffc-40c1-a661-76f41be15c21",
+          "text": "Structured outputs (showList format, externalId in recs, concept reasoning) decouple AI generation from UI rendering and enable deterministic testing",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "9abed5fe-c9f1-469d-b0f9-39b929e38586",
+          "text": "Server-only API keys + provider-agnostic interface enables safe credential handling and future model switching without client code changes",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Feature Implementation & User Journeys",
+      "content": "Core features map to distinct user intents. Collection Home displays library grouped by status (Active prominent, Excited, Interested, Other collapsed); filters (tag, genre, decade, community score, media type) applied on top. Search is traditional external catalog lookup by title/keyword; results are clickable show tiles marking in-collection items. Ask is conversational discovery with chat history, grounded in user's library, generating taste-aware recommendations that resolve to real shows via mention parsing (Title::externalId::mediaType format). Explore Search Chat variant mirrors emotional tone of show being discussed. Alchemy is structured 5-step flow: select 2+ shows → conceptualize (extract shared ingredients) → select 1-8 concepts → alchemize (get 6 recs) → chain (loop using results as inputs). Explore Similar (per-show) is simplified 3-step: Get Concepts → select → Explore Shows (5 recs). Show Detail is single source of truth: header media carousel, core facts, My relationship controls (status/interest chips in toolbar, rating slider, tag editor), Overview + Scoop toggle, Ask About Show, genres/languages, traditional recs, Explore Similar, cast/crew, TV seasons, movie financials, streaming availability. Person Detail: image gallery, bio, analytics charts (avg rating, genres, year distribution), filmography grouped by year with clickable credits. Settings split into: app (font size, search on launch), user (username), AI (provider, model, key), integrations (catalog provider, key), Your Data (export button, import placeholder). Status system: Active, Later (with Interested/Excited interest levels), Wait, Done, Quit, Next (model only, not UI). Removing status triggers confirmation modal and clears all My Data. All key journeys implement implicit auto-save (no explicit Save button).",
+      "key_claims": [
+        {
+          "claim_id": "df0502c1-1bb5-4680-9744-8f60c7b478a0",
+          "text": "Status grouping (Active, Excited, Interested, Other) makes collection scannable and reflects implicit priority ordering",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3de62028-261e-4db2-9b0d-4245a623b0a1",
+          "text": "Alchemy's 5-step flow with chaining creates a \"mode\" that feels like play rather than transactional search",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "70758ed1-1ef1-4717-8640-fde2a25eb4d4",
+          "text": "Detail page narrative hierarchy (header immersion → facts → My relationship → overview → Scoop → Ask → recs → concepts → cast) guides user through feeling → thinking → action",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.13,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "d00a9e54-631f-4db4-b05e-f5eaca56dd94",
+          "text": "Auto-save on status/rating/tag removes friction and keeps collection current without user ceremony",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "589b9256-9904-496f-85f7-2642d1944962",
+          "text": "Ask mention resolution (Title::externalId::mediaType parsing → catalog lookup) ensures every recommendation is actionable without hallucinations",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Infrastructure, Auth & Operational Safety",
+      "content": "Technology stack: Next.js (runtime) + Supabase (persistence) as benchmark baseline. Supabase chosen for ease of local + cloud deployment without Docker requirement; service-role key server-only, anon key in browser. Environment-driven configuration: all secrets in .env, never committed, example provided in .env.example. Development identity injection: X-User-Id header in dev mode (no OAuth required for benchmark). Future OAuth migration straightforward: schema unchanged, only middleware changes. Row-Level Security enforces (namespace_id, user_id) partition; RLS policies prevent cross-user/namespace access. Destructive testing via POST /api/test/reset clears namespace-specific data; runs are isolated. Namespace assigned per build (e.g., build-${CI_JOB_ID}). Database migrations idempotent; data model version tracked for transparent upgrades. One-command developer experience: npm run dev, npm test, npm run test:reset. Required repo deliverables: .env.example, migrations, seed fixtures, test helpers. Cloud-agent compatibility: no Docker required; connects to hosted Supabase. API keys for catalog and AI stored server-side only; user-entered keys optional and encrypted in database. Secrets never exposed to client. Request/response logging captures critical events (user_id, namespace_id, endpoint, status, duration). Error handling: network failures show toast + retry, AI timeouts fallback to non-AI alternatives, missing catalog items non-blocking with search handoff. Rate limiting: 10 search/min, 5 chat/min, 3 scoop-gen/hour per show per user, 1 export/hour. Monitoring tracks daily active users, weekly additions, status/tag update frequency, AI surface usage, cache hit rates, response times, error rates. Alerting on: connection pool exhaustion, provider down, namespace breach, high latency, high error rate.",
+      "key_claims": [
+        {
+          "claim_id": "37a17f7e-4db3-490f-b453-86cffc33aff6",
+          "text": "Namespace+user RLS partition prevents all unauthorized access and enables safe multi-tenant benchmark execution",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "fa2694fa-19b7-4cc5-9436-cfdbd94afceb",
+          "text": "Development identity injection (X-User-Id header) eliminates OAuth complexity for benchmarking while preserving production migration path",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "e6f4e7f9-72a7-4976-9bbc-30c90b906a2f",
+          "text": "Environment-only secrets (no committed keys) + .env.example pattern enables safe credential injection across local/cloud/CI environments",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5db3b6dc-24a6-420c-b2b0-bdc54626a1d4",
+          "text": "No Docker requirement for benchmark execution reduces infrastructure friction and enables cloud-agent compatibility",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b7d3bcac-febe-484c-8427-ba871199427b",
+          "text": "Idempotent migrations + version tracking enable transparent data model evolution across app updates without data loss",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Implementation Roadmap & Phasing",
+      "content": "Three-phase rollout ensures stable incremental delivery. Phase 1 (Core Collection MVP): Show CRUD, status/interest/tags/rating system, Collection Home with filtering, Detail page (non-AI), Search external catalog, data persistence + isolation. No AI features. Success: user can build collection, data persists, namespace isolation verified. Phase 2 (AI Features): Scoop generation + 4-hour caching, Ask conversational surface with mention resolution, Explore Similar (concepts + 5 recs per round), Person Detail page, Export/backup. Success: AI responses match voice spec, mentions resolve correctly, Scoop caches, Ask grounded in library, export produces valid JSON. Phase 3 (Alchemy & Polish): Alchemy full 5-step flow with chaining, UI polish (animations, responsive design), performance optimization (caching, lazy load), monitoring setup, documentation. Success: Alchemy chain-able, mobile UX functional, error rates <1%, benchmarks repeatable + isolated. No phase breaks data model or architecture. All three phases preserve backward compatibility.",
+      "key_claims": [
+        {
+          "claim_id": "4e3274e5-6329-4535-8dc8-03e2cadf70c3",
+          "text": "Three-phase approach isolates risk: Phase 1 unblocks data layer, Phase 2 unblocks AI voice coherence, Phase 3 unblocks full alchemy experience",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "b2ee67fc-ab94-47e4-bd12-982fabdce65d",
+          "text": "Phasing preserves backward compatibility; no breaking changes to schema or API between phases",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Discovered Gaps & Implementation Challenges",
+      "content": "Several integration points remain underspecified but are addressed in the plan: (1) Exact Scoop section structure/formatting not prescribed; implementation should follow ~150-350 word target with clear sections for digestibility. (2) Person analytics charts (avg rating, genres, year distribution) are described as optional lightweight; implementation can range from simple text summaries to full charting. (3) External catalog provider interface is provider-agnostic; TMDB integration is common but plan assumes pluggable architecture. (4) Concept generation quality is subjective (\"aha\" vs generic); discovery quality bar provides rubric (specificity, diversity, strength ordering) but no automated validation. (5) Streaming provider availability structure (providerData format) is opaque blob in schema; implementation details depend on catalog provider's API shape. (6) Image resolution/optimization strategy not prescribed; implementation can use CDN + responsive srcset. (7) Trailer playback inline or in modal not specified; Detail experience spec suggests inline is preferred. (8) Conversation summarization (after ~10 messages) requires custom logic; no standard prompt provided but guidelines exist. (9) Conflict resolution between concurrent edits on same field rare in practice (different users/devices typically edit different fields); timestamp winner suffices for most cases but pathological edge cases possible. (10) Tag library implicit (derived from all user tags across shows); no explicit tag management UI specified (e.g., rename/delete tag globally). (11) Import/Restore from export zip noted as open question, not implemented. (12) Named custom lists (beyond tags) are future extension.",
+      "key_claims": [
+        {
+          "claim_id": "edde0f48-22d9-4990-8ea3-f9d4d481e2df",
+          "text": "Most underspecified areas are UI/polish details that don't block core functionality or require schema changes",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "13f8d892-2ca7-424c-a7f8-edee5b58751c",
+          "text": "External catalog provider abstraction is pluggable; TMDB/similar providers' APIs differ enough that implementation must handle multiple shapes",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "a1a1f889-647a-449b-9d46-eabbe75b882b",
+          "text": "Concept generation quality (vs generic placeholders) is subjective; discovery quality bar provides rubric but requires human judgment to enforce",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.17,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Acceptance Criteria & Success Thresholds",
+      "content": "Functional completeness checkpoints (all must pass): Create/read/update/delete collection shows; persistence across sessions/device resets; namespace+user isolation prevents data leakage; all statuses + interest levels functional; filtering (status/tag/media type) works; Detail page displays all sections + My Data controls; Search external catalog functional; Ask generates taste-aware responses + resolves mentions; Explore Similar generates 5 recs; Alchemy generates 6 recs + chaining works; Scoop generation + 4-hour caching; Person Detail with filmography; Export produces valid JSON zip; timestamps tracked correctly for conflict resolution. Quality criteria: AI responses match voice/personality spec; concepts specific not generic; all recommendations resolve to real catalog items; error handling user-friendly; performance acceptable (Detail <2s, Search <1s); mobile UI responsive; accessibility WCAG AA. Data integrity: user edits never overwritten by catalog refresh; duplicates merged correctly; namespace isolation cannot be breached; foreign keys validated. Operational: all secrets in environment (none committed); .env.example complete; migrations idempotent; test reset clears namespace-only; logging captures events; benchmarks repeatable + isolated. Discovery quality bar scoring (0-2 per dimension): Voice ≥1 required, Taste Alignment ≥1, Real-Show Integrity =2 (non-negotiable), total ≥7/10.",
+      "key_claims": [
+        {
+          "claim_id": "d9a13c11-502e-4dfa-a588-907752ad10d4",
+          "text": "Non-negotiable constraints (namespace isolation, real-show integrity, API secrets) are foundational; all others are quality/polish",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3a647313-1a3b-4fde-b820-a6edaae4266c",
+          "text": "Discovery quality bar threshold (≥7/10 with Real-Show Integrity non-negotiable) ensures AI outputs are reliable + taste-aligned without over-specifying tone",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.18,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed UI mockups, wireframes, and component compositions. The plan describes layout intent and narrative hierarchy but not pixel-level specifications, spacing/typography systems, or animation/interaction timelines.",
+      "why": "PRD is intentionally design-agnostic; visual realization is left to design phase. Plan captures information content and IA; visual polish is post-blueprint.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Exhaustive test case catalog. Plan specifies test strategy (namespace isolation, key scenarios) but not line-by-line test code or edge cases.",
+      "why": "Test implementation details belong in test files, not plan. Plan provides testing philosophy + critical scenarios; QA team will expand to full coverage.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Vendor-specific integration details (e.g., TMDB API exact response schema, OpenAI specific token limits). Plan assumes pluggable providers; vendor details emerge during integration work.",
+      "why": "Multiple providers possible; plan avoids lock-in. Provider-specific docs are separate from blueprint.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Low-level database optimization tuning (query plans, index strategies specific to expected data volumes). Plan specifies index intent; actual tuning requires production load data.",
+      "why": "Optimization is empirical; plan provides foundation (correct indexes exist) but tuning requires observability in production.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Detailed prompt engineering iterations and version history. Plan references prompt sources (ai_personality_opus.md, ai_prompting_context.md) but does not inline full verbatim prompts.",
+      "why": "Prompts are living artifacts; full prompts in companion docs. Plan documents intent and surface-specific behaviors; actual prompts evolve with models.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Exhaustive error code catalog and fallback branching for every possible failure. Plan specifies categories (network, catalog, AI timeout) and recovery patterns; implementation will define specific codes.",
+      "why": "Error handling is too broad to enumerate; plan provides framework (graceful degradation, actionable messages) allowing engineering to elaborate.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Detailed analytics event taxonomy and payload schemas. Plan specifies key metrics (DAU, additions, feature usage, errors) but not event names or field definitions.",
+      "why": "Analytics implementation is tool-specific (Segment, internal instrumentation, etc.); plan guides what to measure, not how to instrument.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Import/Restore feature specification. Plan notes this as open question and unimplemented; detailed behavior deferred.",
+      "why": "Import depends on export format + merge strategy for conflicting data; PRD flags it as optional. Plan does not block it but leaves it for future phase.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Custom list/named list feature specification (e.g., \"Weekend Watchlist\" beyond tags). Plan notes this as future extension; not included in core feature set.",
+      "why": "Open question in PRD; implementation strategy unclear. Can be added post-MVP without schema changes.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Detailed behavior of conversation summarization (exact threshold, summary prompt, how to preserve tone). Plan specifies intent (~10 messages, preserve persona) but not exact implementation.",
+      "why": "Summarization is AI-dependent; exact prompts and thresholds need tuning. Plan provides guidance; implementation will refine.",
+      "category": "practical_constraint"
+    }
+  ],
+  "open_questions": [
+    "Should 'Next' status transition from data model–only to first-class UI feature? (Requires UI design, but no schema change.)",
+    "What is exact Scoop section structure? (Plan suggests ~150-350 words with clear sections; implementation chooses format.)",
+    "Should Person analytics include charts, or just text summaries? (Plan allows lightweight implementation; UX team decides richness.)",
+    "How to handle concept generation quality validation? (Discovery quality bar provides rubric; needs human review or golden test set.)",
+    "Import/Restore from export zip: desired behavior? (Noted as open; deferred pending merge strategy clarity.)",
+    "Should generating Scoop on unsaved show implicitly save it? (Plan suggests no; only explicit saves trigger collection membership.)",
+    "Should clearing myRating store explicit 'Unrated' state vs nil? (Currently nil; explicit state useful for disambiguation.)",
+    "Tag management UI: allow rename/delete tags globally? (Currently implicit; no global tag management UI specified.)",
+    "Alchemy session save/share as reusable blends? (Noted as future extension; requires persistence + new feature area.)",
+    "How to present traditional recommendations alongside AI recs without overwhelming Detail page? (Plan specifies horizontal strands; UX polish TBD.)",
+    "Conversation context window strategy: fixed ~10 messages or adaptive? (Plan suggests ~10; implementation may tune dynamically.)",
+    "Should Explore Search Chat (variant Ask mode) have different token/context budgets than standard Ask? (Plan specifies intent; implementation details TBD.)",
+    "Trailer playback: inline or modal? (Detail spec hints inline; UX implementation chooses.)",
+    "How to handle shows with same title from different years/regions? (Catalog lookup by externalId preferred; fallback to title + year.)",
+    "Should failed recommendation resolution block Alchemy results or show partial results? (Plan suggests showing resolvable items; implementation decides UI for partial.)"
+  ],
+  "instructions_for_next": "\nThe next cognitive cycle should move from blueprint to **implementation sequence clarity**. Critical next steps: (1) Confirm technology stack and Supabase setup (local vs cloud, auth strategy finalization). (2) Design database schema (migrations, indexes, RLS policies) with explicit namespace/user partitioning test. (3) Implement Phase 1 core collection (Show CRUD, status/tags/rating, Home page, Detail skeleton) to validate data model + isolation. (4) Establish API route structure and middleware for user_id/namespace_id injection. (5) Create test harness (namespace isolation verification, destructive reset endpoint). (6) Finalize AI prompts (from ai_personality_opus.md) and test on reference models before integration. (7) Mock external catalog provider interface and implement provider resolution logic. (8) Prototype Ask mention resolution (Title::externalId::mediaType parsing → catalog lookup). (9) Plan UI component library (ShowTile, StatusChips, RatingSlider, etc.) and establish design system. (10) Establish monitoring/logging strategy and alerting rules for benchmark execution. The plan is intentionally complete but high-level; engineering should use it as a checklist, not a step-by-step recipe. Each phase should produce a retrospective documenting what was underspecified in the plan and what implementation choices emerged from reality.\n",
+  "epistemic": {
+    "truth": 0.87,
+    "indeterminacy": 0.11,
+    "falsity": 0.02
+  }
+}

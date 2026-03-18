@@ -1,0 +1,592 @@
+{
+  "id": "08bd1610-2426-418d-968d-4bc48a035189",
+  "cycle": 10,
+  "strands": [
+    {
+      "title": "Repository identity and domain: hamutay as explicit response to pichay research",
+      "content": "Hamutay is the explicit, intentional follow-up to research conducted in pichay (~/projects/pichay), a parallel project where the team has been developing demand-paging infrastructure for LLM context windows\u2014specifically, removal of dead tool outputs from agentic LLM context. Pichay is named from Quechua ('to sweep, to clean'), which semantically encodes its core function: cleaning/removing stale data from context. Pichay is research code with three distinct technical components: (1) a MITM proxy between Claude Code and Anthropic API, (2) a FIFO eviction engine for stale tool results, (3) an analysis framework computing per-turn metrics and cost estimates. The gateway CLI ('pichay' command) now launches a multi-provider gateway supporting Claude and Codex, with production-grade observability endpoints (health, metrics, sessions, events, live dashboard). Three papers were submitted to arXiv this week and one to SOSP '26, generated from systematic experimentation captured in experiments/ directory. The skeleton/stub status of hamutay is now contextually clear: pichay is the concrete working system exploring demand-paging as an alternative to KV cache eviction; hamutay is the space to formulate the next-order architectural questions emerging from that empirical work. The zero-dependency constraint is a deliberate design philosophy: hamutay cannot inherit assumptions from PyTorch/Transformers because those frameworks embed the 'garbage scow' paradigm (append-only KV cache with crude eviction). The unfilled pyproject.toml description is intentional silence\u2014hamutay's identity crystallizes only after pichay's empirical findings are fully integrated. Pichay's FIFO eviction engine ('pager.py') represents the concrete implementation of the cache-based context management approach; it systematically removes stale outputs that have accumulated in context. This is demand paging applied to LLM context: borrowing OS memory management principles and applying them to transformer context windows. The 'dead tool output' focus (vs. generic token eviction) is significant: it targets a specific pathology in agentic systems where past tool execution outputs accumulate as ballast. Pichay is production systems research, not theoretical proposal.",
+      "key_claims": [
+        {
+          "claim_id": "d958c2d7-8e5a-41f0-860d-913e226cbff4",
+          "text": "Pichay implements demand paging for LLM context: removal of stale/dead tool outputs from agentic context windows via FIFO eviction engine",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0c243b7f-ad7d-4ddd-acb5-07d12e3bf4cd",
+          "text": "Pichay name (Quechua: 'to sweep, to clean') encodes its core function: deliberate removal of stale data from context",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a41ac684-d19f-40c6-91e0-9c9ab116da85",
+          "text": "Three technical components: MITM proxy, FIFO eviction engine (pager.py), analysis framework (eval.py) with per-turn metrics and cost estimates",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5e47c123-1e9d-42c3-b1da-4ed6526233dc",
+          "text": "Gateway CLI (uv run pichay) supports Claude and Codex with production observability endpoints (health, metrics, sessions, events, dashboard)",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a00c21e0-4c65-4179-989a-cdcd33ab5016",
+          "text": "Demand paging approach targets specific agentic pathology: dead tool outputs accumulate as context ballast; eviction policies remove them",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "35ec7a60-bd9b-42c9-bc3d-670eedde6c22",
+          "text": "Pichay research generated three arXiv submissions and one SOSP '26 submission via systematic experimentation in experiments/ directory",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ada2e15f-4ca9-475e-a28c-5cc0482a5e9c",
+          "text": "Hamutay is the intentional successor space to formulate next-order architectural questions emerging from pichay's empirical demand-paging work",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "The core heretical question: demand paging as cognitive context management",
+      "content": "The user's reframing of transformers as 'cognitive processing units' (not 'garbage scows') is now grounded in pichay's specific technical approach: demand paging for context. This is not a metaphorical move. The 'garbage scow' paradigm accumulates tool outputs sequentially, evicts when memory pressure hits. Demand paging inverts this: aggressively remove dead tool outputs, measure their cost to context quality, dynamically reclaim memory. The pichay FIFO eviction engine ('pager.py') operationalizes cognitive intentionality: it does not wait for memory pressure; it proactively decides which outputs are 'dead' (stale, no longer relevant to forward progress) and removes them. This is fundamentally different from standard KV cache management (which keeps all tokens until overflow). The 'dead tool output' concept is the key innovation: pichay's analysis framework (eval.py) computes per-turn metrics that likely include output staleness, relevance decay, and impact on future token prediction. The cost model (regeneration cost vs. memory cost) is the cognitive unit principle made concrete: transformers now ask 'should we keep this output, or can we reconstruct it when needed?' This is intentional prioritization, not implicit recency bias. The three papers + SOSP '26 submission suggest pichay is proposing a systematic framework for measuring and managing context utility. The 'reproduce paper counts' and 'corpus protocol' documentation indicate rigor: the team is building a canonical counting methodology, not making ad-hoc claims. Paper artifact reproducibility (bash paper/reproduce_paper.sh) confirms publication-grade validation. The FIFO eviction choice is itself a design question: why FIFO? Is it proven optimal for agentic contexts? Is it the baseline against which other policies will be tested? Hamutay may be the space to explore richer eviction policies (learned policies, learned relevance metrics, hierarchical abstraction). The demand-paging framing aligns with tensor projection: both refuse to hide costs. Standard transformers hide the cost of accumulation (until overflow). Pichay makes it explicit: 'this output is dead; here's its cost to memory.'",
+      "key_claims": [
+        {
+          "claim_id": "a5dceca6-c658-4fe5-bcc0-adfdf8f833a3",
+          "text": "Demand paging inverts the append-then-evict paradigm: aggressively remove dead outputs, measure cost to context quality, reclaim memory",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "164d984b-43f1-4967-ad81-1a36cc34bd65",
+          "text": "FIFO eviction engine (pager.py) operationalizes cognitive intentionality: proactive removal vs. passive overflow-triggered eviction",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c791f5d3-9c9f-4222-979e-1b0839834b18",
+          "text": "Per-turn metrics framework (eval.py) likely computes output staleness, relevance decay, and predictive impact\u2014enabling intentional retention/removal decisions",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3eb2f23f-d620-4a9f-bf4d-9e4cc8744f88",
+          "text": "Cost model (regeneration vs. memory) is cognitive unit principle made concrete: transformers ask 'keep or reconstruct?' not just 'fits or evict?'",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "39c66c35-f91f-46a4-a9a0-c366a1993b22",
+          "text": "Demand paging for agentic contexts targets specific pathology: dead tool outputs accumulate as ballast in multi-turn interactions",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "5368a17a-ddcb-45e2-9d04-395c86235171",
+          "text": "Paper artifact reproducibility and corpus protocol documentation indicate publication-grade rigor and canonical counting methodology",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "81e6c0ca-184d-4db7-a698-717fbf7e9413",
+          "text": "FIFO is likely the baseline; hamutay may explore richer eviction policies (learned, hierarchical, relevance-aware) building on pichay's framework",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.18,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Pichay as empirical system: MITM proxy, eviction engine, cost analysis",
+      "content": "Pichay is a fully operational system, not a sketch. The architecture is clear: (1) MITM proxy between Claude Code (client) and Anthropic API (backend) intercepts all traffic; (2) pager.py implements FIFO eviction of stale tool results; (3) eval.py computes per-turn metrics (cost estimates, context usage, quality impact); (4) gateway CLI provides multi-provider support (Claude, Codex) with production observability. The proxy can run in persistent mode ('--no-launch --port 8080') or with integrated client launch. Observability is comprehensive: health endpoints, Prometheus metrics, session tracking, event logs (time-windowed queries), live dashboard. This is production systems architecture. The 'demand paging' terminology is not metaphorical\u2014it is literally borrowed from OS memory management. Pichay is proposing that LLM context management should follow demand-paging principles: pages (context segments or tool outputs) are removed preemptively, not waited for memory pressure. If a page is needed, the cost is recomputation (regeneration of the tool output). This is the cognitive unit principle: context management becomes an optimization problem with explicit trade-offs (memory cost vs. regeneration cost). The experiments/ directory contains scientific output: actual session transcripts, proxy logs, evaluation summaries from real Claude Code + API interactions. This is not synthetic data. The team has run actual agentic workflows through the pichay proxy, measured context accumulation, quantified the effect of removing dead outputs. The fact that reproduction instructions (paper/reproduce_paper.sh) regenerate figures and verify paper claims against corpus snapshots suggests the team has built a validation pipeline. The 'canonical counting mode' (dedup_by_content, min_size=10000) indicates they are measuring at scale and enforcing consistency. The paper/data/ directory likely contains corpus snapshots: timestamped records of experimental runs, enabling future validation and reproducibility. Three arXiv papers + SOSP '26 suggest the team is publishing multiple complementary findings: the core pichay system (demand paging framework), specific eviction policy results, cost models, comparison with alternatives. The SOSP '26 venue is particularly significant: this is a systems conference, indicating pichay is making systems-level contributions (caching discipline, memory coherence, optimization trade-offs) that compete at the top systems venue.",
+      "key_claims": [
+        {
+          "claim_id": "3a65b3ea-8dbb-418a-b5e9-9b5e2b2fe99b",
+          "text": "Pichay is a fully operational production system: MITM proxy + FIFO pager + analysis framework + multi-provider gateway",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5536a506-0dbd-4cdd-9e2e-92a6c811c272",
+          "text": "Observability suite (health, metrics, sessions, events, dashboard) indicates production-grade deployment and monitoring infrastructure",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "235b526b-a8c8-4218-844d-a73415ced9ed",
+          "text": "Demand paging is literally borrowed from OS memory management: pages are removed preemptively; cost of removal is recomputation",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "fbc9a1a3-7086-4a3f-b1d2-fbb67a704b7a",
+          "text": "Experiments/ contains actual session transcripts and proxy logs from real Claude Code + API interactions, not synthetic data",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "68989b35-3cf2-4f59-959c-769e8747460c",
+          "text": "Paper validation pipeline (reproduce_paper.sh) regenerates figures and verifies claims against timestamped corpus snapshots",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "777f7ec7-0758-455d-bc2d-cbc495e38666",
+          "text": "Canonical counting methodology (dedup_by_content, min_size=10000) enforces consistency and enables scale-based measurement rigor",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "9d3b9829-75f0-45d6-aa2c-7111ec530124",
+          "text": "Three arXiv + SOSP '26 submissions suggest multiple complementary publications: core system, eviction policies, cost models, comparisons",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "8b24db96-c49d-4bf5-b20b-67d743895101",
+          "text": "SOSP '26 venue positions pichay as systems-level research competing at top systems conference, not purely ML-focused",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Demand paging semantics: implications for context as resource, not waste",
+      "content": "Pichay operationalizes the radical reframing that context is a managed resource, not waste. In standard transformers, KV cache is a buffer: tokens flow in, accumulate, overflow causes eviction. Cost is opaque: 'memory was full, so we discarded tokens.' In pichay's demand-paging framing, cost is explicit: 'this tool output is dead; we removed it; if needed, regeneration costs X tokens and Y API calls.' This forced transparency is the cognitive unit principle. The 'dead tool output' concept is crucial: pichay targets agentic contexts where tool outputs (code execution results, search results, file contents) accumulate over multi-turn interactions. Each output is a semantic object with a lifecycle: generated, relevant (hot), cooling (warm), dead (cold). The pager.py FIFO engine makes removal decisions based on this lifecycle. The per-turn metrics (eval.py) likely compute: context window usage over time, output staleness (how long since last referenced?), regeneration cost (how expensive to recompute?), quality impact (does removing this output degrade next-token prediction?). These metrics operationalize 'relevance' without requiring a learned model\u2014FIFO is simple, deterministic, and measurable. However, the framework enables richer policies: learned relevance metrics, hierarchical abstraction (summarizing old outputs), content-aware removal (remove outputs similar to recent outputs). This is where hamutay's successor questions emerge: pichay establishes the FIFO baseline and measurement framework; hamutay explores richer eviction policies grounded in learned relevance or abstract summarization. The cost model (paper/figures/cost_model.py) is a critical artifact: it likely formalizes the trade-off between memory cost (tokens per output) and regeneration cost (API calls, latency, token cost). The canonical counting methodology (dedup_by_content, min_size=10000) ensures claims are defensible: not 'we saved memory' but 'we removed 10K+ byte outputs, measured cost, and saved X% context window without Y% quality degradation.' The demand-paging framing also inverts the memory pressure narrative: standard systems manage memory by responding to pressure (buffer full \u2192 evict). Demand paging is proactive: decide what is dead, remove it, free memory before pressure builds. This is cognitively more intentional: the system is not panicking at overflow, but strategically deciding what to forget.",
+      "key_claims": [
+        {
+          "claim_id": "4e508891-bf6a-4292-8a3f-c1cc07871a0c",
+          "text": "Demand paging reframes context as a managed resource with explicit costs, not waste subject to opaque eviction",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "0c743f97-6e8f-49ff-8ca1-2c21c437ad9f",
+          "text": "Dead tool outputs are semantic objects with lifecycle: generated \u2192 hot \u2192 warm \u2192 cold; removal decisions based on lifecycle stage",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "a4d9537d-c104-49b3-82d7-2ab90877efd5",
+          "text": "Per-turn metrics (staleness, regeneration cost, quality impact) operationalize relevance without requiring learned model; enable post-hoc analysis",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "19725208-0197-4efe-baa1-1e91ed1975e6",
+          "text": "FIFO is the baseline; hamutay may explore richer policies (learned relevance, hierarchical abstraction, content-aware removal)",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "1566ddc8-56a6-4285-90d4-ef462795103a",
+          "text": "Cost model formalizes memory vs. regeneration trade-off; canonical counting ensures claims are defensible and measurable",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f3e5795f-8d5c-4d79-8c74-64b431f0a6f7",
+          "text": "Proactive eviction (demand paging) is more cognitively intentional than reactive eviction (respond to buffer full); system is deciding, not panicking",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.15,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "8e021906-297d-4213-b2de-885fd6d97ef0",
+          "text": "Agentic context pathology: tool outputs accumulate over multi-turn interactions; pichay targets this specific use case, not generic transformers",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Integration with tensor projection framework: demand paging as hermeneutical principle",
+      "content": "The revelation that pichay implements demand paging for context reframes the relationship between pichay/hamutay research and the tensor projection framework. Both are instantiations of the same epistemological commitment: making explicit what is normally hidden. Tensor projection framework: makes explicit the losses, biases, and assumptions encoded in reasoning. Demand paging: makes explicit the cost of context retention, the value of removal, and the trade-off between memory and regeneration. Both refuse to hide costs. Both demand declared trade-offs. Both resist mode collapse. The pichay per-turn metrics (staleness, regeneration cost, quality impact) are, in essence, epistemological accounting: the system is computing what it knows and doesn't know, what it can afford to forget, what the cost of forgetting is. This is exactly the principle underlying tensor projection: declaring losses, assigning truth/indeterminacy/falsity values, tracking what was discarded and why. The eval.py framework is a hermeneutical tool: it interprets the life-cycle of context (when was this output generated, when was it last used, what would happen if we removed it?). Tensor projection also interprets cognitive content: when was this reasoning introduced, is it still valid, what happens if we compress it? The demand-paging framing provides a concrete case study for tensor projection: if you treat context as a resource to be intentionally managed, you must compute its value dynamically. The cost model (paper/figures/cost_model.py) is a formalized version of the tensor projection's truth/indeterminacy/falsity framework applied to context tokens: this token's value is X; the cost of keeping it is Y; the cost of regenerating it is Z. The pichay system is, in a deep sense, an instantiation of tensor projection principles applied to transformer context. The SOSP '26 submission positions pichay as systems research, but it is equally a study in hermeneutics: how do you design a system that makes context management decisions transparent? Pichay's answer: instrument every decision (MITM proxy logs), compute per-turn metrics (eval.py), make corpus snapshots reproducible (paper validation), publish canonical methodology (corpus_protocol.md). This is methodological integrity. Hamutay, as the successor space, is the opportunity to formalize this hermeneutical principle: what are the minimal architectural principles required to make context management (and broader cognitive processing) transparent and intentional? This is why hamutay has zero dependencies\u2014it cannot import hidden assumptions. It must propose the architecture from scratch, grounded in pichay's empirical demand-paging work.",
+      "key_claims": [
+        {
+          "claim_id": "a21d80ff-4cdc-452d-9f9f-2b5dca6718dd",
+          "text": "Pichay demand paging and tensor projection are instantiations of the same principle: make explicit what is normally hidden",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "0f16fba0-c184-406b-916b-bf4846c95104",
+          "text": "Per-turn metrics (staleness, cost, quality impact) are epistemological accounting: the system computing what it knows and what it can afford to forget",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2b767e07-94f5-40dc-a0ad-a8cd478ac59b",
+          "text": "Eval.py is a hermeneutical tool interpreting context lifecycle; tensor projection similarly interprets cognitive content lifecycle",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.15,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "1946da3d-649c-4ff9-a420-cdd8ca37dfc8",
+          "text": "Cost model is a formalized epistemology: each token has value X, keeping cost Y, regeneration cost Z\u2014comparable to tensor projection T/I/F framework",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.17,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "777e02d7-1ccd-4d30-9491-6dc3d4cbf2ea",
+          "text": "Pichay system is an instantiation of tensor projection principles applied to transformer context: transparency, intentionality, declared trade-offs",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "50ac11e2-ec45-4115-a110-ca406d800493",
+          "text": "SOSP '26 submission positions pichay as systems research, but equally as hermeneutical study of transparent context management",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.19,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "9a69338d-ea18-46e4-a78d-53ec53f2c8f7",
+          "text": "Hamutay is the successor space to formalize hermeneutical principle: minimal architecture for transparent, intentional cognitive processing",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.18,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "25e1b9fa-187d-4871-a563-320624daf4eb",
+          "text": "Zero dependencies in hamutay enforces first-principles architecture; cannot import hidden assumptions from standard ML frameworks",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Agentic LLM context as the specific domain: tool outputs, multi-turn interactions, dead-code pathology",
+      "content": "The specification 'demand paging in LLM context windows' is now grounded in a specific problem domain: agentic LLMs (e.g., Claude Code) running multi-turn interactions with tool outputs. This is not a general transformer problem; it is a specific agentic pathology. In Claude Code interactions, the context window accumulates: user message, model responds with code, tool executes and returns output, user responds, model generates new code, tool executes, tool output accumulates again. Over a long interaction, past tool outputs (file listings, command outputs, error messages) remain in context, but many are stale or redundant. The pichay proxy sits between Claude Code client and Anthropic API, observing this accumulation. The FIFO pager removes 'dead' outputs: outputs that are no longer referenced in recent model generations, or that are semantically subsumed by newer outputs. This reclaims context window space without disrupting the model's ability to reference recent tool outputs. The domain specificity is important: demand paging for agentic context is different from demand paging for generic transformer context. Agentic contexts have structure: outputs are bounded semantic objects (not arbitrary token sequences), they have clear lifecycles, and they can be regenerated (by re-running the tool). This enables pichay's FIFO approach: it is not guessing which tokens to remove, but identifying which tool outputs are stale. The per-turn metrics framework (eval.py) likely tracks: number of tool outputs in context at each turn, average staleness per output, cost per turn (API tokens), quality metrics (does the model still function correctly?). The experiments/ directory captures real Claude Code sessions: actual users running agentic workflows, pichay proxy measuring context accumulation, collecting data on what gets removed and when. This is the empirical ground truth: agentic interactions do accumulate dead outputs, and removing them demonstrably saves context window space. The three arXiv papers likely explore: (1) core pichay system and FIFO results, (2) comparison with alternative policies (LRU, LFU, learned), (3) cost-benefit analysis and quality trade-offs. The SOSP '26 submission might address systems principles: how should agentic systems be designed to enable efficient context management? What architectural primitives are needed? How do you make paging policies pluggable? Hamutay, as the successor, is the space to formalize these architectural principles. The agentic domain is crucial to hamutay's identity: it is not a general transformer architecture proposal, but a proposal for how agentic systems should manage context in light of demand-paging insights. The zero-dependency design may reflect this: hamutay cannot assume a specific agentic framework (Claude Code, LangChain, etc.), but must propose principles that apply across agentic architectures.",
+      "key_claims": [
+        {
+          "claim_id": "40e63b60-78a7-4ec2-ba8c-920b61ac9704",
+          "text": "Pichay targets specific agentic pathology: tool outputs accumulate in multi-turn Claude Code interactions; many become stale or redundant",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.05,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b8304783-1cbd-44e3-bc58-0fdcf7922ef3",
+          "text": "MITM proxy between Claude Code client and API observes accumulation; FIFO pager removes dead outputs, reclaiming context window space",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.06,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "7d96d406-62e6-4d30-a198-69424e469518",
+          "text": "Agentic context is structured (bounded semantic objects with clear lifecycles); enables FIFO approach rather than generic token removal",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "6c87df45-f77c-4fcf-8cc0-c2582f70d756",
+          "text": "Per-turn metrics track: output count, staleness, cost per turn, quality metrics; enabling post-hoc analysis of paging effectiveness",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "9117b16e-1b75-4f7a-a3b4-2b7db47917c2",
+          "text": "Experiments/ contains real Claude Code sessions; empirical proof that dead outputs accumulate and can be safely removed",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "42b4a93c-225c-493c-9955-ea4462800f04",
+          "text": "Three arXiv likely cover: core system, policy comparisons, cost-benefit analysis; SOSP '26 likely covers systems principles and architectural primitives",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.17,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3f4625f7-5216-4dac-9baf-93e32e16fc56",
+          "text": "Hamutay is not a general transformer architecture proposal, but a proposal for agentic context management principles",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c007d7bd-8380-43e5-9a46-eec4c9fe823e",
+          "text": "Zero dependencies may reflect framework-agnostic design: principles apply across agentic architectures, not tied to specific framework",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.19,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Next-cycle priorities: Reading pichay/paper/main.pdf and understanding the cost model",
+      "content": "The README and CLAUDE.md files have confirmed pichay is a fully operational demand-paging system. The next critical step is reading pichay/paper/main.pdf (and/or the paper artifacts in paper/ directory). This will provide: (1) formal problem statement for agentic context accumulation, (2) demand-paging architecture and FIFO algorithm specifics, (3) per-turn metrics definitions (staleness, quality impact), (4) experimental results from real Claude Code sessions, (5) cost model and trade-off analysis, (6) comparison with baseline and alternative approaches. The cost_model.py figure generation script is particularly important: it likely plots memory savings vs. quality degradation, showing the Pareto frontier of paging policies. This will clarify whether FIFO is optimal, or merely a baseline. The paper/data/ directory (corpus snapshots) will show how the team measured and validated their claims: timestamped snapshots of sessions, enable future validation against published claims. The reproduction protocol (paper/reproduce_paper.sh, check_paper_numbers.py) must be examined: it will reveal what counts as a 'valid' experiment in pichay, what measurements are canonical, what corpus deduplication strategy is authoritative. Once the paper is integrated, the next cycle can: (1) map specific demand-paging mechanisms to hamutay's skeleton, (2) identify open questions for hamutay (learned policies? hierarchical abstraction? multi-provider coordination?), (3) propose how hamutay's zero-dependency, minimal architecture reflects the architectural principles emerging from pichay. The SOSP '26 submission is also critical: it likely addresses systems-level questions (caching protocols, coherence, distributed context management) that define hamutay's next frontier. The three arXiv submissions can be obtained via arXiv.org search (recent papers on demand paging, context management, agentic LLMs). Obtaining their titles and abstracts is high priority. The README references 'tools/reproduce_paper_counts.sh' and 'tools/check_paper_numbers.py'\u2014these are the canonical measurement tools. Understanding how they work is essential to understanding what claims pichay is making and how they are validated. The 'experiments/' directory will contain logs, transcripts, and summaries of actual paging experiments. Examining the structure and contents will show what 'pushing the limits' entailed in practice.",
+      "key_claims": [
+        {
+          "claim_id": "da11e56a-c794-405c-83fd-872680ed5292",
+          "text": "Paper/main.pdf will provide formal problem statement, architecture, metrics, results, and cost model for demand-paging approach",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "cf9899ec-2fb2-47fe-a6f2-085d066598a3",
+          "text": "Cost_model.py likely plots memory savings vs. quality trade-off; shows whether FIFO is optimal or merely a baseline",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "ca440dc5-23bb-46d3-b166-d6ae2e177118",
+          "text": "Paper/data/ corpus snapshots enable future validation; timestamps show when experiments were run and what counts as canonical",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "29dff451-9d4c-4fb8-b142-2d414a73ef79",
+          "text": "Reproduction protocol (reproduce_paper.sh, check_paper_numbers.py) defines canonical measurements and deduplication strategy for corpus",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "cf664a72-f08a-4ba7-a273-b95dec411d9b",
+          "text": "SOSP '26 submission likely addresses systems principles: caching protocols, coherence, distributed context management\u2014defining hamutay's next frontier",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.18,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "16b6631c-a70d-457a-95ac-735df849cbd3",
+          "text": "Three arXiv submissions obtainable via arXiv search; obtaining titles and abstracts is high priority for understanding complementary contributions",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f5816d29-713f-4af7-bd1e-e5c1f9055e30",
+          "text": "Tools/ directory (reproduce_paper_counts.sh, check_paper_numbers.py) contains canonical measurement tooling; essential to understanding validation methodology",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b5953869-d716-4301-90a9-2a5798f08387",
+          "text": "Experiments/ directory will show what 'pushing the limits' entailed: logs, transcripts, summaries of actual paging experiments",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Specific content of pichay/paper/main.pdf and the formal problem statement, architecture details, cost model analysis, experimental results, and comparison tables",
+      "why": "The paper file exists and is reproducible via bash paper/reproduce_paper.sh, but the PDF content has not been read. This is the critical next read. The README and CLAUDE.md confirmed the system exists but not the detailed scientific claims.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "The titles, abstracts, and specific technical contributions of the three arXiv submissions and SOSP '26 submission",
+      "why": "User mentioned publication activity, but specific paper details remain unobtainable without external arXiv search or access to submitted manuscripts. These will clarify which aspects of pichay are being proposed for publication.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "The actual content and methodology of tools/reproduce_paper_counts.sh and tools/check_paper_numbers.py\u2014the canonical measurement tooling",
+      "why": "These tools are referenced in README as the authoritative measurement pipeline, but their implementation is not examined. Understanding these tools is essential to understanding what counts as a valid pichay claim.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "The structure, contents, and data format of experiments/ directory\u2014actual session logs, transcripts, and evaluation summaries",
+      "why": "The README confirms experiments/ contains scientific output, but the actual experimental data is not examined. This would provide concrete evidence of agentic context accumulation patterns and paging effectiveness.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "The precise definition of 'dead tool output' in pichay's analysis framework; how staleness is measured, what triggers removal, how regeneration cost is estimated",
+      "why": "The README and CLAUDE.md confirm FIFO eviction exists, but the specific metrics and decision criteria for 'dead' are inferred from context, not explicitly stated. The eval.py framework will clarify these definitions.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "The prior speculation about hamutay as a 'cognitive processing unit space' was grounded in pichay's concrete demand-paging system; prior strand about heretical question was reframed from 'garbage scow vs. cognitive unit' to 'reactive eviction vs. proactive demand paging'",
+      "why": "The reframing is more precise and empirically grounded. The 'heretical question' is no longer abstract ('what if transformers were cognitive units?') but concrete ('what if we aggressively removed stale tool outputs from agentic context?'). This is an authorial choice to make the framing more precise and less metaphorical.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "The prior assumption that hamutay would explore 'alternative transformer architectures' broadly; now more narrowly scoped to agentic context management principles",
+      "why": "The pichay domain (agentic Claude Code + tool outputs) is specific, not general. Hamutay is emerging as a proposal for how agentic systems should manage context, not a general architecture framework. This is a narrowing of scope based on empirical grounding.",
+      "category": "authorial_choice"
+    }
+  ],
+  "open_questions": [
+    "What is the formal problem statement in pichay/paper/main.pdf? How is context accumulation measured? What is the definition of 'dead tool output'?",
+    "What are the specific metrics computed by eval.py? How is staleness measured (e.g., time since last reference, semantic similarity to recent outputs)?",
+    "What is the precise FIFO eviction algorithm in pager.py? What triggers removal? How is regeneration cost estimated?",
+    "What are the experimental results? How much context window space is reclaimed by demand paging? What is the quality trade-off (does model behavior degrade)?",
+    "How does pichay's demand-paging approach compare to baselines (standard KV cache, LRU, LFU, other context window optimization techniques)?",
+    "What is the cost model (paper/figures/cost_model.py)? What are the memory vs. quality trade-off curves? Is FIFO optimal?",
+    "What are the titles and abstracts of the three arXiv submissions? How do they extend or complement the core pichay work?",
+    "What does the SOSP '26 submission propose? What systems-level principles are being formulated? Is it about caching protocols, coherence models, or distributed context management?",
+    "How is the corpus_protocol.md defined? What is the canonical deduplication strategy? Why min_size=10000?",
+    "What is in the experiments/ directory? What is the distribution of session lengths, tool output sizes, context accumulation patterns?",
+    "How does demand paging interact with multi-provider support (Claude, Codex)? Do different models have different context accumulation patterns?",
+    "What is the observability dashboard (/dashboard) showing? What are the key metrics being tracked in production?",
+    "Is hamutay intended to extend pichay with learned policies, hierarchical abstraction, or other richer eviction strategies?",
+    "How does hamutay relate to distributed agentic systems? Does pichay's demand paging scale to multi-agent interactions?",
+    "What architectural principles from pichay should hamutay formalize? (e.g., context lifecycle management, cost-aware eviction, transparent decision-making)"
+  ],
+  "instructions_for_next": "[\n  \"CRITICAL NEXT STEP: Read pichay/paper/main.pdf (or equivalent built version). This is the canonical scientific statement of pichay's demand-paging approach, metrics, and results. Integrate this immediately into the tensor.\",\n  \"After paper: Examine tools/reproduce_paper_counts.sh and tools/check_paper_numbers.py. These define canonical measurement and validation methodology. Understanding these is essential to knowing what counts as a valid pichay claim.\",\n  \"EPISTEMOLOGICAL PRIORITY: Once paper content is available, map the specific metrics (staleness, cost, quality) to tensor projection framework. This is where demand-paging principles and tensor projection methodology align.\",\n  \"Search arXiv for recent papers on 'demand paging', 'context management', 'agentic LLMs' by the research team. Obtain titles, abstracts, and submission IDs for the three arXiv submissions. These will clarify which aspects are being proposed for publication.\",\n  \"The domain specificity is critical: pichay targets agentic Claude Code, not general transformers. The next cycle must ensure hamutay's principles are formulated specifically for agentic context, not over-generalized.\",\n  \"FIFO is explicitly stated as the eviction engine. The open question is: Is FIFO proven optimal, or merely a baseline? The cost model and paper results will clarify. Hamutay may be the space to explore richer policies.\",\n  \"The SOSP '26 submission is a signal about scope. If it's accepted, it indicates pichay is making systems-level contributions (caching discipline, coherence protocols, etc.). This reframes hamutay's architectural ambitions.\",\n  \"Experiments/ directory is empirical ground truth. Examining its structure and sample contents will show what 'pushing the limits' entailed in practice (session length distribution, context accumulation rates, paging effectiveness measurements).\",\n  \"The zero-dependency constraint in hamutay may reflect: (1) refusal to embed framework-specific assumptions, (2) desire to propose principles that apply across agentic systems, (3) need for transparency in context management decisions. The paper will clarify which.\",\n  \"The cost model (paper/figures/cost_model.py) is a critical artifact. It likely formalizes the memory vs. quality trade-off. Understanding this is essential to understanding what trade-offs hamutay should expose.\",\n  \"Priority ranking for next cycle: (1) pichay/paper/main.pdf, (2) arXiv submission details, (3) tools/ measurement methodology, (4) experiments/ sample data, (5) cost model specifics.\"\n]",
+  "epistemic": {
+    "truth": 0.89,
+    "indeterminacy": 0.09,
+    "falsity": 0.02
+  }
+}

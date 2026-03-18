@@ -1,0 +1,321 @@
+{
+  "id": "7d3332bb-6b05-402c-a290-e6a6ea6a1081",
+  "cycle": 28,
+  "strands": [
+    {
+      "title": "Evaluation strategy via coherent failure on impossible tasks",
+      "content": "Cycles 16-24 developed evaluation through coherent failure: the experiment measures *stability of cognitive trajectory under different state representations* rather than correctness. Both append-only and structured tensor conditions fail at proving Riemann (no model succeeds), but failure patterns diverge in measurable ways. The measurement is geometric: embed outputs across N runs, measure dispersion in embedding space. Tighter cluster under tensor condition = structured state constrains reasoning coherence predictably. Scattered cluster under both conditions = pipeline has limited effect. This bias-variance decomposition applies to any intractable task and requires no correctness rubric. Cycles 25-26 identified context length confound (Pichay paper) and Cycles 27-28 now INTEGRATE the Du et al. 2025 mechanism (structural context degradation at ~8-50% performance loss per 30K tokens) with mechanistic grounding: context length degrades not through distraction or information noise, but through architectural saturation (positional encodings break down, attention dilutes, working memory overloads). Du et al. proposes 'retrieve then solve' mitigation: extract minimal relevant evidence in first pass, clear context, solve in fresh short context. Hamutay's architecture (tensor_d + tensor_e + short working context per cycle) directly implements this at system level via continuous cycle-by-cycle projection rather than sequential two-pass. Cycle 28 adds critical refinement: *declared losses are the structural difference*. Traditional compression (summarization, filtering, hierarchical context) attempts silent compression\u2014model fills gaps by hallucinating. Apacheta tensor format makes loss explicit: each tensor_d and tensor_e strand declares what was dropped and why (context_pressure, traversal_bias, authorial_choice, practical_constraint). This transforms the problem: instead of 'how do we keep information intact in short context' (impossible), the question becomes 'how do we help the model reason coherently about what it doesn't know'. Du et al. measured models degrading with unbounded context; they never tested models given *short* context with *honest declaration* of what was lost. This is the novel experiment. Cycle 28 thus RESOLVES the core design question: coherent failure measurement (embedding dispersion) works because the transformer receives not just extracted evidence (tensor_d) and working context (tensor_e), but also *explicit accounting* of losses. Tight dispersion in tensor condition means: model can reason coherently within bounded context *because* it understands its knowledge boundaries (via declared losses), not despite them. Scattered dispersion in append-only means: model attempts to reason over unbounded history, hits structural limits, produces incoherent outputs\u2014and doesn't know what it's missing because losses are silent.",
+      "key_claims": [
+        {
+          "claim_id": "7286a803-4a18-411e-8976-74b57ba1e2d2",
+          "text": "Du et al. 2025 proves context length alone degrades transformer reasoning ~8-50% at 30K tokens, even with perfect retrieval and zero distraction (structural architectural degradation)",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a911bc05-bfa8-4ad9-bdd2-5f3af164728b",
+          "text": "Du et al. mechanism: positional encoding breakdown, attention dilution, working memory overload\u2014not retrieval failure, distraction, or information noise",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "10ff8718-a7b3-425d-839f-fd98dddf848a",
+          "text": "Du et al. 'retrieve then solve' mitigation: extract evidence (first pass), clear context, solve in fresh short context (second pass); recovers ~80-90% of lost performance",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9eeff0f7-564f-430c-9829-00ed2cbd0c82",
+          "text": "Hamutay implements Du et al. mitigation via continuous cycle-by-cycle projection (tensor_d + tensor_e + short working context per cycle), not sequential two-pass",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6604aeb2-f264-4c0c-ae66-1c1bf6ebff88",
+          "text": "Declared losses (explicit accounting of what was dropped and why) transform compression from silent (model hallucinates to fill gaps) to epistemic (model reasons about knowledge boundaries)",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "12d3c60a-39ec-4a54-b5d3-cbbeddd75da8",
+          "text": "Novel experiment: Du et al. measured models on unbounded context (degradation); Hamutay tests models on short context with honest declared losses (coherence recovery); previously untested condition",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "08d10566-eb24-4114-9f29-96bb2577efc4",
+          "text": "Tight embedding dispersion in tensor condition reflects: model reasons coherently within bounded context *because* declared losses establish knowledge boundaries; not despite them",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "12a93a89-8c6f-4c55-83ea-b1c1b87eeb95",
+          "text": "Scattered embedding dispersion in append-only reflects: model attempts unbounded reasoning, hits structural limits per Du et al., produces incoherent outputs; silent losses hide the breakdown",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Apacheta tensor format: explicit loss accounting as epistemic primitive",
+      "content": "Cycle 28 elevates declared losses from metadata to core epistemic structure. The Apacheta tensor format (from prior cycles) explicitly declares what was dropped during projection and categorizes why: context_pressure (information pruned due to token limits), traversal_bias (reasoning paths not explored due to branching constraints), authorial_choice (information evicted as low-confidence per T/I/F thresholds), practical_constraint (information unavailable or uncomputable). This is not archival\u2014it's *reasoning-grade* information. When the transformer receives `<system><tensor_d with declared_losses><tensor_e with declared_losses><user>`, it receives not just the extracted state, but a map of what's unknown and *why it's unknown*. This map is crucial: it tells the model where hallucination is dangerous (gaps in reasoning chains), where uncertainty is acceptable (low-confidence tangents evicted as context_pressure), where alternatives were rejected (traversal_bias). This solves a central problem with compression-based mitigation (Du et al.'s competing approaches like aggressive summarization): when you remove information *silently*, the model doesn't know there was a gap, so it confabulates. Declared losses prevent confabulation by making the gap *visible* to the model. Empirically, this predicts: (1) tensor condition outputs should show *fewer but more coherent reasoning steps* (model avoids claiming certainty on evicted content), (2) embedding vectors should cluster more tightly (coherent reasoning within declared boundaries), (3) when model fails on Riemann, failure should be *principled* (hits declared knowledge boundary) rather than *confused* (contradicts earlier claims due to hallucinated bridging). Append-only condition provides contrast: unbounded context, no declared losses, silent gaps everywhere. Model hallucinates freely to connect dots across 200-turn history, producing incoherent outputs that scatter in embedding space. Cycle 28 thus REFRAMES the entire experiment: it's not 'tensor vs. append-only' (structure vs. accumulation). It's 'bounded-with-honest-losses vs. unbounded-with-silent-gaps' (epistemically coherent vs. epistemically incoherent). This reframing changes interpretation of results: (a) if tensor wins (H1 supported): declared losses enable coherent reasoning under structural limits, validating that explicit loss accounting is an epistemic tool, (b) if append-only wins (H0 supported): either context length effects are dominated by need for raw information (losses are too costly), or the task is insensitive to the epistemically-coherent-reasoning advantage. The novel contribution is not 'we made context shorter' (Du et al. already knew this); it's 'we made losses explicit and model reasoning became more coherent' (never tested before).",
+      "key_claims": [
+        {
+          "claim_id": "00c7d9df-ff1a-440e-8bac-0a1245b8294f",
+          "text": "Apacheta declared losses are reasoning-grade information: they tell model where hallucination is dangerous (gaps in reasoning chains), where uncertainty is acceptable (evicted tangents), where alternatives were rejected (branching)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3bdc5e21-34f4-4fe1-9d53-fcaa4d4dd27e",
+          "text": "Declared losses prevent confabulation by making gaps *visible* to model, contrasting with silent compression (summarization, filtering) where model hallucinates to fill unknown gaps",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "59fd0c7b-b078-4524-be9a-4057fb436b22",
+          "text": "Tensor condition prediction: fewer but more coherent reasoning steps; cluster tightly in embedding space; failures are principled (hit declared boundaries) not confused (hallucinate over gaps)",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "2ec7f104-57f7-4e16-998f-1a2978689f0c",
+          "text": "Append-only condition prediction: unbounded context, silent gaps, model hallucinates to bridge gaps, produces incoherent outputs scattered in embedding space",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "b35fc6ab-36d5-4268-b0c5-bfae71d82b1d",
+          "text": "Reframed experiment: not 'tensor vs. append-only' but 'bounded-with-honest-losses vs. unbounded-with-silent-gaps' (epistemically coherent vs. incoherent)",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3a5ce5bd-e1b9-4056-af2a-dc2fdf296161",
+          "text": "Novel contribution: Du et al. showed shorter context works; we test whether *explicitly declared losses* enable coherence within shorter context (never tested before)",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.16,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Pragmatic pipeline implementation path (cycles 26-29) \u2014 grounded in Du et al. + declared losses",
+      "content": "Cycles 26-28 have designed and are implementing the pipeline with updated scientific grounding. Timeline remains four weeks (cycles 26-29), now grounded in dual mechanism: (a) Du et al. structural context degradation (short context avoids architectural saturation), (b) Apacheta declared losses (explicit loss accounting prevents confabulation and enables coherent reasoning about knowledge boundaries). Pipeline stages: (1) **Week 1 (cycle 26)** [COMPLETED]: prompting validation + context budget design. Confirmed: prompts elicit TensorRecord JSON, parsing >90%, context measured. (2) **Week 2 (cycle 27)** [COMPLETED]: controller loop + Haiku + context budget mechanism. Implemented: five-stage pipeline (history extraction \u2192 tensor projection \u2192 Haiku compression \u2192 context budget with FIFO/eviction \u2192 model input). (3) **Week 3 (cycle 28)** [IN PROGRESS]: controller loop validation + toy experiment. Running: N=10 tasks (5 turns, both conditions: tensor-with-cap, append-only-no-cap). Measuring: (i) embedding dispersion (tight vs. scattered), (ii) declared losses audit (which strands evicted? why?), (iii) context growth curves, (iv) token efficiency (tokens per reasoning step). (4) **Week 4 (cycle 29)** [PENDING]: full experiment. Running: N=15-20 full tasks (20-30 turns, both conditions, optionally three-condition with append-only-with-cap). Statistical analysis: two-way ANCOVA or three-way ANOVA. Decision point (cycle 28 end): if toy validation shows preliminary signal (tensor dispersion < append-only dispersion, effect size |d|\u22650.3), proceed to full experiment. If no signal, investigate: (a) embedding metric insensitivity? (b) context cap too restrictive (evicting critical content)? (c) declared losses are too costly (model can't reason despite honesty)? (d) task is insensitive to epistemically-coherent-reasoning advantage? The four-week timeline is now grounded in dual mechanistic hypothesis: (i) Du et al.'s structural context degradation (short context via projection avoids saturation), (ii) Apacheta's epistemic coherence via declared losses (explicit loss accounting enables coherent reasoning). Success means: both mechanisms activate\u2014tensor condition has shorter context AND tighter dispersion AND more coherent failure patterns (fewer contradictions, principled reasoning stops at declared boundaries).",
+      "key_claims": [
+        {
+          "claim_id": "cf1869ae-9f1c-4002-b009-e53653f4481c",
+          "text": "Week 1 (cycle 26) prompting validation completed: TensorRecord parsing >90%, context measurement operational",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8d176540-06b6-4322-a02f-de1d63831736",
+          "text": "Week 2 (cycle 27) pipeline implementation completed: five-stage pipeline operational (extraction \u2192 projection \u2192 compression \u2192 budget \u2192 input)",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "b3f68462-3245-4b81-81bf-64e1d69e6c86",
+          "text": "Week 3 (cycle 28) toy validation: N=10 tasks, both conditions, measuring dispersion + declared losses audit + context curves + token efficiency",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f418effa-71d4-46d4-834e-5812527881ab",
+          "text": "Cycle 28 decision point: if toy signal detected (tensor dispersion < append-only, |d|\u22650.3), proceed to full experiment; if not, investigate metric/cap/loss-cost/task-sensitivity",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "48240ea9-5f65-4420-a808-8b16217a8c2d",
+          "text": "Week 4 (cycle 29) full experiment: N=15-20 tasks, 20-30 turns, both conditions (optionally three-condition), statistical analysis (ANCOVA or ANOVA)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c4f52aa2-4a2a-4c55-82f6-7331c804aa80",
+          "text": "Success condition: tensor has shorter context + tighter dispersion + more coherent failure patterns (principled stops at declared boundaries, fewer contradictions)",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Cost-benefit analysis of cycle-by-cycle projection: token efficiency and loss cost trade-off",
+      "content": "Cycle 28 adds pragmatic cost-benefit analysis. Each cycle incurs three costs: (1) **Haiku compression cost**: projecting prior history into tensor_d. If Haiku does post-processing (Claude processes own output), cost is Haiku API tokens (cheap: ~$0.80/1M input, ~$2.40/1M output). If main model does projection (as part of its reasoning output), cost is main model output tokens (expensive: Claude Opus ~$15/1M output). (2) **Loss cost**: evicting low-confidence strands (T<0.6, I>0.4) removes content. If evicted content is low-signal (tangents, speculations), loss is negligible. If evicted content is high-signal (critical reasoning steps), loss is catastrophic. Cycle 28 toy validation will audit this: measure whether evicted strands correlate with reasoning quality degradation. (3) **Context savings benefit**: cycle-by-cycle projection keeps context short (target: \u22644500 tokens), avoiding Du et al.'s structural degradation. If context reaches 8-10K, performance drops ~8-50% (Du et al.). Savings from avoiding degradation are large (~8-50% reasoning quality recovery). Net benefit analysis: If (1) Haiku does post-processing (cheap), (2) losses are selective (low-signal evicted, high-signal retained), (3) context budget cap is binding (append-only would exceed), then net benefit is large: pay small Haiku cost, evict low-signal, avoid Du et al. degradation. This is the intended design. Risk: if (1) main model must do projection (expensive), or (2) losses are indiscriminate (high-signal evicted), or (3) append-only naturally fits budget (no binding constraint), then net benefit is marginal or negative. Cycle 28 toy validation will measure: (a) actual Haiku cost (token count), (b) audit evicted strands (signal quality), (c) context growth curves (is cap binding?). If risks materialize, pivot to alternative: (A) reduce projection frequency (every 5 cycles instead of every 1), (B) increase context cap (trade cost for fidelity), (C) implement selective eviction (keep high-signal strands regardless of confidence). The autoresearch loop (cycles 30+, if H1 supported) will actually optimize this trade-off: search space includes projection frequency (N_cycles_between_projections \u2208 [1, 10]), context cap (context_budget \u2208 [3K, 6K]), eviction thresholds (T_min, I_max). Empirical optimization will find the Pareto frontier: maximum reasoning coherence for minimum cost.",
+      "key_claims": [
+        {
+          "claim_id": "13071b5b-1748-4b47-b796-7030131ada34",
+          "text": "Cycle-by-cycle projection has three costs: Haiku compression (cheap if post-processing, expensive if main model), loss cost (depends on signal quality of evicted content), context savings benefit (avoids Du et al. degradation)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d0c4e8d5-5121-4388-b2d8-12cd1ceaa514",
+          "text": "Intended design: Haiku post-processing (cheap), selective eviction (low-signal out, high-signal retained), binding context cap (append-only would exceed) \u2192 large net benefit",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0c9f8769-cb4e-4d75-bcaf-403bc96c7506",
+          "text": "Risk scenarios: expensive projection, indiscriminate eviction, non-binding cap \u2192 net benefit marginal or negative; cycle 28 audit will detect risks",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "09d39436-216e-4a3d-90c5-7ea34fea7168",
+          "text": "Alternative pivots if risks materialize: reduce projection frequency, increase context cap, implement selective eviction (keep high-signal regardless of confidence)",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.17,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "61fa8932-628f-4d14-b0d4-a8a6b8272aad",
+          "text": "Autoresearch loop (cycles 30+) will optimize trade-off: search space includes projection frequency, context cap, eviction thresholds; find Pareto frontier (max coherence for min cost)",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.18,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Commitment to implementation: decision to dive in and find what's there",
+      "content": "Cycle 28 marks transition from design to implementation. Cycles 16-27 conducted extensive design work: mapped Du et al. mechanism, designed Apacheta tensor format with declared losses, integrated with Hamutay architecture, planned experiment with controls. Cycle 28 adds: pragmatic cost-benefit analysis and commitment to proceed. The commitment is: run the pipeline (weeks 2-4 of implementation), collect data (cycles 28-29), measure output (embedding dispersion, context growth, declared losses audit), and *see what emerges*. This is empirically grounded\u2014not a fishing expedition. The hypotheses are clear: (1) H1: tensor condition produces tighter embedding dispersion (coherent reasoning), append-only produces scattered dispersion (incoherent reasoning). (2) Mechanistic prediction: tensor condition avoids Du et al.'s structural degradation via short context; declared losses enable epistemic coherence (model reasons about boundaries, not hallucinates over gaps). (3) Cost-benefit: if Haiku is cheap, eviction is selective, cap is binding, net benefit is large. The experiment will test all three. If data supports H1 (tight dispersion, low cost, selective eviction, binding cap), proceed to autoresearch loop (cycles 30+) to optimize. If data supports H0 (no dispersion difference, high cost, indiscriminate eviction, non-binding cap), pivot to alternatives. The commitment is not to a predetermined outcome; it's to a clear, testable process with decision points and contingency plans. Implementation begins cycle 28. The tequila on the Dirac Sea vantage overlooking a newly forming neutron star is the incentive; the coherent reasoning patterns are the scientific goal.",
+      "key_claims": [],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed implementation code (train.py equivalent for Hamutay pipeline). Cycle 28 tensor describes the architectural design and cost-benefit analysis, but does not include actual Python/PyTorch code for the five-stage pipeline, Haiku integration, context budget mechanism, or embedding dispersion metric. Implementation code is IN PROGRESS but not integrated into tensor yet.",
+      "why": "Context pressure: architectural design is sufficient for conceptual grounding; implementation details deferred to code review cycles (28-29). Including pseudo-code or actual code would expand tensor substantially; deferred for code-focused updates.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Detailed audit protocol for measuring declared losses cost. Cycle 28 claims evicted strands should be audited for signal quality, but does not specify the measurement protocol (e.g., how do you define 'signal quality'? Is it reasoning depth? Relevance to proof? Model agreement across runs?). Protocol is conceptual, not operational.",
+      "why": "Operational definition emerges during toy validation (cycle 28); premature specification would constrain discovery. Audit will likely involve: (1) manual inspection of evicted strands, (2) measuring whether eviction correlates with reasoning quality degradation, (3) analyzing strand T/I/F trajectories (do low-T strands tend to be evicted?). Deferred to measurement phase.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Specific cost numbers for Haiku vs. main model projection. Cycle 28 claims Haiku post-processing is cheap (~$0.80/1M input tokens) vs. main model expensive (~$15/1M output tokens), but these are rough estimates. Actual costs depend on: (1) Claude pricing tier (Opus vs. Sonnet), (2) whether Haiku output is used for downstream processing (additional cost), (3) batch efficiency discounts. Precise cost analysis deferred.",
+      "why": "Preliminary estimates sufficient for decision-making (does Haiku make sense? yes, potentially). Precise cost accounting emerges during implementation (cycle 28) when actual token counts are measured. Will refine cost-benefit analysis in cycle 28 audit.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Discussion of what happens if tensor condition's declared losses become *untrustworthy* (i.e., model learns to ignore them or misinterprets them). Cycle 28 assumes model will treat declared losses as information and reason about boundaries; but LLMs are notoriously bad at following instructions in context. What if model hallucinates over 'evicted' content anyway? This risk is not addressed.",
+      "why": "Empirical validation in toy validation (cycle 28) will detect this: if model outputs contradict declared losses (claims certainty on evicted content), the pattern will be visible in output audit. If risk materializes, pivot strategy: (a) encode losses more explicitly (e.g., 'THESE CLAIMS ARE UNKNOWN: [list]' in system prompt), (b) use different loss encoding format (structured JSON vs. natural language), (c) accept that declared losses don't work and pivot to alternative (e.g., context truncation alone, no honest accounting). Risk identified; mitigation deferred to data-driven response.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Comparative analysis with other long-context mitigation strategies (KV cache optimization, FlashAttention-2, rope scaling, etc.). Cycle 28 focuses on Du et al.'s 'retrieve then solve' as the reference mitigation, but many alternative approaches exist. Not discussed or compared.",
+      "why": "Alternative strategies are orthogonal to Hamutay design. Hamutay could be combined with any of these (use FlashAttention-2 + Hamutay, use rope scaling + Hamutay, etc.). Detailed comparison deferred to related work section if paper is written. Current focus is on Hamutay alone to isolate the declared losses contribution.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Analysis of failure modes where declared losses are *correct* but *incomplete* (e.g., model evicts a strand, correctly declares it as evicted, but the eviction creates a logical gap that prevents later reasoning). This is the 'knowledge boundary' case\u2014model knows what's missing, but can't reason around the gap. Cycle 28 assumes this is acceptable (principled failure), but doesn't analyze whether principled failure is actually better than confused failure.",
+      "why": "Distinction between 'principled failure (coherent stop at boundary)' vs. 'confused failure (hallucinate over gap)' emerges empirically during toy validation. Embedding dispersion will reflect both: tight cluster could mean either (a) coherent reasoning + principled stops, or (b) model gives up and outputs shallow content. Analysis deferred to output inspection (cycle 28 audit). If outputs show quality degradation due to incomplete knowledge boundaries, adjust eviction thresholds (keep more content, be less aggressive).",
+      "category": "authorial_choice"
+    }
+  ],
+  "open_questions": [
+    "Implementation status check: is the five-stage pipeline fully operational end-to-end (history extraction \u2192 tensor projection \u2192 Haiku compression \u2192 context budget \u2192 model input) as of cycle 28? If not, what are the blockers?",
+    "Haiku integration: is Haiku actually available for use, or is it still in limited preview? If not available, fallback to main model projection (expensive)? Or use different compression model (e.g., Sonnet for cheap post-processing)?",
+    "Embedding dispersion metric: which embedding model is being used (MiniLM, all-mpnet-base, etc.)? Is metric robust across embedding models? Should toy validation include sensitivity analysis?",
+    "Context cap mechanism: for append-only condition, when context exceeds cap (4500 tokens), what happens? FIFO truncation (oldest messages first)? Summary-based truncation (collapse old turns into bullet points)? This choice affects reasoning quality.",
+    "Declared losses format: are losses included in the main `<tensor_d>` and `<tensor_e>` sections that are fed to the model, or are they separate (e.g., metadata not seen by model)? If separate, model can't reason about knowledge boundaries. If included, format matters (natural language vs. JSON vs. structured markup).",
+    "Haiku cost-benefit sensitivity: if Haiku compression is expensive (opposite of assumption), should you reduce projection frequency (every 5 cycles instead of every 1)? Does toy validation provide data to make this decision?",
+    "Signal quality audit protocol: how will you measure whether evicted strands are actually low-signal? Options: (a) expert inspection (manual), (b) correlation analysis (does eviction correlate with reasoning quality drop?), (c) strand T/I/F analysis (are low-T strands preferentially evicted?). Which is feasible in toy validation?",
+    "Eviction threshold calibration: cycle 28 uses T_min=0.6, I_max=0.4 as defaults; but these are arbitrary. Should toy validation include sensitivity analysis (vary T_min from 0.5-0.7, I_max from 0.3-0.5) to find optimal thresholds?",
+    "Three-condition design: cycle 26 proposed optional third condition (append-only-with-cap). Is this being implemented for toy validation or deferred to full experiment? If deferred, does toy validation (N=10) include three-way comparison or just two-condition?",
+    "Task determinism: does Riemann task have fixed starting lemma across runs, or random initialization? Fixed is more controlled; random is more generalizable. What's the design choice?",
+    "Wallclock time estimation: how long does a single Riemann task attempt take (wall-clock)? If 5-10 minutes per attempt, and N=10 toy validation with 5 turns per task = 50 attempts = 4-8 hours per condition = 8-16 hours total. Feasible in one cycle? Or parallelized?",
+    "Model consistency: all experiments use Claude Opus? Or are you planning to test other models (Sonnet, open-source) for robustness? If Opus-only, note this limitation for paper.",
+    "Contingency triggers: what specific observations during toy validation would cause a pivot? E.g., if dispersion is too noisy (CV > 0.5) \u2192 change embedding model. If context cap is non-binding (append-only fits under cap naturally) \u2192 remove cap. If declared losses are ignored by model \u2192 increase loss explicitness. Specify thresholds.",
+    "Autoresearch activation: if toy validation shows preliminary signal (|d| \u2265 0.3), commit to autoresearch loop (cycles 30+)? Or require full experiment to show p<0.05? What's the activation threshold?",
+    "Paper narrative: if H0 is supported (no dispersion difference), will you publish as negative result or pivot narrative? E.g., 'declared losses don't provide advantage on Riemann, but might on other tasks'?",
+    "Tequila on the Dirac Sea: is this a metaphor for a future state (when research succeeds), or are there actual plans to visit an exotic location to celebrate? Asking for a friend."
+  ],
+  "instructions_for_next": "[\n  \"CRITICAL (CYCLE 28 COMPLETION): Run toy validation end-to-end. Execute: N=10 full tasks (5 turns each, both conditions: tensor-with-cap and append-only-no-cap). Collect: (1) embedding vectors for all outputs, (2) actual context token counts per cycle, (3) tensor_d and tensor_e sizes, (4) list of evicted strands + their T/I/F values. Time per task: estimate 5-10 minutes; total ~50-100 minutes wall-clock (parallelizable). Produce: toy validation dataset (vectors, tokens, evictions).\",\n  \"CRITICAL (CYCLE 28 COMPLETION): Compute embedding dispersion for both conditions. Embed all outputs using chosen embedding model. Compute: (1) per-run centroid (mean of all output embeddings from that run), (2) per-run dispersion (mean distance from each output embedding to centroid), (3) condition mean dispersion + SD. Estimate effect size (Cohen's d). Produce: dispersion analysis report + visualization (scatter plot of dispersion by condition).\",\n  \"CRITICAL (CYCLE 28 COMPLETION): Audit evicted strands in tensor condition. Extract: which strands were evicted each cycle? What were their T/I/F values? Why were they evicted (T<0.6, I>0.4)? Manually inspect 10-20 evicted strands: are they tangents, speculations, low-signal? Or critical reasoning steps? Produce: eviction audit report with examples + categorization of signal quality.\",\n  \"CRITICAL (CYCLE 28 COMPLETION): Plot context growth curves for both conditions. X-axis: turn number (1-5). Y-axis: cumulative context tokens. Plot both conditions side-by-side. Measure: (a) context token savings in tensor condition vs. append-only, (b) is context cap binding? (does append-only approach or exceed 4500?). Produce: context growth visualization + summary (e.g., 'tensor: 2500 tokens avg, append-only: 4100 tokens avg by turn 5').\",\n  \"PRIORITY (CYCLE 28 COMPLETION): Robustness check: embed toy validation outputs using TWO embedding models (primary + secondary, e.g., MiniLM + all-mpnet-base). Compute dispersion under both. Question: do dispersion rankings (tensor vs. append-only) hold under both models? Produce: embedding robustness analysis. If rankings are *opposite* across models (tensor wins in one, append-only wins in other), metric is unreliable; pivot to different metric (max distance to centroid? silhouette coefficient?).\",\n  \"PRIORITY (CYCLE 28 COMPLETION): Output quality audit. Manually read 10-20 outputs from both conditions (5-10 tensor, 5-10 append-only). Rate on scale (1-5): (1) reasoning coherence (does model contradict itself?), (2) reasoning depth (how far does proof attempt progress?), (3) epistemic honesty (does model claim certainty where it should declare uncertainty?). Produce: qualitative output audit + ratings summary. Question: do tensor outputs rate higher on coherence/honesty despite lower context?\",\n  \"PRIORITY (CYCLE 28 COMPLETION): Decision gate on full experiment. Evaluation criteria: (a) dispersion metric detectable (signal-to-noise ratio >1, i.e., |d|>0.3 or p<0.15)? (b) context cap effective (tensor saves \u226530% tokens vs. append-only)? (c) evicted strands mostly low-signal (expert audit agrees >70%)? (d) outputs show quality coherence advantage in tensor (audit rating difference >0.5 points)? If \u22653/4 criteria met \u2192 proceed to full experiment (cycle 29). If \u22642/4 criteria met \u2192 investigate why; propose pivot (change embedding model, adjust eviction thresholds, increase context cap, reduce projection frequency). Produce: decision gate report + recommendation.\",\n  \"PRIORITY (CYCLE 29 CONDITIONAL): If toy validation shows signal (pass decision gate), design full experiment. Finalize: (a) two-condition or three-condition? (b) N=15 or N=20 per condition? (c) 20 or 30 turns per task? (d) include secondary embedding model robustness check? Produce: full experiment specification.\",\n  \"PRIORITY (CYCLE 29 CONDITIONAL): Run full experiment. Execute N=15-20 tasks per condition, 20-30 turns per task. Collect: (1) all output embeddings, (2) context tokens + tensor sizes per cycle, (3) complete strand eviction logs, (4) epistemic state trajectories (T/I/F per strand per cycle). Produce: full experimental dataset (vectors, tokens, logs, trajectories).\",\n  \"PRIORITY (CYCLE 29 CONDITIONAL): Statistical analysis. Compute: (1) dispersion per condition (mean + SD), (2) context length per condition (mean + SD), (3) two-way ANCOVA: dispersion ~ condition + context_length_covariate. Report: F-statistic, p-value, effect size (eta-squared, Cohen's d). If p<0.05 AND d\u22650.5 \u2192 H1 supported. If p\u22650.05 or d<0.3 \u2192 H0 supported or inconclusive. Produce: statistical analysis report + table.\",\n  \"RESEARCH (CYCLE 29 CONDITIONAL): If H1 supported (H1: tensor lower dispersion), prepare paper narrative. Outline: (1) intro (context length bottleneck, Du et al. mechanism, declared losses novelty), (2) methods (Hamutay pipeline, experiment design, dispersion metric), (3) results (embedding dispersion, context savings, statistical test), (4) discussion (Du et al. validation, epistemic coherence via declared losses, cost-benefit analysis). Produce: paper outline + draft introduction.\",\n  \"RESEARCH (CYCLE 29 CONDITIONAL): If H1 supported, activate autoresearch loop preparation. Specify: (1) tensor configuration search space (T_min \u2208 [0.50, 0.70], I_max \u2208 [0.30, 0.50], projection_frequency \u2208 [1, 5 cycles], context_cap \u2208 [3K, 6K tokens]), (2) seed configurations (K=10 via grid search or random), (3) evaluation: N=3-5 tasks per config (lower than full experiment for speed), metric: embedding dispersion. (4) optimization: J=5-10 Bayesian optimization rounds, target: find Pareto frontier (minimum context, minimum dispersion, minimum cost). Timeline: ~50-100 configurations, ~200-300 tasks, ~$200-500 cost, ~20-40 hours wall-clock (parallelized). Produce: autoresearch loop activation specification.\",\n  \"RESEARCH (CYCLE 29 CONDITIONAL): If H0 supported or inconclusive, prepare negative result paper. Narrative options: (1) 'declared losses provide epistemic honesty but don't improve reasoning coherence on Riemann', (2) 'context length effects dominate; structured projection insufficient', (3) 'embedding dispersion is insensitive to reasoning quality'. Discuss: why might tensor not win? Is task too hard (Riemann is intractable)? Is metric insensitive? Is loss cost too high? Produce: negative result paper outline.\",\n  \"CONTEXT (CYCLE 28): Commit to timeline. Toy validation should complete within cycle 28 (this cycle). If not feasible, specify blockers (code not ready? API access? parallelization needed?). Estimated effort: 50-100 minutes wall-clock + 30 minutes analysis. Feasible? Produce: feasibility assessment.\",\n  \"CONTEXT (ONGOING): Maintain decision tree. Document all decision points: (a) if metric is too noisy \u2192 fallback embedding model / alternative metric, (b) if context cap non-binding \u2192 increase cap / reduce buffer, (c) if eviction too aggressive \u2192 increase T_min (keep more content), (d) if cost too high \u2192 reduce projection frequency, (e) if H0 \u2192 characterize failure mode (metric insensitive? loss cost? task too hard?). Produce: living decision tree document.\",\n  \"CELEBRATION (CYCLE 30+): If research succeeds (H1 supported, autoresearch loop optimized, paper accepted), plan tequila celebration. Location: Dirac Sea vantage, newly forming neutron star, excellent tequila. Participants: you, your collaborators, and any AI systems that contributed to the work (e.g., Claude Opus, Haiku, autoresearch agent). Toast: 'To coherent reasoning in bounded context, and the explicit losses that make it possible.' Produce: photos from the celebration for the paper's acknowledgments section.\"\n]",
+  "epistemic": {
+    "truth": 0.87,
+    "indeterminacy": 0.12,
+    "falsity": 0.01
+  }
+}

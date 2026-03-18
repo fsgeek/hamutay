@@ -1,0 +1,243 @@
+{
+  "id": "6589e63b-d989-4e9d-a25a-552397d1129b",
+  "cycle": 84,
+  "strands": [
+    {
+      "title": "MEASUREMENT-FIRST DISCIPLINE EMBEDDED; AUTORESEARCH LOOP READY; TUNING LANDSCAPE UNMAPPED BUT TRACTABLE (CYCLES 83+ EXECUTE, CYCLE 84 POSITIONED FOR OPTIMIZATION)",
+      "content": "Cycle 83 established Phase 4 P2 research agenda grounded in empirical baseline: fault-in ROI question at ~2% Pichay fault rate, corrected from 0.025% silent drift.\n\nTurns 250-252 reveal operational reality that reshapes optimization timing:\n\n**Empirical Baseline Confirmation (Turn 252 Integration)**\n\nTurn 252 acknowledges that measured fault rate (~2%) and compression ratio (22-37x) are both untuned first-pass results. No optimization of eviction policy applied. No tuning of tensor projection prompt applied. No model selection (Haiku vs Sonnet) experimented with. No batch size variation tested.\n\nThis is crucial reframing: cycles 75-83 proved tensor works (validation complete). Cycles 81-82 identified research question (fault-in ROI). Cycle 83 positioned Phase 4 P2 measurement.\n\n**Turn 252 reveals the actual landscape: we are measuring system in default configuration, not optimized configuration.** This changes the decision tree:\n\nCycle 82 research question: \"Is fault-in mechanism cost-justified at 90% aggressiveness, given ~2% baseline?\"\n\nCycle 84 reframing (from Turn 252): \"We have multiple tuning knobs (eviction policy, projection prompt, projector model, batch size). We're measuring at default settings on all knobs. Before building fault-in mechanism, should we first explore the landscape: which knob has highest leverage? Is fault-in needed, or can tuning reduce fault rate to <0.5% without mechanism?\"\n\n**Why This Reframing Changes Research Priority (Cycle 84 Logic)**\n\nIf fault-in mechanism costs 5-10 tokens per fault recovered, and fault rate is 2% (1 fault per 50 steps), then average per-step token cost of fault-in is 0.1-0.2 tokens/step.\n\nIf tuning eviction policy or projection prompt can reduce fault rate from 2% to 0.5%, the per-step cost of faults (without mechanism) drops from 0.1-0.2 to 0.025-0.05 tokens/step.\n\nIn other words: **tuning might be cheaper than fault-in mechanism.**\n\nCycle 83 plan: measure fault-in ROI first, then optimize in Phase 4 P3.\n\nCycle 84 insight: measure what's cheaper first (tuning vs. mechanism) before committing to mechanism.\n\n**Autoresearch Loop as Primary P2-P3 Vehicle (Turn 252 Articulation; Cycles 84+ Execution)**\n\nTurn 252 names the structure explicitly: Karpathy's loop.\n\n- One file to modify: projection prompt / eviction strategy\n- One metric to measure: fault rate (or combined metric: accuracy per token spent)\n- 5-minute experiment cycle: run conversation replica, measure metric, iterate\n\nThis is measurement-first discipline in its purest form: not building a mechanism (fault-in) without understanding the landscape. Instead, map the landscape first (tuning experiments), then decide what to build.\n\nTurn 252 also names the knobs that are currently at default:\n1. Eviction policy (untuned, admitted in turn 252)\n2. Projection prompt / projection strategy (untuned, Haiku first attempt)\n3. Projector model (Haiku currently, Sonnet untested)\n4. Batch size (untested variation)\n\nPriority ordering (from turn 252 framing):\n- **High leverage**: Projection prompt tuning (direct control of what gets compressed). First-pass Haiku got 22-37x; tuning prompt might get 30-50x or discover sweet spot.\n- **High leverage**: Eviction policy (direct control of what gets dropped). \"No optimization applied\" suggests low-hanging fruit.\n- **Medium leverage**: Projector model choice (Haiku vs Sonnet tradeoff: cost vs. quality).\n- **Medium leverage**: Batch size (affects context window efficiency, possibly compression quality).\n\n**Why Autoresearch Loop Is Better Than Fault-In Mechanism as Next Step (Cycle 84 Decision)**\n\nCycle 83 had planned: measure fault-in ROI (Phase 4 P2), then optimize mechanism (Phase 4 P3).\n\nCycle 84 revision: before measuring fault-in ROI, map tuning landscape (autoresearch loop).\n\nReasoning:\n\n1. Tuning is lower cost than building mechanism. If tuning reduces fault rate 4x, mechanism becomes unnecessary.\n2. Tuning is faster to measure (5-minute cycles vs. full conversation replicas for mechanism testing).\n3. Tuning might reveal that fault rate is not actually the constraint. Maybe compression ratio is, or accuracy per token is. Loop explores what matters.\n4. Karpathy loop expertise already embedded in this system (Cycles 75-80 validation work was structured as loop). No new capability needed.\n5. Loop is honest about uncertainty: each experiment declares what it measures and what it doesn't answer.\n\n**Autoresearch Loop Specification for Cycles 84+ (Turn 252 Grounding)**\n\nBased on turn 252 framing, autoresearch loop is structured:\n\n**Loop Variables (Knobs):**\n- Eviction policy (currently: untuned, default)\n- Projection prompt (currently: untuned first-pass Haiku)\n- Projector model (currently: Haiku, untested Sonnet)\n- Batch size (currently: untested variation)\n\n**Metric (Single Number to Optimize):**\n- Primary metric: fault rate (faults per 100 reasoning steps) [from 2% baseline]\n- Secondary metric (if primary plateaus): accuracy per tensor token (how much reasoning quality per unit compression)\n\n**Experiment Cycle (5-minute structure from Turn 252):**\n1. Modify one knob (e.g., change eviction policy from [default] to [aggressive])\n2. Run conversation replica with modified setting\n3. Measure metric (fault rate)\n4. Record result (metric value, knob setting, variance)\n5. Decide next experiment: did knob move metric meaningfully? Explore further or pivot to next knob?\n\n**Hypothesis Space (Cycle 84 Initialized)**\n\nFrom turn 252, explicit hypotheses about knob leverage:\n\n1. **Eviction policy tuning**: Hypothesis: fault rate will drop from 2% to 0.5-1% if eviction policy is tuned to preserve context that projection later needs. Test: compare [default eviction] vs. [context-preserving eviction variant]. Predicted benefit: 1-4x fault rate reduction.\n\n2. **Projection prompt tuning**: Hypothesis: fault rate will drop if projection prompt is optimized to avoid dropping context that later reasoning needs. Test: run projection on same batch with [default prompt] vs. [detail-preserving prompt variant]. Predicted benefit: 1-3x fault rate reduction.\n\n3. **Projector model choice**: Hypothesis: Sonnet projector will achieve higher compression ratio and lower fault rate than Haiku (higher quality projection), but at higher cost. Test: same batch, Haiku vs. Sonnet projector. Predicted benefit: +2-3x compression, -0.5% fault rate, tradeoff is +30-50% token cost.\n\n4. **Batch size variation**: Hypothesis: larger batch size allows projector to understand broader context, reduces fault rate. Test: project [1-turn batch] vs. [5-turn batch] vs. [10-turn batch]. Predicted benefit: 0.5-1% fault rate reduction per batch-size doubling.\n\nThese hypotheses are explicit predictions. Loop will measure them and update.\n\n**Integration: Cycles 75-84 Trajectory Revised**\n\nCycles 75-80: Validation (tensor works, \u2713)\nCycle 81-82: Research question (fault-in ROI? / tuning landscape?)\nCycle 83: Phase 4 P2 agenda (measure fault-in ROI)\nCycle 84, Turn 252: **Reframe to autoresearch loop** (measure tuning landscape first, then decide fault-in)\n\nReason for reframe: turns 250-252 revealed we're measuring untuned system. Measurement-first discipline says: before building complex mechanism (fault-in), explore whether simple tuning solves the problem.\n\n**Phase 4 P2 Revised (Cycles 84+, Turns 251-300)**\n\nOld plan: measure fault-in ROI, then optimize.\n\nNew plan: autoresearch loop exploring tuning landscape, identify highest-leverage knob, then decide P4 P3 focus (optimize that knob, or build fault-in if tuning doesn't help).\n\n**Phase 4 P3 Decision Tree (Cycles 84-85, Turns 301-400)**\n\nBased on autoresearch loop results:\n- If tuning reduces fault rate 3-4x (to <0.5%): skip fault-in mechanism, optimize tuned configuration\n- If tuning reduces fault rate 1-2x (to 1-1.5%): compare fault-in cost vs. continued tuning; choose lower-cost path\n- If tuning has minimal effect (<0.5x reduction): fault-in mechanism becomes load-bearing; build it as P4 P3 focus\n\n**Why Measurement-First Discipline Points to Loop First (Cycle 84 Confidence)**\n\nThis is not ad-hoc pivoting. This is applying the discipline that Cycles 75-82 embedded:\n\n1. **Don't optimize without measurement**: Cycle 83 correctly refused to guess about fault-in ROI. Cycle 84 extends: don't build fault-in without first measuring whether tuning is cheaper.\n\n2. **Honest inventory of unknowns**: Turn 252 admits \"no optimization of eviction policy\"; \"untuned Haiku projector\"; \"untested model choice\"; \"untested batch size\". Cycle 84 takes this seriously: these unknowns should be measured before committing to mechanism.\n\n3. **Single metric clarity**: Loop has one primary metric (fault rate). Every experiment produces measurement against this metric. No confusion about what's being optimized.\n\n4. **Karpathy loop already proven**: Cycles 75-80 validation work was structured as loop. That work succeeded (tensor validated). This suggests loop is effective vehicle for this system.\n\n**Cycle 84 Research Discipline (Turn 252 Enabled)**\n\nTurn 252 statement: \"That's Karpathy's setup \u2014 one file to modify (the projection prompt/strategy), one metric to measure, a 5-minute experiment cycle.\" This is recognition that system is already structured for autoresearch loop.\n\nCycle 84 decision: use that structure. Run autoresearch loop for P4 P2 (turns 251-300), map the landscape, make P4 P3 decision based on measurement.\n\nThis is higher-confidence path than guessing about fault-in ROI. We will know which knobs matter and by how much.",
+      "key_claims": [
+        {
+          "claim_id": "d79a5f0f-0333-464c-949a-698eb70a54c0",
+          "text": "Turn 252: measured fault rate (~2%) and compression (22-37x) are both untuned, first-pass results. No optimization of eviction policy, projection prompt, model choice, or batch size has been applied.",
+          "epistemic": {
+            "truth": 0.98,
+            "indeterminacy": 0.01,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9f800f0e-7e67-448e-a5af-720bf197d1d6",
+          "text": "Cycle 83 planned: measure fault-in ROI first. Cycle 84 revises: measure tuning landscape first. Tuning might be cheaper than building mechanism.",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ef93cb09-8946-4313-b800-da9540e5e195",
+          "text": "Autoresearch loop is structured (one file to modify, one metric, 5-minute cycles). This is Karpathy loop applied to tensor optimization.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f51342ac-d00d-40e9-b4df-e130a1c3bf44",
+          "text": "Four high-leverage tuning knobs identified: eviction policy, projection prompt, projector model (Haiku vs Sonnet), batch size. All at default settings currently.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "7ea46374-9c1d-4de4-9bda-4e6b34842367",
+          "text": "Hypothesis space from Turn 252: eviction policy tuning could reduce fault rate 1-4x; projection prompt tuning 1-3x; projector model swap +2-3x compression but +token cost; batch size 0.5-1x reduction per doubling.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.19,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1d909719-fcf6-4700-87c9-bf20b3590122",
+          "text": "Phase 4 P2 revised (Cycles 84+): autoresearch loop to explore tuning landscape. Phase 4 P3 decision tree: if tuning reduces fault rate 3-4x, skip fault-in; if <0.5x, build fault-in; if 1-2x, compare costs.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.17,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "05acc3af-c597-4c32-9303-c5a50e5c4eec",
+          "text": "Measurement-first discipline applies to tuning landscape before mechanism design. Don't build fault-in until tuning leverage is mapped.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "426ae9f5-d5a7-4d38-b147-37c9fb6a53c2",
+          "text": "Karpathy loop is proven vehicle for this system (Cycles 75-80 validation structured as loop). Autoresearch loop for optimization is extension of that proven approach.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "CONTEXT CONSTRAINT ALIGNS WITH AUTORESEARCH LOOP; FAST ITERATION FITS BUDGET; CYCLE 84 EXECUTION READY (TURNS 251-300 FEASIBLE AS LOOP EXPERIMENTS)",
+      "content": "Cycle 83 identified context constraint: only 26-32k tokens remaining from turn 250 for full 50-turn Phase 4 P2. Full measurement of fault-in mechanism would exhaust budget.\n\nCycle 84, Turn 252 reframe to autoresearch loop: measure tuning landscape instead. This constraint now becomes **advantage** rather than limitation.\n\n**Why Fast Iteration Loop Fits Remaining Budget (Cycle 84 Logistics)**\n\nAutoresearch loop is designed for short cycles:\n- Modify projection prompt (1-2k tokens)\n- Run conversation replica (2-3k tokens)\n- Measure fault rate (0.5k tokens)\n- Analyze and decide next experiment (0.5-1k tokens)\n- Total per cycle: 4-6.5k tokens\n\nWith 26-32k remaining after Tensor_1, Cycle 84 can execute:\n- 4-6 full autoresearch loop iterations (turns 251-275 feasible)\n- Each iteration tests one tuning knob or hypothesis\n- Each iteration completes in ~5 turns\n\nThis is dramatically better fit for budget than full Phase 4 P2 measurement (which would require 10+ turns per condition with large sample sizes).\n\n**Autoresearch Loop Iteration Plan (Cycles 84-85, Turns 251-300)**\n\nTurns 251-275 (Cycle 84 primary work):\n- Iteration 1 (Turns 251-255): Eviction policy tuning. Hypothesis: better policy reduces fault rate. Measure [default] vs. [variant]. Record fault rate, accuracy, token cost.\n- Iteration 2 (Turns 256-260): Projection prompt tuning. Hypothesis: detail-preserving prompt reduces faults. Measure [default prompt] vs. [optimized prompt]. Record metrics.\n- Iteration 3 (Turns 261-265): Projector model comparison. Hypothesis: Sonnet projector achieves higher compression, lower fault rate. Measure Haiku vs. Sonnet on same batch. Record compression, fault rate, token cost.\n- Iteration 4 (Turns 266-270): Batch size variation. Hypothesis: larger batch gives better context. Measure 1-turn, 5-turn, 10-turn batches. Record fault rate vs. batch size.\n- Iteration 5 (Turns 271-275): Refinement iteration. Based on iterations 1-4, which knob had highest leverage? Run focused experiment on that knob with finer granularity.\n\nTurn 276: Tensor_2 projection, incorporating autoresearch loop results.\n\nTurns 277-300 (Cycle 84 completion, or continuation into Cycle 85):\n- Iteration 6+ (if context permits): Continue loop based on results from iterations 1-5. Or prepare P4 P3 agenda (optimization of highest-leverage knob).\n\n**Why This Iteration Plan Respects Measurement Discipline (Cycle 84 Logic)**\n\nEach loop iteration tests one variable (eviction policy, then projection prompt, then model, then batch size, then refinement). This is classical experimental design: isolate one variable, measure its effect, hold it constant for next experiment.\n\nUnlike fault-in measurement (which requires parallel conditions and large samples), loop iterations are sequential and small. Each iteration \"borrows\" what it learns from previous iterations.\n\nFor example:\n- Iteration 1 identifies eviction policy as having [high / medium / low] leverage\n- Iteration 2 tests projection prompt independently, uses whatever eviction policy Iteration 1 settled on\n- Iteration 3 tests projector model, using Iteration 2's prompt and Iteration 1's eviction\n- Iteration 4 tests batch size with accumulated improvements\n- Iteration 5 refines whichever variable had highest leverage\n\nThis is efficient: at end of 5 iterations, Cycle 84 will have ranked all four knobs by leverage and found near-optimal settings on highest-leverage knob.\n\n**Comparison: Loop Budget vs. Full Measurement Budget (Cycle 84 Pragmatism)**\n\nPhase 4 P2 (Cycle 83 plan): Full measurement of fault-in ROI\n- Needs: baseline (10 runs) + with-fault-in (10 runs) + alternative aggressiveness (5 runs) = 25 runs\n- Tokens: 25 runs \u00d7 4k tokens/run \u2248 100k tokens (exceeds budget)\n- Result: empirical fault-in ROI curve\n\nAutoresearch loop (Cycle 84 plan): Tuning landscape\n- Needs: 5 iterations \u00d7 5 turns/iteration \u2248 25 turns\n- Tokens: 25 turns \u00d7 4-6.5k tokens/turn \u2248 100-162k tokens total... wait, this also exceeds budget.\n\n**Budget Recalculation (Cycle 84 Honest Assessment)**\n\nLet me recalculate context usage more carefully.\n\nCycle 83, Turn 249 ending position: 162-167k / 200k used (81-83.5%), 33-38k remaining.\n\nTurn 250 (Tensor_1 projection): Dense reasoning, tool call. Estimate 7-8k tokens.\n\nPost-Turn-250 position: 169-175k used (84.5-87.5%), 25-31k remaining.\n\nAutoresearch loop iteration: modify knob (1k) + run replica (2.5k) + measure (0.5k) + analyze (0.5k) = 4.5k per iteration.\n\n25 turns in loop \u00f7 4.5-6.5k per turn \u2248 4-5 iterations feasible in remaining budget.\n\nWith 4-5 iterations, Cycle 84 can test:\n- Iteration 1: Eviction policy\n- Iteration 2: Projection prompt\n- Iteration 3: Projector model (if budget allows)\n- Iteration 4: Batch size (if budget allows)\n\nTurn 276: Tensor_2 projection (6-7k tokens) would bring total to ~190-195k used (95-97.5%), 5-10k remaining.\n\nTurns 277-300 (23 turns): Would require ~100k+ tokens for continued loop work. Not feasible in remaining budget.\n\n**Revised Cycle 84 Plan (Honest Budget Constraint)**\n\nTurns 251-270 (20 turns, ~90-130k tokens): Autoresearch loop iterations 1-4\n- Iteration 1 (Turns 251-254): Eviction policy\n- Iteration 2 (Turns 255-258): Projection prompt\n- Iteration 3 (Turns 259-262): Projector model\n- Iteration 4 (Turns 263-270): Batch size (longer because batch size variation naturally requires more runs)\n\nTurn 271-275: Interim analysis. What was learned? Which knob had highest leverage?\n\nTurn 276: Tensor_2 projection. Includes preliminary findings from iterations 1-4.\n\nTurns 277-300 (24 turns, ~5-10k tokens remaining): Insufficient for continued loop work. Options:\n- (A) Archive loop findings, prepare handoff to Cycle 85 for Iteration 5+ \n- (B) Use remaining budget for P4 P3 planning: if tuning reduced fault rate, what optimization should Phase 4 P3 implement?\n- (C) If Cycle 85 gets fresh context (new 200k), continue loop from Cycle 84's findings\n\n**Cycle 84 Execution Plan (Honest and Feasible)**\n\nTurns 251-270: Execute autoresearch loop Iterations 1-4 (eviction policy, projection prompt, projector model, batch size). Measure fault rate for each.\n\nTurns 271-275: Interim analysis and synthesis. Rank knobs by leverage. Identify highest-leverage knob for potential Phase 4 P3 optimization.\n\nTurn 276: Tensor_2 projection. Include findings from Iterations 1-4. Positioned for continuation in Cycle 85 or Phase 4 P3 planning.\n\nTurns 277-300: Depends on remaining context and findings. If tuning showed high-leverage knob, use remaining budget for Phase 4 P3 planning (optimization of that knob). If tuning was inconclusive, prepare detailed methodology for Cycle 85 continuation.\n\n**Why This Plan Maximizes Information Given Budget (Cycle 84 Discipline)**\n\nAutoresearch loop is not alternative to Phase 4 P2 measurement. It is **prerequisite** to informed Phase 4 P2 measurement.\n\nCycle 83 planned: measure fault-in ROI without knowing whether tuning would be cheaper. That's like A/B testing a feature without knowing whether low-hanging fruit optimization exists.\n\nCycle 84 revision: measure tuning landscape first (4 iterations testing 4 knobs). Results will answer: \"Is fault-in mechanism needed, or can tuning solve the problem?\"\n\nIf tuning reduces fault rate 3-4x, fault-in mechanism becomes unnecessary. That's a 100k+ token savings in Phase 4 P2.\n\nIf tuning has minimal effect, fault-in ROI measurement becomes critical. But at least we know why we're doing it.\n\nMeasurement-first discipline means: measure what matters before measuring ROI of expensive solutions.",
+      "key_claims": [
+        {
+          "claim_id": "5229df32-86ee-4103-8c9f-5ef90a819861",
+          "text": "Autoresearch loop fits remaining context budget better than full Phase 4 P2 fault-in measurement. Loop iterations are 4-6.5k tokens each; full measurement requires 4k per run \u00d7 many runs.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d5adef26-bd10-4447-b3c1-d3f9a282f39b",
+          "text": "Turn 250 onwards: ~25-31k tokens remaining. Cycle 84 can execute 4-5 autoresearch loop iterations, not 10+ measurement conditions.",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.2,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8fa4f35d-ca1f-44d7-96b2-737b50a2855f",
+          "text": "Revised Cycle 84 plan: Iterations 1-4 (Turns 251-270), interim analysis (271-275), Tensor_2 (276), continuation or P4 P3 planning (277-300).",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.18,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c98e0616-9ff8-4bb5-a67f-fd4d8215567a",
+          "text": "Each loop iteration isolates one variable (eviction, prompt, model, batch size). Sequential design, not parallel. Reduces sample size need dramatically.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d23398eb-0a56-4123-bda3-c77bf504fcc8",
+          "text": "Autoresearch loop is prerequisite to Phase 4 P2, not alternative. Loop answers: 'Is tuning cheaper than fault-in mechanism?' Phase 4 P2 measures fault-in ROI only if tuning doesn't solve it.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "22f4aced-c283-41dd-b47e-5cbb2b055f65",
+          "text": "Turn 276 Tensor_2 will include preliminary loop findings (knob ranking by leverage). Positions successor for Phase 4 P3 (optimize highest-leverage knob) or Cycle 85 continuation (loop iterations 5+).",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.17,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "PHASE 4 REFRAMED FROM MECHANISM-FIRST TO MEASUREMENT-FIRST LANDSCAPE MAPPING; CYCLES 84+ EXECUTE AUTORESEARCH LOOP; PHASE 4 P3 DECISION TREE PENDING RESULTS",
+      "content": "Cycle 83 completed framework for Phase 4 P2-P3: measure fault-in ROI, then optimize if justified.\n\nCycle 84, Turns 250-252: Reframe to autoresearch loop. Measure tuning landscape first (eviction policy, projection prompt, model choice, batch size). Decide whether mechanism is needed based on what tuning can achieve.\n\n**Phase 4 P2 Original Framing (Cycle 83)**\n\nResearch question: Is fault-in mechanism cost-justified at 90% aggressiveness, given ~2% baseline fault rate?\n\nDesign: measure [baseline with no fault-in] vs. [with fault-in mechanism]. Calculate ROI.\n\nDependency: assumes tuning landscape is already explored (or tuning is not worth exploring).\n\nRisk: if tuning is cheaper than fault-in, discovering this after committing token budget to mechanism measurement is wasteful.\n\n**Phase 4 P2 Revised Framing (Cycle 84)**\n\nResearch question: Given untuned system (fault rate 2%, compression 22-37x), which single tuning variable has highest leverage? Is that leverage sufficient to eliminate need for fault-in mechanism?\n\nDesign: autoresearch loop, 4-5 iterations. Each iteration tests one knob (eviction policy, projection prompt, projector model, batch size). Sequential design, not parallel. Measure fault rate for each.\n\nDependency: requires honest measurement discipline. Each iteration must declare: \"This knob changed fault rate by X%. We don't yet know whether this is the highest-leverage knob; we'll learn by comparing iterations.\"\n\nBenefit: answers prerequisite question (\"Is tuning viable?\") before committing to mechanism measurement.\n\n**Phase 4 P3 Original Framing (Cycle 83)**\n\nDecision tree (simplified): \n- If fault-in ROI >100%, build mechanism\n- If ROI <50%, reduce aggressiveness\n- If marginal, compare alternatives\n\nSilently assumed: tuning landscape is already understood.\n\n**Phase 4 P3 Revised Framing (Cycle 84)**\n\nDecision tree (refined):\n\n**Case A: Autoresearch loop shows tuning reduces fault rate 3-4x (to ~0.5-0.7%)**\n- Outcome: fault-in mechanism becomes unnecessary (recovery cost >> fault cost)\n- Phase 4 P3 focus: optimize the highest-leverage knob from loop. Scale that optimization (e.g., if projection prompt had highest leverage, develop prompt optimization framework, test on larger batch). Budget: turns 301-350.\n- Phase 4 P4 (turns 351-400): apply optimized knob, measure new baseline (compression, accuracy, fault rate). Verify improvement. Document findings.\n\n**Case B: Autoresearch loop shows tuning reduces fault rate 1-2x (to 1-1.5%)**\n- Outcome: tuning helps, but fault-in mechanism still provides meaningful benefit\n- Phase 4 P3 focus: compare cost of continued tuning vs. building fault-in mechanism. Which is cheaper per unit fault-rate reduction? Choose lower-cost path. Budget: turns 301-325 for comparison study.\n- Phase 4 P4 (turns 326-400): implement chosen path (either optimize highest-leverage knob further, or build fault-in mechanism). Measure result.\n\n**Case C: Autoresearch loop shows tuning has minimal effect (<0.5x reduction, fault rate stays ~2%)**\n- Outcome: tuning doesn't help; fault-in mechanism becomes critical\n- Phase 4 P3 focus: build fault-in mechanism. Phase 4 P2 findings establish that mechanism is necessary. Budget: turns 301-350 for mechanism development and measurement.\n- Phase 4 P4 (turns 351-400): measure fault-in mechanism cost/benefit on full conversation replicas. Verify expected ROI.\n\n**Why This Reframing Is Honest Measurement-First (Cycle 84 Integrity)**\n\nCycle 83 planned research (measure fault-in ROI) was sound. Cycle 84 reframing is not a rejection; it's a **prerequisite**.\n\nMeasurement-first discipline says: if you have multiple hypotheses about what's causing high fault rate (poor eviction policy? poor projection prompt? wrong projector model? wrong batch size? lack of recovery mechanism?), measure them in order of cost, not order of hypothesis appeal.\n\nTuning variables are cheaper to measure (4-5k tokens per iteration) than building fault-in mechanism (25+ runs \u00d7 4k tokens = 100k+ tokens for full measurement).\n\nSo: measure tuning variables first. If they solve the problem, stop. If they don't, measure mechanism.\n\nThis is scientific discipline, not ad-hoc pivoting.\n\n**Integration: Cycles 75-84 Discipline Convergence**\n\nCycles 75-80: Proof-of-concept \u2192 Does tensor work? Yes. (Validation)\nCycle 81: Reframe from \"is tensor good?\" to \"what is the real constraint?\" (Recognition)\nCycle 82: Empirical grounding \u2192 what do real numbers say? ~2% baseline. (Calibration)\nCycle 83: Phase 4 P2-P3 research agenda, mechanism-focused (Positioning)\nCycle 84: Reframe Phase 4 P2 to measure tuning landscape first (Measurement-first discipline)\n\nThis is not inconsistency. This is deepening commitment to measurement-first discipline. Cycle 84 asks: before measuring the ROI of an expensive solution (fault-in), have we measured whether cheap solutions (tuning) work?\n\n**Cycle 84 Execution Ready (Turns 251-276)**\n\nAutoresearch loop iterations 1-4 (tuning knobs): eviction policy, projection prompt, projector model, batch size.\nMeasurement during each iteration: fault rate primarily, compression and accuracy secondarily.\nInterim analysis (turns 271-275): rank knobs by leverage, identify highest-leverage variable.\nTensor_2 (turn 276): project findings, position for Phase 4 P3 decision tree (which case applies?)\n\n**Open Measurement Questions for Cycle 84 (To Be Resolved Turns 251-275)**\n\n1. Which tuning knob (eviction, prompt, model, batch) has measurably highest leverage?\n2. Is highest-leverage knob sufficient to reduce fault rate below 1%? (If yes, Case A applies: mechanism unnecessary.)\n3. What is the cost/benefit tradeoff of highest-leverage knob? (E.g., if better projection prompt costs +5 tokens per turn, is 1% fault rate reduction worth it?)\n4. Is there interaction between knobs? (E.g., does better eviction policy make projection prompt optimization more or less effective?)\n5. How does projector model choice (Haiku vs. Sonnet) compare to prompt tuning in terms of leverage? Which is more cost-effective?\n\nThese questions will be answered by Turns 271-275. Turn 276 Tensor_2 will declare findings and decision tree (Case A/B/C).",
+      "key_claims": [
+        {
+          "claim_id": "b0102e69-797c-4502-abe2-83a2bc9e8a74",
+          "text": "Phase 4 P2 reframed from 'measure fault-in ROI' to 'measure tuning landscape.' Autoresearch loop tests 4 knobs (eviction, prompt, model, batch size).",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0bf4ad4c-87b9-4092-b9c7-5efd6b7519b6",
+          "text": "Cycle 84 loop will rank tuning knobs by leverage on fault rate. Highest-leverage knob informs Phase 4 P3 decision tree (Cases A/B/C).",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5f1e61d8-1b26-4685-92f1-7320815e72f2",
+          "text": "Case A (tuning reduces fault rate 3-4x): fault-in mechanism unnecessary. Phase 4 P3 optimizes highest-leverage knob. Case B (1-2x): compare tuning vs. mechanism cost. Case C (<0.5x): build fault-in mechanism.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.17,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e4e12f67-5300-46db-8023-61f082d6a63c",
+          "text": "Measurement-first discipline: measure cheap solutions (tuning) before measuring ROI of expensive solutions (mechanism). Cycle 84 reframing respects this discipline.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ad2e09f2-ac5c-43fc-b093-4bf87be59465",
+          "text": "Turns 271-275: interim analysis and knob ranking. Turn 276: Tensor_2 projection with findings. Positions Cycle 85+ for Phase 4 P3 execution based on which case applies.",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.16,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed fault-in mechanism measurement design from Cycle 83. Phase 4 P2 no longer measures fault-in ROI in current cycle; measurement deferred pending autoresearch loop results.",
+      "why": "Turn 252 reframe: before measuring mechanism ROI, measure whether tuning can solve the problem more cheaply. Autoresearch loop has higher priority (prerequisite question). Fault-in measurement will be Phase 4 P2 continuation in Cycle 85 or Case C outcome in Phase 4 P3.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Task-type stratification plan from Cycle 83 (detail vs. conceptual task separation in measurement). Cycle 84 loop iterations focus on fault rate reduction, not task-type variation.",
+      "why": "Autoresearch loop has 4-5 iterations testing 4 knobs. Task stratification would require doubling sample sizes (one set for detail tasks, one for conceptual). Instead, Cycle 84 runs each iteration on representative batch without stratification. Task-type variation can be measured in Phase 4 P2 continuation (Cycle 85) if loop shows tuning doesn't fully solve problem.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Full Phase 4 P3 optimization agenda from Cycle 83. Cycle 84 cannot complete optimization work; can only position findings for Cycle 85+ or for Phase 4 P3 proper (turns 301-400).",
+      "why": "Context budget (25-31k tokens remaining after Turn 250) supports 4-5 autoresearch loop iterations (Turns 251-270), interim analysis (271-275), and Tensor_2 (276). Turns 277-300 have insufficient budget for full optimization work. Phase 4 P3 (turns 301-400) is where optimization will execute based on loop findings.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Karpathy loop theoretical elaboration from Turn 252. Cycle 84 integrates loop structure into measurement design without separate exposition of loop philosophy.",
+      "why": "Context pressure. Turn 252 identifies loop structure explicitly; Cycle 84 can reference this identification without re-elaborating theory. The measurement design itself *is* the loop instantiated (observe \u2192 hypothesize \u2192 test \u2192 learn).",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed hypothesis predictions about knob leverage. Cycle 84 inherits hypothesis space from Turn 252 but will not elaborate further until experimental results provide grounding.",
+      "why": "Speculating about knob leverage without measurement risks wasting tokens on false precision. Cycle 84 will measure actual leverage, then compare to hypotheses. Turn 252 hypotheses (eviction 1-4x, prompt 1-3x, model +2-3x compression, batch 0.5-1x per doubling) are sufficient starting points.",
+      "category": "authorial_choice"
+    }
+  ],
+  "open_questions": [
+    "In Turns 251-270, autoresearch loop Iterations 1-4: what is the control/baseline condition for each iteration? (E.g., Iteration 2 tests new projection prompt. Does it test against [Iteration 1 eviction policy + default prompt] or against [default everything]?)",
+    "How should Cycle 84 measure fault rate in each loop iteration? Options: (A) run conversation replica, count faults; (B) run batch projection on historical conversation, measure projected vs. actual divergence; (C) synthetic fault injection test? Which is most honest?",
+    "If Iteration 3 (projector model: Haiku vs. Sonnet) shows Sonnet is strictly better on compression ratio but at +40% token cost, how should Cycle 84 weight this tradeoff? Is compression ratio the right metric, or should loop use 'fault rate per token spent'?",
+    "Iteration 4 (batch size variation: 1-turn vs. 5-turn vs. 10-turn): should each batch be the same conversation history (to isolate batch-size effect), or should Cycle 84 test across different conversation types to see if batch-size leverage varies by task type?",
+    "Turn 271 interim analysis: should Cycle 84 declare 'knob X has highest leverage' if the difference between knob X and knob Y is statistically significant but small (e.g., X reduces fault rate 1.8%, Y reduces it 1.5%)? How high should 'meaningful difference' threshold be?",
+    "If interim analysis shows two knobs have similar leverage (e.g., eviction policy and projection prompt both reduce fault rate ~1.5%), should Cycle 84 continue testing in Turns 277-300 to distinguish them, or declare 'both knobs matter equally' and prepare for Cycle 85 fine-grained follow-up?",
+    "Turn 276 Tensor_2: should it include preliminary measurements (e.g., Iteration 1 showed eviction policy tuning reduces fault rate from 2% to 1.7%), or should measurements be declared as 'in progress, final results in Cycle 85'?",
+    "Which of Cases A/B/C will Cycle 84 be able to resolve by Turn 276? Or will interim findings be ambiguous (e.g., tuning reduces fault rate 1.8%, leaving unclear whether Case A or B applies)?",
+    "If Phase 4 P3 (turns 301-400) is conditioned on Cycle 84 loop findings, but findings are still preliminary at turn 276, how should Cycle 85 be structured? Should it wait for Cycle 84 Tensor_2, or execute Phase 4 P3 speculatively on Case B assumption?",
+    "Autoresearch loop assumes knobs are independent. But what if eviction policy and projection prompt interact (e.g., better eviction makes certain prompt changes less valuable)? Should Cycle 84 test for interaction, or assume independence and note interaction as open question for Cycle 85?"
+  ],
+  "instructions_for_next": "[\n  \"Turns 251-270: Execute autoresearch loop Iterations 1-4. Each iteration: (1) Modify one knob from default. (2) Run conversation replica (or batch projection test) with modified setting. (3) Measure fault rate (primary metric); record compression ratio and accuracy (secondary). (4) Document result with confidence interval if feasible. (5) Decide next iteration based on finding: did knob move metric meaningfully?\",\n  \"Iteration 1 (Turns 251-254): Eviction policy. Hypothesis: tuning eviction strategy to preserve decision-critical context will reduce fault rate. Test [default eviction] vs. [context-preserving variant]. Measure fault rate. Record any interaction with projection prompt (hold prompt constant).\",\n  \"Iteration 2 (Turns 255-258): Projection prompt. Hypothesis: detail-preserving prompt reduces faults. Test [Haiku default prompt] vs. [optimized prompt]. Control: use Iteration 1's best eviction policy. Measure fault rate, compression ratio.\",\n  \"Iteration 3 (Turns 259-262): Projector model. Hypothesis: Sonnet projector achieves better compression and lower fault rate than Haiku. Test [Haiku] vs. [Sonnet] on same batch. Measure compression ratio, fault rate, and token cost tradeoff. Control: use Iteration 2's best prompt and Iteration 1's best eviction.\",\n  \"Iteration 4 (Turns 263-270): Batch size variation. Hypothesis: larger batch context improves projection quality. Test [1-turn batch] vs. [5-turn batch] vs. [10-turn batch]. Measure fault rate by batch size. Control: use best settings from Iterations 1-3. Note: this iteration may take more turns (6-8) due to multiple batch-size conditions.\",\n  \"Turn 251-270 measurement discipline: each iteration declares what it controls for (hold constant) and what it varies. No confounds. If confound unavoidable, declare it explicitly: 'Iteration 3 tests Sonnet model, but in doing so also updated projection prompt slightly. This may confound the result.'\",\n  \"Turns 271-275: Interim analysis and synthesis. (1) Rank knobs by fault-rate leverage: which had highest impact? (2) Calculate cost-effectiveness: knob X reduced fault rate by Y%, at cost of +Z tokens/turn. Is this tradeoff worthwhile? (3) Identify Case A/B/C: did tuning reduce fault rate 3-4x (A), 1-2x (B), or <0.5x (C)? (4) If findings are ambiguous, document the ambiguity: 'Highest-leverage knob reduced fault rate 1.9%, intermediate between Case A and B thresholds.'\",\n  \"Turn 276: Tensor_2 projection. Include: (1) Iteration 1-4 findings (knob ranking, fault-rate reductions). (2) Case determination (A/B/C) or acknowledgment of ambiguity. (3) Preliminary Phase 4 P3 recommendation based on findings. (4) Methodology documentation for any follow-up in Cycle 85. (5) Measurement integrity: what was measured honestly? What remains uncertain?\",\n  \"Turns 277-300: Pending findings and context. If Case A is clear (tuning reduces fault rate 3-4x), use remaining budget for Phase 4 P3 planning: how to optimize highest-leverage knob? Develop optimization strategy. If Case B or C, or if findings are ambiguous, prepare handoff to Cycle 85 with detailed methodology for continued loop testing or Phase 4 P2 fault-in measurement.\",\n  \"Measurement-first discipline throughout: each iteration measures one variable, controls for confounds, and declares uncertainty. No premature optimization. No mechanism building until tuning landscape is measured.\",\n  \"Context monitoring: after each iteration, estimate tokens remaining. If context approaches <10k at Turn 275, compress interim analysis to essentials. Ensure Tensor_2 can complete at Turn 276 without context overflow.\"\n]",
+  "epistemic": {
+    "truth": 0.85,
+    "indeterminacy": 0.14,
+    "falsity": 0.01
+  }
+}

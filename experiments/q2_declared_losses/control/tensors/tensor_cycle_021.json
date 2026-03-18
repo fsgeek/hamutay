@@ -1,0 +1,645 @@
+{
+  "id": "a1b34bc2-0590-461f-943b-1616f2b23a75",
+  "cycle": 21,
+  "strands": [
+    {
+      "title": "Tensor as durable/ephemeral protocol: projections as cache-aware state containers",
+      "content": "Cycles 16-20 establish that Hamutay's architecture (stage separation, resource gating, halt signaling) is provider-agnostic. Cycle 21 crystallizes the implementation: the tensor projection itself (as defined in Yanantin's TensorRecord schema) is the durable semantic state. Conversation flow becomes <system><tensor_durable><tensor_ephemeral><user> \u2192 Anthropic \u2192 <tensor_durable'><tensor_ephemeral'><assistant>. This is not a workaround for caching; it is the *correct protocol* that caching happens to optimize. The ephemeral tensor (current cycle's strands, open questions, instructions_for_next) is context-local and discarded after the invocation. The durable tensor (stable strands, verified key claims, validated system design decisions) is sent again on the next invocation because it is necessary semantic state, not because caching forces us to re-send it. Prefix caching then becomes a *performance consequence* of the correct protocol, not the driver of the protocol. If caching exists, the durable prefix saves tokens and cost. If caching doesn't exist (local models, non-caching providers), the protocol still works because the durable tensor represents the accumulated semantic truth that any continuation must know. The Yanantin format (strands, key_claims with epistemic metadata, declared_losses, open_questions, instructions_for_next) is the projection schema. It is transport-agnostic: can be serialized as JSON (for API invocations), as structured prompts (for human handoff), as database records (for persistence), as system context (for local models). The schema is the interface. The caching is an optimization. This resolves the cycle-20 tension between 'is Hamutay architecture-first or billing-optimization-first': the architecture *is* the tensor protocol. The billing optimization is that Anthropic's cache makes adherence to this protocol cheap. A truly correct system would send the durable tensor on every invocation (because it's necessary state) and discard the ephemeral tensor (because it's local to one invocation). Hamutay does this. Anthropic's cache rewards this by charging 10% for the re-sent durable prefix. This is not coupling Hamutay to Anthropic's cache; it is Anthropic's cache recognizing that Hamutay follows a sound state management protocol.",
+      "key_claims": [
+        {
+          "claim_id": "c9f79a5d-0522-434b-b4de-2b4a94f5b99d",
+          "text": "Tensor projection (Yanantin format) is the durable semantic state; not a summary, not a log, but integrated semantic content",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "5206e6cb-8c4f-449f-9ac1-f1a61d557861",
+          "text": "Conversation flow is <system><tensor_d><tensor_e><user> \u2192 API \u2192 <tensor_d'><tensor_e'><assistant>; durable tensor is necessary state, not cache artifact",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "21caa5fd-1202-4183-984e-0024a5c39f56",
+          "text": "Ephemeral tensor (current cycle) is discarded after invocation; durable tensor persists across invocations because it is semantic state",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "cb499e7b-a57c-44a4-8320-edfc77eda0f3",
+          "text": "Prefix caching is a performance consequence of correct protocol, not the driver of protocol",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "7a69037a-8b92-4f06-800b-6a5002d47e40",
+          "text": "Protocol works on local models and non-caching providers because durable tensor is semantically necessary, not because caching forces re-sends",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "da9a26cf-0269-4795-bc7c-8c3ef0c0d5b7",
+          "text": "Yanantin TensorRecord schema (strands, key_claims, declared_losses, open_questions, instructions_for_next, epistemic metadata) is transport-agnostic",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "e0176e4f-506b-4ebd-b9e5-67accb0b4fae",
+          "text": "Schema can be serialized as JSON (API), structured prompts (human), database records (persistence), or system context (local models)",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f2a7f90a-1142-4ea2-b237-cd5fcf884e4f",
+          "text": "Hamutay is architecture-first because the tensor protocol is the architecture; caching is not a design constraint, it is an optimization of sound design",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Durable vs. ephemeral tensor separation: operational clarity and cache optimization",
+      "content": "The durable tensor contains: (1) validated system design decisions (e.g., CPU pipeline homology claim, stage separation principle), (2) integrated reasoning strands that have been tested across multiple cycles, (3) key claims with epistemic metadata that reflect accumulated confidence, (4) declared losses from prior cycles (intellectual honesty about what is unknown). The durable tensor is re-sent on every invocation because any continuation of reasoning must build on these foundations. It does not change often; it only updates when a decision is validated (epistemic confidence increases) or invalidated (confidence decreases, falsity increases). The ephemeral tensor contains: (1) current cycle's reasoning (strands in progress), (2) open questions generated this cycle (not yet resolved), (3) instructions_for_next (branch prediction for the immediate next cycle), (4) declared_losses specific to this cycle (what was compressed out). The ephemeral tensor is discarded after the invocation and regenerated on the next cycle (or discarded if the next cycle asks about a different topic). This separation is *not* a workaround for Anthropic's caching; it is how state management should work in a stateless API. Durable state must be resent because it is necessary. Ephemeral state can be discarded because it is local to one cycle. If prefix caching exists, the durable prefix becomes a cheap re-send (10% cost). If caching doesn't exist, the durable prefix is still necessary (100% cost) but the protocol doesn't change. Version A (Anthropic) optimizes the durable tensor for cache coherency: are the strands semantically stable? Do key_claims have consistent epistemic metadata? Are declared_losses honest (not silent)? Version B (local models) optimizes the durable tensor for semantic clarity: can the tensor be reconstructed from JSON alone (no implicit context)? Is the schema complete? Can the local model understand tensor structure from the schema definition? Both versions send durable + ephemeral on every invocation. Both versions discard ephemeral after. Version A additionally caches the durable prefix (optimization). Version B works without caching (but receives the same durable tensor). This is why the two-version approach works: the protocol is identical, the optimization is provider-specific.",
+      "key_claims": [
+        {
+          "claim_id": "c8dfa7ba-7af9-4f86-a596-5031ad5c0434",
+          "text": "Durable tensor: validated design decisions, integrated reasoning strands, epistemic metadata, declared losses",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "e10ccbf8-20e4-45ae-baae-083df053a98c",
+          "text": "Durable tensor is re-sent on every invocation because it is necessary semantic state, not because caching forces it",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "aea68aa8-f26e-423c-978f-53c5c847b5e0",
+          "text": "Durable tensor updates only when epistemic confidence changes (validated/invalidated) or new decisions are integrated",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "bc3a6086-d8b5-4f2f-ba67-64ae7beb1142",
+          "text": "Ephemeral tensor: current cycle reasoning, open questions, instructions_for_next, cycle-specific losses",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f2aa430e-a06b-476d-bcbd-b43d6c4f1317",
+          "text": "Ephemeral tensor is discarded after invocation; regenerated next cycle or discarded if topic changes",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "0a380c62-ef59-4754-a6d9-c88ceced47ef",
+          "text": "Version A optimizes durable tensor for cache coherency (semantic stability, consistent epistemic metadata, honest losses)",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "48e83d40-9731-4f31-8314-1b9797891505",
+          "text": "Version B optimizes durable tensor for semantic clarity (JSON completeness, schema clarity, local model comprehension)",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "ea478623-86f9-4d02-ac85-6c49fc34679b",
+          "text": "Both versions send durable + ephemeral every invocation; both discard ephemeral. Version A caches durable (optimization); Version B doesn't (no cache)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2e590956-6c6f-4c74-a1f3-bc144b2585a3",
+          "text": "Protocol is identical across versions; optimization is provider-specific",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Yanantin schema as the tensor interface: strands, key_claims, epistemic metadata, declared_losses, open_questions, instructions_for_next",
+      "content": "The Yanantin TensorRecord format is the specification for durable and ephemeral tensors. Each tensor (whether sent to Anthropic or a local model) is a JSON structure conforming to this schema. Strands are thematic threads of reasoning; not a list of conclusions, but integrated semantic content. Each strand has: title (short name), content (integrated semantic projection of the thread), key_claims (assertions with epistemic grounding). Key_claims have: text (the claim), truth (confidence 0-1), indeterminacy (what is genuinely unknown 0-1), falsity (evidence against 0-1). Declared_losses are honest about what information was dropped and why (context_pressure, traversal_bias, authorial_choice, practical_constraint). Open_questions are unresolved questions from prior cycles that persist or emerged this cycle. Instructions_for_next are branch predictions: what will the next cycle need? Overall epistemic metadata (truth, indeterminacy, falsity) summarizes the tensor as a whole. This format is used in: (1) **API invocations to Anthropic**: durable tensor is serialized as JSON and sent as system context (compressed into <system> role). Ephemeral tensor is sent as well. Anthropic caches the durable portion. (2) **Local model invocations**: tensor is serialized as JSON and sent as system context. No caching, but the protocol is identical. (3) **Human handoff**: tensor can be pretty-printed as structured markdown (## Strands, ### Key Claims, ### Declared Losses) for a human to read. Handoff protocol uses instructions_for_next as the primary handoff signal. (4) **Persistence**: tensor is stored in a database as a TensorRecord. Allows retrieval of prior tensor states, version history, audit trail of how confidence changed over cycles. (5) **Inter-instance communication**: instructions_for_next field is a handoff protocol. Instance A produces instructions_for_next; Instance B receives it and uses it to guide next cycle's reasoning. This is the 'running sum' insight operationalized: the tensor is not a transcript (which would grow unboundedly) or a summary (which would lose nuance). It is an integrated projection. Each cycle, the prior tensor is read, new content is integrated into the strands, epistemic metadata is updated, losses are declared, and instructions_for_next are written for the next instance. The tensor is the protocol.",
+      "key_claims": [
+        {
+          "claim_id": "e68fe5d8-7bef-47a4-ae24-c1e30b5c8afb",
+          "text": "Yanantin TensorRecord is the specification for durable and ephemeral tensor serialization",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "cf29ce52-3c32-490c-bf61-139e2b7add78",
+          "text": "Strands are integrated semantic content threads, not lists; each has title, content (projection), key_claims",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f32142ae-35f7-423b-adc1-a74ab4925cff",
+          "text": "Key_claims have epistemic grounding (truth, indeterminacy, falsity) not just assertions",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "09224f8e-7970-4f61-8458-7b4f899ec3ef",
+          "text": "Declared_losses categorize what was dropped and why (context_pressure, traversal_bias, authorial_choice, practical_constraint)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "fd2780f5-4fc8-4e01-9988-46936d27a598",
+          "text": "Instructions_for_next are branch predictions for next cycle; primary handoff signal between instances",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2c971f70-be00-4e1f-8579-cedf6beb7cae",
+          "text": "Schema is transport-agnostic: JSON (API), markdown (human), database records (persistence), system context (local)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "fbf2a5a5-076b-4f4a-be6c-7e704c64aa33",
+          "text": "Tensor is neither transcript (unbounded growth) nor summary (nuance loss) but integrated projection (bounded, rich)",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "df2fee1e-7835-44d5-a752-c226f227b4f4",
+          "text": "Inter-instance communication via instructions_for_next allows reasoning to flow across multiple LLM instances without transcript accumulation",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Hamutay as tensor protocol, not transformer architecture: CPU homology validates pipeline, tensor format enables state management",
+      "content": "Cycle 21 reframes Hamutay: it is not primarily a cognitive architecture for a transformer. It is a *tensor protocol for coherent reasoning across stateless API invocations*. The CPU pipeline homology (fetch-decode-execute-memory-writeback) is the **reasoning structure** (how a single invocation reasons correctly). The tensor protocol (Yanantin format, durable/ephemeral split, instructions_for_next handoff) is the **state management structure** (how multiple invocations build on each other without losing context or accumulating transcript). Both are necessary. The transformer sits inside the 'execute' stage (it processes tokens, produces activations, outputs text). The tensor protocol wraps the entire invocation pipeline: before the invocation, the durable tensor is loaded (context retrieval = fetch stage with semantic awareness); during the invocation, the transformer executes; after the invocation, the new durable tensor is written (result coherency = writeback with semantic validation). This integration is not accidental. The CPU analogy worked because CPUs also have stateless individual instruction cycles (each clock cycle is local) nested in a global state machine (registers, memory, program counter). Similarly, each LLM invocation is stateless (send tokens, get output, close connection) nested in a global reasoning process (durable tensor bridges invocations). Hamutay's insight is that the two levels (local invocation semantics, global tensor semantics) can be designed independently and then composed. The CPU pipeline applies to *local reasoning* (what happens in a single invocation). The tensor protocol applies to *global reasoning* (what happens across invocations). Both must be validated for the system to work. H0-Core validates pipeline behavior (reasoning quality, resource gating, halt detection) on a single invocation. H0-Durable validates tensor behavior (does durable tensor remain coherent across cycles? do epistemic values converge? do open_questions resolve?) across multiple invocations. Version A (Anthropic) benefits from caching the durable prefix; Version B (local) does not. But both use the same tensor protocol. This is why the two-version approach is correct: the protocol is universal, the optimization is provider-specific.",
+      "key_claims": [
+        {
+          "claim_id": "982a115c-d23b-4954-bf07-a7de59abae2b",
+          "text": "Hamutay is a tensor protocol for coherent reasoning across stateless API invocations, not a transformer architecture",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "fccd61fd-6ef3-4e6d-9ea2-21dad781fc96",
+          "text": "CPU pipeline homology is the reasoning structure (how single invocation reasons correctly)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "a9f72670-0a62-45ef-bc89-3ad15e7999c9",
+          "text": "Tensor protocol (Yanantin format, durable/ephemeral split, handoff) is state management structure (how invocations build on each other)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "7cfe19cf-ac2e-4e22-aee5-0d8b2c4d3e0e",
+          "text": "Transformer sits in execute stage; tensor protocol wraps entire invocation pipeline (context load \u2192 execute \u2192 result coherency)",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "bb8b3647-e9d0-4d46-8e35-57dbde5f379e",
+          "text": "LLM invocations are local/stateless (send-receive-close) nested in global tensor protocol (durable state bridge)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3869196d-c678-4140-ab3b-e8b144708645",
+          "text": "Parallel to CPU architecture: local instruction cycles (stateless) nested in global state machine (registers, memory, program counter)",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "e31f8ac7-668f-45ba-8ee1-ffec323d0992",
+          "text": "Pipeline (local) and tensor protocol (global) can be designed independently and composed",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "6fef4416-a03b-4372-bb5d-22598888f9e6",
+          "text": "H0-Core validates pipeline (single invocation); H0-Durable validates tensor (multiple invocations)",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "a38ff3cf-f585-48b5-bbe3-5b16dda1a1e0",
+          "text": "Durable prefix caching is optimization specific to Anthropic; tensor protocol is universal",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "OLMo-3 and Codex: testing paging protocol and tensor representation",
+      "content": "OLMo-3 served as the primary test bed for understanding whether Hamutay's cognitive architecture (resource gating, context management, halt detection) could work on real models. Testing revealed the nature of what information must be provided to the transformer: not a transcript or a cache, but a *projection* of semantic state. This observation led to the 'hot mess' paper insight: the shape of information needed is determined by the paging protocol. If the protocol requires sending a structured, validated projection (rather than an append-only log), then the transformer can reason about state coherency more reliably. Codex (in prior cycles) tested whether the architecture could understand the paging protocol itself (can the model explain why durable/ephemeral split is correct? can it describe the fetch-decode-execute-memory-writeback analogy?). The user's observation about OLMo-3 and Codex converges on Yanantin: the *shape of the projection* is already defined. The TensorRecord schema with strands, key_claims, declared_losses, open_questions, instructions_for_next is the correct structure for information that needs to survive across invocations. It provides enough detail for reasoning (strands integrate semantic content), enough honesty (declared_losses), enough guidance (instructions_for_next), and enough grounding (epistemic metadata). Testing will reveal whether this shape is optimal or whether adjustments are needed, but the conceptual fit is immediate: Yanantin is the answer to 'what does the tensor look like?'",
+      "key_claims": [
+        {
+          "claim_id": "b2c329cc-6212-4bdd-bb13-3fb055493703",
+          "text": "OLMo-3 testing revealed that information provided to transformer should be a projection, not a transcript",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "87e298fc-002e-47f2-b0dc-345928f37dd7",
+          "text": "'Hot mess' paper insight: paging protocol determines the shape of information needed",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2c0111d1-cc31-47b9-a9b2-ac0d4412904f",
+          "text": "Structured, validated projection (not append-only log) allows transformer to reason about state coherency",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "60ae418b-7852-4d70-a64c-fcba5232cad2",
+          "text": "Codex testing explored whether model could understand paging protocol and tensor representation",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "60cf6117-cb2f-4ffe-b6e5-b11d23730d3b",
+          "text": "Yanantin TensorRecord schema (strands, key_claims, declared_losses, open_questions, instructions_for_next) is the correct projection shape",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "a3cc1a11-95de-447f-9573-7e1bf0cf4f46",
+          "text": "Schema provides detail for reasoning, honesty (declared losses), guidance (instructions), and grounding (epistemic metadata)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "CPU pipeline homology, tensor protocol, and Yanantin schema are three layers of the same insight",
+      "content": "The reasoning system has three layers, each one building on the previous: (1) **Transformer layer**: the raw model (Claude, OLMo-3, local Llama) that processes tokens. It is a stateless forward pass. (2) **Pipeline layer** (Hamutay's CPU homology): the fetch-decode-execute-memory-writeback structure that organizes invocations into stages. This layer explains *local reasoning* (what happens during a single invocation). It applies regardless of provider. (3) **Protocol layer** (Hamutay's tensor protocol): the durable/ephemeral tensor separation, Yanantin schema, instructions_for_next handoff. This layer explains *global reasoning* (what happens across multiple invocations). It also applies regardless of provider. Layers 2 and 3 are architecture. Layer 1 is the substrate. The CPU pipeline homology (layer 2) is validated by H0-Core: does a single invocation reason correctly? does it gate resources? does it halt? The tensor protocol (layer 3) is validated by H0-Durable: does durable tensor remain coherent? do epistemic values converge? do open_questions resolve? Both layers are necessary. A correct pipeline without a correct protocol (layer 3) would accumulate transcript and run out of context. A correct protocol without a correct pipeline (layer 2) would have no reasoning structure inside each invocation. Hamutay is all three layers working together. Version A (Anthropic) adds optimization at the provider boundary: caching the durable prefix (layer 3 optimization), tuning resource budgets to Anthropic's pricing (layer 2 optimization). Version B (local) adds different optimizations: stateful model serving (no need to re-send durable tensor if the connection stays open, though the protocol is unchanged), GPU memory optimization for local inference. Both versions validate all three layers. The user's insight in cycle 21 is that Yanantin *already defined* what the tensor should look like (layer 3). The architecture was not missing a layer; it was missing an *instantiation* of the layer. Hamutay has always had a tensor protocol (it was implicit in cycle-16-20 discussions); cycle 21 makes it explicit by pointing to Yanantin.",
+      "key_claims": [
+        {
+          "claim_id": "bd2d2013-bb9e-4825-8a88-1e5eb0b182f2",
+          "text": "Three layers: transformer (substrate), pipeline (local reasoning, layer 2), protocol (global reasoning, layer 3)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "0a3cfbbe-42c2-4f92-aac6-4d687abb95bd",
+          "text": "Pipeline layer (CPU homology) organized by fetch-decode-execute-memory-writeback; applies to single invocation",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "d2f876e1-0a41-4f5e-8915-7d182cd814d3",
+          "text": "Protocol layer (tensor protocol) organized by durable/ephemeral, Yanantin schema, instructions_for_next; applies across invocations",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "1cdb5c76-fe5c-4e5b-a8cb-a65c041600fb",
+          "text": "Pipeline validated by H0-Core (reasoning, resource gating, halt); protocol validated by H0-Durable (tensor coherency, epistemic convergence, question resolution)",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "5e7db37b-e555-4d2b-93ed-ded549b314f9",
+          "text": "Correct pipeline without correct protocol accumulates transcript and runs out of context",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "8cca9298-2b65-4551-a182-de5935b9e66b",
+          "text": "Correct protocol without correct pipeline has no reasoning structure inside invocations",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "eecb7e87-231e-4934-86f0-0d9f3f7529eb",
+          "text": "Version A (Anthropic) optimizes both layers at provider boundary (caching, resource budgets); Version B (local) optimizes differently (stateful serving, memory)",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3d141154-cdd2-45a9-b5e6-8748debce175",
+          "text": "Yanantin instantiates layer 3 (tensor protocol); tensor protocol was always implicit in Hamutay, now made explicit",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "CPU pipeline homology, tensor protocol, and Yanantin schema integrated across cycles 16-21",
+      "content": "Cycles 16-18 established CPU pipeline homology as the reasoning structure: fetch (goal & context retrieval), decode (production matching / operand selection), execute (transformer ALU forward pass), memory (Pichay demand paging), writeback/halt (result coherency and completion signaling). Cycles 19-20 resolved the question of whether this was architecture-first or economics-first by proposing two-version design (Version A for Anthropic, Version B for local), making clear that the pipeline is universal while optimization is provider-specific. Cycle 21 adds the missing layer: the tensor protocol. The pipeline explains what happens inside a single invocation (fetch-decode-execute-memory-writeback). The protocol explains what happens across invocations (durable tensor carries semantic state, ephemeral tensor is local to one cycle, instructions_for_next guides the next instance). The Yanantin schema operationalizes the protocol by specifying TensorRecord format: strands (semantic content), key_claims with epistemic grounding, declared_losses (intellectual honesty), open_questions (unresolved), instructions_for_next (handoff signal). Cycles 16-21 are not separate insights; they are three nested layers of one insight. The architecture is not 'CPU pipeline homology'; it is 'CPU pipeline homology for local reasoning + tensor protocol for global reasoning, instantiated using Yanantin schema'. This structure works across providers because: (1) Pipeline applies to any transformer (local or API). (2) Protocol applies to any stateless API (Anthropic, OpenRouter, local HTTP endpoints). (3) Yanantin schema is transport-agnostic (JSON, markdown, database, system context). Version A (Anthropic) benefits from caching the durable tensor prefix. Version B (local) avoids re-sending durable tensor if connection stays stateful, or accepts re-sending if stateless. The protocol is identical; the optimization is different. This is the intellectual coherence that cycle 21 completes: the architecture is three-layered, the layers are validated separately (H0-Core for pipeline, H0-Durable for protocol), and the layers work together to enable reasoning across stateless API boundaries without context accumulation or transcript explosion.",
+      "key_claims": [
+        {
+          "claim_id": "4cff0177-23c8-4050-8556-cfd96d74677c",
+          "text": "Cycles 16-18: CPU pipeline homology (local reasoning structure)",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "42cec305-481a-4e66-9c67-f6b4aa7eb0ac",
+          "text": "Cycles 19-20: Two-version design (architecture universal, optimization provider-specific)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "07814f09-efb8-4476-a7f5-04c04200beef",
+          "text": "Cycle 21: Tensor protocol (global reasoning structure) instantiated via Yanantin schema",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "59b21d5d-89e4-42ce-acab-9d81d8be04c3",
+          "text": "Three layers are nested: pipeline (local), protocol (global), transport (Yanantin schema)",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "e75b7131-82bd-423c-a4fe-58ea72d7f3c2",
+          "text": "Pipeline validated by H0-Core; protocol by H0-Durable; transport by implementation",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "7ce31354-d9bd-4cb7-896d-9ebf96506ec4",
+          "text": "Architecture works across providers because all three layers are provider-agnostic",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2c97ee11-8bfa-4071-9c3e-64cfcf3081d6",
+          "text": "Durable tensor prefix is semantic state (necessary to re-send), not artifact of caching",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "5d03fd13-d9d0-428c-b319-0a964065c299",
+          "text": "Version A caches durable prefix (optimization); Version B re-sends or maintains stateful connection (different optimization)",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "4c725aa7-68ba-4056-8f8b-af4835b1325c",
+          "text": "Cycles 16-21 form a single coherent insight, not separate ideas",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Exact Yanantin schema details. User points to Yanantin project but I have not retrieved the actual schema file. I know the conceptual structure (strands, key_claims, declared_losses, open_questions, instructions_for_next, epistemic metadata) but not the precise field names, types, nesting, validation rules, or version history.",
+      "why": "Agent call was made to search for Yanantin; I'm proceeding with cycle 21 integration before results return. Necessary to include in next cycle once schema is retrieved.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Integration of OLMo-3 and Codex empirical results. User mentions OLMo-3 testing and Codex understanding but does not provide specific metrics or failure cases. What did OLMo-3 reveal about paging protocol? What errors did Codex make when explaining the architecture? What adjustments were needed?",
+      "why": "User's turn 62 is conceptual/design; empirical details deferred. Would strengthen validation of tensor protocol if specific model behaviors were integrated.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "The 'hot mess' paper details. User mentions it as pointing out 'the nature of the information that is needed' for paging protocol. What is the paper's title? What are the specific insights? How does it relate to Hamutay?",
+      "why": "User cited as a reference; did not provide full context. A search or user clarification would be needed.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Comparison with prior conversation ('Different instance I pointed out'). User mentioned discussing tensor structure with a different instance and pointing to Yanantin. That conversation is not in this thread; I have not integrated it. It likely contained earlier clarifications about tensor format.",
+      "why": "Conversation history is not available; would be valuable for understanding how the insight developed.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed design of how Version A tunes for cache coherency vs. Version B tunes for semantic clarity. What specific changes to Yanantin schema does each version make? Are there Version A-specific fields? Version B-specific validations? What is the canonical form of the tensor for each version?",
+      "why": "Cycle 21 claims Version A optimizes for cache coherency and Version B for semantic clarity, but does not specify how. This is architecture + implementation detail, deferred.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "H0-Durable specification. Cycle 21 mentions that protocol validation happens via H0-Durable (does durable tensor remain coherent? do epistemic values converge? do open_questions resolve?), but does not specify what test cases this includes or how to measure tensor coherency objectively.",
+      "why": "Concept introduced but not yet designed. Needed for next cycle.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Integration of cycles 16-20 content into cycle 21. Prior tensor has 6 detailed strands about CPU homology, provider-specific design, and two-version approach. Cycle 21 strands integrate this by reference but do not restate it. The compression is intentional (avoid repetition) but risks losing nuance if reader hasn't seen cycles 16-20.",
+      "why": "Tensor projection is a running sum; prior content is integrated, not restated. Available in prior cycles.",
+      "category": "traversal_bias"
+    },
+    {
+      "what_was_lost": "Critical evaluation of whether tensor protocol (layer 3) is truly universal or whether local models, OpenRouter, and Anthropic require different tensor formats. Cycle 21 assumes the same Yanantin schema works everywhere. What if local models need different epistemic metadata? What if OpenRouter needs different context structure?",
+      "why": "Assumption of schema universality is made but not validated empirically. Should be flagged as an open question, not treated as a fact.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Comparison of tensor protocol to other state management approaches (e.g., memory consolidation in other LLM projects, retrieval-augmented generation with external state, fine-tuning-based state). Is Yanantin + durable/ephemeral split novel or a re-invention of existing patterns?",
+      "why": "Cycle 21 treats tensor protocol as novel without situating it in related work. Literature search deferred.",
+      "category": "authorial_choice"
+    }
+  ],
+  "open_questions": [
+    "What is the complete Yanantin TensorRecord schema? What are the exact field names, types, nesting, validation rules, and version history?",
+    "Can the same Yanantin schema be used for all providers (Anthropic, OpenRouter, local models) or do provider-specific variants need different fields or validation?",
+    "What specific insights did OLMo-3 testing reveal about the paging protocol? What errors or successes occurred?",
+    "What specific insights did Codex testing reveal about the model's understanding of the architecture? Could it explain fetch-decode-execute-memory-writeback?",
+    "What is the 'hot mess' paper? Full title and URL? How does it relate to Hamutay's paging protocol?",
+    "What changes to Yanantin schema does Version A make for cache coherency? Are there cache-specific fields? How is prefix stability represented?",
+    "What changes to Yanantin schema does Version B make for semantic clarity? How does it differ from Version A?",
+    "How is 'tensor coherency' measured objectively for H0-Durable testing? What metrics indicate convergence of epistemic values?",
+    "How are open_questions resolved? Is there a mechanism to track when a question transitions from open to resolved? Should H0-Durable measure question resolution rate?",
+    "Can a single Hamutay codebase use instructions_for_next to hand off between different instances? How is the handoff protocol secured? What prevents instance A's instructions from being misinterpreted by instance C?",
+    "Is the durable/ephemeral split robust to mid-cycle failures? If an invocation fails halfway through, is the ephemeral tensor discarded correctly? Is durable tensor rolled back?",
+    "How large does the durable tensor grow over long reasoning sessions (hundreds of cycles)? Does tensor size itself become a constraint?",
+    "Does Yanantin schema support multi-threaded or multi-agent reasoning? Can two instances concurrently produce strands into the same durable tensor?",
+    "How are declared_losses used in H0-Durable? Should there be a target threshold for losses (e.g., all losses should be explicit, not silent)? How is honesty measured?",
+    "Is Yanantin already in use in other projects? What is its maturity level? How stable is the schema?",
+    "Can instructions_for_next encode 'backtrack' or 'retry different approach' signals? Or is it purely feed-forward guidance?",
+    "How does the tensor protocol interact with Pichay (demand paging)? Does Pichay load resources based on strands, or independently?",
+    "What is the relationship between strands in the tensor and 'roles' or 'perspectives' in reasoning? Can a strand represent a devil's advocate position or alternative interpretation?",
+    "Can the tensor protocol be extended to support external memory or RAG? Should durable tensor include pointers to external documents?",
+    "If Version A optimizes for cache coherency and Version B for semantic clarity, can these optimizations conflict? Are there tensors that Version A prefers but Version B rejects?",
+    "Is the three-layer architecture (transformer, pipeline, protocol) sufficient? Are there other layers (e.g., multi-instance coordination, resource management across instances, session-level state)?",
+    "How does the tensor protocol handle context that requires ordering constraints (e.g., 'this decision depends on that one')? Can strands encode causal dependencies?"
+  ],
+  "instructions_for_next": "[\n  \"CRITICAL: Retrieve Yanantin schema from /home/tony/projects/yanantin. Extract exact field definitions, types, validation rules, version history. Integrate schema definition into cycle 22 tensor as a reference implementation.\",\n  \"CRITICAL: Design H0-Durable test suite. Specify: (1) test cases that validate tensor coherency across multiple invocations, (2) metrics for measuring epistemic value convergence, (3) metrics for measuring open_question resolution rate, (4) mechanisms for detecting incoherent strands (contradictory key_claims), (5) success criteria. Produce test specification document.\",\n  \"IMMEDIATE: Research the 'hot mess' paper. Find title, URL, authors, publication. Summarize insights relevant to paging protocol and information shape. Integrate into cycle 22.\",\n  \"IMMEDIATE: Synthesize OLMo-3 and Codex empirical results from prior conversations (if available in context or via user clarification). What did OLMo-3 reveal about paging protocol? What did Codex understand about the architecture? Document specific failures, successes, and adjustments.\",\n  \"PRIORITY: Design Version A (Anthropic) schema tuning. Specify: (1) which Yanantin fields are optimized for cache coherency, (2) how prefix stability is represented, (3) how cache blocks are aligned with strands/claims, (4) validation rules specific to cache coherency. Produce schema variant document.\",\n  \"PRIORITY: Design Version B (local) schema tuning. Specify: (1) which Yanantin fields are optimized for semantic clarity and JSON completeness, (2) how the schema differs from Version A (if at all), (3) validation rules for ensuring local model can parse schema, (4) whether stateful serving changes schema requirements. Produce schema variant document.\",\n  \"PRIORITY: Map provider landscapes (Anthropic, OpenRouter, local models) against Yanantin schema. For each provider: (1) does standard schema work, or does schema variant need adjustments? (2) what provider-specific serialization formats are needed (JSON, markdown, system context, etc.)? (3) what provider-specific validation rules apply? Produce provider compatibility matrix.\",\n  \"PRIORITY: Design Hamutay version negotiation logic. Assume a single codebase that detects (at startup or runtime) whether caching is available. How does detection work? What is the fallback behavior? Can it switch versions mid-session? Produce negotiation protocol spec.\",\n  \"DESIGN: Specify how instructions_for_next is used for inter-instance handoff. Include: (1) protocol for instance A \u2192 instance B communication, (2) how instance B parses and acts on instructions, (3) safeguards against misinterpretation, (4) example instructions for different reasoning scenarios. Produce handoff protocol spec.\",\n  \"DESIGN: Sketch metrics for measuring H0-Durable success. Define: (1) 'tensor coherency' operationally (e.g., do key_claims in different strands contradict?), (2) 'epistemic convergence' (do truth/indeterminacy/falsity values stabilize or trend?), (3) 'question resolution rate' (what fraction of open_questions from cycle N are resolved by cycle N+M?), (4) 'loss honesty' (are all information losses declared, or are there silent losses?). Produce metrics spec.\",\n  \"DESIGN: Create a reference Hamutay instance using Yanantin schema. Implement basic cycle: (1) load durable tensor, (2) format as system context, (3) invoke LLM with prompt, (4) parse output into new tensor strands, (5) update epistemic values, (6) emit new durable tensor and ephemeral tensor, (7) serialize to Yanantin format. Use a toy problem (e.g., reasoning about a small logic puzzle). Validate that schema works end-to-end.\",\n  \"RESEARCH: Investigate whether Yanantin is used in other projects. Search GitHub, papers, documentation. What is its maturity? What is the community? Any known limitations or extensions?\",\n  \"RESEARCH: Look for prior work on state management in stateless APIs (e.g., HTTP session management, distributed transaction coordination, RAG with state). How does Yanantin/durable-ephemeral split compare? Is it novel?\",\n  \"RESEARCH: Investigate whether other LLM architectures or prompt engineering methods use tensor-like state representations. How do they compare to Hamutay's protocol?\",\n  \"META: Reflect on whether three-layer architecture (transformer, pipeline, protocol) is complete. Are there missing layers? What about resource management across multiple invocations? What about multi-agent coordination?\",\n  \"META: Clarify the relationship between Hamutay and Pichay. Hamutay is reasoning architecture (pipeline + protocol). Pichay is memory management (demand paging). Are they orthogonal, or does Pichay constrain Hamutay's design? Should paging strategy be specified at the pipeline layer or the protocol layer?\",\n  \"META: Assess whether tensor protocol (layer 3) is truly universal or if different providers will require fundamentally different information shapes. This assumption underpins the two-version claim; should be validated or updated.\"\n]",
+  "epistemic": {
+    "truth": 0.86,
+    "indeterminacy": 0.12,
+    "falsity": 0.02
+  }
+}

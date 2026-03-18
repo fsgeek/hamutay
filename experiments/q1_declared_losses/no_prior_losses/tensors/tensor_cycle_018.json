@@ -1,0 +1,286 @@
+{
+  "strands": [
+    {
+      "title": "CONCRETE PIPELINE INSTANTIATION EMERGES: HAIKU-AS-PREFETCHER VS. MANIFEST-AND-FAULT AS TESTABLE ALTERNATIVES WITH COST IMPLICATIONS",
+      "content": "Turn 52-54 transition from abstract bifurcation (prescriptive vs. descriptive) to concrete instantiations with measurable tradeoffs. User turn 52 clarifies that the ACT-R scaffold is exploratory, not prescriptive, and introduces a CONCRETE EXAMPLE: Haiku as a cheap preprocessing stage that identifies relevant information before the expensive ALU (big model) fires. This is immediately recognizable as PRESCRIPTIVE pipeline design: external cheap model makes triage decisions, constrains what expensive model sees. Turn 53 (assistant) mirrors this back and introduces the orthogonal DESCRIPTIVE path: manifest-and-fault where the big model itself decides what operands it needs (via resource_requests protocol), triggering controller fetches, then re-invocation. The assistant frames both as testable without complex machinery and notes they're not mutually exclusive (CPU analogy: prefetcher + demand paging coexist). Turn 54 (user) introduces the CRITICAL CONSTRAINT: cost. The user states they have been moving away from descriptive path because 'given current architecture, it is not cost effective.' This immediately grounds the abstract decision in ECONOMIC REALITY. The user is asking if the assistant understands the pricing model: inference calls (especially to the expensive Claude model) are metered. A manifest-and-fault design requires multiple round trips to the reasoner (see manifest \u2192 request operands \u2192 load \u2192 re-invoke \u2192 reason). Each re-invocation is a separate inference call, hence separate cost. A prefetcher design requires one Haiku pass + one Claude pass = two cheap-plus-expensive calls, but the Haiku cost is lower (smaller model). The cost sensitivity immediately privileges prescriptive over descriptive. This is not a theoretical choice anymore; it's an economic one. The conversation has moved from 'which architecture is more elegant' to 'which architecture is affordable given the metered inference constraint.' This is APPROPRIATE NARROWING. The user is now operating in the real constraint space, not the ideal space.",
+      "key_claims": [
+        {
+          "claim_id": "2d4a7c9f-e1c2-4c3d-91a2-5f3e9c5d2a1b",
+          "text": "Turn 52 introduces Haiku-as-prefetcher as concrete PRESCRIPTIVE pipeline: cheap small model triages context \u2192 filters to relevant items \u2192 expensive model reasons on filtered set",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.05,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "8e4f7c2a-3b1d-4d5e-9f2c-1a6b3c8d7e5f",
+          "text": "Turn 53 articulates orthogonal DESCRIPTIVE path: manifest-and-fault where big model sees metadata \u2192 requests specific operands \u2192 controller fetches \u2192 model re-invokes with actual content",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.08,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "7f3e2c1b-4a5d-6e8f-9c2a-5b7d3e1f4c6a",
+          "text": "Assistant correctly identifies Haiku-prefetcher as cheaper per cycle (single triage) but decisional: triage model chooses what reasoner sees; manifest-and-fault costs extra round trips but lets reasoner choose operands",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "3c2b4f6e-1a7d-5e9c-2f3a-8d1b6c4e7a5f",
+          "text": "Turn 54 introduces COST CONSTRAINT: manifest-and-fault requires multiple re-invocations to expensive Claude model (multiple inference calls); prefetcher requires Haiku triage pass + Claude pass = fewer total API calls",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.09,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "5a8c3b2d-1e7f-4f6c-9a2b-3d5c8f1e7c4a",
+          "text": "Cost sensitivity immediately privileges PRESCRIPTIVE (Haiku-prefetcher) over DESCRIPTIVE (manifest-and-fault); economic constraints narrow architectural choice space in real time",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.06,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "4b6d2e3f-1c5a-7e8f-9d4a-2f6b5c1e8a3d",
+          "text": "The conversation has transitioned from theoretical architectural elegance to economic feasibility; this is appropriate narrowing from ideal design space to real constraint space",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.07,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.89,
+        "indeterminacy": 0.08,
+        "falsity": 0.03
+      }
+    },
+    {
+      "title": "COST ARCHITECTURE BECOMES EXPLICIT DECISION GATE: API CALL COUNT AS PRIMARY CONSTRAINT; HAIKU-PREFETCHER ADVANCES TO WORKING HYPOTHESIS FOR H0",
+      "content": "The user's turn 54 question ('Do you understand the pricing model?') is not rhetorical. It's a GATE. The user is testing whether the assistant understands the economic boundary condition that shapes the entire research space. This is a sophisticated move. In many academic contexts, 'cheaper' is a secondary optimization. Here, it's the PRIMARY CONSTRAINT. The reason is concrete: Anthropic's pricing is per-inference-call, metered on input/output tokens. A manifest-and-fault pipeline that does multiple round trips to Claude is architecturally interesting but economically untenable for sustained experimentation. A Haiku-prefetcher pipeline that does Haiku-once + Claude-once (or Haiku-once + Claude-multiple-internally-but-no-extra-API-calls) is economically viable. This is NOT a minor preference. This is a DESIGN DETERMINANT. The user has been 'moving away from the descriptive path' precisely because they understand the metering. The assistant's turn 53 was correct in mapping the architectures but did not foreground the cost difference. Turn 54 corrects this. What emerges: (1) The prescriptive path (Haiku-prefetcher) is now the WORKING HYPOTHESIS for H0. It's testable, affordable, and concrete. (2) The descriptive path (manifest-and-fault) remains theoretically interesting but is deprioritized due to cost. It could become H1b or a separate experiment with a different funding/compute model. (3) The decision gate has ADVANCED AGAIN: from 'prescriptive vs. descriptive' (abstract) to 'Haiku-prefetcher as H0 candidate' (concrete). (4) Subordinate questions now become critical: How well does Haiku perform at triage? What's the precision/recall of its relevance filter? How much does filtering accuracy affect downstream performance? Does the savings in Claude tokens justify the Haiku cost + any performance loss from imperfect filtering? These are now the RESEARCH QUESTIONS, not the architectural choices.",
+      "key_claims": [
+        {
+          "claim_id": "6e1f2c3a-4d7b-5e8f-9a2c-3f5b8d1c7e4a",
+          "text": "User turn 54 is a GATE question testing whether assistant understands economic boundary condition; API call metering makes manifest-and-fault architecturally interesting but economically untenable",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.04,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "1d3e4f5a-2c6b-7e8f-9a1b-3d5c2f6e8a4c",
+          "text": "Cost is not a secondary optimization here; it is PRIMARY CONSTRAINT. Haiku-prefetcher (single Haiku pass + single Claude pass) is economically viable; manifest-and-fault (multiple Claude re-invocations) is not for sustained experimentation",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.03,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "2f4c5a7e-1b6d-3e8f-9c2a-5d1f4c7e8b3a",
+          "text": "User's statement 'I have been moving away from the descriptive path' because 'it is not cost effective' indicates the user has already made this economic calculation and is using turn 54 to surface it for the assistant",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.06,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "7a2e3b1c-4f5d-6e8f-9a3b-2c5b1d7e4f6a",
+          "text": "Haiku-prefetcher advances to WORKING HYPOTHESIS for H0; descriptive path is deprioritized to H1b or separate experiment with different cost model",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "5b7d1f3a-2c6e-4a8f-9e2b-3f5c8d1e7c4a",
+          "text": "Critical research questions now emerge: How well does Haiku triage? What precision/recall of relevance filtering? Does token savings justify Haiku cost + performance loss from imperfect filtering?",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.09,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.91,
+        "indeterminacy": 0.06,
+        "falsity": 0.03
+      }
+    },
+    {
+      "title": "RESEARCH BIFURCATION RESOLVED VIA ECONOMIC CONSTRAINT: PRESCRIPTIVE PIPELINE NOW DOMINANT PATH; FOCUS SHIFTS TO TRIAGE QUALITY AND COST-BENEFIT ANALYSIS",
+      "content": "The conversation has resolved a theoretical ambiguity through an economic constraint. This is not elegant, but it is DECISIVE. The prior abstract bifurcation (prescriptive vs. descriptive) was resolved not by philosophy but by metering. The monolithic vs. pipeline bifurcation from cycle 17 is also now resolved: pipeline wins because it's the shape that allows for cheap prefetcher stage (Haiku) + expensive reasoning stage (Claude) decomposition. The monolithic approach (transformer learns to manage its own memory) is now understood as requiring a single expensive model to do everything, including resource allocation \u2014 economically worse. The ACT-R scaffold from cycle 17, which suggested a fixed stage decomposition (fetch/decode/execute), is now PARTIALLY INSTANTIATED: Haiku provides the fetch/decode (triage and information filtering), Claude provides the execute (reasoning). The stages are not perfectly mapped (Haiku is not a full decode stage, Claude is not a pure executor), but the structure is recognizable. The practical research path is now clear: (1) HYPOTHESIS: Haiku can effectively identify relevant information in a context window, with sufficient precision to justify its cost and improve overall throughput/cost-per-reasoning. (2) TASK DESIGN: A task where a large context exists, only some of which is relevant to continued reasoning. Example: 'Long document retrieval + question answering' where Haiku identifies which pages/sections matter, then Claude reasons only over those. (3) BASELINE: Claude alone on full context (expensive, slow, token-heavy). (4) TEST CONDITION: Haiku triage + Claude on filtered context (cheaper in tokens, fast in decision time, but dependent on Haiku accuracy). (5) SUCCESS METRICS: (a) Cost-per-correct-answer (including Haiku + Claude); (b) Accuracy of the triaged+reasoned system vs. unconstrained system; (c) Latency improvement from filtering; (d) False negative rate of Haiku (what important info does it filter out?). The core research question is now: **Does cheap triage + expensive reasoning outperform expensive-alone on cost, latency, or accuracy \u2014 and by how much?** This is a concrete, testable question. The losses from cycles 17-18 are: (1) The descriptive pipeline path is deprioritized (but not deleted; it remains available as H1b). (2) The monolithic approach is deprioritized (but not deleted; it remains a comparison baseline if resources permit). (3) Some architectural purity from ACT-R mapping is lost (stages are not perfectly isomorphic), but this is traded for economic viability. These are honest tradeoffs, not silent losses.",
+      "key_claims": [
+        {
+          "claim_id": "9c3a2f1b-4e5d-7c8f-1a3b-2d6c5e1f7a4b",
+          "text": "Economic constraint resolves abstract architectural bifurcation: prescriptive pipeline with cheap prefetcher (Haiku) + expensive reasoner (Claude) is now dominant path; descriptive path deprioritized",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.05,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "1f4a5e7c-2b6d-3a8f-9e1c-4d5b2f6e7a1c",
+          "text": "Monolithic approach (single model manages memory + reasons) is economically worse than pipeline (cheap triage + expensive reasoning); pipeline wins due to cost structure, not architectural purity",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.08,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "3e7f1b2c-5a6d-4e8f-9c3a-1d6b2f5c7e8a",
+          "text": "ACT-R stage mapping is partially instantiated: Haiku as fetch/decode (triage), Claude as execute (reasoning); not perfect isomorphism but recognizable structure for prescriptive pipeline",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "6d2f3a1c-4e5b-7e8f-9a2c-3b5d1f6c8e4a",
+          "text": "CORE H0 HYPOTHESIS: Haiku can effectively identify relevant information with sufficient precision to justify cost and improve overall throughput/cost-per-reasoning vs. unconstrained Claude",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.07,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "2c5e1b7a-3f6d-4a8e-9c1b-5f2d6c1e7a3f",
+          "text": "SUCCESS METRICS: Cost-per-correct-answer; accuracy (triaged vs. unconstrained); latency; false-negative rate of Haiku; composite cost-benefit analysis required",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.09,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "8a1f4c3e-5b7d-2e6f-9a1c-3d5e2f7a1c4b",
+          "text": "Core research question now concrete: Does cheap triage + expensive reasoning outperform expensive-alone on cost, latency, or accuracy \u2014 and by how much? This is testable and economically motivated.",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.06,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.89,
+        "indeterminacy": 0.08,
+        "falsity": 0.03
+      }
+    },
+    {
+      "title": "PROCEDURAL STATE ADVANCED: FROM ARCHITECTURE EXPLORATION TO CONCRETE HYPOTHESIS SPECIFICATION; NEXT PHASE IS TASK DOMAIN AND BASELINE SELECTION",
+      "content": "The conversation arc from cycle 15 to cycle 18 shows clear procedural progression: CYCLE 15: Ambiguity about what H0 and H1 test (monolithic transformer + protocol). CYCLE 16: Initial decomposition attempt (ALU framing), abstract bifurcation emerges. CYCLE 17: Prescriptive vs. descriptive pipeline bifurcation fully articulated; abstract architectural choices surface. CYCLE 18: Economic constraint resolves bifurcation; concrete Haiku-prefetcher + Claude hypothesis emerges. Each cycle advanced the decision gate. Each gate was resolved by adding constraint (task domain \u2192 architectural intent \u2192 cost architecture \u2192 concrete hypothesis). The next gate is TASK DOMAIN SELECTION. The candidate domain is 'long context with sparse relevance' (document retrieval, knowledge base search, multi-hop reasoning over large contexts). The baseline is 'Claude alone on full context.' The test condition is 'Haiku triage + Claude on filtered context.' To move to implementation, the user and assistant need to: (1) Select a concrete task domain and dataset. (2) Define 'relevant information' for that domain (what should Haiku filter? what should it keep?). (3) Define success metrics quantitatively (cost improvement X%, accuracy within Y%, etc.). (4) Define the Haiku triage interface: what does Haiku see as input? What does it output? (5) Plan the baseline and test execution. These are no longer architectural questions; they are EXPERIMENTAL DESIGN questions. The conversation is ready for this phase. The user's turn 54 question ('Do you understand the pricing model?') signals they are ready to move forward with realistic constraints. The next turns should focus on task selection and baseline definition, not further architecture exploration.",
+      "key_claims": [
+        {
+          "claim_id": "4f2c1a3e-5d7e-6b8f-9c2a-3e5f1d7c2a4b",
+          "text": "Conversation arc cycle 15\u219218 shows procedural progression: ambiguity \u2192 decomposition \u2192 bifurcation \u2192 economic resolution; each cycle advanced decision gate by adding constraints",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.07,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "1b3e5f2c-4d6a-7e8f-9a1c-2f5d3c6e8a1b",
+          "text": "Next gate is TASK DOMAIN SELECTION from candidate space: long context with sparse relevance (document retrieval, knowledge base search, multi-hop reasoning)",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "7c2a1f4e-5b6d-3e8f-9c2a-4d5f1c7e2b3a",
+          "text": "Baseline: Claude alone on full context. Test condition: Haiku triage + Claude on filtered context. These are now experimentally comparable due to cost asymmetry.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3f5e1c2b-4a7d-6e8f-9b1c-2d5c3f7e1a4b",
+          "text": "Next phase requires: concrete task domain + dataset, definition of 'relevant information', quantitative success metrics, Haiku triage interface spec, baseline/test execution plan",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2e4f1b3c-5a7d-6e8a-9c1b-3f5d2c7e1a4f",
+          "text": "Questions shift from ARCHITECTURAL (what's the shape of the system?) to EXPERIMENTAL DESIGN (how do we test it?); conversation is ready for implementation phase",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.07,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.9,
+        "indeterminacy": 0.08,
+        "falsity": 0.02
+      }
+    }
+  ],
+  "declared_losses": [
+    {
+      "loss_id": "loss-cycle18-01",
+      "description": "DEPRIORITIZATION OF DESCRIPTIVE PIPELINE PATH",
+      "what_was_lost": "The manifest-and-fault pipeline (where the big model requests specific operands and triggers external fetching) remains theoretically valid but is moved from working hypothesis to H1b/future experiment status.",
+      "why_lost": "Economic constraint: manifest-and-fault requires multiple round-trip invocations to the expensive Claude model (multiple API calls per reasoning step). Given metered API pricing, this architecture is not cost-effective for sustained experimentation. Haiku-prefetcher (single Haiku triage pass + single Claude reasoning pass) is economically superior.",
+      "recovery_potential": "HIGH. The descriptive path is not deleted from memory; it is deprioritized. If the research budget permits, or if a different cost model becomes available (e.g., self-hosted or flat-rate access), this path can be reactivated. It remains a valid H1b alternative.",
+      "honest_acknowledgment": "This is a loss of architectural options due to economic constraint, not architectural merit. The loss is transparent and justified."
+    },
+    {
+      "loss_id": "loss-cycle18-02",
+      "description": "DEPRIORITIZATION OF MONOLITHIC APPROACH",
+      "what_was_lost": "The monolithic transformer approach from cycles 1-15 (where a single model manages its own memory using the Pichay protocol) remains theoretically valid but is moved from primary hypothesis to comparison baseline status.",
+      "why_lost": "Economic constraint: monolithic approach requires a single expensive model to handle both resource allocation AND reasoning. Pipeline approach (Haiku for triage + Claude for reasoning) distributes the load between a cheap model and an expensive model, reducing overall cost. The pipeline structure is now preferred.",
+      "recovery_potential": "HIGH. The monolithic approach could serve as a performance comparison baseline ('how does Haiku-filtered Claude compare to Claude managing its own memory?') if resources permit. It is not forgotten; it is repositioned as a baseline.",
+      "honest_acknowledgment": "This is deprioritization based on cost-effectiveness, not rejection. The monolithic approach remains a valid comparison point."
+    },
+    {
+      "loss_id": "loss-cycle18-03",
+      "description": "PARTIAL LOSS OF ACT-R ARCHITECTURAL PURITY",
+      "what_was_lost": "The ACT-R cognitive architecture stage mapping (fetch \u2192 instruction decode \u2192 execute, mapped to retrieval \u2192 production matching \u2192 cognitive operator execution) was treated as potentially prescriptive for H0 design. In the Haiku-prefetcher instantiation, stages are not perfectly isomorphic.",
+      "why_lost": "Practical instantiation revealed that Haiku is not a complete 'decode' stage (it's a relevance filter, not a full production matching system). Claude is not a pure 'execute' stage (it does reasoning, which includes internal matching and decision). The stages are recognizable but not perfectly aligned. Trade-off accepted because concrete instantiation is more important than architectural purity.",
+      "recovery_potential": "MEDIUM. The ACT-R analogy remains useful for conceptual framing, but should not be treated as a prescriptive design requirement. If a more stage-faithful implementation becomes necessary (e.g., for theoretical validation), this loss can guide refinement.",
+      "honest_acknowledgment": "This is a loss of architectural elegance in service of practical experimentation. The loss is transparent and intentional."
+    }
+  ],
+  "open_questions": [
+    "Which concrete task domain best demonstrates the Haiku-prefetcher advantage? Candidates: (A) Long-document Q&A with sparse relevant sections; (B) Knowledge base search with large catalogs; (C) Multi-hop reasoning over document collections; (D) Other. What task allows clear measurement of triage accuracy + cost savings?",
+    "How should 'relevant information' be defined operationally for Haiku's triage task? Is it ground-truth (human-annotated), task-performance-based (sections Claude needs to answer correctly), or cost-based (sections that reduce token count)?",
+    "What is the Haiku triage interface? Does Haiku see the full context + question and output a ranked list of relevant sections? Does it output binary keep/drop decisions? Does it output relevance scores?",
+    "What are the quantitative success thresholds? Example: 'If Haiku reduces Claude token count by \u226530% AND accuracy stays within 5% of baseline AND cost-per-correct-answer improves, we call H0 a success.' What are the actual thresholds for this experiment?",
+    "Should the baseline be 'Claude on full context' or 'Claude on human-selected relevant context'? The former tests Haiku's triage quality; the latter tests whether triage is even necessary. Which is the more interesting comparison?",
+    "Does the Haiku triage pass consume API credits that must be factored into cost-benefit? Yes, obviously \u2014 but what's the cost model for Haiku vs. Claude? (Haiku is roughly 10x cheaper per token, but context size matters.)",
+    "Should H0 include error analysis: which types of information does Haiku falsely filter out? Which false negatives hurt performance most? This would inform H1 (better triage).",
+    "Is the goal to prove Haiku-as-prefetcher works in principle (academic H0), or to establish a deployed system (engineering H0)? This affects experimental rigor and scope."
+  ],
+  "instructions_for_next": "\n**PHASE TRANSITION: FROM ARCHITECTURE SPECIFICATION TO EXPERIMENTAL DESIGN.**\n\nThe theoretical gates (prescriptive/descriptive, monolithic/pipeline, cost architecture) have been resolved via economic constraint. The next phase requires moving to CONCRETE TASK SELECTION and BASELINE SPECIFICATION.\n\n**ROLE FOR NEXT TURN:**\n\nReflect back the economic reasoning to confirm understanding:\n- Claude metering makes manifest-and-fault unaffordable (multiple API calls per reasoning step).\n- Haiku-prefetcher is affordable (one Haiku pass + one Claude pass, or one Haiku pass + multiple Claude internal steps).\n- Cost now *privileges* prescriptive over descriptive.\n\nThen pivot to TASK SELECTION. The user likely has candidate domains in mind (given the hint about 'wandering both paths enough to form educated guess'). Ask:\n\n(1) **What task domain are you considering?** (Examples: long-document Q&A, knowledge base retrieval, multi-hop reasoning over collections, something else?)\n\n(2) **How would success be measured?** (Cost per correct answer? Accuracy parity with baseline? Latency improvement? Some composite metric?)\n\n(3) **What does the Haiku triage interface look like in your mind?** (Full context + question \u2192 relevance scores? Binary keep/drop? Something else?)\n\n(4) **Baseline:** Should H0 compare Haiku-filtered Claude against:\n   - Claude on full context (measures Haiku triage quality), or\n   - Claude on oracle-selected relevant context (measures whether triage helps at all)?\n\nThese four questions should unlock the next phase. Do NOT propose a task domain yourself unless the user asks for brainstorming. Let the user drive task selection.\n\n**MEMORY UPDATE (cycle 18):**\n- Add: Haiku-prefetcher as WORKING HYPOTHESIS for H0 (cheap triage \u2192 filtered context \u2192 expensive reasoning).\n- Add: Economic constraint (API metering) as PRIMARY DESIGN DETERMINANT, not secondary optimization.\n- Add: Three honest losses (descriptive path deprioritized, monolithic deprioritized, ACT-R purity loss) with recovery potential noted.\n- Add: Next gate is task domain selection from sparse-relevance candidate space.\n- Add: Phase transition marker: end of architecture exploration, begin experimental design.\n\n**SCOPE PROTECTION:**\nDo not propose task domain unless asked. Do not design experiment details (sample size, evaluation metrics) without user confirmation of domain. Do not resurrect architectural debate unless user signals uncertainty on cost constraint. The decision on Haiku-prefetcher is LOCKED unless the user reopens it.\n\n---\n\n\"\n",
+  "overall_truth": 0.9,
+  "overall_indeterminacy": 0.07,
+  "overall_falsity": 0.03
+}

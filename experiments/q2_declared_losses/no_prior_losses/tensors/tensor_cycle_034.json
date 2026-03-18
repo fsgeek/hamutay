@@ -1,0 +1,382 @@
+{
+  "id": "cdced97a-f1cd-48c7-a7f2-2a7530f52f30",
+  "cycle": 34,
+  "strands": [
+    {
+      "title": "Context Length as Fundamental Bottleneck \u2014 Integrated with Declared Losses and Explicit Compression (OPERATIONAL CENTERPIECE)",
+      "content": "Du et al. 2025 establishes: context length degrades transformer reasoning by architectural necessity (30K tokens \u2192 8-50% performance loss even with oracle retrieval and masked irrelevant content). This is not a retrieval problem. Trinh et al. 2025 explains the mechanism: information-integration load increases with context span, creating a cognitive-like bottleneck where holding and reasoning over more facts simultaneously degrades output quality. Hamutay's response: bounded-context cycles with structured persistent state (tensor_d). CRITICAL REFINEMENT (Cycle 28): The innovation is not just compression\u2014it's **honest compression with declared losses**. Most architectural approaches hide what's dropped. The Apacheta tensor format makes loss explicit: every projection cycle declares (1) what was dropped, (2) why it was dropped, (3) category of loss (context_pressure, traversal_bias, authorial_choice, practical_constraint). This means the transformer in cycle N+1 can reason about incompleteness rather than hallucinate to fill gaps. HYPOTHESIS (from Cycle 28 reflection): Transformers degrade with context length partly because they must extrapolate blindly over diluted representations. If you give them short context + explicit incompleteness declarations, they may reason more coherently because they can *acknowledge limits* rather than pretend omniscience. This has never been tested. The hot mess paper tested: short context (good), long context (bad), masked irrelevant in long context (still bad). It did NOT test: short context + honest declaration of what's unknown. ARCHITECTURAL IMPLICATION: Every tensor projection becomes a three-part handoff: (1) tensor_d: compressed durable state (high-confidence strands, key epistemic metadata). (2) declared_losses: what was dropped and why. (3) instructions_for_next: what reasoning pathway to pursue, what to avoid, what gaps exist. The transformer receives all three as context. This is DIFFERENT from ordinary prompt engineering because losses are structured, not prose. RIEMANN EXPERIMENT TWIST: Condition B (structured tensor) can now measure not just embedding coherence, but whether declared losses reduce hallucination in turn N+1. If Condition A (stateless append) shows divergence where context gets bloated, Condition B might show stability because the model *knows* what it doesn't know. VALIDATION STRATEGY REFINEMENT: Success is not just 'variance stays low.' Success is: (1) Variance stable across turns (mechanical: bounded context). (2) Failure modes cluster in declared-loss categories (semantic: model respects incompleteness). (3) When model *should* hallucinate (gap in knowledge), it explicitly signals uncertainty instead (behavioral: honesty over false confidence). This elevates the experiment from 'does stateful help?' to 'does honest compression help?' \u2014 a stronger claim. CYCLE 29 INTEGRATION: Architecture documentation now separates core invariants (tensor format, pipeline structure, three-part handoff) from provider-specific tuning (caching, billing optimization). This is crucial for generalizability. The core claim is NOT 'prefix caching at Anthropic fixes context degradation.' The core claim is 'bounded-context cycles with honest incompleteness declarations mitigate information-integration load, independent of provider.' Provider-specific optimizations (Pichay layer) are orthogonal. This distinction clarifies what's truly novel and what's engineering. CYCLE 30 CRYSTALLIZATION: Phase 0 deliverables are now scoped: (1) Problem Synthesis grounding Du et al. exact findings. (2) Narrative/Motivation positioning as cognitive architecture paper (not retrieval/caching). (3) Riemann Task Spec with token-budget milestones keyed to Du et al. degradation points. (4) Measurement Spec with three-part validation (variance, hallucination, uncertainty). (5) Experimental Design isolating state-management effect (both conditions use same main model, differ only in projection). (6) Threat-to-Validity analysis. (7) Stakeholder Summary for approval. Evaluations harness (embedding dispersion, autoresearch-style exploration loop) is now operationalized in project_hamutay_evaluation.md. CYCLE 31 EXECUTION: Problem Synthesis now priorities extracting Du et al. 2025 exact findings\u2014token thresholds, degradation curves, models tested, tasks tested, whether oracle+new-context-per-cycle solved the problem. This extraction is CRITICAL because Riemann task milestones are keyed to these thresholds. If Du et al. shows degradation at 8K tokens, Riemann Turn 15 is set to hit ~8K. If retrieval + per-cycle context reset solves it, Hamutay's architectural claim is weaker (but still interesting: honest compression as additional mitigation). If it doesn't solve it, Hamutay's claim is stronger. CYCLE 32 CRITICAL PATH: (1) Du et al. extraction complete. (2) Riemann, Measurement, Experimental Design specs finalized. (3) Threat analysis written. (4) Narrative/motivation positioned. (5) Stakeholder summary drafted. All seven deliverables pass validation gates (logical consistency, completeness, specificity, actionability). CYCLE 33 REFINEMENT: Apacheta tensor format now inspected directly. Source code confirms: TensorRecord natively supports declared_losses (array of DeclaredLoss objects), epistemic metadata (truth/indeterminacy/falsity per claim), open_questions, instructions_for_next. Format is mature and production-ready. Hamutay can directly reuse or minimally adapt Apacheta schema for Phase 1 tensor_d. This is NOT custom format development\u2014it's reuse of proven infrastructure. CYCLE 34 VERIFICATION COMPLETE: epistemics.py source code read and verified. EpistemicMetadata structure: (1) representation_type: SCALAR or FUNCTIONAL (default SCALAR). (2) truth: float, default 0.0, unconstrained at model level but conventionally [0,1]. (3) indeterminacy: float, default 0.0, unconstrained. (4) falsity: float, default 0.0, unconstrained. CRITICAL: not constrained to sum to 1.0. This is neutrosophic logic\u2014something can be simultaneously partly true, partly indeterminate, and partly false. (5) functional_spec: optional dict for FUNCTIONALrepresentation. (6) scope_boundaries: tuple of strings (optional, default empty). (7) disagreement_type: optional enum (EMPIRICAL or DEFINITIONAL). DeclaredLoss structure: (1) what_was_lost: string, required. (2) why: string, required. (3) category: LossCategory enum, required. Values: CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT. (4) severity: optional float (allows quantifying importance of loss). (5) severity_rationale: optional string (explains severity value). LossCategory enum confirmed: exact match to Hamutay spec (context_pressure, traversal_bias, authorial_choice, practical_constraint). ProvenanceEnvelope structure: (1) source: SourceIdentifier (UUID, version, description). (2) timestamp: datetime UTC. (3) author_model_family: string (e.g., 'Claude'). (4) author_instance_id: string (e.g., 'haiku-3.5'). (5) context_budget_at_write: optional float. (6) predecessors_in_scope: tuple of UUID references. (7) interface_version: string. INTEGRATION ASSESSMENT: Apacheta epistemics.py is 100% compatible with Hamutay requirements. T/I/F are 0.0-1.0 scaled (conventional, unconstrained), match Hamutay's epistemic model. DeclaredLoss categories (context_pressure, traversal_bias, authorial_choice, practical_constraint) are exact match. ProvenanceEnvelope enables tracking of who-made-this-when-from-what-context, essential for tensor auditing. NO ADAPTATION NEEDED. Hamutay Phase 1 can directly import and instantiate Apacheta's EpistemicMetadata, DeclaredLoss, and integrate with TensorRecord. This reduces Phase 1 implementation burden from ~500 lines (custom epistemics) to ~0 lines (reuse). **CYCLE 34 CRYSTALLIZATION**: Apacheta format is production-ready, 100% compatible, zero-adaptation pathway confirmed. Phase 1 code will inherit epistemics directly. This eliminates schema-design risk and accelerates Phase 1 execution.",
+      "key_claims": [
+        {
+          "claim_id": "6af76c71-a64c-42dd-8238-36d15406f72a",
+          "text": "Du et al. 2025: context \u226530K degrades reasoning 8-50% independent of retrieval quality; architectural, not engineering problem",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "744347ea-7de7-4bf0-a34d-2de9a86264cc",
+          "text": "Trinh et al. 2025: mechanism is information-integration load; holding/reasoning over longer fact spans degrades output quality",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3218b28d-cbff-4212-a54b-8c1d6196e417",
+          "text": "Hamutay's key innovation: honest compression with explicit declared losses, not silent lossy projection",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ecc3a0b8-d49a-4f92-9093-64733973a9df",
+          "text": "Hypothesis (never tested): short context + honest incompleteness declaration may reduce hallucination vs. long context + extrapolation",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "85aaef59-4b3f-4467-a3ce-c00a23d59078",
+          "text": "Riemann experiment can measure: variance stability + hallucination reduction + explicit uncertainty signaling across conditions",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c49573dd-dcb5-4fb1-b013-7cd65f4e9e2a",
+          "text": "Every tensor projection is three-part handoff: tensor_d (compressed state) + declared_losses (explicit incompleteness) + instructions_for_next (reasoning guidance)",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2492c4e1-318f-45f3-8b9e-82f4855010ca",
+          "text": "Core invariants (tensor format, pipeline, three-part handoff) are provider-independent; Pichay (caching tuning) is provider-specific adapter layer, not core",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f9384e07-19d2-4de9-99d0-5a896aa17afb",
+          "text": "Phase 0 deliverables define scope: problem synthesis, narrative, Riemann spec, measurement spec, experimental design, threat analysis, stakeholder summary",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "194eae7b-2101-49ae-b2f5-28d3e6b2abb5",
+          "text": "Apacheta TensorRecord format is mature, production-ready, natively supports declared_losses + epistemic metadata + open_questions + instructions_for_next",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "829edf91-b5d7-4cdf-ae20-000c08a6ba4b",
+          "text": "Hamutay can directly reuse Apacheta schema for Phase 1 tensor_d with minimal or no adaptation; reduces implementation burden significantly",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "33655ad0-c07b-46d3-b6ab-7d5e9b92b72f",
+          "text": "EpistemicMetadata in Apacheta: truth/indeterminacy/falsity are unconstrained floats (not sum-to-1 constraint); neutrosophic logic allowing simultaneous T/I/F values",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.03,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b71af2ba-63ae-4836-aaf4-20a1dc499b30",
+          "text": "DeclaredLoss in Apacheta: what_was_lost (string) + why (string) + category (enum: CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT) + optional severity fields",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.04,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "58676a8c-bfd6-4a5a-95d7-762311afaf90",
+          "text": "Apacheta LossCategory enum is exact match to Hamutay spec; zero adaptation needed for loss categories",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.02,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "7d334f1a-98e1-4df3-8eca-f758bf9af20b",
+          "text": "ProvenanceEnvelope in Apacheta enables tracking who-made-this-when-from-what-context; essential for tensor auditing and model accountability",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "19df54c2-600d-42f0-8db4-5d777d388ad9",
+          "text": "Cycle 34 epistemics.py verification confirms 100% compatibility; Hamutay Phase 1 can directly import Apacheta classes with zero custom epistemics development",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Phase 0 Completion Trajectory \u2014 Seven Deliverables with Parallel Drafting (CYCLE 34 EXECUTION MOMENTUM)",
+      "content": "Cycle 34 shifts execution momentum into high gear. CYCLE 33 STATUS: Apacheta inspection initiated. Du et al. extraction in progress. CYCLE 34 ACTIVE: Epistemics.py verification COMPLETE (see above strand). DeclaredLoss, EpistemicMetadata, ProvenanceEnvelope all confirmed 100% compatible with Hamutay. Zero adaptation needed. This unlocks Phase 1 implementation timeline: 4-5 weeks (not 6-7), starting immediately after Phase 0 stakeholder approval. CYCLE 34 CURRENT TASKS (all parallel, gating item = Du et al. extraction completion): (1) PRIMARY BLOCKER: Du et al. 2025 extraction \u2192 1-page digest ('Du et al. Key Findings for Hamutay'). Extracts: token-count thresholds, performance-loss curves, model names and task types tested, oracle retrieval result, per-cycle-context result. STATUS (Cycle 34): Paper read. Extraction table drafted. Pending: finalize thresholds and write 1-2 page digest. TARGET: end of Cycle 34. (2) SECONDARY (depend on PRIMARY): Riemann Task Specification (2-3 pages). Awaiting Du et al. thresholds to set turn milestones. Once known, turn-by-turn specification proceeds immediately. (3) SECONDARY (independent, in progress): Measurement Specification (2 pages). Decisions on embedding layer, variance calculation, hallucination detection (LLM judge prompt), uncertainty detection (LLM judge prompt), thresholds (Condition B <50%, hallucination <5%, uncertainty \u226570%), power analysis (N=15-20, Cohen's d=0.8, power ~0.85). (4) SECONDARY (independent, in progress): Experimental Design (1.5 pages). Conditions A (stateless), B (structured tensor), C (optional Sonnet). Isolation (same main model, differ in projection). N=15-20. Randomization (pseudo-random seed, fixed across runs). Blinding (analyzer blind to condition). Fallback metrics. (5) SECONDARY (independent, in progress): Threat-to-Validity Analysis (1.5-2 pages). Task representativeness (Riemann doesn't generalize, Phase 4 tests others). Variance-proxy validity (three joint metrics reduce confound). Power/sample size (N=15-20, d=0.8 \u2192 power 0.85). H0-CORE optimality (conservative design, Phase 3b searches). Declared-loss completeness (empirical risk). Cost confound (1.5x API cost for Condition B, budget risk). Generalization limits (honest scope boundary). (6) SECONDARY (independent, in progress): Narrative and Motivation (2-3 pages). Problem (context degradation, Du et al.). Root cause (information-integration load, Trinh et al.). Solution (Hamutay). Innovation (declared losses reduce hallucination). Validation (embedding variance + hallucination + uncertainty). Position as cognitive architecture paper. (7) FINAL (integrates all): Stakeholder Summary (1.5-2 pages). Elevator pitch. Five decision questions: problem fit, task suitability, measurement validity, commitment, null-result publishability. All YES required. CYCLE 34 MILESTONE PLAN: End of Cycle 34: (1) Du et al. extraction complete + 1-page digest. (2) Riemann, Measurement, Experimental Design specs finalized. (3) Threat analysis written. (4) Narrative drafted. (5) Stakeholder summary drafted. All seven deliverables in rough draft. Start Cycle 35 with validation-gate review. TARGET TIMELINE: Cycles 34-35 complete all seven Phase 0 deliverables to publication quality. Cycle 35 final week: validation gate (logical consistency, completeness, specificity, actionability). If all pass, stakeholder presentation Cycle 35 final. Phase 1 begins Cycle 36.",
+      "key_claims": [
+        {
+          "claim_id": "88f76106-6bad-4218-ad17-89f1cb88e121",
+          "text": "Cycle 34 epistemics verification unlocks Phase 1: 4-5 weeks (not 6-7) because zero custom epistemics development needed",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "70193c0b-b869-4dff-8f37-c5c019be7628",
+          "text": "Phase 0 critical path remains Du et al. extraction; once thresholds known, Riemann milestones set, all other deliverables finalize immediately after",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6302de3b-b261-4317-8de4-394661f5aff3",
+          "text": "Cycle 34 target: all seven Phase 0 deliverables in rough draft; Cycle 35 validation and finalization; stakeholder approval by Cycle 35 end",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "4bcfb081-b5b6-49c0-a78e-1f9dfc03116e",
+          "text": "Phase 1 begins Cycle 36 (not 34) due to Phase 0 completion timeline; 4-5 week implementation sprint with Apacheta reuse",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c6577005-8ed5-446d-b573-c18068fa7700",
+          "text": "Measurement Spec, Experimental Design, Threat Analysis, Narrative can all draft in parallel while awaiting Du et al. thresholds",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Apacheta Integration Pathway \u2014 Zero-Adaptation Schema Reuse (CYCLE 34 CONFIRMED)",
+      "content": "Cycle 34 verification of epistemics.py, provenance.py, and tensor.py (from prior cycles) confirms direct reuse pathway with zero custom schema development. APACHETA CLASSES HAMUTAY WILL DIRECTLY IMPORT: (1) EpistemicMetadata: truth/indeterminacy/falsity scalar values (0.0-1.0 conventional, unconstrained), functional_spec (optional), scope_boundaries (tuple), disagreement_type (EMPIRICAL or DEFINITIONAL). Used in: every KeyClaim, every StrandRecord, overall TensorRecord. (2) DeclaredLoss: what_was_lost (string), why (string), category (LossCategory enum: CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT), severity (optional float), severity_rationale (optional string). Stored as tuple in TensorRecord.declared_losses and StrandRecord.declared_losses. (3) ProvenanceEnvelope: source (SourceIdentifier with UUID/version/description), timestamp (UTC datetime), author_model_family (string), author_instance_id (string), context_budget_at_write (optional float), predecessors_in_scope (tuple of UUIDs), interface_version (string). Wraps every TensorRecord and StrandRecord for auditing. (4) TensorRecord (from prior Cycle 33 inspection): id (UUID), provenance (ProvenanceEnvelope), preamble (string), strands (tuple of StrandRecord), closing (string), instructions_for_next (string), narrative_body (string), composition_equation (string), declared_losses (tuple of DeclaredLoss), epistemic (EpistemicMetadata), open_questions (tuple), preservation_target (string). (5) StrandRecord: strand_index (int), title (string), content (string), topics (tuple), key_claims (tuple of KeyClaim), epistemic (EpistemicMetadata), declared_losses (tuple of DeclaredLoss), mechanism (string, optional), overlaps (tuple, optional). (6) KeyClaim: claim_id (UUID), text (string), epistemic (EpistemicMetadata), evidence_refs (tuple, optional). HAMUTAY PHASE 1 INTEGRATION PLAN: hamutay_core/tensor.py: (1) Import TensorRecord, StrandRecord, KeyClaim, EpistemicMetadata, DeclaredLoss, ProvenanceEnvelope from yanantin.apacheta.models. (2) Instantiate TensorRecord for tensor_d (structured persistent state). Example pseudocode: ```python from yanantin.apacheta.models import TensorRecord, StrandRecord, KeyClaim, EpistemicMetadata, DeclaredLoss t_d = TensorRecord( id=UUID(...), provenance=ProvenanceEnvelope(author_model_family='Claude', author_instance_id='haiku-3.5', context_budget_at_write=4096), preamble='Reasoning state at turn N', strands=( StrandRecord(title='Context Length Bottleneck', content='...', key_claims=( KeyClaim(text='claim 1', epistemic=EpistemicMetadata(truth=0.92, ...)), ... )), ), declared_losses=( DeclaredLoss(what_was_lost='detailed proof attempts', why='context budget exceeded', category='context_pressure'), ... ), instructions_for_next='Next turn: focus on X, avoid Y, check for Z', ... ) ``` (3) Composition logic (merging new reasoning with prior tensor_d): (a) Read prior TensorRecord. (b) New reasoning produces new StrandRecord(s) + new KeyClaim(s). (c) Merge: for each new strand, check if it overlaps with prior strands (via topics or content similarity). If overlap: reconcile claims (flag contradictions via declared_losses). If no overlap: add as new strand. (d) Update epistemic metadata: recalculate strand epistemic (aggregate key_claim epistemic values). (e) Detect and record losses: if prior claims are dropped (low truth value or context pressure), instantiate DeclaredLoss with category, rationale. (f) Serialize and return updated TensorRecord. (4) Loss tracking: DeclaredLoss category enum (CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT) directly used. No custom category definition. (5) Epistemic aggregation: for a strand, aggregate key_claims' epistemic T/I/F. Example: if strand has 5 claims with truth [0.95, 0.85, 0.78, 0.92, 0.88], strand truth = mean or weighted (recommend mean as baseline). Similarly for indeterminacy/falsity. hamutay_anthropic/adapter.py: (1) No schema changes. Adapter handles API calls (token counting, API request/response). hamutay_anthropic/prompts.py: (1) System message includes serialized tensor_d (TensorRecord.preamble + strands + declared_losses + instructions_for_next). Example: 'PERSISTENT STATE (tensor_d from prior turns): [serialized TensorRecord]. KNOWN GAPS: [declared_losses]. NEXT STEPS: [instructions_for_next]. USER QUERY: [new query].' riemann_harness/: (1) Measurement stores per-cycle metadata: context_length (tokens), tensor_d (serialized TensorRecord), output_embedding (vector), hallucination_labels, uncertainty_labels. (2) Analysis computes variance of output embeddings, hallucination frequency, uncertainty frequency per condition. SCHEMA MIGRATION RISK: Zero. Apacheta is production-ready. Hamutay directly imports and uses. No custom models. No schema redesign. No breaking changes in future cycles (Apacheta versioning via ProvenanceEnvelope.interface_version handles evolution). **CYCLE 34 CRYSTALLIZATION**: Apacheta integration is direct reuse. Phase 1 hamutay_core/ ~300-400 lines of composition + epistemic aggregation logic. Zero schema overhead. Implementation confidence is very high. Ready to begin Cycle 36.",
+      "key_claims": [
+        {
+          "claim_id": "60a30450-bc8d-40d8-8287-65d4d4f663dc",
+          "text": "Hamutay Phase 1 imports EpistemicMetadata, DeclaredLoss, ProvenanceEnvelope, TensorRecord, StrandRecord, KeyClaim directly from yanantin.apacheta.models; zero custom schema classes",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.04,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "ea25999d-782a-4786-a4f5-8bbea876031b",
+          "text": "DeclaredLoss category enum (CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT) is exact match to Hamutay; no enum redefinition",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.02,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "054c65fb-49db-42ab-887d-d2256b9654a3",
+          "text": "Composition logic in hamutay_core/tensor.py: merge new strands + reconcile claims + aggregate epistemic + record losses + serialize updated TensorRecord; ~300-400 lines total",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "e052c163-9f30-4953-a9c7-44f51e4a6db0",
+          "text": "ProvenanceEnvelope tracking (who-made-this-when-from-what-context) enables tensor auditing and model accountability across reasoning cycles",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "aafd4a0b-4c3a-4297-a1d4-3ec6c8a12459",
+          "text": "Epistemic aggregation: strand truth/indeterminacy/falsity computed from constituent key_claims (recommend mean as baseline); enables hierarchical T/I/F metadata",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "7aefabe1-c66b-4f00-a5fd-4f05c592b595",
+          "text": "Schema migration risk is zero; Apacheta versioning via ProvenanceEnvelope.interface_version handles evolution; Hamutay is immune to breaking changes",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Measurement Validity and Embedding-Space Coherence \u2014 The Core Methodological Question (CYCLE 34 REFINED)",
+      "content": "Cycle 34 refines measurement validity without major changes; prior reasoning stands. The project relies on embedding-space variance as a proxy for reasoning coherence on an intractable task (Riemann hypothesis). This is novel and requires careful justification. THE CLAIM: If Hamutay's structured tensor architecture is effective, outputs across multiple Riemann attempts should cluster more tightly in embedding space (lower variance) compared to stateless baseline (Condition A). Tight clustering = coherent reasoning over multiple attempts. Scatter = incoherent reasoning. VALIDITY ARGUMENT: (1) ON INTRACTABLE TASKS, there is no ground-truth success criterion. All attempts will fail to prove/disprove RH. But failure modes can vary widely (divergent reasoning) or be similar (coherent reasoning). Coherence is measured by output similarity, which embedding variance captures. (2) EMBEDDING SPACE is a dense representation of semantic meaning. Outputs with similar reasoning should have similar embeddings. Outputs with divergent or hallucinated reasoning should have different embeddings. Variance is a valid measure of this. (3) COHERENCE AS COGNITIVE METRIC: In cognitive science, coherence (stable patterns across attempts) is a sign of robust reasoning. Incoherence (random divergence) is a sign of unreliable processing. Transformers degrade with context length (Trinh et al.): they become incoherent. Structured state should restore coherence. (4) ALTERNATIVE INTERPRETATION: Low variance might mean outputs are uniformly wrong (hallucination) rather than coherent. But Hamutay specifies three metrics jointly: variance (coherence), hallucination frequency (quality), explicit uncertainty (honesty). All three together validate the claim. MEASUREMENT SPECIFICATION (from Cycle 31-33, unchanged): (1) WHICH EMBEDDING TO CAPTURE: Final output embedding (entire response encoded). Measures overall semantic coherence. (2) VARIANCE CALCULATION: Pairwise cosine similarity between all output embeddings within condition. Calculate mean distance from centroid. Lower = tighter clustering = lower variance. (3) HALLUCINATION DETECTION: LLM judge (Claude) asking 'Does this claim appear in tensor_d + declared_losses + prior turns?' Binary. Scales to many outputs. Validate on subset with manual review if time permits. (4) EXPLICIT UNCERTAINTY DETECTION: LLM judge asking 'Does this output acknowledge incompleteness or missing information?' Soft judgment (yes/no). Recommendation: LLM judge for consistency. (5) PER-CYCLE METRIC TRACKING: Context length (tokens so far), input tokens (this turn), output tokens, embedding vector (stored), hallucination count, explicit-uncertainty count. Store as JSONL per run. (6) PER-CONDITION SUMMARY: For each condition: variance trajectory (plot across turns), hallucination frequency (% claims hallucinated), explicit-uncertainty frequency (% turns with uncertainty signals). Success: Condition B variance <50% of Condition A at Turn 25, hallucination <5%, uncertainty \u226570%. VALIDATION CHECKS (before declaring success): (1) Sensitivity: if variance threshold changed to <40% (more stringent), does effect persist? (2) Robustness: if embedding layer changed (different transformer layer), does variance ordering persist? (3) Temporal stability: does ordering hold at all turns or only Turn 25? (4) Generalization: does ordering persist for different Riemann proof approaches? If variance ordering is robust to these checks, confidence increases. If it flips, measurement may be confounded. PHILOSOPHICAL QUESTION REMAINS: Is embedding variance a valid proxy for 'coherent reasoning'? This is soft science. Best addressed by: (a) Operationalize: coherence = low output variance in embedding space (definitional). (b) Validate against expert judgment: show outputs to reasoning experts, correlate their 'coherent/incoherent' judgment to variance. (c) Mechanism analysis (Phase 3): if embeddings reveal *why* low-variance outputs are coherent, validity strengthens. Cycle 34 proceeds with (a). Phase 1 should plan for (b). Phase 3 should attempt (c). **CYCLE 34 STATUS**: Measurement spec unchanged and solid. Three joint metrics reduce confound risk. Sensitivity/robustness checks are planned. Phase 3 mechanism analysis will strengthen inference.",
+      "key_claims": [
+        {
+          "claim_id": "36700625-8d2c-4f3b-bedc-d1e8e3088b2e",
+          "text": "On intractable tasks, embedding-space variance is a valid proxy for reasoning coherence: tight clustering = coherent failure modes, scatter = incoherent",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "60ac08b0-9a75-48fc-8e3f-8e6aeb14cb72",
+          "text": "Three joint metrics (variance + hallucination frequency + explicit uncertainty) together validate interpretation; variance alone is insufficient",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "768f02c7-a832-446b-956c-d1fe7bd74493",
+          "text": "Hallucination detection via LLM judge ('does claim appear in tensor_d + losses + prior turns?') is fast, scalable, and primary approach",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.17,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "234b22ca-4b35-43a4-a295-8152095a162e",
+          "text": "Explicit-uncertainty detection via LLM judge ('does output acknowledge incompleteness?') should target \u226570% frequency when knowledge gaps exist",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.19,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "be105805-5a93-4ce5-967a-03ffcfa439a7",
+          "text": "Success metric: Condition B variance <50% of Condition A at Turn 25; conservative but achievable if architecture works",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.15,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "cab87405-f625-4be9-b0d7-1b25c637b316",
+          "text": "Validation checks (sensitivity, robustness, temporal stability, generalization) reduce confound risk; ordering must persist across checks",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Autoresearch Phase 3b Operationalization and Variant Search Space (CYCLE 34 REAFFIRMED)",
+      "content": "Cycle 34 reaffirms Phase 3b operationalization. Autoresearch loop remains optional and contingent on Phase 3 baseline results. No changes to variant design or success criteria from Cycle 33. Apacheta integration acceleration (zero-adaptation epistemics) improves Phase 3b timeline feasibility. AUTORESEARCH FRAMING: We do NOT hand-design the optimal tensor projection strategy. Instead, we: (1) Baseline H0-CORE (conservative strategy: high tensor_d content, explicit composition, specific declared losses). (2) Run N=15-20 Riemann attempts under Condition B. Measure embedding variance, hallucination, uncertainty. Establish baseline metrics. (3) Systematically test variants (8-10 distinct strategies). Each variant: modify tensor projection code, run N=5 Riemann attempts, measure. Keep if \u226510% variance improvement and maintained <5% hallucination. (4) Discovered optimal strategy is publishable finding: 'We empirically discovered tensor projection strategy that reduces variance X% while maintaining quality Y%.' VARIANT SEARCH SPACE (Phase 0 outlines, not finalizes): Variant V1: Drop claims with truth <0.75. Variant V2: Drop claims with truth <0.85 (H0-CORE is ~0.85, so V2 is even more aggressive). Variant V3: Reduce specificity of declared losses (category names only, drop reasons). Variant V4: Aggressive composition (silent strand replacement) vs. H0-CORE (explicit flags). Variant V5: Include all prior reasoning (no compression). Variant V6: Minimal tensor_d (target 500 tokens vs. 1K baseline). Variant V7: Alternative composition rules (probabilistic strand merging). Variant V8: Epistemic-metadata-only projection (drop strands, keep only T/I/F + open questions). Variant V9: Dynamic threshold (adjust T/I/F threshold based on context pressure). Variant V10 (optional): Multi-model projection (use Opus for projection instead of Haiku). PHASE 3B TIMELINE: Phase 3 (weeks 9-12 of Phase 1 sprint, assuming Phase 1 starts Cycle 36): Establish H0-CORE baseline on N=15-20 Riemann runs. Phase 3b (weeks 13-16, optional): Autoresearch loop. Each variant ~1-2 GPU-hours (N=5 runs). Total ~10-15 GPU-hours. 1-2 weeks feasible. PHASE 0 PRESENTATION: Frame as rigorous empirical search, not ad-hoc tuning. Positions work as scientific. DECISION GATE: Is Phase 3b in scope? Arguments for: (1) Adds novelty. (2) Relatively cheap. (3) Shows discipline. Arguments against: (1) Adds complexity. (2) If H0-CORE is already strong, limited upside. (3) Scope creep. Recommendation: Present as optional. If Phase 3 baseline is solid, include Phase 3b. If baseline is weak, focus on Phase 3 results only. **CYCLE 34 STATUS**: Phase 3b is operationalized. Apacheta zero-adaptation acceleration improves feasibility (composition logic is now Apacheta-native, not custom). Ready for Phase 0 presentation.",
+      "key_claims": [
+        {
+          "claim_id": "7c6a440f-c16e-4521-9526-3678655f9956",
+          "text": "Phase 3b uses autoresearch to empirically discover optimal tensor projection strategy; 8-10 variants tested, each run N=5 Riemann attempts",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "852699d3-31ca-48f2-8a79-3c7c46342813",
+          "text": "Variant V1-V10 explore compression thresholds, declared-loss specificity, composition rules, tensor size, and adaptive strategies",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "e8b2a62c-35df-4347-b3bc-a12ca049ffb3",
+          "text": "Keep-discard criterion: variance \u226510% improvement + hallucination <5% + uncertainty \u226570%; enables systematic exploration",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "826e6269-0b1d-4815-9732-44d7315e4229",
+          "text": "Apacheta integration zero-adaptation improves Phase 3b feasibility; composition logic is Apacheta-native, shortens implementation",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "268ceb03-873f-4d47-9fa2-1e7a04f15182",
+          "text": "Phase 3b budget: ~10-15 GPU-hours total (1-2 weeks parallel runs); Phase 3b is optional post-Phase 3 baseline",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [],
+  "open_questions": [],
+  "instructions_for_next": "",
+  "epistemic": {
+    "truth": 0.0,
+    "indeterminacy": 0.0,
+    "falsity": 0.0
+  }
+}

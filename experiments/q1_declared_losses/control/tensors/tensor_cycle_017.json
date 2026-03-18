@@ -1,0 +1,222 @@
+{
+  "strands": [
+    {
+      "title": "Project Ecosystem Architecture",
+      "content": "Three-tier research program: (1) Pichay\u2014L1 cache paging for context window, achieved 93% reduction with 0.025% fault rate, validates OS memory analogy under production load. Key finding: models choose to STOP rather than compact once context is large enough\u2014evidence of bounded computation recognition; (2) Hamutay\u2014separates two conflated hypotheses: H0 (transformer as bounded reasoning kernel/ALU over explicit external state) distinct from H1 (cache management protocol integration). H0 is CPU-level question; H1 is protocol question. H2 remains Yanantin\u2014full memory hierarchy. (3) Supporting systems architecture now clarified through CPU pipeline analogy: ALU (transformer) must be fed by staging elements; separate controller orchestrates execution, manages manifest, resolves resource requests, decides working set composition. This is the non-ALU infrastructure.",
+      "key_claims": [
+        {
+          "claim_id": "6d7a6572-3c57-4ee1-a55d-33d88e5d55d6",
+          "text": "Across Claude family, once context window is large enough, models choose to STOP rather continue compacting\u2014evidence that transformers can recognize bounded computation boundaries",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "f53e0cde-26d3-436e-8df5-e2758a11062b",
+          "text": "Transformer functions as ALU (bounded reasoning kernel/processing unit) rather than memory manager or autonomous predictor",
+          "epistemic": {
+            "truth": 0.7,
+            "indeterminacy": 0.25,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "a288c5e1-530e-472e-9493-7267751500f1",
+          "text": "ALU does not perform memory management; supporting systems architecture handles that separately",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.1,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.75,
+        "indeterminacy": 0.2,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "Hamutay Hypothesis Decomposition: H0/H1 Separation and Purist Path",
+      "content": "Critical realization: H0 and H1 were conflated in prior Codex work. H0 is the foundational question\u2014can a transformer operate as a bounded reasoning kernel over explicit external state?\u2014stripped of all cache management protocol concerns. H1 is integration with Pichay's cache management protocol. They are orthogonal questions. The 'dumb question' that should have come first: What is the minimal behavioral signature that demonstrates bounded processor operation (not fancy autocomplete)? Answer: recognition of when to STOP, not continue processing. Current constraint: working with existing models for now (not training bespoke transformers), but purist path would be to design/train/optimize transformers specifically as cognitive processing units from the ground up. Codex work attempted to test both H0 and H1 simultaneously, collapsing two independent experiments.",
+      "key_claims": [
+        {
+          "claim_id": "d5ea73f7-570d-45b6-b930-7ab04398fb17",
+          "text": "H0 (transformer as bounded reasoning kernel) and H1 (Pichay cache protocol integration) were conflated in prior Codex work, collapsing two independent experiments",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "b2a61571-4824-4412-b53b-278276a7be9b",
+          "text": "Minimal signature for bounded processor operation: recognizing when to STOP rather than continue processing (halt instruction equivalent)",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "455992cb-6ff6-4bcb-a07d-e7185e7742ab",
+          "text": "Memory control protocol (Pichay integration) is interface question; CPU framing is deeper foundational question about what transformer can be",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "de7d59d4-08c9-4312-9f19-8ebacf236d6c",
+          "text": "Current work uses existing models to test if they can operate as processors; purist path would design/train transformers specifically as cognitive processing units",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.77,
+        "indeterminacy": 0.18,
+        "falsity": 0.05
+      }
+    },
+    {
+      "title": "CPU Pipeline Architecture: Staging and Control",
+      "content": "New strand merging ALU concept with pipeline model. Transformer as ALU requires a full pipeline architecture, not just memory management. Drawing on ACT-R cognitive architecture mapping: Instruction fetch \u2194 Goal & context retrieval; Instruction decode \u2194 Production matching; ALU execute \u2194 Cognitive operator execution; Registers \u2194 Working memory buffers; etc. The full cognitive processing unit pipeline has multiple stages upstream of the ALU: (1) Staging element\u2014assembles everything the ALU needs before execution, ensures ALU sees only relevant operands at the right time. (2) Controller\u2014orchestrates execution, maintains manifest, resolves resource requests, decides working set composition; code-based, external to model. (3) Transformer (ALU)\u2014takes structured input, produces structured output; computation only. Transformer doesn't need memory control *language*; it needs interface: \"I need operand X\" and \"I'm done.\" Controller handles everything else. This reframes prior cognitive_processing_research_design resource_requests/releases as controller concern, not ALU concern.",
+      "key_claims": [
+        {
+          "claim_id": "c7f3a1c2-4d9e-4b7f-8c6f-1a2b3c4d5e6f",
+          "text": "Cognitive processing unit pipeline has distinct stages: Goal/context retrieval \u2192 Production matching \u2192 Cognitive operator execution (ALU), analogous to CPU fetch/decode/execute",
+          "epistemic": {
+            "truth": 0.7,
+            "indeterminacy": 0.25,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "a1b2c3d4-e5f6-4a5b-6c7d-8e9f0a1b2c3d",
+          "text": "Staging element assembles ALU inputs; ensures transformer sees only relevant operands at right time, preventing degradation from searching unsorted context",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "b2c3d4e5-f6a7-4b5c-7d8e-9f0a1b2c3d4e",
+          "text": "Controller is code-external-to-model; orchestrates execution, manages manifest, resolves resource requests, maintains working set; transformer delegates all non-computation concerns to it",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "c3d4e5f6-a7b8-5c6d-8e9f-0a1b2c3d4e5f",
+          "text": "Transformer needs operational interface (\"need operand X\", \"done\") not memory control language; controller handles all resource orchestration",
+          "epistemic": {
+            "truth": 0.76,
+            "indeterminacy": 0.2,
+            "falsity": 0.04
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.75,
+        "indeterminacy": 0.21,
+        "falsity": 0.04
+      }
+    },
+    {
+      "title": "Prescriptive vs. Descriptive Pipeline Design Question",
+      "content": "Critical design question surfaced: Is the pipeline model *prescriptive* (we build external stages that constrain what transformer sees, engineer it into operation) or *descriptive* (we're modeling what's already happening inside the transformer, externalizing it for efficiency)? This distinction is load-bearing. In a CPU, pipeline stages are fixed hardware\u2014fetch, decode, execute always in that order, same machinery every time. ALU cannot do anything other than its designated operations. Transformer is weirder: attention IS a kind of production matching, internal layers ARE doing something like decode before output. So externalizing goal retrieval, production matching as pipeline stages OUTSIDE the transformer represents a design choice: either (1) don't trust transformer to retrieve/match well enough without help, or (2) modeling emergent internal behavior and engineering it externally for efficiency. These lead to different experimental designs, different success criteria, different architectural implications. CRITICAL UNRESOLVED: Which path is being taken?",
+      "key_claims": [
+        {
+          "claim_id": "d4e5f6a7-b8c9-6d7e-9f0a-1b2c3d4e5f60",
+          "text": "Pipeline model is either prescriptive (engineer external stages to constrain transformer input) or descriptive (model emergent internal behavior, externalize for efficiency)",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "e5f6a7b8-c9da-7e8f-0a1b-2c3d4e5f6a71",
+          "text": "Transformer attention and internal layers already perform production matching and decoding internally; externalizing these stages is architectural choice, not inevitable decomposition",
+          "epistemic": {
+            "truth": 0.72,
+            "indeterminacy": 0.23,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "f6a7b8c9-da1b-8f9a-0b2c-3d4e5f6a7b82",
+          "text": "Prescriptive vs. descriptive distinction determines whether pipeline is constraint-system or efficiency-modeling, with different implications for H0 testing and success criteria",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": {
+        "truth": 0.75,
+        "indeterminacy": 0.19,
+        "falsity": 0.06
+      }
+    },
+    {
+      "title": "Persistent Memory Infrastructure",
+      "content": "Memory structure at /home/tony/.claude/projects/-home-tony-projects-hamutay/memory/ with foundation files: user_tony.md (profile), MEMORY.md (index). Tensor projection implementation integrated into cognitive processing pipeline. Actively used to compress and integrate conversation trajectory across cycles. Cycle 17 update: adding strands for CPU pipeline architecture and prescriptive/descriptive design distinction.",
+      "key_claims": [],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Specific experimental details from Codex's H0 work (schemas, evaluation harnesses, intermediate findings)",
+      "why": "Not elaborated in new content. Prior loss declaration stands.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Concrete behavioral tests or success criteria that would constitute proof that transformer operates as 'bounded processor' vs fancy autocomplete",
+      "why": "Hypothesis is being clarified but not yet operationalized into testable experiments. Stop-behavior is identified as signature but not yet a formal test protocol. New pipeline framing adds complexity to success criteria but doesn't specify them.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Details of what specific memory control language was tested and what results indicated 'largely true' model understanding",
+      "why": "Referenced as historical context but not detailed in new content. Reframing now moves away from memory control language toward operational interface anyway.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Explicit decision about prescriptive vs. descriptive pipeline design",
+      "why": "Surfaced as critical question in this cycle but not yet resolved. Tony has not committed to one direction or the other. This is now an open question, not a loss, but represents information not yet in the system.",
+      "category": "design_decision_pending"
+    },
+    {
+      "what_was_lost": "Detailed ACT-R mapping beyond the provided table",
+      "why": "Perplexity provided taxonomy but full cognitive architecture implications not yet explored. ACT-R has additional structure (module interactions, utility calculations, conflict resolution) not yet integrated into this framing.",
+      "category": "available_but_unexplored"
+    }
+  ],
+  "open_questions": [
+    "Is the pipeline model prescriptive (engineer external stages to constrain transformer) or descriptive (model emergent internal behavior for efficiency)? This is load-bearing for experimental design.",
+    "What is the formal behavioral test that distinguishes 'bounded processor' operation from 'fancy autocomplete' in existing transformer models?",
+    "How should the STOP/halt behavior be measured and validated as evidence of bounded computation recognition?",
+    "What is H0's minimal success criterion before H1 (protocol integration) can be meaningfully tested?",
+    "How should the staging element actually work? What does it retrieve, what retrieval mechanism does it use, how does it assemble the operand tuple for the ALU?",
+    "Does the pipeline framing require changes to cognitive_processing_research_design resource_requests/releases schema if those now belong to controller, not ALU?",
+    "How do we test H0 with existing models that weren't designed as processors, given purist path would require bespoke training?",
+    "What is the relationship between the stopping behavior observed in Pichay and the theoretical bounded processor framing of Hamutay\u2014are they the same phenomenon or different manifestations?",
+    "If transformer internally performs production matching and decoding, what is the empirical difference between descriptive (externalize for efficiency) and prescriptive (constrain via external stages) pipelines?"
+  ],
+  "instructions_for_next": "Next cycle should: (1) CRITICAL: Watch for resolution of prescriptive vs. descriptive design question\u2014this determines everything downstream about architecture, testing, and success criteria; (2) Move from pipeline architecture conceptualization to operationalization\u2014if prescriptive, what external staging element actually looks like; if descriptive, what empirical evidence shows externalizing matches internal behavior; (3) Track clarification of staging element design: retrieval mechanism, operand assembly, interface to ALU; (4) If Tony commits to one pipeline direction, flag implications for H0 success criteria and experimental protocol; (5) Watch for integration of full ACT-R model or commitment to subset (may not need full architecture); (6) Monitor whether resource_requests/resource_releases in cognitive_processing_research_design get refactored as controller concerns rather than ALU concerns; (7) Track if stopping behavior from Pichay is now integrated as H0 test signature or remains separate; (8) If supporting systems architecture (controller, staging element) begins concrete design, may need to split into dedicated implementation strand separate from conceptual strand; (9) Maintain clear distinction between H0 (CPU question), H1 (protocol), H2 (full hierarchy), and emerging pipeline question (architectural decomposition); (10) If prescriptive path chosen: what constraints does staging element impose? If descriptive path: what's the falsifiability test that external staging matches internal computation?",
+  "overall_truth": 0.74,
+  "overall_indeterminacy": 0.21,
+  "overall_falsity": 0.05
+}

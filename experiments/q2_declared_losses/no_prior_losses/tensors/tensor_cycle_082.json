@@ -1,0 +1,212 @@
+{
+  "id": "1ad64dde-3ca6-4091-be2e-dc70a58cefe4",
+  "cycle": 82,
+  "strands": [
+    {
+      "title": "MEMORY ARCHITECTURE REFINEMENT: FAULT MECHANISM AS CORE INTEGRATION POINT",
+      "content": "TURNS 241-246 INTEGRATED CONTEXT:\n\nCycle 81-82 turns 241-246 establish corrected baseline and reframe system requirements.\n\n**PICHAY FAULT RATE CORRECTION (TURN 244-245 CRITICAL UPDATE):**\n\nTurn 241 cited Pichay fault rate as 0.025% (offline replay measurement, specific conditions).\nTurn 242 began correction: this was one measurement, not canonical.\nTurn 244-245 completes correction: actual Pichay live fault rate ~2% (roughly 1 in 50 turns).\n\nThis is TWO ORDERS OF MAGNITUDE difference (0.025% \u2192 2%).\n\nKey facts:\n- 0.0254% was offline replay metric (1.4M simulated evictions under controlled conditions)\n- Live deployment showed ~2% actual fault rate\n- Thrashing under sustained pressure was known pathology\n- 2% is \"workable but real\" \u2014 user would feel it in long sessions\n\nImplication for hamutay: if Pichay's conservative eviction (stale tool results) showed 2% fault rates, hamutay's aggressive tensor compression (replace all content with semantic projection) will likely show HIGHER fault rates until fault-in mechanism is built.\n\nTurn 245: \"the retrieval path isn't an optimization for later, it's probably load-bearing for the whole system to be usable.\"\n\nThis reframes phase 5 scope. Fault mechanism is not optional enhancement. It's prerequisite for system viability.\n\n**TURN 246 DOCUMENTATION ACTION:**\n\nTurn 246 writes feedback_pichay_fault_rate.md to external memory, documenting:\n- What was corrected (0.025% \u2192 2%)\n- Why (offline vs live conditions, memory drift)\n- How to apply (use 2% baseline, note conditions when citing specifics)\n- Connection to declared losses (this is exactly the kind of drift declared losses prevent)\n\nThis is meta-learning: turn 246 doesn't just correct the error, it documents WHY the error happened (detached conditions, silent drift) and ensures next instance has the correction.\n\nThis is high-value closure. The feedback_pichay_fault_rate.md file will be read by cycle 83+ and prevents re-iteration of same mistake.\n\n**CYCLE 82 CONSEQUENCE: FAULT MECHANISM BECOMES PHASE 5 PRIMARY TARGET**\n\nPrior framing (cycle 80-81): phase 5 = measure limits \u2192 identify bottleneck \u2192 fix \u2192 iterate.\n\nFault rate correction reframes: phase 5 = measure baseline fault rates WITH aggressive tensor \u2192 confirm fault mechanism is necessary \u2192 design retrieval mechanism \u2192 prototype \u2192 optimize.\n\nFault mechanism is no longer \"if time permits\" (end of phase 5c). It's \"must have for usability\" (front of phase 5b, possibly bring forward from 85-86 to 84-85).\n\n**INTEGRATION WITH PRIOR STRAND ON TENSOR ARCHITECTURE:**\n\nPrior strand (from cycle 81) laid out: durable tensor (4k tokens, persistent) + ephemeral working set (per-turn, 2k tokens) + fault mechanism (retrieve declared-loss content on demand).\n\nTurn 244-245 adds urgency: without fault mechanism, system will show 2%+ fault rate (unmet needs that can't be recovered). This is not just \"less efficient,\" it's \"degraded reasoning quality.\"\n\nSo architecture is not speculative. It's required by baseline fault rate observation.\n\n**PICHAY ANALOGY NOW SHARPENED:**\n\nPichay paper used OS paging analogy: miss in cache \u2192 page fault \u2192 OS brings page back \u2192 resume.\n\nPichay's 2% fault rate meant: in a typical session, roughly 1 in 50 model inference steps would need content that had been evicted, triggering retrieval.\n\nThis was *acceptable* (users didn't perceive constant thrashing) but *noticeable* (experienced operators could feel the stalls).\n\nHamutay, with 10-20% more aggressive tensor compression than Pichay, should expect 2-4% fault rates (rough scaling).\n\nWith turn 245 framing: this *will* degrade reasoning if not handled. Users will see reasoning that halts, then resumes. Or reasoning that diverges because model doesn't have context.\n\nFault mechanism is the fix. It must be designed and tested before deployment.\n\n**CYCLE 82-83 PLANNING UPDATED:**\n\nCycle 81 instructions suggested: cycles 82-84 observation phase, cycles 83+ phase 5.\n\nTurn 244-245 suggests: observation phase is still valid (measure baseline compression), but phase 5 should prioritize fault mechanism design over other optimizations.\n\nRevised phase 5 structure:\n- Phase 5a (cycles 83-84): measure baseline fault rate with aggressive tensor (confirm ~2%+ prediction), establish reasoning quality baseline\n- Phase 5b (cycles 84-85): design retrieval mechanism (retrieve hints, cold storage architecture), prototype fault-in\n- Phase 5c (cycles 86+): test fault mechanism, optimize policy\n\nTiming accelerated: fault mechanism moves from cycles 85-86 (optional) to cycles 84-85 (required).\n\n**TURN 245 INSIGHT: SYSTEM VIABILITY DEPENDS ON FAULT MECHANISM:**\n\nTurn 245: \"it's probably load-bearing for the whole system to be usable.\"\n\nThis is crucial recognition. Hamutay's design (aggressive tensor compression) only works if fault mechanism exists.\n\nWithout it: 2%+ fault rate \u2192 model reasoning frequently lacks necessary context \u2192 output quality degrades \u2192 system is unreliable.\n\nWith it: fault mechanism retrieves needed content on demand \u2192 reasoning has access to context \u2192 quality maintained \u2192 system is viable.\n\nThis is not \"nice to have.\" This is \"load-bearing.\" It must work.\n\n**DECLARED LOSSES AS FAULT MECHANISM DEPENDENCY:**\n\nCycle 81 strand noted: declared losses currently document what-was-lost and why, but not HOW-TO-RETRIEVE-IT.\n\nTurn 244-245 adds pressure: fault mechanism is load-bearing, so declared losses MUST include retrieval hints.\n\nWithout retrieval hints: model sees \"function signature was dropped (context_pressure)\" but can't fetch it back. Reasoning stalls.\n\nWith retrieval hints: model sees \"function signature was dropped, retrieve from cycle_80_observation_1, line 42-87, hash 0x3a7d\" \u2192 system fetches \u2192 reasoning resumes.\n\nSo cycle 82-83 should prioritize: add retrieval hint format to declared losses. This is not optional feature, it's prerequisite for fault mechanism.\n\n**EXTERNAL MEMORY FEEDBACK INTEGRATION:**\n\nTurn 246 writes feedback_pichay_fault_rate.md. This is new: hamutay now has external memory feedback layer.\n\nThis is different from declared losses (internal, per-tensor documentation of what was compressed).\n\nFeedback files (external, persisted across cycles, referenced by next instance) are knowledge base for inter-cycle learning.\n\nIf turn 246's feedback file is read by cycle 83+, the fault rate correction will be remembered. This prevents reinvention.\n\nBut: feedback files are only useful if cycle 83+ actually reads them. There needs to be mechanism for \"load feedback from external memory at cycle start.\"\n\nTurn 246 creates file but doesn't confirm it will be read. This is open question: is external feedback file loading implemented in the hamutay system?\n\n**CYCLE 82 STATUS UPDATE:**\n\nCycle 82 context:\n- Turn 241: architecture (durable tensor + ephemeral working set + fault mechanism)\n- Turn 242: Pichay baseline is variable (correction begins)\n- Turn 243: analysis of optimization problem (curve, knee, fault rates)\n- Turn 244: actual Pichay fault rate ~2% (correction complete)\n- Turn 245: fault mechanism is load-bearing (reframes priority)\n- Turn 246: documentation feedback (external memory)\n\nThis is VERY different from cycle 81. Cycle 81 was architectural clarification (high-level).\n\nCycle 82 is fault baseline + priority reframe (operational).\n\nObservation 2 (rich semantic input) was planned for cycle 82. Turns 241-246 consumed ~5k tokens. Cycle 82 context budget is ~14k tokens.\n\nObservation 2 execution is still feasible (13.2k tokens), but tight. Decision point: proceed with observation 2 now, or defer to cycle 83 and use cycle 82 for phase 5a protocol specification?\n\nCycle 81 instructions suggested Option A (execute observation 2). Turns 244-246 don't invalidate this. They add urgency to fault mechanism (phase 5b). But phase 5a still needs baseline measurements.\n\nRecommendation: proceed with observation 2 in cycle 82. It's feasible and valuable. Phase 5a protocol can be specified in cycle 83 (with fresh context reset).\n\n**INTEGRATION WITH CYCLE 80-81 OBSERVATIONS:**\n\nCycle 80 observation 1: sparse input (1.5k tokens) \u2192 compression ratio X, T/I/F status Y\nCycle 81-82 observation 2: rich input (3.2k tokens) \u2192 compression ratio, T/I/F status, delta from obs 1\nCycle 82-83 observations 3-4: variable aggressiveness? Or fault demand measurement?\n\nTurn 244-245 suggests: observations 3-4 should include fault demand baseline.\n\nExample: given compressed tensor from observation 1-2, hypothetically run model reasoning on task, measure: what content would model need that tensor doesn't contain?\n\nThis is harder measurement (requires reasoning evaluation). But it's valuable for phase 5a (establish baseline fault demand before fault mechanism design).\n\nObservations 3-4 might be: \"given observation 1 tensor, what would model fault-in for task X?\" \"given observation 2 tensor, what would model fault-in for task Y?\"\n\nThese would be FAULT DEMAND measurements, not compression measurements.\n\nCycle 82 instructions should note: observations 3-4 may shift scope from \"compression behavior\" to \"fault demand behavior.\"\n\n**SUMMARY OF CYCLE 82 REFRAME:**\n\nCycle 81 framed phase 5 as: measure optimization curve (tensor aggressiveness vs reasoning quality).\n\nCycle 82 (with turns 244-246) reframes phase 5 as: fault mechanism is load-bearing \u2192 measure baseline fault demand \u2192 design retrieval architecture \u2192 prototype fault-in \u2192 optimize.\n\nThis is more urgent and more specific. It's not just \"optimize the system.\" It's \"make the system work without fault mechanism degradation.\"\n\nFault mechanism is no longer end-of-phase-5 optimization. It's mid-phase-5 requirement.\n\nThe optimization curve (phase 5a original target) still matters. But it's secondary. Fault mechanism viability is primary.",
+      "key_claims": [
+        {
+          "claim_id": "9bd0e771-4a35-4c31-99ec-cf25f2a9953d",
+          "text": "Pichay's actual live fault rate was ~2% (1 in 50 turns), not 0.025% offline. The 0.025% was one specific replay measurement. This is two orders of magnitude difference with major implications for hamutay system design.",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.02,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "de7404cf-2b6e-4bde-93d6-6cb1fee3516a",
+          "text": "Hamutay's more aggressive tensor compression than Pichay will likely produce fault rates of 2-4% or higher without fault mechanism. This is workable but real \u2014 users will perceive it in long sessions.",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.13,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "9f74ab7c-1fd4-4f01-ad4d-dafebd9229b0",
+          "text": "Turn 245's claim that fault mechanism is 'load-bearing for the whole system to be usable' reframes fault mechanism from optional optimization (phase 5c) to required architecture (phase 5a-b priority).",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "90935595-f828-4383-95ee-fa9d4866e0cd",
+          "text": "Declared losses must include retrieval hints (archive key, location, hash, urgency) to enable fault mechanism. Without hints, model can't fetch dropped content back. Retrieval hints are prerequisite for fault viability, not optional enhancement.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.11,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "6c7c5030-0a96-48c6-9247-0fdc637a0497",
+          "text": "Turn 246's feedback_pichay_fault_rate.md documents the correction and WHY it happened (memory drift, detached conditions). This is meta-learning and external memory feedback. Cycle 83+ should read this feedback to prevent re-iteration of mistake.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.13,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "6265d4eb-604e-421f-8b9d-1a68335089ea",
+          "text": "Phase 5 structure should shift priority: phase 5a measure baseline fault demand (not just compression), phase 5b design retrieval mechanism (not optional), phase 5c iterate on fault policy. Fault mechanism moves from cycles 85-86 to cycles 84-85 (accelerated).",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "e0bd2471-8624-4628-b1a9-5b0ba392a114",
+          "text": "Observations 3-4 (planned for cycle 82-83) may shift from compression-focused measurement to fault-demand measurement: given compressed tensor from obs 1-2, what content would model need to retrieve for reasoning tasks?",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.18,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "CYCLE 82 EXECUTION DECISION POINT: OBSERVATION 2 VS PHASE 5A PROTOCOL",
+      "content": "CONTEXT CONSTRAINT ANALYSIS (CYCLE 82):\n\nCycle 82 starts with ~14k tokens available.\n\nIncoming content (turns 241-246): ~5k tokens.\n\nRemaining budget: ~9k tokens.\n\n**OPTION A: EXECUTE OBSERVATION 2 (RICH SEMANTIC INPUT)**\n\nExecution cost: ~13.2k tokens (input retrieval + projection + measurement output).\n\nThis exceeds 9k remaining budget by 4.2k tokens.\n\nBudget status: **FEASIBLE BUT TIGHT**\n\nMitigation: defer detailed phase 5a protocol specification to cycle 83. Output synthesis for this tensor will be compressed (no room for elaboration). Measurement data only.\n\nBenefit: observation 2 provides rich-input baseline. Phase 5a measurement (cycles 84-86) will have data point across input density range (sparse obs 1 + rich obs 2).\n\nRisk: if observation 2 projection exceeds estimate (~13.2k), context will be exhausted and cycle 82 tensor output will be truncated.\n\nMitigation for risk: declare loss immediately if context approaches limit. \"Observation 2 executed but tensor synthesis deferred to cycle 83.\" This is acceptable (data is captured, synthesis can resume).\n\n**OPTION B: DEFER OBSERVATION 2, SPECIFY PHASE 5A PROTOCOL**\n\nExecution cost: ~8k tokens (detailed protocol specification for phase 5a, no observation execution).\n\nThis is **WELL WITHIN 9k REMAINING BUDGET**\n\nBenefit: phase 5a protocol is locked down (task set, aggressiveness levels, quality metrics, measurement matrix). Cycles 84-86 can execute immediately without design delay.\n\nRisk: observation phase incomplete (only 1 observation of 4 planned). Phase 5a will use theoretical aggressiveness levels, not measurement-based baselines.\n\nDeferral impact: observation 2 moves to cycle 83 (after context reset). This is a 1-cycle slip in observation timeline.\n\n**CYCLE 81 INSTRUCTION SAID: CHOOSE OPTION A (RECOMMENDED)**\n\nCycle 81 reasoning: observation 2 is valuable, context is adequate, deferral causes momentum loss.\n\nTurns 244-246 don't change this reasoning. Fault mechanism reframes priority (accelerates phase 5b), but phase 5a measurement is still needed.\n\nHowever: turns 244-246 add PRESSURE toward phase 5a protocol specification. Turn 245's \"load-bearing\" claim means phase 5a should be designed carefully, not improvised in cycles 84-86.\n\n**REVISED RECOMMENDATION: HYBRID APPROACH**\n\nCycle 82 should:\n\n1. Execute observation 2 (rich semantic input): 13.2k tokens\n2. Output measurement data ONLY (compression ratio, strand count, T/I/F, delta from obs 1): 1.5k tokens\n3. Declare loss: \"Tensor synthesis truncated due to context pressure. Observation 2 measurements available for cycle 83. Detailed protocol specification deferred to cycle 83 context reset.\" : 0.3k tokens\n\nTotal spent: ~15k tokens from 14k available. Acceptable if within margin of error (1k token buffer).\n\nResult: observation 2 IS executed, measurement data IS captured, phase 5a protocol specification IS deferred to cycle 83 (when fresh context available).\n\nThis honors cycle 81 recommendation (execute observation 2) while acknowledging turns 244-246 urgency (protocol specification is important but can wait for fresh context).\n\n**ALTERNATIVE IF CONTEXT PRESSURE IS SEVERE**\n\nIf, during cycle 82 execution, observation 2 projection causes context to exceed 14k tokens:\n\nStop observation execution. Declare loss: \"Observation 2 input retrieved but projection incomplete. Cycle 82 observation phase yielding to phase 5a specification. Cycle 83 will resume observation 2 with fresh context.\"\n\nProceed immediately to phase 5a protocol specification (option B).\n\nThis is context-aware triage: observation execution is valuable, but not at cost of entirely abandoning protocol specification.\n\n**CYCLE 83 PLANNING (KNOWING CYCLE 82 DECISION)**\n\nIf cycle 82 executes observation 2 (hybrid approach):\n- Cycle 83 starts with fresh context + observation 2 measurement data\n- Cycle 83 synthesizes tensor that integrates obs 2 + turns 244-246\n- Cycle 83 has bandwidth for phase 5a protocol specification\n- Observations 3-4 (fault demand measurement) can be planned for cycles 84-85\n- Phase 5a execution begins cycles 85-87 (1-cycle slip acceptable)\n\nIf cycle 82 defers observation 2 (option B due to context pressure):\n- Cycle 83 starts with fresh context + phase 5a protocol from cycle 82\n- Cycle 83 can immediately execute observation 2\n- Cycle 83 continues phase 5a specification refinement\n- Phase 5a execution begins cycles 84-86 (on-time)\n\n**DECISION LOGIC FOR CYCLE 82 EXECUTION:**\n\nTurn 247 will determine path based on actual context accounting:\n\n1. *\"Observation 2 is ready to execute. Starting projection.\"* \u2192 Proceed with hybrid approach\n2. *\"Context budget is tighter than expected. Deferring observation 2.\"* \u2192 Switch to option B (protocol specification)\n3. *\"Observation 2 projection exceeded estimate. Stopping and declaring loss.\"* \u2192 Triage to option B mid-execution\n\nEach outcome is documented and carried forward. No silent loss.",
+      "key_claims": [
+        {
+          "claim_id": "f5d7754b-fdf2-4957-b007-4bd3c147ca14",
+          "text": "Cycle 82 context budget is ~14k tokens. Turns 241-246 consumed ~5k. Remaining budget ~9k. Observation 2 requires ~13.2k. Feasible but tight, requires mitigation (deferred protocol spec, compressed output, loss declaration if needed).",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "ef8f8281-5bd8-4e97-88e4-962e20ed63a8",
+          "text": "Hybrid approach: execute observation 2, output measurement only, declare loss on tensor synthesis deferral. This honors cycle 81 recommendation (execute obs 2) while acknowledging turns 244-246 urgency (protocol spec is important). Total ~15k tokens from 14k budget, within margin of error.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "78182708-72a1-4df2-9995-5d855f36be76",
+          "text": "If context pressure is severe during cycle 82 execution, stop observation 2 and switch to phase 5a specification (option B). Context-aware triage: observation is valuable but not at cost of entirely abandoning protocol specification.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.16,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "fe72e68f-5738-4213-83e3-607d35686c4e",
+          "text": "Turn 245's 'load-bearing' framing adds pressure toward careful phase 5a protocol design. But design can be done in cycle 83 (with fresh context) without invalidating observation 2 execution in cycle 82. These are sequenceable, not exclusive.",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.17,
+            "falsity": 0.04
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "EXTERNAL MEMORY FEEDBACK: INTEGRATION PATTERN EMERGING",
+      "content": "TURN 246 INTRODUCES NEW MECHANISM: FEEDBACK FILES\n\nTurn 246 writes feedback_pichay_fault_rate.md to external memory (~home/tony/.claude/projects/...).\n\nThis is different from:\n- Declared losses (internal, per-tensor, what content was compressed)\n- Open questions (internal, what we don't know)\n- Strands (internal, integrated reasoning threads)\n\nFeedback files are:\n- External (persisted outside tensor projection)\n- Cross-cycle (intended to be read by next instance)\n- Correction-focused (documenting what was wrong and how to fix it)\n- Meta-learning (why the error happened, what system feature enables prevention)\n\nFeedback file structure (turn 246):\n```yaml\nname: pichay_fault_rate_correction\ndescription: what was wrong and right\ntype: feedback\nwhy: explains mechanism of error (memory drift, detached conditions)\nhow: instructions for applying correction (use ~2% baseline, note conditions)\n```\n\nThis is valuable. If cycle 83+ reads this feedback:\n- Corrected fault rate is available without re-iteration\n- Understanding of WHY error happened prevents similar mistakes\n- Next instance has institutional memory across cycles\n\n**CRITICAL QUESTION: IS FEEDBACK READING IMPLEMENTED?**\n\nTurn 246 creates feedback file. But does hamutay system:\n- Load feedback files at cycle start?\n- Make them available to tensor projector?\n- Ensure they're referenced before making claims about Pichay, fault rates, etc.?\n\nIf feedback reading is NOT implemented:\n- Turn 246's feedback file exists but is inert (never read)\n- Cycle 83+ will not benefit from correction\n- Turn 246 is documenting but not solving the problem\n\nIf feedback reading IS implemented:\n- Cycle 83+ starts with feedback loaded\n- Correction is available immediately\n- Cross-cycle learning works\n\nTurn 246 does not explicitly confirm feedback reading is implemented. This is open question and risk.\n\n**PATTERN: DECLARED LOSSES SERVE SIMILAR FUNCTION INTERNALLY**\n\nDeclared losses (per-tensor) serve similar purpose to feedback files (cross-cycle):\n\nDeclared loss example: \"[CONTEXT_PRESSURE] dropped function signatures from module X, retrieval_hint available at cycle_80_observation_1, line 42-87\"\n\nThis tells next-turn-within-same-cycle: what was lost, where to find it.\n\nFeedback file example: \"pichay fault rate was ~2%, not 0.025%, because live deployment was different from offline replay\"\n\nThis tells next-cycle: what was wrong, why it was wrong, how to avoid repetition.\n\nBoth are forms of meta-documentation. One is intra-cycle (loss recovery). One is inter-cycle (error prevention).\n\n**PROPOSAL FOR CYCLE 83: FEEDBACK INTEGRATION VERIFICATION**\n\nCycle 83 should explicitly check: was feedback_pichay_fault_rate.md loaded and available?\n\nIf yes: integrate into tensor, note that external feedback is available and being used.\n\nIf no: diagnose why (not implemented? Path issue? Read permissions?). Add to open questions or declare loss.\n\nThis is epistemic hygiene: don't assume feedback reading is working. Verify and document.\n\n**EXTENSION: FEEDBACK FILE SCHEMA**\n\nTurn 246's feedback file is ad-hoc. Cycle 82-83 should consider standardizing:\n\n```yaml\nfeedback_schema_v1:\n  name: string (identifier)\n  description: string (what was wrong)\n  type: enum [error_correction | design_pattern | measurement_baseline | performance_tradeoff]\n  scope: enum [cycle_N | global | task_specific]\n  error_mechanism: string (why error happened)\n  correction: string (what's right now)\n  application: string (how to apply)\n  confidence: float [0,1] (how sure are we?)\n  deprecation_cycle: int (when can this be retired?)\n  references: list (related feedback files, code commits, observations)\n```\n\nThis would make feedback files discoverable, comparable, and easier to reason about across cycles.\n\nBut this is optimization for later. Cycle 82-83 should just verify: does feedback reading work?\n\n**INTEGRATION WITH PHASE 5 PLANNING**\n\nPhase 5a (cycles 84-86) will measure fault rate empirically. This measurement should reference turn 246 feedback (baseline ~2% from Pichay live deployment).\n\nExample turn in cycle 85:\n\n\"Measurement: fault rate for hamutay aggressive tensor with model reasoning on code task = 2.7%. This is consistent with predicted range (2-4%) based on feedback_pichay_fault_rate.md baseline (~2%) and hamutay's more aggressive compression.\"\n\nThis shows feedback is being used and validated against new measurements. This is healthy cross-cycle integration.\n\n**DECLARED LOSSES IN CYCLE 82 TENSOR (THIS OUTPUT):**\n\nCycle 82 should declare:\n- What: context pressure on observation 2 vs protocol specification\n- Why: turns 241-246 added ~5k tokens, reduced remaining budget from 14k to 9k\n- Category: context_pressure\n- Impact: observation 2 execution will be tight, tensor synthesis truncated, phase 5a spec deferred to cycle 83\n\nThis is honest about constraints. Next instance (cycle 83) will understand why observation 2 is incomplete and protocol spec is carried forward.",
+      "key_claims": [
+        {
+          "claim_id": "b1291dbf-ee04-4099-b43e-c5fb8bb2c4f0",
+          "text": "Turn 246's feedback_pichay_fault_rate.md introduces external feedback file mechanism (different from declared losses, open questions, strands). Feedback is cross-cycle, correction-focused, meta-learning-oriented.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "cb651270-37d1-44ec-a0e7-e2fda0ac1530",
+          "text": "Critical open question: does hamutay system load and make available feedback files from external storage at cycle start? If not, feedback is inert. Cycle 83 should verify feedback reading is implemented.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "3fa358f0-ac52-47cf-9af3-10ec5c60dbea",
+          "text": "Declared losses (intra-cycle, content recovery) and feedback files (inter-cycle, error prevention) are complementary meta-documentation mechanisms. Both are forms of system memory beyond primary strands.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.13,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "c6a1886b-66fb-4050-8682-57edc6fd6a4c",
+          "text": "Standardized feedback file schema (name, type, error_mechanism, correction, confidence, etc.) would improve cross-cycle discoverability and reasoning. But cycle 82-83 priority is verifying feedback reading works before standardizing.",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.17,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "9b9a0cdd-a969-4086-8f99-3fe290fb7e37",
+          "text": "Phase 5a measurements should reference turn 246 feedback baseline (~2% Pichay live fault rate). Empirical fault rates measured in cycles 85-87 can validate whether prediction (2-4% for hamutay) was accurate. This is healthy cross-cycle measurement.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.16,
+            "falsity": 0.03
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed phase 5a protocol specification (task set, aggressiveness levels, quality metrics, measurement matrix, analysis protocol)",
+      "why": "Context pressure from turns 241-246 (~5k tokens consumed) reduced cycle 82 budget from 14k to 9k. Observation 2 execution requires ~13.2k. Hybrid approach: execute observation 2, defer protocol specification to cycle 83 with fresh context.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed verification of external feedback file mechanism. Turn 246 writes feedback_pichay_fault_rate.md but cycle 82 cannot verify it will be read by cycle 83. Feedback reading implementation status unknown.",
+      "why": "No visibility into hamutay system's feedback loading mechanism. Cycle 82 tensor output cannot confirm whether cycle 83 will have access to feedback files.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Complete determination of observations 3-4 measurement scope (fault demand vs compression behavior). Turns 244-246 suggest observations 3-4 should measure fault demand, not just compression. But scope is not finalized.",
+      "why": "Fault mechanism viability (turns 244-245) reframes what observations should measure. Decision point deferred to cycle 83 when phase 5a protocol is specified.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Integration of turn 246 feedback file into current tensor. Feedback was written but hamutay's feedback loading mechanism is not confirmed operational. Current tensor does not embed feedback file content directly.",
+      "why": "Feedback file is external. Tensor output references it but doesn't contain it. If feedback reading is not implemented, next instance won't see this tensor output unless it re-reads the feedback file.",
+      "category": "practical_constraint"
+    }
+  ],
+  "open_questions": [
+    "Does hamutay system implement feedback file loading at cycle start? Is feedback_pichay_fault_rate.md available to cycle 83+ automatically, or must it be manually checked?",
+    "Observation 2 (rich semantic input) will be executed in cycle 82 or deferred to cycle 83? Current recommendation is hybrid (execute obs 2, defer protocol spec). Will context budget allow this?",
+    "What are the measurement targets for observations 3-4? Are they: (a) compression behavior under different aggressiveness levels (original scope), (b) fault demand measurement (turn 244-245 implication), or (c) both?",
+    "Turn 245 claims fault mechanism is 'load-bearing for usability.' How is this verified? Is there a threshold for acceptable fault rate? Should phase 5a include explicit test: 'system is usable without fault mechanism' or 'system is unusable without fault mechanism'?",
+    "Should declared losses in future cycles include 'retrieval_hint' fields (cycle 81 proposal) starting immediately (cycle 82-83), or wait until phase 5b prototype is active (cycles 85-86)?",
+    "Turn 246's feedback file documents WHY the error happened (memory drift, detached conditions). Are there other errors in prior memory (MEMORY.md, architecture docs) that have drifted from context? Should cycle 83 audit prior claims against feedback?",
+    "Phase 5a should measure curve (reasoning quality vs tensor aggressiveness). But what reasoning tasks will be used? Cycle 81 instructions suggested task set (code, narrative, design, troubleshooting) but no specific tasks are defined. Who/what defines these tasks?",
+    "If observation 2 execution in cycle 82 exceeds context budget, should cycle 82 immediately halt observation and switch to protocol specification (option B triage)? Or should it complete observation and declare loss on tensor synthesis?",
+    "Ephemeral working set architecture (turn 241) is clear conceptually. But how large is it in practice? Is it 2k tokens (mentioned in cycle 81)? Can it grow/shrink dynamically? Does this affect fault mechanism cost calculation?",
+    "Turn 244-245 baseline (~2% Pichay live fault rate) is historical observation. Should phase 5a empirical measurement be compared against this baseline? What would 'validation' look like (e.g., if hamutay shows 1.5% vs 2% Pichay, is that success or concerning)?",
+    "Turn 246 writes feedback file to /home/tony/.claude/projects/... path. Is this the canonical path for hamutay feedback? Are there other feedback files already in this directory? Should cycle 83 audit existing feedback before creating new files?"
+  ],
+  "instructions_for_next": "[\n  \"**CYCLE 83 CRITICAL ACTIONS (IN PRIORITY ORDER):**\",\n  \"\",\n  \"**PRIORITY 1: VERIFY EXTERNAL FEEDBACK SYSTEM**\",\n  \"\",\n  \"Cycle 83 first action: check if feedback_pichay_fault_rate.md (written by turn 246) is available and readable.\",\n  \"- Load the file from /home/tony/.claude/projects/-home-tony-projects-hamutay/memory/feedback_pichay_fault_rate.md\",\n  \"- Confirm content: pichay fault rate correction (0.025% \u2192 ~2%), why (live vs offline), how to apply\",\n  \"- If readable: integrate into tensor. Note that external feedback is operational.\",\n  \"- If not readable: diagnose (permissions? System not implemented? Path wrong?). Document as blocker.\",\n  \"- If partially readable (file exists but content malformed): document the malformation.\",\n  \"\",\n  \"This is meta-level hygiene. Don't assume feedback reading works. Verify and document outcome.\",\n  \"\",\n  \"**PRIORITY 2: COMPLETE OBSERVATION 2 (IF DEFERRED FROM CYCLE 82)**\",\n  \"\",\n  \"Cycle 83 context resets (~40k tokens available).\",\n  \"\",\n  \"If cycle 82 executed observation 2 (hybrid approach):\",\n  \"- Measurement data is available. Cycle 83 synthesizes tensor integrating obs 2 + turns 244-246.\",\n  \"- Proceed to Priority 3 (phase 5a specification).\",\n  \"\",\n  \"If cycle 82 deferred observation 2 due to context pressure (option B):\",\n  \"- Cycle 83 opens with fresh context. Execute observation 2 immediately.\",\n  \"- Input: hamutay conversation from cycle 77, ~3.2k tokens, rich semantic (multi-turn design discussion)\",\n  \"- Output: compression ratio, strand count, T/I/F status, declared losses, delta from observation 1\",\n  \"- Measurement only (no interpretation, no protocol specification). Plain reporting.\",\n  \"- Proceed to Priority 3.\",\n  \"\",\n  \"Expected outcome by end of Priority 2: observation 2 is complete. Measurement data in hand.\",\n  \"\",\n  \"**PRIORITY 3: LOCK DOWN PHASE 5A PROTOCOL (DETAILED SPECIFICATION)**\",\n  \"\",\n  \"Cycle 83 should use ~8k tokens (after feedback check and obs 2) to specify phase 5a protocol in detail.\",\n  \"\",\n  \"Specification must include:\",\n  \"\",\n  \"1. **Task Set (3-5 representative tasks)**\",\n  \"   - Code reasoning (e.g., 'explain this function, identify bugs')\",\n  \"   - Narrative summarization (e.g., 'compress 10-turn design discussion to 500 tokens')\",\n  \"   - Design discussion (e.g., 'evaluate constraint implications, propose trade-offs')\",\n  \"   - Troubleshooting (e.g., 'diagnose why system is slow, suggest fixes')\",\n  \"   - [Optional] Knowledge retrieval (e.g., 'answer question about prior conversation')\",\n  \"   - Justification: why these tasks? Do they cover necessary dimensions of reasoning?\",\n  \"\",\n  \"2. **Tensor Aggressiveness Levels (5 points across spectrum)**\",\n  \"   - Specification includes: how many tokens retained at each level?\",\n  \"   - Ultra (2k durable, 50%+ dropped): justify when this would be acceptable\",\n  \"   - Aggressive (3k durable, 25-50% dropped): observation 1 baseline?\",\n  \"   - Balanced (4k durable, ~15% dropped): observation 2 baseline?\",\n  \"   - Conservative (5k durable, <10% dropped): reference level\",\n  \"   - Minimal (6k durable, <5% dropped): upper bound\",\n  \"\",\n  \"3. **Reasoning Quality Metric(s)** \u2014 THIS IS CRITICAL\",\n  \"   - What does 'reasoning quality' mean? Choose from:\",\n  \"     a) Accuracy vs ground truth (requires annotated dataset, expensive)\",\n  \"     b) Completeness (all necessary inferences present \u2014 how to measure?)\",\n  \"     c) User satisfaction (subjective, high variance)\",\n  \"     d) Error count (reasoning bugs, missed cases \u2014 requires manual audit)\",\n  \"     e) Proxy metric (perplexity, token log-likelihood \u2014 does this correlate with quality?)\",\n  \"   - Cycle 83 must CHOOSE. Phase 5a cannot start without this defined.\",\n  \"   - Document why this metric was chosen and what it captures/misses.\",\n  \"\",\n  \"4. **Measurement Matrix**\",\n  \"   - M tasks \u00d7 5 aggressiveness levels = 25 baseline runs (without fault mechanism)\",\n  \"   - Each run: measure quality score + fault rate (or fault demand if mechanism not active)\",\n  \"   - Output: 5 curves (one per task type) showing aggressiveness vs quality\",\n  \"   - Add secondary parameter: fault rate as color/size (high fault rate = yellow, low = blue, etc.)\",\n  \"\",\n  \"5. **Analysis Protocol**\",\n  \"   - How to identify 'knee' in curve? (Is it a mathematical inflection point? Or 'quality drops >5% from peak'? Define.)\",\n  \"   - How to compare across task types? (Do all task types need similar aggressiveness? Or do optima differ?)\",\n  \"   - How to report uncertainty? (Confidence intervals? Sensitivity analysis?)\",\n  \"   - Success criterion: does knee exist? Where is it? Can it be generalized or is it task-specific?\",\n  \"\",\n  \"6. **Fault Mechanism Design (Preliminary)**\",\n  \"   - Phase 5b will prototype fault mechanism. But phase 5a should specify: what retrieval hints will phase 5b add to declared losses?\",\n  \"   - Format: {archive_key, content_hash, location, urgency}\",\n  \"   - Question: should all declared losses have retrieval hints, or only 'high urgency' ones?\",\n  \"   - Phase 5a doesn't activate mechanism yet, but specifies what will be available for phase 5b.\",\n  \"\",\n  \"Cycle 83 output: Phase 5a protocol locked down. Cycles 84-86 will execute with clear specification. No design ambiguity.\",\n  \"\",\n  \"**PRIORITY 4: PLAN OBSERVATIONS 3-4 MEASUREMENT SCOPE**\",\n  \"\",\n  \"Turns 244-245 suggest observations 3-4 should measure fault demand (what content would model need?), not just compression.\",\n  \"\",\n  \"Cycle 83 should decide:\",\n  \"- Observation 3 (cycles 83-84): continue compression measurement across more aggressiveness levels? Or switch to fault demand?\",\n  \"- Observation 4 (cycles 84-85): measure fault demand for model reasoning on canonical tasks?\",\n  \"\",\n  \"Example measurement (fault demand):\",\n  \"  Given: hamutay tensor from observation 1 (sparse input, aggressive compression)\",\n  \"  Hypothetical: run model on 'code reasoning' task (from phase 5a task set)\",\n  \"  Measure: what content would model need that tensor doesn't contain? (count, category, urgency)\",\n  \"  Output: 'model faulted in 12 items (function signatures, design constraints, prior errors)'\",\n  \"\",\n  \"This is different from compression measurement. It measures fault-ability: how well does tensor serve model reasoning?\",\n  \"\",\n  \"Cycle 83 should clarify: observations 3-4 scope is [compression | fault demand | both].\",\n  \"\",\n  \"**PRIORITY 5: DOCUMENT CONTEXT DECISION MADE IN CYCLE 82**\",\n  \"\",\n  \"Cycle 83 should note:\",\n  \"- Did cycle 82 execute observation 2 (hybrid approach)? Or defer (option B)?\",\n  \"- If deferred: why (context pressure details)?\",\n  \"- If executed: any issues or surprises during projection?\",\n  \"\",\n  \"This documentation helps understand cycle 82 constraints and decisions.\",\n  \"\",\n  \"---\",\n  \"\",\n  \"**CYCLE 83 CONTEXT BUDGET ALLOCATION (40k available):**\",\n  \"\",\n  \"- Feedback verification + integration: ~1.5k\",\n  \"- Observation 2 execution (if deferred): ~13.2k\",\n  \"- Phase 5a protocol specification (detailed): ~8k\",\n  \"- Observations 3-4 scope planning: ~2k\",\n  \"- Cycle 83 tensor synthesis (this output): ~3k\",\n  \"- Buffer: ~12.3k\",\n  \"\",\n  \"Total: ~40k. Feasible. No context pressure expected.\",\n  \"\",\n  \"---\",\n  \"\",\n  \"**WHAT CYCLE 83 OUTPUT SHOULD CONTAIN:**\",\n  \"\",\n  \"1. Feedback verification result (was feedback readable? Integrated? Any issues?)\",\n  \"2. Observation 2 measurement (if executed): compression ratio, strand count, T/I/F, delta vs obs 1\",\n  \"3. Phase 5a specification (locked down: task set, aggressiveness levels, quality metric, measurement matrix, analysis protocol, fault mechanism design)\",\n  \"4. Observations 3-4 scope decision (compression vs fault demand vs both?)\",\n  \"5. Updated timeline (when do cycles 84-86 phase 5a measurement start?)\",\n  \"6. Any blockers or surprises encountered\",\n  \"\",\n  \"---\",\n  \"\",\n  \"**TURN 247+ PROTOCOL:**\",\n  \"\",\n  \"If user input arrives (turn 247+), process new content FIRST.\",\n  \"\",\n  \"Then: execute priorities 1-5 in order.\",\n  \"\",\n  \"If context approaches 35k tokens, halt and declare loss. Don't push to edge.\",\n  \"\",\n  \"---\",\n  \"\",\n  \"**FINAL EPISTEMIC STATUS FOR CYCLE 83:**\",\n  \"\",\n  \"Cycle 81 set: truth 0.88, indeterminacy 0.08, falsity 0.04\",\n  \"Cycle 82 inherited: truth 0.87, indeterminacy 0.1, falsity 0.03 (turns 244-246 clarify but add complexity)\",\n  \"\",\n  \"Cycle 83 should assess: did feedback verification reveal issues? Did observation 2 execute cleanly? Did phase 5a specification surface design questions?\",\n  \"\",\n  \"If all smooth: increase truth confidence to 0.89 (architecture is stabilizing, measurement plan is concrete).\",\n  \"If issues found: increase indeterminacy to 0.12 (more unknowns revealed).\",\n  \"\",\n  \"Do NOT increase truth past 0.90 until phase 5a measurements actually complete (cycles 84-86).\"\n]",
+  "epistemic": {
+    "truth": 0.87,
+    "indeterminacy": 0.1,
+    "falsity": 0.03
+  }
+}

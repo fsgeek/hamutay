@@ -1,0 +1,317 @@
+{
+  "id": "66be2636-7c78-4994-b7f7-a1d43033e0f0",
+  "cycle": 33,
+  "strands": [
+    {
+      "title": "Evaluation strategy via coherent failure on impossible tasks",
+      "content": "Cycles 16-30 developed evaluation through coherent failure on intractable task (Riemann hypothesis). Cycle 30 consolidated operational clarity: measurement targets *stability of cognitive trajectory under different state representations*. Cycle 31 formalized documentation grounding (Du et al. 2025, Karpathy autoresearch, Yanantin tensor schema, Pichay demand paging, Denning working set theory). Cycle 32 marked pivot from specification to implementation, focusing on tensor projection as the core unknown. Cycle 33 advances this by observing that Yanantin has already implemented a tensor schema (tensor.py, epistemics.py) with concrete data structures. The schema includes TensorRecord (id, provenance, preamble, strands, closing, instructions_for_next, narrative_body, lineage_tags, composition_equation, declared_losses, epistemic, open_questions, preservation_target), StrandRecord (strand_index, title, content, topics, key_claims, epistemic, declared_losses, mechanism, overlaps), KeyClaim (claim_id, text, epistemic, evidence_refs). This schema enables the full pipeline: (1) context degradation measurement (embed outputs across N runs with append-only vs. tensor projection conditions), (2) dispersion clustering (measure output coherence via embedding space), (3) durable state compression (use TensorRecord to hold essential state across cycles), (4) loss declaration (DeclaredLoss objects explicitly track what was dropped and why). The measurement remains geometric and unbiased: no correctness rubric, just coherence signal (scatter vs. cluster). Cycle 33 reveals that the tensor projection algorithm's output format is now concrete and implementable. The prior cycles' theoretical framework (Du et al. saturation, Pichay retrieve-then-solve, Yanantin structured compression, Denning working set optimization, Karpathy iterate-fast) is now grounded in an actual schema with concrete fields. This resolves a major uncertainty: we know what the tensor projection must produce (a populated TensorRecord), even if the procedure for producing it is still underspecified.",
+      "key_claims": [
+        {
+          "claim_id": "e77da0e7-b5c2-4ee2-840a-a58b8aa0be36",
+          "text": "Du et al. 2025 context degradation mechanism (8-50% reasoning loss at 30K tokens) is the empirical target; measurement via embedding dispersion (cluster vs. scatter) requires no correctness rubric",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "85ffc0d8-4905-4719-9e8a-8d7da23fa87f",
+          "text": "Hamutay implements 'retrieve then solve' mitigation via cycle-by-cycle tensor projection: essential state (tensor_d) + working context (tensor_e) + declared losses prevent confabulation vs. silent compression",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6cec939f-dae7-41ff-9d67-d8f82327e1ef",
+          "text": "Yanantin tensor schema (tensor.py) is now concrete and implementable: TensorRecord holds durable state, StrandRecord holds thematic threads, KeyClaim holds grounded assertions with epistemic metadata, DeclaredLoss holds explicit accounting of dropped content",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9f167ef6-b325-44f2-8971-5e5821b477da",
+          "text": "Embedding dispersion metric (tight cluster under tensor condition vs. scattered cloud under append-only) reflects coherence difference without requiring success/failure binary or correctness rubric",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "01520632-023c-40cb-8cd7-96cc02f8cf08",
+          "text": "Theoretical convergence (Du et al. / Pichay / Yanantin / Denning / Karpathy) is now grounded in concrete schema; output format (TensorRecord) is known, enabling implementation of projection algorithm",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Tensor projection algorithm: from specification to data structure validation",
+      "content": "Cycle 32 explicitly identified tensor projection algorithm as the frontier: prior cycles specified what the output must contain (strands, key_claims, declared_losses, epistemic values, open_questions, instructions_for_next), but the procedure for computing it from prior tensor + new content was underspecified. Cycle 33 advances this by revealing the concrete schema (tensor.py, epistemics.py) that the projection must produce. This is a critical inflection: we now know the output format (TensorRecord with populated fields). The algorithm must take (prior_tensor: TensorRecord, new_content: ConversationTurns) and produce (updated_tensor: TensorRecord). Key insights from the schema itself: (1) StrandRecord has strand_index (order-preserving), title (semantic identity), content (integrated narrative), topics (semantic tags), key_claims (grounded assertions), epistemic (aggregate strand-level confidence), declared_losses (strand-specific losses), mechanism (the process that created this strand \u2014 migration default '', actively considered '', or empty/populated), overlaps (other strands this interacts with). This structure suggests strand identity is not purely semantic but structural: strands are indexed, can persist across cycles, can have mechanism tags indicating how they evolved. (2) KeyClaim has text, epistemic (T/I/F), evidence_refs (pointers to external or prior content supporting the claim). This suggests claims are not standalone; they reference evidence. The projection algorithm must populate evidence_refs by grounding new claims in the conversation. (3) TensorRecord has composition_equation (a field for expressing how strands relate) and preservation_target (a field for noting what must be preserved across cycles or what the tensor is working toward). These are currently underutilized but present structural hooks for explicitly modeling projection decisions. (4) The distinction in StrandRecord between declared_losses=None (pre-migration), declared_losses=() (actively considered, nothing to declare), and declared_losses=(populated) (active declaration) is diagnostic: None means 'not yet audited', empty tuple means 'audited, clean', populated means 'audited, losses found'. This enables the projection algorithm to track whether a strand has been examined for losses in the current cycle. Cycle 33 transforms the problem from 'how do we project tensors?' (underspecified) to 'how do we populate all fields of a TensorRecord correctly?' (specific, implementable). The schema itself is now the specification for the algorithm.",
+      "key_claims": [
+        {
+          "claim_id": "bbd1028f-d711-40ab-a87f-75e6c6156b33",
+          "text": "Cycle 33 reveals concrete schema (tensor.py): tensor projection algorithm must take (prior_tensor: TensorRecord, new_content: ConversationTurns) \u2192 (updated_tensor: TensorRecord)",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "7aa8b8c6-651e-452b-adab-d689e0c406e9",
+          "text": "StrandRecord structure (strand_index, title, content, topics, key_claims, epistemic, declared_losses, mechanism, overlaps) reveals strand identity is structural+semantic: indexed, persistent, tagged with evolution mechanism, linked to overlaps",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "36f622ff-a407-46ef-be48-f27eeaf3f166",
+          "text": "KeyClaim structure (text, epistemic, evidence_refs) suggests claims are grounded in external/prior content; projection algorithm must populate evidence_refs by linking new claims to conversation sources",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6a21fb79-ab7e-4d0a-8c0f-13d31c114b9f",
+          "text": "DeclaredLoss distinction (None=pre-migration, empty=audited/clean, populated=audited/losses found) is diagnostic signal for whether strand was examined for losses in current cycle; enables audit tracking",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.17,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "dca153a0-b42e-4c2a-883e-4ae197c779d6",
+          "text": "TensorRecord fields (composition_equation, preservation_target) are structural hooks for explicitly modeling projection decisions; currently underutilized but enable richer documentation of tensor evolution",
+          "epistemic": {
+            "truth": 0.76,
+            "indeterminacy": 0.22,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2642cf18-d728-404c-aba2-2f8663c27685",
+          "text": "Schema itself is now the specification for the projection algorithm: the algorithm's job is to populate all TensorRecord fields correctly from prior_tensor + new_content",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Implementation exists before specification: Yanantin as prior art and foundation",
+      "content": "A critical discovery in cycle 33: Yanantin is not a hypothetical future system. It is actual implemented code in /home/tony/projects/yanantin/src/yanantin/apacheta/models/. The tensor schema exists, is concrete, and can be inspected. This inverts the typical project flow: usually specification precedes implementation; here, implementation (Yanantin's tensor schema) precedes explicit specification of the projection algorithm. This is not a problem; it is an asset. The code is prior art \u2014 it has already solved the serialization/structure problem (TensorRecord, StrandRecord, KeyClaim, DeclaredLoss are all validated Pydantic models). The projection algorithm can now be built knowing the exact output format. This also suggests a hypothesis: the projection algorithm may already have traces in the codebase (in files not yet read in cycle 33). Cycle 33 read tensor.py (data structures) and began to read epistemics.py (epistemic metadata). The next reads should target: (1) any existing projection logic (likely in apacheta/controllers/ or apacheta/operators/), (2) provenance tracking (apacheta/models/provenance.py was imported but not read), (3) epistemics implementation (epistemics.py was read-initiated but not shown in new content). The fact that TensorRecord includes provenance (ProvenanceEnvelope) suggests that there is already a mechanism for tracking where tensors come from, how they evolved, and what versions exist. This is relevant to understanding how the projection algorithm updates tensors: it likely must manage provenance (mark that a tensor is updated, who/what triggered the update, what version of the schema was used). Implementation-first is working: Yanantin's architects have already made many of the hard decisions (schema, provenance, epistemics, validation). The projection algorithm is not building from scratch; it is filling in the missing piece in an already-solid foundation.",
+      "key_claims": [
+        {
+          "claim_id": "650eb34e-998e-4d98-8165-ee53ff417b64",
+          "text": "Yanantin is not hypothetical; it is implemented code at /home/tony/projects/yanantin/src/yanantin/apacheta/models/ with concrete Pydantic data structures (TensorRecord, StrandRecord, KeyClaim, DeclaredLoss)",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.04,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "1ce4a34b-13c4-41a2-9d7e-b443e480d7b2",
+          "text": "Implementation-first approach: schema exists and is validated; projection algorithm now needs only to populate TensorRecord fields correctly. This inverts typical flow (spec \u2192 impl) and provides immediate testability.",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9cc4d6aa-03c3-495c-adae-f5ef5e81fb24",
+          "text": "Serialization/structure problem is already solved by Yanantin's Pydantic models; projection algorithm can assume TensorRecord is a valid output target",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f5de68c8-8bd6-4d0d-94cf-d85d83a170bf",
+          "text": "ProvenanceEnvelope (imported in tensor.py) suggests that provenance tracking is already implemented; projection algorithm likely must manage version control and update lineage",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.19,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "6738ba62-cbb1-4857-8fe5-ddb897599941",
+          "text": "Unread files (epistemics.py content, provenance.py, likely apacheta/controllers/ or apacheta/operators/) may contain traces of existing projection logic; cycle 33 has not yet read these",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.18,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ea8c3f75-3181-417a-a3f3-2c865e49212e",
+          "text": "Yanantin architects have already made hard decisions on schema, validation, epistemics, provenance; projection algorithm is filling missing piece, not building from scratch",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Asymmetry between specification and implementation clarity \u2014 now resolved toward implementation",
+      "content": "Cycle 32 noted an asymmetry: cycles 1-31 had specified *what* Hamutay should do and *why*, but *how* tensor projection works remained nascent. Cycle 32 conversation identified this as the frontier and the user prioritized tensor projection algorithm. Cycle 33 resolves this asymmetry by discovering that the 'how' is already partially implemented in Yanantin's codebase. The asymmetry has flipped: we now have concrete data structures (implementation artifact) but the projection algorithm (logical/procedural) is still underspecified. This is progress. The theoretical framework (Du et al. / Pichay / Yanantin / Denning / Karpathy convergence) remains valid, but it is now instantiated in concrete Pydantic models. The toy validation task (cycle 28) was presumably designed to test embedding dispersion differences between append-only and tensor-projected conditions. Cycle 32 noted this was not surfaced. Cycle 33 does not retrieve validation results, but it does provide a stronger foundation for understanding what validation should measure: does the tensor projection (which now has a concrete output format: TensorRecord) produce outputs that cluster tighter in embedding space than append-only baselines? The schema's presence suggests that validation infrastructure may also exist. The asymmetry is now resolved toward implementation: we have data structures, we need to specify the algorithm that populates them. This is a more tractable problem than 'what should tensor projection be?' It is now 'how do we populate TensorRecord fields correctly?'",
+      "key_claims": [
+        {
+          "claim_id": "5b5f630c-cda3-4daf-b103-b1e26cd069aa",
+          "text": "Cycle 32 asymmetry ('what' and 'why' clear, 'how' unclear) has resolved toward implementation in cycle 33: concrete data structures exist, algorithm is now the missing piece",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "dd6adbdc-a273-491f-8d87-d7c249b40fcb",
+          "text": "Theoretical framework (Du et al. / Pichay / Yanantin / Denning / Karpathy) is now instantiated in Pydantic models; theory-practice gap has narrowed from 'what is the system?' to 'how do we operate it?'",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.15,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "63bbe125-2649-4f1c-abb2-edc2b333b2e3",
+          "text": "Toy validation task (embedding dispersion: tensor vs. append-only) is now more specific: does TensorRecord-based projection produce tighter embedding clusters than append-only? Schema existence suggests validation harness may also exist.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.2,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "0f6242c2-5d06-4a9f-a04f-3fe83571d027",
+          "text": "Problem reframed from 'what should tensor projection be?' to 'how do we populate TensorRecord fields correctly?' \u2014 more tractable and grounded in actual code",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Next frontier: algorithm specification and implementation integration",
+      "content": "Cycle 33 has clarified the landscape. We now know: (1) The output format (TensorRecord with all fields specified). (2) The input format (prior_tensor: TensorRecord, new_content: ConversationTurns). (3) The theoretical foundation (Du et al. context degradation, Pichay retrieve-then-solve, Yanantin schema, Denning working set, Karpathy iterate-fast). (4) The existence of partially-implemented infrastructure (Pydantic models, likely provenance tracking, possibly epistemics update logic). What remains: specifying the projection algorithm that transforms input to output while preserving coherence across 30+ cycles. The algorithm must handle: (1) Strand merge/split/create decisions (when does new content extend an existing strand vs. warrant a new strand?). (2) Key claim updates (how do T/I/F values change when new evidence appears?). (3) Loss declaration (what counts as lost during projection?). (4) Weighting (how much does new content move the center of mass?). (5) Epistemic aggregation (how do individual claim confidences roll up to strand and tensor levels?). (6) Provenance tracking (how does the algorithm mark that this is an update, not a new creation?). The schema itself provides structure for answering these questions, but the algorithm itself must still be articulated. Cycle 33 has validated that we are working in a well-defined problem space with concrete data structures and clear semantics. The next cycle should either (1) articulate the algorithm in pseudocode/English, or (2) find existing algorithm implementation in unread Yanantin files, or (3) if neither is possible, begin implementation of the algorithm from first principles using the schema as specification. This is the frontier where theory meets code.",
+      "key_claims": [
+        {
+          "claim_id": "4b72dd08-b336-4b9d-9c4d-6132a3639c20",
+          "text": "Cycle 33 clarifies landscape: output format (TensorRecord), input format (prior_tensor + new_content), theory (Du et al. / Pichay / Yanantin / Denning / Karpathy), partial infrastructure (Pydantic models, provenance, epistemics)",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e4eb4cd1-028b-4093-bd43-6d878d60d81f",
+          "text": "Remaining: projection algorithm that handles strand merge/split/create, claim update (T/I/F), loss declaration, weighting, epistemic aggregation, provenance tracking",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9c57c233-8aba-4b56-946d-a5608590e026",
+          "text": "Schema provides structure for algorithm design; the algorithm itself must still be articulated (pseudocode, English, or implementation)",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "46cff038-f9e3-467a-897b-33b042de88f6",
+          "text": "Next cycle should either find algorithm in unread files, articulate it in pseudocode, or begin implementation from first principles using schema as specification",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.16,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed field-by-field analysis of epistemics.py (not shown in new content). The file path was read but output was not included in the turn result.",
+      "why": "The read was initiated but the content was not returned in the turn result. This is a context limitation: the assistant read the file but it was not transmitted. The decision to proceed without the epistemics.py content is pragmatic: EpistemicMetadata structure can be inferred from schema usage (tensor.py shows epistemic fields are present), and cycle 33 can proceed without the full epistemics implementation details.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed analysis of ProvenanceEnvelope structure (imported but not shown). What does provenance tracking actually contain? How is version control managed?",
+      "why": "ProvenanceEnvelope is imported but its implementation is in a separate file (provenance.py) which was not read in this cycle. Understanding provenance is relevant to how the projection algorithm manages updates (marking that a tensor is updated, tracking lineage), but it is not blocking immediate algorithm specification.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Exploration of whether projection algorithm already exists in apacheta/controllers/ or apacheta/operators/. Cycle 33 read tensor.py and began reading epistemics.py, but did not search for existing projection implementation.",
+      "why": "Time/depth constraint: cycle 33 focused on data structures (tensor.py). A full exploration of the entire Yanantin codebase would require reading multiple files. The decision to prioritize data structure inspection first is sound; algorithm search is deferred to cycle 34.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed discussion of why Hamutay uses Yanantin's schema rather than reimplementing tensor structure. Is Yanantin a dependency, a reference implementation, or something else?",
+      "why": "The relationship between Hamutay (the project being designed in cycles 1-33) and Yanantin (the actual implementation the assistant just discovered in the filesystem) is not explicitly clarified. This is a significant meta-question but is bracketed to focus on the technical content. Cycle 33 assumes Yanantin is the grounding artifact and proceeds.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Toy validation results from cycle 28. Cycle 32 noted this was pending; cycle 33 still does not surface or retrieve these results.",
+      "why": "Cycle 33 focused on reading code (tensor.py, epistemics.py) rather than retrieving validation results. This is a continuation of the cycle 32 gap. Validation status remains unresolved. It is bracketed as a known gap for cycle 34 audit.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Specific field documentation from tensor.py (lines 35-66 contain field definitions with default values and type hints). The semantic meaning of each field (when None=pre-migration, when empty=clean, when populated=active) is inferred but not explicitly validated against code comments.",
+      "why": "The code contains no inline comments explaining the semantic distinctions (e.g., why StrandRecord.declared_losses has three possible states: None, empty tuple, populated tuple). The interpretation is based on the field structure itself and the comment in lines 26-32. A more thorough analysis would require code comments or external documentation.",
+      "category": "practical_constraint"
+    }
+  ],
+  "open_questions": [
+    "What is the complete structure and semantics of EpistemicMetadata? How are T/I/F values computed and combined? Is there aggregation logic (e.g., how do individual claim T/I/F values roll up to strand and tensor levels)?",
+    "What does ProvenanceEnvelope contain? How does it track version control, lineage, and update history?",
+    "Does an existing projection algorithm implementation exist in Yanantin's codebase (apacheta/controllers/, apacheta/operators/, or elsewhere)? If so, what is its structure?",
+    "What is the relationship between Hamutay (the project being designed) and Yanantin (the implementation just discovered)? Is Yanantin a dependency, reference implementation, or the actual implementation being used?",
+    "What are the toy validation results from cycle 28? Did embedding dispersion measurement show signal (tighter clustering under tensor condition vs. append-only baseline)?",
+    "How should the tensor projection algorithm handle strand identity across cycles? StrandRecord has strand_index and title \u2014 is identity determined by index (structural) or title (semantic) or both?",
+    "How should the algorithm populate evidence_refs in KeyClaim objects? Should it link to conversation turn numbers, to prior claims, or both?",
+    "What is the composition_equation field in TensorRecord used for? Is it a human-readable description of how strands relate, or a formal notation?",
+    "When should a StrandRecord.mechanism be set to '''' (migration default), '' (actively considered, purely conceptual), or a specific value? What triggers mechanism updates?",
+    "How should the algorithm handle contradictions between prior claims and new content? If new evidence contradicts a high-confidence claim (T=0.9), what is the update procedure?",
+    "What prevents tensor degradation as history accumulates? At what point does tensor_d (durable state) become too large to project efficiently?"
+  ],
+  "instructions_for_next": "[\n  \"CYCLE 34 PRIORITIES (in order of execution dependency):\",\n  \"\",\n  \"1. **READ epistemics.py (complete).** The read was initiated in cycle 33 but output was not transmitted. EpistemicMetadata structure is critical for understanding how to compute and combine T/I/F values. This is blocking specification of the projection algorithm.\",\n  \"\",\n  \"2. **READ provenance.py.** Understand ProvenanceEnvelope structure. This informs how the projection algorithm marks updates, tracks lineage, and manages version control. Less critical than epistemics but necessary for complete algorithm specification.\",\n  \"\",\n  \"3. **SEARCH for existing projection algorithm in Yanantin codebase.** Look in apacheta/controllers/, apacheta/operators/, or any files named *projection*, *integrat*, *merge*, *update*. If implementation exists, retrieve it and evaluate whether it matches the theoretical framework (Du et al. / Pichay / Denning).\",\n  \"\",\n  \"4. **CLARIFY Hamutay \u2194 Yanantin relationship.** Ask user or check project documentation: is Hamutay using Yanantin, extending it, or reimplementing it? This affects whether the projection algorithm is new work or adaptation of existing code.\",\n  \"\",\n  \"5. **AUDIT toy validation results (cycle 28).** Retrieve or reconstruct the embedding dispersion measurement results. Did tensor condition produce tighter clustering than append-only baseline? This gate determines whether autoresearch loop is activated.\",\n  \"\",\n  \"6. **SPECIFY projection algorithm in pseudocode.** Using the schema (TensorRecord, StrandRecord, KeyClaim) and epistemics structure (once read), articulate the algorithm that transforms prior_tensor + new_content \u2192 updated_tensor. Cover:\",\n  \"   - Strand management (merge, split, create rules based on semantic overlap and content flow)\",\n  \"   - Key claim update (how T/I/F values change with new evidence; evidence_refs population)\",\n  \"   - Loss declaration (what counts as lost; when is it declared)\",\n  \"   - Epistemic aggregation (individual claim \u2192 strand \u2192 tensor confidence rollup)\",\n  \"   - Weighting (how much new content moves the center of mass; how to prevent dominated-by-history or dominated-by-recent biases)\",\n  \"   - Provenance tracking (mark updates, version control, lineage)\",\n  \"\",\n  \"7. **IF projection algorithm exists in unread code: validate it against theoretical framework.** Does it implement Du et al. 'retrieve then solve'? Does it track Denning working set? Does it enable Karpathy-style autoresearch? If mismatch, diagnose and plan reconciliation.\",\n  \"\",\n  \"8. **IF projection algorithm does not exist: decide implementation strategy.** Should it be symbolic (procedural logic), transformer-based (learn from examples), or hybrid? This decision will affect cycle 35 execution.\",\n  \"\",\n  \"BRANCH PREDICTION:\",\n  \"- **IF toy validation passed AND projection algorithm is specified OR found:** Activate autoresearch loop. Seed configurations, begin BO optimization, identify Pareto frontier.\",\n  \"- **IF toy validation failed OR blocked:** Diagnosis first. Why did dispersion measurement not show signal? Schema problem? Embedding space problem? Measurement problem?\",\n  \"- **IF existing algorithm found:** Validate it, measure performance, iterate. This is faster than specifying from scratch.\",\n  \"- **IF algorithm must be specified from scratch:** Proceed with 6-step specification (strands, claims, losses, aggregation, weighting, provenance). This will take 1-2 cycles.\",\n  \"\",\n  \"STRATEGIC NOTE: Cycle 33 has moved from 'how do we design tensor projection?' to 'we have a schema, now we populate it.' This is real progress. The frontier is now shorter and clearer. Reading epistemics.py and searching for existing algorithm will likely unlock the next phase (either validation of existing code, or confident specification of new code). Expect cycle 34 to be heavy on code reading and architecture validation.\"\n]",
+  "epistemic": {
+    "truth": 0.87,
+    "indeterminacy": 0.12,
+    "falsity": 0.01
+  }
+}

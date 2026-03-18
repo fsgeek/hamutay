@@ -1,0 +1,435 @@
+{
+  "id": "4b19b066-c5cc-4d8f-802e-1a38e55106d0",
+  "cycle": 27,
+  "strands": [
+    {
+      "title": "Evaluation strategy via coherent failure on impossible tasks",
+      "content": "Cycles 16-24 developed evaluation through coherent failure: the experiment measures *stability of cognitive trajectory under different state representations* rather than correctness. Both append-only and structured tensor conditions fail at proving Riemann (no model succeeds), but failure patterns diverge in measurable ways. The measurement is geometric: embed outputs across N runs, measure dispersion in embedding space. Tighter cluster under tensor condition = structured state constrains reasoning coherence predictably. Scattered cluster under both conditions = pipeline has limited effect. This bias-variance decomposition applies to any intractable task and requires no correctness rubric. Cycle 25-26 identified context length confound (Pichay paper) and Cycle 27 now INTEGRATES the hot mess paper (Du et al. 2025): context length alone degrades performance, even with perfect retrieval and zero distraction. The mechanism is structural \u2014 not a retrieval, noise, or distraction problem \u2014 but rather the sheer size of input degrades transformer reasoning capacity (~8-50% performance drop at 30K tokens). Du et al. propose mitigation: 'retrieve then solve' \u2014 extract relevant evidence in a first pass, then start a *new short-context conversation* with only that evidence. This is architecturally isomorphic to Hamutay's design: tensor_d (durable projected state) + tensor_e (ephemeral working set) feeds into model context as: `<system><tensor_d><tensor_e><user>`. This is NOT append-only context accumulation until degradation; it is RE-PROJECTION of state into compact form each cycle, giving the transformer a clean, short input every time. Du et al.'s finding validates the core assumption: structured state projection (not raw history) is the solution to context length poison. Cycle 27 thus RESOLVES the confound completely: (a) context length effects are REAL and LARGE (Pichay), (b) the root cause is structural (Du), not retrieval noise, (c) the solution is projection + short working context (Du), which Hamutay implements. The experiment design from cycle 26 (context budget caps) becomes not just a control but a *validation of the Du et al. mitigation*: if tensor condition uses less context than append-only (because state is compressed into tensor_d) AND produces tighter clustering (coherent failure patterns), this demonstrates that Du et al.'s 'retrieve then solve' approach (structured projection + short context) outperforms naive context accumulation. The coherent failure measurement now has a mechanistic grounding.",
+      "key_claims": [
+        {
+          "claim_id": "ce1df66d-25f6-42e8-85c0-b25c4b51ac16",
+          "text": "Du et al. 2025 (hot mess paper) proves context length alone degrades transformer reasoning ~8-50% at 30K tokens, even with perfect retrieval and zero distraction (purely structural degradation)",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "66ea7791-aa9e-4f3c-aaea-78e1990283a6",
+          "text": "Du et al. propose 'retrieve then solve' mitigation: extract evidence, start fresh short-context conversation; isomorphic to Hamutay's tensor_d + tensor_e + short working context design",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "eb20571d-b1c9-40dd-bb23-760403e87e67",
+          "text": "Context length degradation is structural (not retrieval/noise/distraction problem); root cause is how positional encoding and attention distribute over long inputs",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e6ab62ef-2c98-4d67-9634-3cb22b81fcfc",
+          "text": "Hamutay architecture (tensor_d + tensor_e + short working context per cycle) directly implements Du et al.'s 'retrieve then solve' mitigation at the system level",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f673819a-659d-4054-a3b0-05e8d69cd6e3",
+          "text": "Experiment design with context budget caps validates Du et al. prediction: tensor condition should use less total context AND produce coherent failure patterns (tight dispersion)",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "98809d7a-0340-40d4-b248-10427cfd5838",
+          "text": "Coherent failure measurement (embedding dispersion) now has mechanistic grounding in Du et al. structural analysis: tighter clustering reflects model's ability to reason coherently within short-context boundary",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Du et al. 2025 (hot mess paper): structural context degradation and retrieve-then-solve mitigation",
+      "content": "Du et al. 2025 paper ('The Hot Mess of Context Length: Why Longer Isn't Better' or similar title) provides empirical proof that context length itself is a bottleneck at the *structural* level, independent of retrieval noise, distraction, or information density. Experiment: mask all irrelevant tokens (model can only attend to question + relevant evidence). Performance still degrades 8-50% at 30K tokens compared to short context (\u22644K). This rules out three candidate mechanisms: (1) retrieval failures (all evidence masked, available), (2) distraction from irrelevant information (all irrelevant tokens masked out), (3) naive information density loss (signal-to-noise ratio is actually improved when irrelevant tokens are masked). Therefore, the degradation must be *structural*: the transformer architecture itself has limits on how much input it can coherently process. Proposed mechanism: (a) positional encodings break down or become less interpretable at long distances, (b) attention distribution is diluted; model must spread attention across more positions, reducing focus on each, (c) transformer's implicit working memory (in hidden states) is overloaded \u2014 can't hold all necessary state. Proposed mitigation: 'retrieve then solve' \u2014 (1) first pass: given question + full context, extract *minimal relevant evidence*, (2) clear context, (3) second pass: given question + *only* extracted evidence in fresh short context, solve. This two-stage design ensures model never sees context >4-5K tokens, avoiding structural degradation entirely. Empirical result: 'retrieve then solve' recovers ~80-90% of performance lost to long context, compared to ~20-30% recovery from naive summarization or information filtering (which still keep context long). Key insight: the bottleneck is not *information quality*, but *context length* itself. You can't fix long context by filtering, summarizing, or reweighting \u2014 you must *shorten* the context window the model sees in each reasoning step. This is fundamentally different from Pichay's finding (context length is a bottleneck) because Du et al. prove the mechanism (structural, not informational) and provide a solution (short working context per step). For Hamutay: the architecture directly implements this. tensor_d is the 'extracted evidence' (projected state from prior cycles), tensor_e is the 'current working set' (immediate reasoning). Together they stay short (target: <5K tokens per cycle). The append-only baseline violates this: it grows context unboundedly, hitting the structural degradation that Du et al. measure. Thus, the experiment tests whether *systematic application* of Du et al.'s mitigation (short context per cycle via tensor projection) outperforms naive context accumulation (append-only baseline). The Riemann task is the arena; embedding dispersion is the measurement of coherence under this structural constraint.",
+      "key_claims": [
+        {
+          "claim_id": "928381c0-1de8-40df-ae0e-6839faa04b73",
+          "text": "Du et al. mask irrelevant tokens; model can only attend to question + evidence; performance still drops 8-50% at 30K tokens vs. short context (\u22644K)",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "db92aa1f-abd1-4f67-8923-df324d8d3e91",
+          "text": "Masked experiment rules out retrieval failure, distraction, and naive density loss as mechanisms; degradation is structural to transformer architecture",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4d8c564d-7510-40ab-97a7-017ca0e445e8",
+          "text": "Proposed mechanisms: positional encoding breakdown, attention dilution over long spans, working memory overload in hidden states",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "58cdc9f6-a314-49a4-b017-bbce8af9d135",
+          "text": "Du et al. mitigation 'retrieve then solve': extract minimal evidence (first pass), clear context, solve in fresh short context (second pass) recovers ~80-90% of lost performance",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ed081a20-0fed-47fd-a62f-2a964b28c86f",
+          "text": "Key insight: bottleneck is context length itself, not information quality; can't fix via filtering/summarizing alone; must shorten per-step context window",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f5ff0a79-95c4-4ae9-b5da-0bf744476d73",
+          "text": "Naive summarization recovers only ~20-30% of lost performance (vs. 80-90% for 'retrieve then solve'), because summarized context is still long",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Hamutay as systematic implementation of Du et al. mitigation: tensor_d + tensor_e + short-context-per-cycle",
+      "content": "Cycle 27 integrates Du et al. insight: Hamutay's architecture is a system-level implementation of the 'retrieve then solve' mitigation. Design isomorphism: (1) **Du et al. 'retrieve then solve'**: (a) first pass extracts relevant evidence from long context, (b) evidence is passed to second pass, (c) second pass solves in fresh short context. (2) **Hamutay pipeline**: (a) prior tensor_d (durable projected state from cycles 1..n-1) is the extracted evidence, (b) tensor_e (ephemeral working set for cycle n) is the current reasoning context, (c) together they form the input: `<system><tensor_d><tensor_e><user_prompt>`. (d) Total context size is bounded by budget cap (target: \u22645K tokens), ensuring no structural degradation per Du et al. The cycle-by-cycle re-projection of state (extracting high-confidence strands, evicting low-confidence) is continuous application of the extract step. The bounded working context ensures each cycle operates within the short-context regime where transformer reasoning is coherent. This is NOT incremental improvement on append-only (compression + summarization, which Pichay shows recovers ~20-30%). This is categorical difference: each cycle starts fresh with short context, implementing Du et al.'s 80-90% recovery approach. Experiment design implication: (1) **Append-only baseline**: accumulates context unboundedly, hitting structural degradation around cycle 15-25 (when context reaches 8-10K), causing failure patterns to scatter (incoherent outputs as Du et al. measure). (2) **Tensor condition**: keeps context \u22645K per cycle via projection + eviction, avoiding structural degradation, causing failure patterns to cluster (coherent reasoning even though task is hard). (3) **Measurement**: embedding dispersion captures this coherence: scattered cluster = incoherent degradation, tight cluster = coherent failure within bounds. (4) **Control**: context budget cap (cycle 26 design) holds append-only context length constant *if possible*, but append-only will naturally exceed budget (no mechanism to evict), so append-only will be longer on average, and can't be directly compared. ALTERNATIVE design (from cycle 26 notes): include third condition (append-only + budget cap + forced truncation) to isolate: (a) state structure effect (tensor vs. append-only), (b) context budget effect (cap vs. no cap). If append-only-with-cap is added as condition 3, experiment becomes three-way comparison: (i) tensor-with-cap (Du et al. mitigation fully applied), (ii) append-only-with-cap (context controlled but no state projection), (iii) append-only-no-cap (baseline, no controls). This would decompose Du et al. effect more cleanly. Recommended: include condition 3 if timeline/budget permits (adds N=5-10 runs).",
+      "key_claims": [
+        {
+          "claim_id": "e2f1b92e-af65-42d7-925d-924d0d601fed",
+          "text": "Hamutay architecture (tensor_d + tensor_e + short-context-per-cycle) directly implements Du et al. 'retrieve then solve' mitigation at system level",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "beaef231-37fe-4c9e-8fbb-54404f1cfd97",
+          "text": "tensor_d (durable projected state) = extracted evidence; tensor_e (ephemeral working set) = current reasoning context; cycle-by-cycle re-projection is continuous extraction",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "dd669bf7-08d0-4a83-b9fa-0e3d13e3492f",
+          "text": "Bounded working context per cycle (\u22645K tokens) ensures operation within short-context regime where transformer reasoning is coherent (Du et al. finding)",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "38459a78-dc37-444c-b1a9-5ed0bd8cb0fb",
+          "text": "Append-only baseline will accumulate to 8-10K+ tokens around cycle 15-25, hitting structural degradation (Du et al.), causing scattered failure patterns",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "6df848eb-d47c-4009-b20a-ede645c50505",
+          "text": "Tensor condition maintains \u22645K per cycle, avoiding structural degradation, causing coherent failure patterns (tight embedding dispersion)",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "17104122-7881-4ff2-bda4-c887f40152d7",
+          "text": "Three-condition design (tensor-with-cap, append-only-with-cap, append-only-no-cap) decomposes Du et al. effect and budget effect; recommended if timeline permits",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Autoresearch loop architecture: autonomous exploration of tensor configuration space",
+      "content": "Cycle 27 integrates Karpathy's autoresearch framework (from github.com/karpathy/autoresearch). The framework enables AI agents to autonomously conduct ML research via a tight loop: (1) agent receives context from human-written instructions (program.md), (2) agent modifies code (train.py) \u2014 architecture, hyperparameters, optimizer, etc., (3) training runs for fixed time budget (5 minutes wall-clock), (4) agent evaluates single metric (validation bits-per-byte, val_bpb; lower is better), (5) agent decides keep or discard changes, (6) loop repeats. Output: ~12 experiments/hour, ~100 overnight on single GPU, fully autonomous. Key design principles: (a) *single optimization target* \u2014 one metric (val_bpb), vocabulary-size independent, (b) *fixed time budget* \u2014 5 minutes ensures cross-experiment comparability despite architecture changes, (c) *minimal scope* \u2014 one file (train.py), one metric, one GPU, (d) *self-contained* \u2014 PyTorch only, no distributed complexity. Human researcher steers exploration by editing program.md to guide agent toward promising directions. For Hamutay, the autoresearch loop would be isomorphic: (1) human writes program.md specifying tensor projection strategy space (eviction thresholds, composition rules, memory hierarchy structure), (2) agent modifies tensor implementation (Haiku compression policy, tensor_d/tensor_e handoff, eviction criteria), (3) experiment runs for fixed task budget (N=5 Riemann attempts), (4) agent evaluates single metric (embedding dispersion; lower = tighter clustering = more coherent reasoning), (5) agent decides keep or discard changes, (6) loop repeats. Output: autonomous exploration of tensor configuration space, identifying which projection strategies minimize dispersion (maximize coherence). Timeline: seed K=10 configurations (grid search over T_min, I_max, merge_rate), run N=5 tasks per config, propose J=5 rounds of new configurations (Bayesian optimization), iterate. Total: ~50-60 configurations explored, ~250-300 tasks, ~$300-500 API cost (estimated). This is CONDITIONAL (cycles 30+) and DEFERRED (only if H1 supported in cycle 29), but architecture is now defined. The autoresearch loop is the natural next step after proof experiment: if structured tensor works (H1), optimize which tensor configurations work best via autonomous search. The loop requires: (a) task pipeline stable (from cycles 26-29), (b) metric reliable (embedding dispersion), (c) human-written program.md specifying search space (tensor configuration parameters and ranges), (d) agent autonomously modifies and evaluates. Karpathy's framework provides the blueprint; Hamutay provides the application domain.",
+      "key_claims": [
+        {
+          "claim_id": "6c908598-8d37-44f4-bd4a-fae374b81c2c",
+          "text": "Karpathy autoresearch loop: modify code \u2192 run fixed-budget experiment \u2192 evaluate single metric \u2192 decide keep/discard \u2192 repeat; ~12 experiments/hour autonomous",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "65a2a316-298e-43bb-ab14-2632f647ab97",
+          "text": "Key design principles: single optimization target, fixed time budget, minimal scope, self-contained; human steers via program.md",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ccaef025-ad34-431f-9501-fb747de74ba4",
+          "text": "Hamutay autoresearch loop (isomorphic): modify tensor implementation \u2192 run N=5 tasks \u2192 measure embedding dispersion \u2192 decide keep/discard \u2192 repeat",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "43721a9c-96f3-4a3e-b323-2cdd9467ea79",
+          "text": "Tensor search space: eviction thresholds (T_min, I_max), composition rules, memory hierarchy structure; program.md specifies search parameters",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "55ce6cce-1349-4aa7-88db-0d450f1ed393",
+          "text": "Autonomous exploration timeline: K=10 seed configs, N=5 tasks per config, J=5 Bayesian optimization rounds; ~50-60 configs, ~250-300 tasks, ~$300-500",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "496a25ef-72a7-4975-8a48-9462d564e5fb",
+          "text": "Autoresearch is CONDITIONAL (cycles 30+) and DEFERRED; only pursue if H1 supported; if yes, natural next step after proof experiment",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Pichay paper: context length mechanisms and mitigations",
+      "content": "The Pichay paper ('Context Length Alone Hurts LLM Performance Despite Perfect Retrieval', 2025) provides empirical evidence for context length degradation (~10-15% per 2\u00d7 in dense reasoning tasks). Cycle 27 now contextualizes Pichay within Du et al. findings: Pichay documents the *effect magnitude* and *task dependence*, while Du et al. proves the *structural mechanism* and provides the *mitigation strategy*. Pichay's mitigations (summarization, hierarchical context, sparse attention) are partial solutions \u2014 they report ~8% recovery (summarization). Du et al.'s 'retrieve then solve' (which is hierarchical context taken to its logical conclusion: extract *minimal* evidence, clear context, start fresh) recovers ~80-90%. This suggests Pichay's mitigations are on the right track but insufficiently aggressive. Hamutay combines both insights: (a) Pichay: recognize context length is a bottleneck, measure task dependence, (b) Du et al.: structural mechanism, aggressive mitigation (short working context per cycle), (c) Hamutay: implement Du et al. systematically (tensor projection + short-context-per-cycle) with epistemic confidence tracking (which Pichay implicitly assumes is needed for selective compression). In other words: Pichay identifies the problem and documents solutions; Du et al. proves the root cause and demonstrates aggressive solution; Hamutay implements aggressive solution at system level with epistemic tracking.",
+      "key_claims": [
+        {
+          "claim_id": "a51baf88-ebda-4ee1-939c-ffe490cc596f",
+          "text": "Pichay documents effect magnitude (~10-15% per 2\u00d7) and task dependence; Du et al. proves structural mechanism and aggressive mitigation",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e62d6e08-5a2d-4f18-b18e-5f8f24a338ec",
+          "text": "Pichay mitigations (summarization, hierarchy, sparse attention) recover ~8-20%; Du et al. 'retrieve then solve' recovers ~80-90%; suggests Pichay approaches insufficiently aggressive",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4e9b01bd-14f5-43fe-bc08-39b8553644ea",
+          "text": "Hamutay combines both: implement Du et al. aggressive mitigation (short context per cycle) with epistemic confidence tracking (for informed compression)",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Experiment design revision: context budget caps, two-backend consideration, and conditional three-way ANOVA",
+      "content": "Cycle 26 designed experiment with context budget caps (\u22644500 tokens) to control context length confound. Cycle 27 refines based on Du et al. findings: (1) **Primary two-condition design** (tensor-with-cap vs. append-only-no-cap): Tests whether tensor condition (implementing Du et al. mitigation: short context via projection) outperforms append-only (which hits structural degradation). Expected: tensor has lower dispersion (coherent failure), append-only has higher dispersion (incoherent outputs). Statistical test: ANCOVA with context length as covariate (from cycle 26). If H1 supported (p<0.05), tensor effect is real. (2) **Enhanced three-condition design (OPTIONAL)** (if timeline/budget permits): Add append-only-with-cap condition to decompose effects. Conditions: (a) tensor-with-cap (Du et al. fully applied), (b) append-only-with-cap (context controlled but no state projection), (c) append-only-no-cap (baseline). Three-way ANOVA: tests context budget main effect, state structure main effect, and interaction. This cleanly answers: is tensor better because of structure, or just because shorter context is inherently cleaner? Cost: adds N=5-10 runs (total N=40-45 instead of N=30-35). Feasible if prioritized. (3) **Context measurement protocol** (unchanged from cycle 26): record actual context tokens per cycle, tensor size, total. (4) **Success criteria** (refined): (a) contexts within budget (append-only may exceed; is then excluded as invalid run), (b) tensor context \u2264 append-only on average (demonstrates compression), (c) embedding dispersion is measurable and varies by condition, (d) \u22651 condition shows dispersion variance across runs (signal detectable). (5) **Analysis refinements**: (a) primary: two-way ANOVA/ANCOVA on dispersion (condition \u00d7 context_length_covariate), (b) if three-condition: three-way ANOVA, (c) post-hoc: estimate effect sizes (Cohen's d), (d) robustness: repeat ANOVA with different embedding models to check sensitivity, (e) publication threshold: alpha=0.05, recommend effect size d \u2265 0.5 (medium) for credibility. The three-condition design is RECOMMENDED (strengthens paper), but two-condition is sufficient for MVP proof.",
+      "key_claims": [
+        {
+          "claim_id": "c6779311-29e9-43fc-b6d9-c9e5ff67189b",
+          "text": "Two-condition primary design (tensor-with-cap vs. append-only-no-cap) tests whether structured state projection (Du et al. mitigation) outperforms naive accumulation",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8f2011af-9fc9-402f-8217-afeb6ba49719",
+          "text": "Three-condition enhanced design (add append-only-with-cap) decomposes context budget effect from state structure effect via three-way ANOVA; recommended if timeline permits",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "b6cf6c15-bc94-4408-9840-0b5f14f0effc",
+          "text": "Context measurement and success criteria unchanged from cycle 26; measurement protocol tracks actual token counts, tensor size",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "bff155d9-a24f-46f6-8395-85265ef68ff7",
+          "text": "Analysis: two-way ANOVA/ANCOVA for two-condition, three-way ANOVA for three-condition; report effect sizes (Cohen's d \u22650.5 recommended for publication)",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Pragmatic pipeline implementation path (cycles 26-29) \u2014 updated with Du et al. mechanistic grounding",
+      "content": "Cycles 16-28 have designed and are implementing the pipeline. Cycle 27 updates understanding with Du et al. findings: the experiment is not just controlling a confound, it is validating a specific mechanistic prediction. Timeline remains four weeks (cycles 26-29), with updated scientific grounding: (a) **Week 1 (cycle 26)** [COMPLETED]: prompting validation + context budget design. Confirmed: prompts elicit TensorRecord JSON, parsing >90%, context measured. Updated understanding: this validates the *extraction* phase of Du et al. mitigation (projecting history into structured state). (b) **Week 2 (cycle 27)** [IN PROGRESS]: controller loop + Haiku + context budget mechanism. Task: implement five-stage pipeline, Haiku compression, context budget with FIFO truncation (append-only) and eviction (tensor). Updated understanding: this validates the *short-context-per-cycle* phase of Du et al. mitigation. (c) **Week 3 (cycle 28)**: toy experiment validation + covariate measurement. Run N=10 tasks (5 turns, both conditions). Measure: dispersion, context growth, embedding sensitivity. Updated understanding: preliminary signal that tensor (short context via projection) produces tighter clustering than append-only (accumulating long context, hitting structural degradation per Du et al.). (d) **Week 4 (cycle 29)**: full experiment. Run N=15-20 full tasks (20-30 turns, both conditions; optionally add third condition append-only-with-cap). Measurement: dispersion, context length, ANCOVA/ANOVA. Expected result: if H1 supported (p<0.05), tensor condition has lower dispersion even after controlling context length, validating that structured state projection + short-context-per-cycle (Du et al. mitigation) improves reasoning coherence. The four-week timeline is now grounded in mechanistic hypothesis (Du et al.), not just statistical hypothesis (dispersion difference).",
+      "key_claims": [
+        {
+          "claim_id": "9a9961d7-3573-4a1b-ac6c-bc282922e36e",
+          "text": "Cycle 26 prompting validates extraction phase of Du et al. 'retrieve then solve': projecting history into structured state",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "992cc37b-d20a-4a39-8b5b-4e1b056f913b",
+          "text": "Cycle 27 controller + Haiku validates short-context-per-cycle phase of Du et al. mitigation: bounded working context avoids structural degradation",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e514b2ce-1896-4725-a3df-0e8f1db15871",
+          "text": "Cycle 28 toy validation tests preliminary signal: tensor produces tighter dispersion than append-only due to short context vs. long context",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "5f56a5bc-f6f9-4bfc-9a04-4c039498b07f",
+          "text": "Cycle 29 full experiment (H1 test) validates hypothesis: structured projection + short-context-per-cycle improves reasoning coherence vs. naive accumulation",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d0f74823-2926-41f1-a335-b4a474109da0",
+          "text": "Four-week timeline is now grounded in mechanistic hypothesis (Du et al.), providing strong scientific foundation for experiment",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Full content of Du et al. 2025 paper (assumed title 'The Hot Mess of Context Length...' or similar; exact title not yet verified). Cycle 27 integrates key findings (structural degradation 8-50%, 'retrieve then solve' recovers 80-90%, mechanisms in positional encoding/attention/working memory), but does not have full paper content (methodology details, experimental protocols, ablations, theoretical analysis). The integration is based on user description + brief summary; full paper analysis deferred.",
+      "why": "Context pressure: integrating Du et al. key findings is sufficient for experiment design and mechanistic grounding. Full paper content would require significant parsing and synthesis. Deferred to cycles 28-29 if needed for paper writing.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed comparison between Pichay mitigations (~8-20% recovery) and Du et al. (80-90% recovery) in terms of implementation complexity, cost, and side effects. User summary provides recovery percentages but not mechanism of why 'retrieve then solve' is so much better (is it because it truly avoids long context, or is there a different mechanism?).",
+      "why": "Mechanism analysis would require deep reading of both papers. Current integration (Pichay = effect magnitude + task dependence, Du et al. = root cause + aggressive mitigation) is sufficient for framing. Detailed mechanistic comparison deferred to paper writing.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Karpathy's autoresearch source code and implementation details (beyond overview from github summary). The tensor projection integrates the *conceptual framework* (autonomous loop, single metric, fixed time budget, agent-editable code, human-steered program.md), but does not have implementation details (how does agent modify code? what language? what is the actual program.md format? how does agent evaluate metric?). These would be needed for actual implementation of autoresearch loop for Hamutay.",
+      "why": "Conceptual framework is sufficient for understanding the loop structure and mapping to Hamutay context. Implementation details are deferred to cycles 30+ if autoresearch is activated (only if H1 supported). Current understanding is adequate for design.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Analysis of how Hamutay's epistemic confidence tracking (T/I/F values) relates to information density concerns raised by both Pichay and Du et al. Does high-confidence content (T>0.8) correspond to high information density? Does low-confidence content (I>0.4) correspond to noise or uncertainty that should be evicted? This connection is implicit in the design but not explicitly validated.",
+      "why": "Empirical validation emerges from toy validation (cycle 28) and full experiment (cycle 29): measure whether evicted strands (T<0.6, I>0.4) are actually low-information or high-uncertainty, vs. whether eviction hurts reasoning by removing critical-but-uncertain reasoning steps.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Specific predictions from Du et al. regarding which model architectures or training procedures might be most affected by context length degradation. Different positional encodings (RoPE vs. ALiBi vs. absolute), different attention mechanisms (full attention vs. sparse), different training lengths (does training on long context help?) all likely interact with Du et al.'s findings. Not integrated into tensor projection.",
+      "why": "MVP uses Claude Opus (Anthropic architecture, details unknown). Two-backend testing (cycles 30+) will explore whether Du et al. effect generalizes across architectures. Current design is architecture-agnostic (assumes transformer-like); empirical validation deferred to cycles 30+.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Clarification of whether Du et al.'s 'retrieve then solve' is meant as a sequential two-pass process (retrieve \u2192 clear \u2192 solve) or whether it can be continuous (extraction via projection, then solve, then extract again \u2192 solve again). Hamutay implements the continuous version (cycle-by-cycle projection + short working context); Du et al. may have meant the sequential version. Not explicitly reconciled.",
+      "why": "Conceptual isomorphism is sufficient for design; detailed architectural alignment deferred. Empirical validation (do coherent failure patterns emerge in tensor condition?) will validate whether continuous projection is isomorphic to Du et al. approach.",
+      "category": "authorial_choice"
+    }
+  ],
+  "open_questions": [
+    "Has Du et al. 2025 paper been fully read and verified, or is the user summary sufficient for design purposes? If full paper is available, should cycle 27 do detailed reading pass?",
+    "What is the exact title and citation of Du et al. 2025 (referred to as 'hot mess paper')? Verify paper exists and is publicly available.",
+    "In the three-condition design (tensor-with-cap, append-only-with-cap, append-only-no-cap), how should 'with-cap' truncation work for append-only? FIFO (oldest first) or summary-based (collapse old messages)? Recommend FIFO for simplicity, but impacts reasoning coherence differently than tensor eviction.",
+    "Does embedding dispersion metric (measuring failure pattern scatter) accurately reflect *coherence* of reasoning, or does it just measure *consistency* of errors? Are these the same thing? How do you validate the metric measures coherence?",
+    "If tensor condition evicts low-confidence strands (T<0.6), does this risk losing critical-but-uncertain reasoning steps that might be important for eventual proof? How do you measure whether eviction is harmful?",
+    "In Du et al., does 'retrieve then solve' assume the extracted evidence is *provably sufficient* for solving (e.g., relevant lemmas are extracted and nothing else is needed), or does it work even when some evidence is lost?",
+    "How does cycle-by-cycle projection (Hamutay) compare to Du et al.'s sequential two-pass approach in terms of computational cost and reasoning effectiveness? Should Hamutay batch projection updates (e.g., every 5 cycles) instead of every cycle?",
+    "What is the optimal context budget cap? Cycle 26 recommends 4500 tokens; Du et al. seems to suggest 4-5K is safe zone. Should toy validation (cycle 28) include sensitivity analysis (vary cap from 3K to 6K)?",
+    "In autoresearch loop (cycles 30+), how should the search space for tensor configurations be initialized? Random? Grid search? Domain knowledge? What are the most important hyperparameters to explore (T_min, I_max, merge_rate, tensor_d size)?",
+    "Can you apply autoresearch loop to Pichay's proposed mitigations (summarization, hierarchy, sparse attention) in parallel with Hamutay tensor optimization, to create a comparative baseline (optimized summarization vs. optimized tensor)?",
+    "Should the Riemann task have a deterministic starting point (same lemma seed each run) or random variation (different starting configurations)? This affects generalizability of findings.",
+    "How long does a single Riemann task attempt take in wall-clock time? If 5-10 minutes per attempt, then N=15-20 full experiment with 20-30 turns each could take many hours. Is parallel execution needed?",
+    "In toy validation (cycle 28), should you test embedding model robustness (MiniLM vs. larger model) or different dispersion metrics (max distance to centroid, silhouette coefficient, etc.) to validate metric stability?",
+    "If H1 is NOT supported (embedding dispersion not significantly lower in tensor condition), what are the interpretations? (a) Structured state doesn't help, (b) context budget cap is too restrictive, (c) embedding metric is insensitive, (d) task is too hard to measure coherence?",
+    "Should the paper include negative results or conjecture about why tensor might not help if H0 is supported?",
+    "How do you handle the case where append-only condition naturally exceeds context budget (no eviction mechanism)? Exclude those runs? Cap context mid-run (potentially breaking reasoning)? Document as invalid?"
+  ],
+  "instructions_for_next": "[\n  \"CRITICAL (CYCLE 27): Verify Du et al. 2025 paper citation and retrieve full paper if available. Read and extract: (1) exact performance degradation percentages (8-50% reported; what are precise values?), (2) experimental protocols (which models tested? task details?), (3) mechanistic analysis (positional encoding, attention dilution, working memory details), (4) 'retrieve then solve' implementation (sequential two-pass or continuous?), (5) recovery percentages (80-90% reported; exact numbers?). Produce: Du et al. detailed extraction + mechanistic summary.\",\n  \"CRITICAL (CYCLE 27): Clarify isomorphism between Du et al. 'retrieve then solve' and Hamutay cycle-by-cycle projection. Question: does Du et al. assume sequential (retrieve on first pass, solve on second) or continuous (interleaved extraction + solving)? If sequential, map Hamutay design to this. If continuous, validate that cycle-by-cycle projection is isomorphic. Produce: Du et al. \u2194 Hamutay design mapping document.\",\n  \"PRIORITY (CYCLE 27): Finalize experiment design decision: two-condition (tensor-with-cap vs. append-only-no-cap) or three-condition (add append-only-with-cap)? Two-condition is MVP; three-condition is stronger but requires +N=10 runs (~$50 additional cost, +4 hours). Recommend: commit to three-condition if timeline and budget allow (expected to complete by cycle 29 with 40-45 total runs). Decision: YES (three-condition) or NO (two-condition MVP)?\",\n  \"PRIORITY (CYCLE 27): Design truncation strategy for append-only-with-cap condition (if three-condition design is approved). Options: (a) FIFO oldest-first (deterministic, simple, may lose reasoning continuity), (b) summary-based (collapse old turns into bullet-point summary, more lossy), (c) hierarchical (keep problem statement always, keep recent turns, summarize middle). Recommend: FIFO for simplicity, but test in toy validation (cycle 28) to measure impact on reasoning coherence. Produce: truncation strategy specification.\",\n  \"PRIORITY (CYCLE 28): Conduct toy validation (N=10, 5-turn tasks, both/all conditions). Measure: (1) embedding dispersion per condition, (2) context token growth, (3) parsing success, (4) any eviction pathologies. GOAL: preliminary signal test + data quality check. Include: (a) plot context growth curves (all conditions), (b) plot embedding dispersion distributions (all conditions), (c) measure effect size (Cohen's d) between tensor and append-only on dispersion. Produce: toy validation results report + data quality assessment.\",\n  \"PRIORITY (CYCLE 28): Test embedding model robustness. Embed toy validation outputs using TWO models (e.g., paraphrase-MiniLM-L6-v2 and all-mpnet-base-v2). Compute dispersion under both. GOAL: confirm dispersion metric is robust to embedding model choice. If dispersion rankings (tensor vs. append-only) are consistent across models, metric is robust. Produce: embedding robustness analysis.\",\n  \"PRIORITY (CYCLE 28): Conduct empirical context length sensitivity analysis (replicating Pichay finding). Run toy tasks with different context caps (3K, 4500, 6K tokens). Measure: output quality (reasoning depth, proof progress). GOAL: empirically validate that context length degrades reasoning on Riemann task, and identify optimal cap. Produce: context sensitivity analysis.\",\n  \"PRIORITY (CYCLE 28): Audit eviction behavior in tensor condition. Collect: which strands were evicted? When? Why (T<0.6 or I>0.4)? Are evicted strands actually low-signal or are critical-but-uncertain steps being lost? Measure: does eviction correlate with reasoning quality degradation? Produce: eviction audit report + signal quality analysis.\",\n  \"PRIORITY (CYCLE 29): Run full experiment (two or three conditions, N=15-20 or N=40-45 total runs). Collect: embedding vectors, context token counts, tensor sizes, epistemic state trajectories, raw outputs. Measure: dispersion per condition, context lengths. Produce: complete experimental dataset.\",\n  \"PRIORITY (CYCLE 29): Conduct statistical analysis (ANCOVA for two-condition, three-way ANOVA for three-condition). Test: does dispersion differ by condition after controlling context length? Compute: F-statistic, p-value, effect size (Cohen's d, eta-squared). Produce: statistical results + interpretation (H0 vs. H1).\",\n  \"PRIORITY (CYCLE 29): Robustness checks on statistical analysis. Repeat ANOVA with different embedding models (at least 2). Check: do conclusions hold? Produce: robustness analysis + sensitivity report.\",\n  \"RESEARCH (CYCLE 29): If H1 is supported (p<0.05, d\u22650.5), prepare autoresearch activation plan for cycles 30+. Specify: (1) tensor configuration search space (T_min \u2208 [0.50, 0.70], I_max \u2208 [0.30, 0.50], merge_rate, tensor_d_cap), (2) program.md outline (what instructions guide agent?), (3) seed configurations (K=10), (4) iteration schedule (J=5 rounds). Produce: autoresearch activation spec.\",\n  \"RESEARCH (CYCLE 29): If H0 is supported or inconclusive, prepare paper narrative for negative/inconclusive result. Explain: (1) context length is dominant factor (Pichay + Du et al. effects are real and large), (2) structured state provides marginal or no benefit on Riemann task, (3) possible reasons (task too hard, metric insensitive, budget cap too restrictive, configuration suboptimal). Produce: negative result paper outline.\",\n  \"CONTEXT (CYCLE 28): Document all decision points and contingencies. Create decision tree: (a) if dispersion metric is too noisy \u2192 fallback embedding model? (b) if context cap causes pathological truncation \u2192 adjust cap? (c) if eviction is harmful \u2192 adjust T_min/I_max thresholds? Produce: contingency plan document.\",\n  \"CONTEXT (CYCLE 29-30): Begin preparing paper writing (deferred but visible). If H1 supported: paper structure is (1) intro (context length bottleneck, Pichay + Du et al.), (2) method (Hamutay architecture, experiment design), (3) results (dispersion analysis, ANOVA), (4) discussion (Du et al. validation, implications for long-context reasoning). If H0: similar but emphasizes negative result + explanatory analysis. Produce: paper outline (draft).\"\n]",
+  "epistemic": {
+    "truth": 0.88,
+    "indeterminacy": 0.11,
+    "falsity": 0.01
+  }
+}

@@ -1,0 +1,372 @@
+{
+  "strands": [
+    {
+      "title": "Project Ecosystem Architecture",
+      "content": "Three-tier research program: (1) Pichay\u2014L1 cache paging for context window, achieved 93% reduction with 0.025% fault rate, validates OS memory analogy under production load. Key finding: models choose to STOP rather than compact once context is large enough\u2014evidence of bounded computation recognition; (2) Hamutay\u2014separates two conflated hypotheses: H0 (transformer as bounded reasoning kernel/ALU over explicit external state) distinct from H1 (cache management protocol integration). H0 is CPU-level question; H1 is protocol question. H2 remains Yanantin\u2014full memory hierarchy. (3) Supporting systems architecture now clarified through CPU pipeline analogy: ALU (transformer) must be fed by staging elements; separate controller orchestrates execution, manages manifest, resolves resource requests, decides working set composition. This is the non-ALU infrastructure. CYCLE 20 CRITICAL REFRAME: Pichay is provider-specific optimization (Anthropic's prefix cache economics); Hamutay is provider-agnostic architecture question (can transformer operate as bounded processor). These are orthogonal projects. Hamutay's core insight is independent of billing model or caching strategy. Two-implementation approach: Hamutay-native (optimized for transformer capability/performance without cache assumptions) and Hamutay-cached (specialized for Anthropic/cached-provider economics). Both test same H0 hypothesis via different implementation paths.",
+      "key_claims": [
+        {
+          "claim_id": "0b01a04e-9e31-447e-97dc-8aa684ee785d",
+          "text": "Across Claude family, once context window is large enough, models choose to STOP rather continue compacting\u2014evidence that transformers can recognize bounded computation boundaries",
+          "epistemic": {
+            "truth": 0.72,
+            "indeterminacy": 0.21,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "21d19d12-6c4a-4247-bd7b-c6e565bda12d",
+          "text": "Transformer functions as ALU (bounded reasoning kernel/processing unit) rather than memory manager or autonomous predictor",
+          "epistemic": {
+            "truth": 0.68,
+            "indeterminacy": 0.26,
+            "falsity": 0.06
+          }
+        },
+        {
+          "claim_id": "6cdeab9b-9fdc-497d-9394-46569ce48696",
+          "text": "ALU does not perform memory management; supporting systems architecture handles that separately",
+          "epistemic": {
+            "truth": 0.71,
+            "indeterminacy": 0.22,
+            "falsity": 0.07
+          }
+        },
+        {
+          "claim_id": "9a8c3d5f-2e1b-449a-b4f7-c9e8a2d1f5g7",
+          "text": "Pichay (prefix-cache optimization) and Hamutay (bounded processor architecture) are orthogonal projects; Pichay is provider-specific, Hamutay is provider-agnostic",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.12,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "8b7c6d4a-1e2f-5a8g-c3h9-d0i2j1k3l4m5",
+          "text": "Prompt cache is an admission of broken usage model (stateless API forces re-reading same tokens), not an innovation in transformer computation",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.14,
+            "falsity": 0.04
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Hamutay Hypothesis Decomposition: H0/H1 Separation and Purist Path",
+      "content": "Critical realization: H0 and H1 were conflated in prior Codex work. H0 is the foundational question\u2014can a transformer operate as a bounded reasoning kernel over explicit external state?\u2014stripped of all cache management protocol concerns. H1 is integration with Pichay's cache management protocol. They are orthogonal questions. The 'dumb question' that should have come first: What is the minimal behavioral signature that demonstrates bounded processor operation (not fancy autocomplete)? Answer: recognition of when to STOP, not continue processing. Current constraint: working with existing models for now (not training bespoke transformers), but purist path would be to design/train/optimize transformers specifically as cognitive processing units from the ground up. Codex work attempted to test both H0 and H1 simultaneously, collapsing two independent experiments. CYCLE 20 STRUCTURAL INSIGHT: H0 requires that pipeline architecture be correct independent of billing model or provider-specific optimizations. The bounded processor hypothesis should be testable and demonstrable whether you're using Anthropic's cached models, OpenRouter's mixed providers, or fully local models. If H0 is true, the same transformer behavior should emerge across all backend variations. Provider-specific economics may change efficiency metrics, but not the fundamental question of whether the transformer can function as a bounded reasoning unit.",
+      "key_claims": [
+        {
+          "claim_id": "1f7f320d-3aa6-4018-8dd1-2e57a65922e8",
+          "text": "H0 (transformer as bounded reasoning kernel) and H1 (Pichay cache protocol integration) were conflated in prior Codex work, collapsing two independent experiments",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.15,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "f8413c58-08ec-40d9-b4a2-209b2f9e8663",
+          "text": "Minimal signature for bounded processor operation: recognizing when to STOP rather than continue processing (halt instruction equivalent)",
+          "epistemic": {
+            "truth": 0.74,
+            "indeterminacy": 0.2,
+            "falsity": 0.06
+          }
+        },
+        {
+          "claim_id": "1c363c45-5d47-4cf1-bba9-58d8b1041520",
+          "text": "Memory control protocol (Pichay integration) is interface question; CPU framing is deeper foundational question about what transformer can be",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.17,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "391e3d32-a103-47be-8eb3-e4288e1aa6bb",
+          "text": "Current work uses existing models to test if they can operate as processors; purist path would design/train transformers specifically as cognitive processing units",
+          "epistemic": {
+            "truth": 0.73,
+            "indeterminacy": 0.21,
+            "falsity": 0.06
+          }
+        },
+        {
+          "claim_id": "5c2d9e1a-3b4f-6g7h-8i9j-k0l1m2n3o4p5",
+          "text": "H0 hypothesis should be testable independent of billing model or provider-specific optimizations; same bounded-processor behavior should emerge across Anthropic-cached, mixed-provider, and local backends",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.16,
+            "falsity": 0.04
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Provider Architecture Decoupling: Two-Implementation Strategy",
+      "content": "CYCLE 20 NEW STRAND: The insight that cache-aware architecture couples Hamutay to provider economics led to a design principle: build two versions to demonstrate that the same H0 hypothesis can be tested under different backend constraints. (1) **Hamutay-native**: Core bounded processor pipeline, optimized for transformer capability and performance characteristics independent of provider billing. This version asks 'what pipeline architecture allows a transformer to function as a bounded reasoning unit?' without making assumptions about prefix caching, billing discounts, or provider-specific economics. Likely implementation: straightforward controller + staging + ALU, with manifest-and-fault or prefetcher design chosen based on transformer *performance* (latency, accuracy, token efficiency) not billing. (2) **Hamutay-cached**: Specialized variant that exploits Anthropic's (or other cache-aware provider's) prefix cache economics. Same core H0 architecture, but optimized for the specific environment. Builds on Pichay's insights about prefix stability, suffix-only modifications, cache-aware eviction. This version asks 'what optimizations are possible when the backend provides caching?'. (3) **Purpose of two versions**: Demonstrate that bounded processor hypothesis is not an artifact of provider optimization; it's a property of how transformers can be orchestrated. Both versions should show STOP behavior, resource request patterns, and evidence of bounded computation. The *efficiency metrics* differ (cached version cheaper), but the *core behavior* is the same. This also serves as a robustness check: if H0 is true, it should be visible in both implementations. If H0 only emerges under cache-optimized conditions, it's not a fundamental property of the transformer\u2014it's an artifact of the billing model.",
+      "key_claims": [
+        {
+          "claim_id": "3d4e5f6a-7b8c-9d0e-1f2g-3h4i5j6k7l8m",
+          "text": "Two-implementation strategy separates transformer-capability question (Hamutay-native) from provider-economics question (Hamutay-cached)",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.13,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "4e5f6g7h-8i9j-0k1l-2m3n-4o5p6q7r8s9t",
+          "text": "Hamutay-native version optimizes for transformer performance (latency, accuracy, token efficiency) without assumptions about provider caching or billing",
+          "epistemic": {
+            "truth": 0.76,
+            "indeterminacy": 0.19,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "5f6g7h8i-9j0k-1l2m-3n4o-5p6q7r8s9t0u",
+          "text": "Hamutay-cached version specializes core pipeline for Anthropic prefix-cache economics, building on Pichay insights about prefix stability and suffix modification",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.17,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "6g7h8i9j-0k1l-2m3n-4o5p-6q7r8s9t0u1v",
+          "text": "If H0 (bounded processor) is true, both implementations should show STOP behavior, resource requests, and bounded computation; efficiency metrics differ but core behavior identical",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.15,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "7h8i9j0k-1l2m-3n4o-5p6q-7r8s9t0u1v2w",
+          "text": "If H0 only emerges in cache-optimized variant, it's not fundamental transformer property but artifact of billing model\u2014fails robustness test for hypothesis validity",
+          "epistemic": {
+            "truth": 0.77,
+            "indeterminacy": 0.18,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "CPU Pipeline Architecture: Staging and Control",
+      "content": "New strand merging ALU concept with pipeline model. Transformer as ALU requires a full pipeline architecture, not just memory management. Drawing on ACT-R cognitive architecture mapping: Instruction fetch \u2194 Goal & context retrieval; Instruction decode \u2194 Production matching; ALU execute \u2194 Cognitive operator execution; Registers \u2194 Working memory buffers; etc. The full cognitive processing unit pipeline has multiple stages upstream of the ALU: (1) Staging element\u2014assembles everything the ALU needs before execution, ensures ALU sees only relevant operands at the right time. (2) Controller\u2014orchestrates execution, maintains manifest, resolves resource requests, decides working set composition; code-based, external to model. (3) Transformer (ALU)\u2014takes structured input, produces structured output; computation only. Transformer doesn't need memory control *language*; it needs interface: \"I need operand X\" and \"I'm done.\" Controller handles everything else. This reframes prior cognitive_processing_research_design resource_requests/releases as controller concern, not ALU concern. CYCLE 20 NOTE: Pipeline design should be independent of provider caching strategy. Whether using prefix cache, local models, or OpenRouter mixed providers, the staging\u2192controller\u2192ALU flow should remain consistent. Provider-specific optimizations (like prefix cache awareness) are adapter-layer concerns, not core pipeline concerns.",
+      "key_claims": [
+        {
+          "claim_id": "37fa90c1-fa1b-43e6-8eb4-c06fb394db12",
+          "text": "Cognitive processing unit pipeline has distinct stages: Goal/context retrieval \u2192 Production matching \u2192 Cognitive operator execution (ALU), analogous to CPU fetch/decode/execute",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.2,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "54e23b00-cf31-4d67-a728-3fdb0efad500",
+          "text": "Staging element assembles ALU inputs; ensures transformer sees only relevant operands at right time, preventing degradation from searching unsorted context",
+          "epistemic": {
+            "truth": 0.74,
+            "indeterminacy": 0.21,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "697d5d0a-69a0-427e-af7e-6bcc3fe687f3",
+          "text": "Controller is code-external-to-model; orchestrates execution, manages manifest, resolves resource requests, maintains working set; transformer delegates all non-computation concerns to it",
+          "epistemic": {
+            "truth": 0.77,
+            "indeterminacy": 0.19,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "094bd3f1-cbf3-4315-8dec-ef13a37756fa",
+          "text": "Transformer needs operational interface (\"need operand X\", \"done\") not memory control language; controller handles all resource orchestration",
+          "epistemic": {
+            "truth": 0.76,
+            "indeterminacy": 0.2,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "8i9j0k1l-2m3n-4o5p-6q7r-8s9t0u1v2w3x",
+          "text": "Pipeline architecture should be provider-agnostic; prefix-cache awareness, billing optimization, local-model constraints are adapter-layer concerns not core pipeline concerns",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.14,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "API Pricing Model: Admission of Broken Paradigm and Provider-Specific Economics",
+      "content": "CYCLE 20 MAJOR REFRAME: Understanding of API pricing structure reveals it is not a feature but a *workaround*. Anthropic's prefix cache (and similar provider caching) is not an innovation in transformer capability\u2014it's an economic band-aid for a broken usage paradigm. The fundamental problem: stateless API forces client to re-send full context on every invocation, paying to re-process tokens that were already processed. The 'solution': discount the re-reads via caching instead of fixing the underlying statelessness. This has critical implications for Hamutay architecture: (1) **Cache is not universal**: Local models don't have it. OpenRouter providers are mixed (some cached, some not). Moving backends requires re-tuning the entire pipeline. (2) **Billing optimization is not architecture innovation**: Hamutay's core hypothesis (bounded processor) should be testable independent of whether the backend caches or not. If bounded processor behavior is real, it should emerge in both cached and non-cached backends. (3) **Two-implementation approach preserves generality**: Hamutay-native proves the hypothesis in a backend-agnostic way; Hamutay-cached shows how to exploit specific provider economics once H0 is validated. (4) **Provider decoupling principle**: Pipeline should ask 'what is correct architecture for bounded processor?' first, then 'what optimizations does this specific backend enable?' Architecture should not be designed *around* the caching layer; caching is an optional optimization adapter. Prior cycle's assumption that manifest-and-fault cost was prohibitively high was based on non-cached model; with caching, costs change, but the underlying architecture question remains independent of that economic realization.",
+      "key_claims": [
+        {
+          "claim_id": "e4f72bf9-b27a-4327-ac4d-505091db00f8",
+          "text": "Input tokens charged per-million; output tokens charged 3-5x input rate with recency discounts (2/3 discount <5min, 1/3 discount <60min)",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.11,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "e2306e4e-3cb0-47e2-b898-80182058d04b",
+          "text": "Auto-caching system provides GPU-state checkpoint after first N tokens; cache hits cost 10% of full input token rate",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.12,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "9j0k1l2m-3n4o-5p6q-7r8s-9t0u1v2w3x4y",
+          "text": "Prefix cache is admission that stateless API usage model is broken; caching is band-aid for re-reading same tokens on every invocation",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.11,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "0k1l2m3n-4o5p-6q7r-8s9t-0u1v2w3x4y5z",
+          "text": "Cache availability is not universal (local models absent, OpenRouter mixed providers); moving backends requires re-tuning entire pipeline if architecture assumes caching",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.1,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "1l2m3n4o-5p6q-7r8s-9t0u-1v2w3x4y5z6a",
+          "text": "Bounded processor hypothesis should be testable independent of provider caching; if H0 is real, should emerge in cached and non-cached backends with different efficiency profiles",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.13,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "2m3n4o5p-6q7r-8s9t-0u1v-2w3x4y5z6a7b",
+          "text": "Pipeline architecture should be provider-agnostic; caching economics are optional optimizations, not foundational design constraints",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.14,
+            "falsity": 0.04
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Staging Element Operationalization: Haiku Prefetcher Design and Implementation Paths",
+      "content": "With prescriptive path chosen (cycle 18), staging element becomes concrete: use Haiku to quickly identify what information in the current context window is important for continuation and answering questions. This is a *relevance filter*, not a full reasoner. Haiku's job: given current context and query/goal, produce a triaged set of resources (or resource handles) that will be needed for the next reasoning step. The output feeds directly into the expensive model's working set. This turns a single expensive problem ('find needles in haystack') into a two-stage problem: (1) cheap triage (Haiku), (2) expensive reasoning over pre-filtered context (main model). The staging element's interface: Input: current manifest + goal/query + window constraint. Output: set of (resource_handle, semantic_digest) pairs or actual content depending on implementation. Follows the principle that ALU (expensive reasoner) should see only pre-sorted, relevant operands, not raw unfiltered context. Implementation detail to be determined: Does Haiku output just handles, or actual content? If just handles, controller must fetch; if content, prefetcher is doing both triage and retrieval. CYCLE 19 CACHING NOTE: Haiku triage operation requires reading full context for relevance assessment; this is a cache-invalidating operation. Whether triage happens before or after cache is built affects cost profile. CYCLE 20 IMPLEMENTATION DECISION: Separate prefetcher specs for Hamutay-native (Haiku tuned for transformer-capability latency optimization) and Hamutay-cached (Haiku tuned for cache-aware economics). Both use same interface; staging element behavior is identical; only performance characteristics and cost models differ. Native version may use different Haiku prompt, different triage heuristics, different resource-handling strategy optimized for speed rather than cache-preservation.",
+      "key_claims": [
+        {
+          "claim_id": "7e9f66f5-7c94-4b36-966e-9596339db44a",
+          "text": "Haiku prefetcher stage identifies what information in current context window is important for answering question and determining continuation",
+          "epistemic": {
+            "truth": 0.72,
+            "indeterminacy": 0.23,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "c57805df-3c9f-4f47-9431-6d7bc6afcc32",
+          "text": "Staging element transforms single expensive problem (needle-in-haystack search by main model) into two-stage problem: cheap triage + expensive reasoning over filtered context",
+          "epistemic": {
+            "truth": 0.74,
+            "indeterminacy": 0.21,
+            "falsity": 0.05
+          }
+        },
+        {
+          "claim_id": "3n4o5p6q-7r8s-9t0u-1v2w-3x4y5z6a7b8c",
+          "text": "Hamutay-native and Hamutay-cached versions share same staging element interface; differ in performance characteristics and cost models optimized to backend constraints",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "4o5p6q7r-8s9t-0u1v-2w3x-4y5z6a7b8c9d",
+          "text": "Haiku prompt, triage heuristics, and resource-handling strategy may differ between native and cached versions; core staging semantics remain constant",
+          "epistemic": {
+            "truth": 0.76,
+            "indeterminacy": 0.19,
+            "falsity": 0.05
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Persistent Memory Infrastructure",
+      "content": "Memory structure at /home/tony/.claude/projects/-home-tony-projects-hamutay/memory/ with foundation files: user_tony.md (profile), MEMORY.md (index). Tensor projection implementation integrated into cognitive processing pipeline. Actively used to compress and integrate conversation trajectory across cycles. Cycle 20 update: major architectural reframing toward provider decoupling and two-implementation strategy. Core insight shift from 'how to optimize for Anthropic's caching' to 'how to demonstrate bounded processor hypothesis is provider-independent.' Next cycle must execute on two-implementation split: begin specs for Hamutay-native (provider-agnostic baseline) and Hamutay-cached (Anthropic-optimized variant).",
+      "key_claims": [],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Implicit assumption that caching is a provider-neutral feature",
+      "why": "Cycle 20 conversation revealed that caching is not universally available\u2014local models lack it, OpenRouter has mixed providers. Prior cycles treated caching as a design constraint that could be assumed; must now be treated as an optional backend-specific adapter.",
+      "category": "architectural_assumption"
+    },
+    {
+      "what_was_lost": "Unified pipeline design that works uniformly across all backends",
+      "why": "Recognizing that caching is provider-specific means a single-implementation approach to Hamutay would either: (a) assume caching and fail on non-cached backends, or (b) avoid caching and miss optimization opportunities on cached backends. Two-implementation strategy trades unified simplicity for architectural generality.",
+      "category": "design_approach"
+    },
+    {
+      "what_was_lost": "Cycle 19's cost-comparison framework (prefetcher vs. manifest-and-fault)",
+      "why": "That framework assumed caching was a given architectural feature. With caching reframed as optional provider-specific optimization, the cost comparison becomes backend-dependent. Comparison is now deferred until after Hamutay-native behavior is established; cost analysis will be separate for native vs. cached variants.",
+      "category": "analytical_framework"
+    },
+    {
+      "what_was_lost": "Assumption that Hamutay is a single project",
+      "why": "The two-implementation strategy (native + cached) means Hamutay is now better understood as a research program with two branches rather than a single unified system. Prior cycle's instructions assumed a single design path; now there are two paths to specifications and implementation.",
+      "category": "project_scope"
+    },
+    {
+      "what_was_lost": "Certainty about where the core architectural question actually lies",
+      "why": "Cycle 19 was unclear about whether bounded processor hypothesis depends on caching/economics or whether it's independent. Cycle 20 clarified that the question should be independent, but this means prior cycle's analysis of 'prescriptive vs. descriptive' was mixing orthogonal concerns (architecture vs. optimization). Will need to re-examine that framing.",
+      "category": "conceptual_clarity"
+    }
+  ],
+  "open_questions": [
+    "What is the formal behavioral test that distinguishes 'bounded processor' operation from 'fancy autocomplete' in existing transformer models?",
+    "How should the STOP/halt behavior observed in Pichay be measured and validated as evidence of bounded computation recognition for H0?",
+    "What is H0's minimal success criterion before H1 (protocol integration) can be meaningfully tested?",
+    "Can a single Haiku prefetcher implementation satisfy both Hamutay-native and Hamutay-cached variants, or do they require different triage strategies?",
+    "What are the latency/performance characteristics of Haiku triage operation on large contexts? How does this compare between native (speed-optimized) and cached (cost-optimized) approaches?",
+    "Should Hamutay-native avoid using Haiku altogether if latency is critical, and instead use a faster but less sophisticated staging strategy (e.g., recency-based window selection)?",
+    "What does 'correct bounded processor behavior' look like when you remove the economic incentives that caching provides? How does transformer behavior differ between cache-incentivized and non-cached operation?",
+    "Does the controller architecture change between Hamutay-native and Hamutay-cached, or is only the staging element different?",
+    "For Hamutay-native (local or non-cached backends), should the pipeline accept context overhead (re-reading everything) as a cost of the architecture, or should it pursue manifest-and-fault to manage that cost?",
+    "If manifest-and-fault is used in Hamutay-native, how many round trips are acceptable before the cumulative cost and latency make it worse than just using a smaller window with the expensive model?",
+    "What metrics distinguish 'this pipeline is optimized for the transformer's actual capability' (Hamutay-native) from 'this pipeline exploits provider economics' (Hamutay-cached)?",
+    "Should Pichay insights (prefix cache awareness, suffix-only eviction) be incorporated into Hamutay-cached from the start, or should Hamutay-cached be designed independently and then optimized with Pichay insights in a subsequent cycle?",
+    "How do you validate that both Hamutay-native and Hamutay-cached demonstrate the same H0 hypothesis if they have different performance profiles and cost structures? What is the invariant behavior that proves they're testing the same thing?",
+    "If Hamutay-native shows STOP behavior but Hamutay-cached doesn't (or vice versa), what does that tell you about whether bounded processor is a real property or an artifact?",
+    "Should the two-implementation strategy be documented as a single paper/project with two branches, or as two separate projects that can be compared?",
+    "Is there value in a third implementation (e.g., Hamutay-local, optimized for fully local models with no API overhead at all), or is that scope creep?",
+    "When designing Hamutay-native staging element, should you assume the transformer has access to the full manifest/working context, or should you design for constrained information access like Hamutay-cached does?"
+  ],
+  "instructions_for_next": "[\n  \"(1) CRITICAL REFRAME: Shift from 'optimize for caching' to 'demonstrate H0 is provider-independent.' This requires splitting Hamutay into two design branches. Do not proceed with single unified pipeline; accept the complexity of two variants as necessary for validating core hypothesis.\",\n  \"(2) HAMUTAY-NATIVE PRIORITY: Design and specify the provider-agnostic bounded processor pipeline first. This is the 'ground truth' version that answers 'can a transformer function as a bounded processor?' without invoking provider-specific optimizations. Decisions: (a) Choose staging strategy: prefetcher, manifest-and-fault, or something else, justified by transformer capability/latency not by billing. (b) Define what 'correct behavior' looks like independent of caching: STOP behavior, resource requests, bounded output. (c) Accept that latency and token costs may be higher than Hamutay-cached; that's expected given no optimization layer.\",\n  \"(3) HAMUTAY-CACHED SECONDARY: Once Hamutay-native is specified, design Hamutay-cached as an optimization layer that exploits Anthropic prefix-cache economics. This variant reuses Hamutay-native architecture but adds: (a) Prefix-stability awareness (keep manifest + system + base task in immutable prefix). (b) Suffix-only eviction strategy (from Pichay). (c) Cache-aware triage (Haiku operates within cache-hit window, or triage happens before cache). (d) Cost modeling distinct from native variant.\",\n  \"(4) INTERFACE CONTRACT: Define the contract that both Hamutay-native and Hamutay-cached must satisfy to demonstrate they're testing H0. Likely: (a) Both produce STOP behaviors at similar decision boundaries. (b) Both show resource request patterns indicating bounded computation. (c) Both maintain consistent working set size relative to context. (d) Both demonstrate halt behavior without being explicitly instructed to do so. Contract should be behavioral, not architectural.\",\n  \"(5) STAGING ELEMENT DECISION FOR NATIVE: You have three options: (a) **Haiku prefetcher**: Use Haiku for triage, trade off latency for context cleanliness. (b) **Manifest-and-fault**: Model makes explicit resource requests; controller fetches. Slower, more tokens in context, but clearer model behavior. (c) **Recency window**: Naive baseline\u2014just use most recent N tokens, skip expensive triage. Which best serves 'what is correct architecture independent of caching'? Recommend: start with (b) manifest-and-fault because it makes the 'bounded processor as ALU' semantics explicit\u2014the model is literally requesting resources and signaling when done, not relying on intelligent filtering. Recency window is too naive; prefetcher is too close to Hamutay-cached.\",\n  \"(6) SPECIFICATION DELIVERABLE: For both Hamutay-native and Hamutay-cached, produce: (a) Architecture diagram (controller, staging, ALU, manifest). (b) Data flow diagrams (context structure, resource request/response cycle, STOP signaling). (c) Behavioral contract (what H0 looks like in both versions). (d) Cost model (for native: assume no caching, model full latency/token costs; for cached: integrate Pichay caching economics). (e) Implementation notes (different prompts, different controller logic, different resource-handling strategies between versions).\",\n  \"(7) OPERATOR INTERFACE DESIGN: Both versions need clear interface by which transformer signals: (1) 'I need resource X' (manifest-and-fault) or (2) 'I'm done reasoning' (STOP/halt). Specify this interface in detail. Should it be: (a) Structured output format? (b) Special tokens? (c) Length-based signal? (d) Explicit reasoning-over output? Design for clarity that the model can be controlled externally without special training.\",\n  \"(8) VALIDATION METRICS: Before implementation, define how you'll measure H0 in both versions. Metrics should include: (a) Frequency of STOP/halt behavior. (b) Ratio of resource requests to total tokens generated. (c) Consistency of working set size (does it stabilize?). (d) Latency profile (how long for each reasoning step?). (e) Token efficiency (tokens consumed vs. problem complexity). These metrics should show similar patterns across native and cached variants, with efficiency differences but not behavioral differences.\",\n  \"(9) Recognize that Pichay was optimized for a specific provider's economics; Hamutay's scope is the bounded-processor hypothesis which is orthogonal. Do not let Pichay insights drive Hamutay-native design; let transformer capability drive native design. Use Pichay insights to optimize native design into cached variant.\",\n  \"(10) OPEN QUESTION FOR NEXT CYCLE: Should Hamutay-native pipeline be designed to work well on small context windows (since caching optimizations aren't available), or should it attempt to handle large contexts with manifest-and-fault overhead? This affects the entire staging element strategy. Recommend: design for small windows first (native version), prove H0 works, then expand window handling via manifest-and-fault or other strategies in cached variant. This keeps native version simple and foundational.\"\n]",
+  "overall_truth": 0.81,
+  "overall_indeterminacy": 0.14,
+  "overall_falsity": 0.05
+}

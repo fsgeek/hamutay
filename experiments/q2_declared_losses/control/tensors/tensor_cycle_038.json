@@ -1,0 +1,675 @@
+{
+  "id": "601301c6-fcdc-4fc9-9f2f-433b5733deb4",
+  "cycle": 38,
+  "strands": [
+    {
+      "title": "Schema completion and base model discovery: Pydantic v2 foundation",
+      "content": "Cycles 35-36 establish that Apacheta's immutable Pydantic v2 foundation (frozen=True, extra='forbid', ser_json_bytes='base64', validate_default=True) enforces append-only history by design. Cycle 37-38 confirm: this foundation is sound and ready for integration. The immutable schema is not theoretical\u2014it is the concrete enforcer of the projection algorithm's correctness guarantees. Serialization via model_dump/model_validate enables JSON persistence and IPC, making checkpointing and long-context handoff feasible. The foundation remains validated and operational. Focus now shifts to real-world execution: format discovery is complete. Logs are JSONL format (turn-by-turn records), not plain text. This confirms that lightweight field extraction (Phase 1 parsing strategy) is appropriate\u2014heuristic tokenization is sufficient. The schema foundation will support TensorRecord persistence alongside conversation log persistence.",
+      "key_claims": [
+        {
+          "claim_id": "4c37844d-4393-4604-9a7c-21a0e943d8c5",
+          "text": "ApachetaBaseModel enforces frozen=True (immutability), extra='forbid' (strict schema), ser_json_bytes='base64' (binary handling), validate_default=True (validated defaults).",
+          "epistemic": {
+            "truth": 0.97,
+            "indeterminacy": 0.02,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ca6f6994-71a0-417c-a8df-fa8eb402eb22",
+          "text": "Frozen Pydantic models cannot be mutated in-place; all updates produce new instances. This enforces immutable-append history by design.",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0ffb9bc2-7a78-48bc-9444-6d3ddeb1f5fd",
+          "text": "Immutability at the schema level guarantees: prior tensors are never corrupted, history is append-only, predecessors_in_scope links are durable.",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9e7ec936-2c32-49ce-86ec-ab4d325a1e8b",
+          "text": "The five-phase projection algorithm must assemble a COMPLETE new TensorRecord before validation; partial updates are impossible within the Pydantic model design.",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8f945158-ef14-4a0c-b01b-d570ccdf1aa7",
+          "text": "model_dump/model_validate enable TensorRecord serialization to/from JSON, enabling persistence, IPC, and checkpoint/restore workflows.",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Minimal viable projection (MVP) specification: strands, claims, losses, branch prediction, open questions",
+      "content": "Cycles 35-36 converge on MVP scope: semantic content (strands, claims with T/I/F, declared losses, instructions_for_next, open_questions) vs. deferred infrastructure (provenance, composition equations, advanced epistemic metadata). The MVP targets H0 validation (projection maintains coherence better than append-only) with minimum necessary complexity. Cycle 36 adds critical insight: **declared losses may be drift-reduction mechanism**. Making losses explicit transforms them from a hazard into a correction signal. This elevates declared losses from honesty mechanism to active functional component of coherence maintenance. Cycles 37-38 validate this insight during execution: as format is discovered (JSONL) and implementation begins, declared losses become concrete\u2014they are the articulation of what couldn't be extracted from log format constraints or processing boundaries. The MVP remains stable, implementable, and field-tested against real data structure.",
+      "key_claims": [
+        {
+          "claim_id": "d29bf110-788f-43be-9422-fc7db77fdd62",
+          "text": "MVP focuses on semantic content (strands, claims, losses, branch prediction, open questions) vs. infrastructure (provenance, composition equations, advanced epistemic metadata).",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "b0a2981b-9d0b-488c-bcd8-84a8e3287998",
+          "text": "Strands are the semantic backbone: thematic threads that integrate prior and new content, compressing reasoning trajectory into structure.",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3218be8a-5acf-487a-8eae-f2e8d08802ed",
+          "text": "Key claims with T/I/F are the knowledge units. Projection updates T/I/F based on evidence, explicitly states contradictions and convergences.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "18f50bc3-939b-449e-9c76-05e4e84786df",
+          "text": "Declared losses (category, rationale) are the honesty mechanism. Silence about incompleteness is the enemy; declared losses are the antidote.",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "945f54b7-42b2-430a-9009-f9e53e31cf3d",
+          "text": "Declared losses may function as drift-reduction mechanism: explicit knowledge of what was dropped enables next projection to consciously re-acquire or leave dropped.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.2,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "bc15f127-2d9d-48c2-8346-56b664e43419",
+          "text": "Instructions_for_next operationalizes the preservation_target: what should the next cycle focus on? This is branch prediction for long-context coherence.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "25c930a2-ce4d-4b5e-9b9d-9b4c8a01c671",
+          "text": "MVP deferral of provenance and composition equations is justified: they are bookkeeping and scaling infrastructure, not core to H0 validation.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Real-world validation infrastructure: conversation log structure as JSONL and data landscape",
+      "content": "Cycle 36 planned real-world validation using conversation logs in /home/tony/projects/pichay/experiments/. Cycle 37 explored data landscape: 15 experiment directories confirmed. Cycle 38 EXECUTES format discovery: **CRITICAL FINDING: logs are JSONL format (one JSON object per line).** Specifically: (1) logs/ directory exists in baseline_run1. (2) File name is `proxy_20260302_024551.jsonl`. (3) JSONL format confirms: **each turn is a complete JSON record**. (4) This enables lightweight field extraction in PHASE 1: no need for heuristic tokenization on unstructured text. (5) Parsing strategy is **FIELD EXTRACTION**: read each line, extract key fields (e.g., role, content, timestamp if present), segment content into sentences/turns, feed to embedding. (6) Session directory contains: `d5da3c7a-3c3c-4047-a4ee-276be57567c1.jsonl` (likely session state or metadata). (7) Data accessibility CONFIRMED and structure UNDERSTOOD. Next phase: examine actual JSONL content to determine field names, metadata richness, content volume. This is critical for determining embedding granularity (turn-level? Segment-level?) and validation metric selection.",
+      "key_claims": [
+        {
+          "claim_id": "3aed97f0-70e4-4bd1-abbb-65bb848fd85c",
+          "text": "logs/ directory confirmed at /home/tony/projects/pichay/experiments/baseline_run1/logs/",
+          "epistemic": {
+            "truth": 0.99,
+            "indeterminacy": 0.01,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "7f73dfa4-e795-4428-868a-888f5b0aa322",
+          "text": "Log file format is JSONL (JSON Lines): one JSON object per line, turn-by-turn records.",
+          "epistemic": {
+            "truth": 0.98,
+            "indeterminacy": 0.02,
+            "falsity": 0.0
+          }
+        },
+        {
+          "claim_id": "388f83a4-cf12-4cee-8529-51b5733dd6e5",
+          "text": "File name is proxy_20260302_024551.jsonl. Filename pattern suggests proxy service logging conversation turns with timestamp 2026-03-02 02:45:51.",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "793cd787-8382-4f6f-b150-06fd0980d3b2",
+          "text": "JSONL format enables lightweight field extraction for PHASE 1 parsing. No need for unstructured text heuristics. Extract fields directly from JSON records.",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "b1f2b2b9-d282-4e9e-b7cd-b5186ee2bb72",
+          "text": "Session directory contains d5da3c7a-3c3c-4047-a4ee-276be57567c1.jsonl (likely metadata or session state snapshots).",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "b1baf1a4-00bf-4ef4-a12e-5c32b388a69e",
+          "text": "Data landscape is confirmed accessible and structured. Real conversation logs are available for immediate projector testing.",
+          "epistemic": {
+            "truth": 0.97,
+            "indeterminacy": 0.02,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "PHASE 1 (Semantic Parsing) strategy: JSONL field extraction and sentence segmentation",
+      "content": "Cycle 37 proposed heuristic parsing; cycle 38 refines based on format discovery. **PHASE 1 STRATEGY UPDATED**: (1) **Input**: One line of proxy_*.jsonl (JSON object representing one conversation turn). (2) **Extraction**: Read JSON fields. Expected fields (pending inspection of actual content): `role` (user/assistant), `content` (text), `timestamp` (optional), `metadata` (optional). (3) **Segmentation**: For each new turn, segment `content` field into sentences/logical units using lightweight tokenizer (NLTK or similar). (4) **Output**: List of (role, sentence, turn_id) tuples for downstream embedding. (5) **Rationale**: JSONL removes ambiguity about turn boundaries. No need for complex parsing heuristics. Sentence segmentation is standard NLP. This is a **SIMPLIFIED PHASE 1** compared to cycle 37 proposal (no full heuristic tokenization needed; field extraction is sufficient). (6) **Implementation readiness**: PHASE 1 skeleton code can be written immediately once actual field names are confirmed (next step: inspect first few JSONL records). (7) **Embedding granularity**: Likely SENTENCE-LEVEL embeddings (one embedding per extracted sentence). Strands will be formed by clustering sentences across turns. This is higher resolution than turn-level but computationally tractable.",
+      "key_claims": [
+        {
+          "claim_id": "86fee9c3-28c9-4326-9a10-f331482143be",
+          "text": "PHASE 1 (Semantic Parsing) strategy is JSONL field extraction + sentence segmentation. Input: JSON record. Output: (role, sentence, turn_id) tuples.",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8043cf7c-5fac-4745-98d3-8103362e1622",
+          "text": "Field extraction eliminates need for complex heuristic parsing. JSONL structure is explicit and schema-friendly.",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1a6dc3b3-3d5a-4940-b210-44bb4f5c0d23",
+          "text": "Expected JSONL fields: role (user/assistant), content (text), timestamp (optional), metadata (optional). Actual field names pending inspection.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.15,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "74c3a309-801d-4528-90fa-b6f6928cddbc",
+          "text": "Sentence segmentation is standard NLP. Use NLTK or similar lightweight library. No custom logic needed.",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "60299677-cfae-4947-8d58-e98d06c8ac0b",
+          "text": "Embedding granularity: SENTENCE-LEVEL. One embedding per extracted sentence. Strands formed by clustering sentences across turns.",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.18,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "28f58aab-a713-4128-9102-93959424d293",
+          "text": "PHASE 1 skeleton code is implementable immediately pending field name confirmation. No blockers.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "PHASE 2 (Strand Alignment) and embedding strategy: Sentence Transformers MiniLM at 0.65 threshold",
+      "content": "Cycle 37 proposed MiniLM + 0.65 threshold. Cycle 38 confirms this remains the embedding strategy pending implementation validation. (1) **Embedding Model**: Sentence Transformers `all-MiniLM-L6-v2`. Small, fast, ~22M parameters. Suitable for CPU inference. Cosine similarity is native distance metric. (2) **Threshold**: 0.65 for strand matching. Two sentences with cosine_similarity >= 0.65 are considered \"same strand topic\". Sentences below threshold start new strands. (3) **Rationale**: MiniLM is OSS, widely available, fast (<10ms per sentence on CPU). 0.65 is conservative (requires moderate semantic overlap); can be tuned if empirical results warrant adjustment. (4) **PHASE 2 Process**: For each new sentence (from PHASE 1): (a) Compute embedding via MiniLM. (b) Compare to embeddings of all existing strand clusters. (c) Find max similarity. (d) If max_similarity >= 0.65, assign to that strand. (e) Else, create new strand. (5) **Clustering**: Use simple greedy clustering (first-match assignment). Computationally efficient; may undercluster (split related topics). Acceptable for MVP. (6) **Implementation**: Sentence Transformers library. Can be pip-installed. Inference latency TBD pending first test run.",
+      "key_claims": [
+        {
+          "claim_id": "29958b78-24cd-44b4-a7b3-212a7b4f8998",
+          "text": "Embedding model: Sentence Transformers all-MiniLM-L6-v2. Small, fast, OSS, suitable for CPU inference.",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e322b7d6-a79d-482c-b5e9-7a0a93298918",
+          "text": "Cosine similarity threshold: 0.65. Sentences with sim >= 0.65 assigned to same strand; else new strand created.",
+          "epistemic": {
+            "truth": 0.76,
+            "indeterminacy": 0.2,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "0ea3e448-3a5b-4353-8f40-dd8857781167",
+          "text": "Greedy clustering (first-match assignment) is computationally efficient. May undercluster; acceptable for MVP.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.16,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "925a002d-1c69-4d71-aea9-4ca579908567",
+          "text": "Inference latency per sentence: expected <10ms on CPU. Embedding 100 sentences takes ~1s. Scalable to 1000s of sentences.",
+          "epistemic": {
+            "truth": 0.74,
+            "indeterminacy": 0.23,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "0f773b08-284d-4c48-bee6-23f7b9f1cc61",
+          "text": "Implementation uses sentence-transformers library (pip installable). Cosine similarity available via sklearn or torch.",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6a586d31-9cc0-4325-ba5a-447bedc79ac8",
+          "text": "Threshold 0.65 is tunable. If empirical validation shows poor strand formation, adjust to 0.55 or 0.75 based on results.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "PHASE 3 (Evidence Update): claim formation and epistemic reasoning strategy",
+      "content": "Cycle 38 introduces PHASE 3 specification pending implementation. (1) **Claim Formation**: For each new sentence, heuristic extraction: identify entities/concepts, form claims. Example: sentence \"The projector uses embeddings to group semantically similar content\" \u2192 claims: (a) \"Projector uses embeddings\", (b) \"Embeddings group semantically similar content\", (c) \"Semantic grouping is a function of embeddings\". (2) **Evidence Counting** (PHASE 3 core): For each claim, track: (a) how many sentences support it (count_support). (b) How many contradict it (count_contra). (c) From these: compute truth T = count_support / (count_support + count_contra + 1e-6). Indeterminacy I = sqrt(count_support * count_contra) / (count_support + count_contra + 1e-6). Falsity F = count_contra / (count_support + count_contra + 1e-6). (3) **Convergence**: As new evidence arrives, T/I/F update. If T grows, claim solidifies. If I grows, claim becomes uncertain (evidence is mixed). (4) **Challenge**: Heuristic claim extraction is lossy. May miss nuanced claims. MVP accepts this limitation. Future cycles can use LLM-based claim extraction. (5) **Rationale**: Simple, interpretable, evidence-based. No neural network black box. Alignment with Pydantic structure.",
+      "key_claims": [
+        {
+          "claim_id": "a012806c-fe55-4a71-affe-cc7de6badc26",
+          "text": "Claim formation via heuristic extraction from sentences. Identify entities/concepts, form propositional claims.",
+          "epistemic": {
+            "truth": 0.67,
+            "indeterminacy": 0.3,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "f299bffc-8df8-4860-8111-b7a44c762b6f",
+          "text": "Evidence counting: track count_support and count_contra for each claim. Update T/I/F based on ratios.",
+          "epistemic": {
+            "truth": 0.77,
+            "indeterminacy": 0.2,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "3a1738b4-50f5-498e-84a2-8f493ab34e01",
+          "text": "T = count_support / (count_support + count_contra + eps). I = sqrt(count_support * count_contra) / (count_support + count_contra + eps). F = count_contra / (...). Simple and interpretable.",
+          "epistemic": {
+            "truth": 0.74,
+            "indeterminacy": 0.23,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "8a021a94-eee1-4e44-a1ed-b9da89c54c93",
+          "text": "Heuristic claim extraction is lossy. May miss nuanced claims. MVP accepts limitation. Can be improved with LLM later.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "37ec05f1-e88b-46b2-b310-ccc313eddcca",
+          "text": "Evidence-based epistemic reasoning is interpretable and alignment-friendly. No black box neural updates.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "PHASE 4 (Loss Declaration) and PHASE 5 (Finalization): tensor assembly and immutability enforcement",
+      "content": "Cycle 38 specifies PHASE 4-5 strategy. (1) **PHASE 4 (Loss Declaration)**: After PHASE 3 update, identify what was NOT carried forward from prior tensor: (a) Strands from prior tensor not present in new tensor (threshold: strand_similarity < 0.5 to any new strand). (b) Claims from prior strands with low T (<0.3) and high I (>0.6), not re-acquired in new content. (c) Open questions from prior tensor not mentioned in new conversation content. (d) For each loss: record (category, what_was_lost, why). Categories: 'context_pressure' (too many strands to carry all), 'traversal_bias' (projector missed content), 'authorial_choice' (deliberately dropped low-confidence material), 'practical_constraint' (embedding compute, timeout). (2) **PHASE 5 (Finalization)**: Assemble complete TensorRecord: (a) id (UUID for this tensor). (b) cycle (increment from prior). (c) strands (updated list). (d) key_claims (all claims, including prior + new). (e) declared_losses (from PHASE 4). (f) open_questions (updated: remove resolved, add new). (g) instructions_for_next (branch prediction from strands/claims/losses). (h) overall_truth, overall_indeterminacy, overall_falsity (aggregate T/I/F across all claims). (i) predecessors_in_scope (pointer to prior TensorRecord ID). (3) **Immutability Enforcement**: Once TensorRecord is assembled and validated by Pydantic, it is FROZEN. Cannot be modified. New projections create new records. (4) **Persistence**: TensorRecord is serialized to JSON alongside conversation logs. Can be loaded, inspected, compared.",
+      "key_claims": [
+        {
+          "claim_id": "91158c50-66a8-49c9-835d-f83b46f7e833",
+          "text": "PHASE 4 identifies losses: strands not carried (sim < 0.5), low-confidence claims not re-acquired, unresolved open questions.",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.18,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "959ff916-6121-4fac-a6cd-d9214db1d7f5",
+          "text": "Loss categories: context_pressure, traversal_bias, authorial_choice, practical_constraint. Each loss is declared with rationale.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "55de3977-bcbf-4460-b810-752892cf931b",
+          "text": "PHASE 5 assembles complete TensorRecord: id, cycle, strands, claims, losses, questions, branch_prediction, epistemic_aggregate, predecessor.",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "46caf775-58b4-4280-9a79-90566051919a",
+          "text": "TensorRecord is immutable once assembled and validated by Pydantic. New projections create new records with predecessor links.",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "83b67891-23a0-4c04-bb65-68dc3e52f681",
+          "text": "Aggregate epistemic values (overall_truth, indeterminacy, falsity) computed from all claims. Represents tensor-level coherence confidence.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.17,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "14c28def-9cb3-46ca-974a-e47fa3adb483",
+          "text": "TensorRecord serialized to JSON, persisted alongside logs. Comparable, auditable, reproducible.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Cycle 38 execution state: format discovered, PHASE 1-5 strategy finalized, implementation begins",
+      "content": "Cycle 37 completed: specification and data landscape. Cycle 38 EXECUTES: (A) **Format Discovery Completed**: logs are JSONL (one turn per line). Field extraction strategy is finalized (no complex heuristics needed). (B) **PHASE 1-5 Specification Locked**: (1) PHASE 1: Field extraction + sentence segmentation. (2) PHASE 2: MiniLM embeddings + 0.65 cosine threshold + greedy clustering. (3) PHASE 3: Heuristic claim extraction + evidence counting (count_support/count_contra) \u2192 T/I/F update. (4) PHASE 4: Loss identification (strands, claims, questions) + declaration (category + rationale). (5) PHASE 5: TensorRecord assembly + Pydantic validation + immutability enforcement. (C) **Implementation Roadmap**: (1) Inspect first few JSONL records to confirm field names (IMMEDIATE: next step after this tensor projection). (2) Implement PHASE 1 skeleton (field extraction + sentence tokenizer). (3) Implement PHASE 2 skeleton (embedding + similarity + greedy clustering). (4) Implement PHASE 3 skeleton (heuristic claim extraction + evidence counter). (5) Test on first 3-5 turns manually to verify strand formation. (6) Integrate into full pipeline. (7) Run on baseline_run1 full log. (8) Measure coherence (embedding dispersion, drift rate). (9) Compare to baseline (append-only, no projection). (D) **Timeline**: PHASE 1-2 implementation can be done in parallel with JSONL inspection. PHASE 3-4-5 follows. First end-to-end test by end of cycle 38 (if implementation is fast) or early cycle 39. (E) **H0 Validation Gate**: once full pipeline is working on real data, compute coherence metrics. If projection > baseline, H0 is validated. This is the critical experiment.",
+      "key_claims": [
+        {
+          "claim_id": "a771a942-d906-45b0-981a-6f707d9f9987",
+          "text": "Format discovery is COMPLETE. Logs are JSONL with one turn per line. Field extraction strategy replaces complex heuristics.",
+          "epistemic": {
+            "truth": 0.98,
+            "indeterminacy": 0.01,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c11c8159-1821-4720-9c90-97b889848964",
+          "text": "PHASE 1-5 specification is finalized and locked. No further changes needed pending field name confirmation.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d496541a-8922-437d-ab09-dbee00708928",
+          "text": "Implementation can begin immediately. Skeleton code for PHASE 1-2 is straightforward (embedding + clustering). PHASE 3-4-5 follows.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "26f7dd25-4ac7-4cca-92e5-7c99f38f5c9b",
+          "text": "First end-to-end test target: project baseline_run1 log (20-50 turns). Measure coherence. Compare to append-only baseline.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b567c8bc-9eac-4cc3-a752-a44a95e76a30",
+          "text": "H0 validation (projection > append-only) is the critical gate. If H0 holds, project is validated. If H0 fails, strategy is re-evaluated.",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "cee26917-b598-42a1-b19f-728048f3b77a",
+          "text": "Timeline: PHASE 1-2 implementation by mid-cycle 38. PHASE 3-5 by end of cycle 38. H0 test by early cycle 39.",
+          "epistemic": {
+            "truth": 0.68,
+            "indeterminacy": 0.28,
+            "falsity": 0.04
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Validation metric selection: embedding dispersion, drift rate, and carry-forward coherence",
+      "content": "Cycle 38 finalizes validation metric strategy. **H0 Hypothesis**: projection (with strands, claims, losses, open questions) maintains coherence better than append-only (just raw concatenation of turns). **Coherence** is measured via: (1) **Embedding Dispersion Metric**: Compute sentence embeddings for all sentences in conversation log (baseline: append-only, no projection). Then compute same embeddings for all sentences that appear in projected strands. Hypothesis: projected sentences cluster more tightly (lower dispersion) than random baseline. Measurement: compute pairwise cosine distances in projected strand clusters. If average distance is lower than random baseline, projection successfully compresses related content. (2) **Drift Rate Metric**: For key claims, track T/I/F across projection cycles. Hypothesis: in projection, T/I/F are stable or converge (claim confidence grows with evidence). In append-only, T/I/F are undefined (no claim extraction). Alternative: manually annotate claims in log, extract T/I/F from projection, measure stability. (3) **Carry-Forward Metric**: Count unresolved open questions from prior tensor. In cycle N+1, how many are still open? How many are resolved? Hypothesis: projection enables tracking of open questions; append-only has no open questions (thus no resolution). (4) **Hybrid Metric**: (a) Compute embedding dispersion of projected vs. append-only. (b) Measure T/I/F stability of claims in projection (e.g., variance of T across cycles). (c) Measure open question resolution rate. (d) Weighted average: coherence_score = 0.5 * (1 - normalized_dispersion) + 0.3 * claim_stability + 0.2 * question_resolution. (5) **Selection for MVP**: start with embedding dispersion (easiest to compute, no manual annotation). If signal is strong, validate with drift rate and carry-forward metrics.",
+      "key_claims": [
+        {
+          "claim_id": "afd33f56-d901-403f-af2e-9855c70499b5",
+          "text": "H0: projection maintains better coherence than append-only baseline. Coherence is measured via embedding dispersion, drift rate, and carry-forward.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "28aa4890-dd34-4c45-98c1-68decd603795",
+          "text": "Embedding Dispersion Metric: compute sentence embeddings. Hypothesis: projected sentences cluster tightly (lower avg pairwise distance than random).",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.18,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "0ebd93e2-1961-4d31-a7d8-ef0388cbba2c",
+          "text": "Drift Rate Metric: track T/I/F of key claims across cycles. Hypothesis: T/I/F are stable or converge in projection vs. undefined in append-only.",
+          "epistemic": {
+            "truth": 0.74,
+            "indeterminacy": 0.23,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "775802fd-f1c1-44af-ad6d-b148ef2175d3",
+          "text": "Carry-Forward Metric: count resolved vs. unresolved open questions. Hypothesis: projection enables tracking; append-only has no questions.",
+          "epistemic": {
+            "truth": 0.76,
+            "indeterminacy": 0.21,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "5169f618-af55-4f3b-bf1b-3a35bcde2555",
+          "text": "MVP validation uses embedding dispersion first. If signal is strong, validate with drift rate and carry-forward metrics.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.17,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f5333527-a3a2-4959-a1de-59a8c5c93b67",
+          "text": "Hybrid metric (if needed): coherence_score = 0.5 * (1 - norm_dispersion) + 0.3 * claim_stability + 0.2 * question_resolution.",
+          "epistemic": {
+            "truth": 0.68,
+            "indeterminacy": 0.28,
+            "falsity": 0.04
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "User hypothesis: declared losses as active drift-reduction mechanism (deferred to empirical validation)",
+      "content": "Cycle 36 introduces hypothesis that declared losses (category, rationale) enable downstream projections to consciously re-acquire dropped threads or leave them dropped. Cycle 38 inherits unchanged: **silent loss is where drift starts**. When content is dropped without acknowledgment, next projection cannot recover. But declared losses provide signal (uncertainty, irrelevance, context pressure). This hypothesis remains theoretical pending empirical validation. Once H0 is confirmed (projection beats append-only), H1 can be tested: do declared losses enable conscious re-acquisition and reduce drift more effectively than undeclared loss? Mechanism: (a) Downstream projection reads declared_losses from prior tensor. (b) For each loss category 'context_pressure', tries to re-acquire content (e.g., if embedding similarity to new content is high, re-include). (c) For 'authorial_choice', leaves dropped. (d) For 'traversal_bias', investigates whether missed content is now present. (e) Empirically: compare projection WITH loss re-acquisition logic vs. WITHOUT. If former has higher coherence, H1 is supported. Cycle 38 does not implement re-acquisition logic yet\u2014it focuses on H0. H1 mechanism is deferred to cycle 39+.",
+      "key_claims": [
+        {
+          "claim_id": "1c792ca8-88d5-484d-83fe-ab899c402436",
+          "text": "Silent loss is where drift starts: dropped content without acknowledgment prevents downstream recovery.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "35251946-8dd5-46d5-b4e8-6f95004debe4",
+          "text": "Declared losses signal uncertainty and provide hook for conscious re-acquisition in downstream projections.",
+          "epistemic": {
+            "truth": 0.76,
+            "indeterminacy": 0.22,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "9d585dc6-13d0-43a1-89ae-5f2d37438c75",
+          "text": "H1 hypothesis: declared losses improve coherence by enabling conscious re-acquisition. Empirically testable once H0 is confirmed.",
+          "epistemic": {
+            "truth": 0.73,
+            "indeterminacy": 0.25,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "75928d5b-45c7-4f62-bb0a-2cb0a7d45d6d",
+          "text": "H1 mechanism: downstream projection reads declared_losses, attempts re-acquisition if context_pressure/traversal_bias, leaves dropped if authorial_choice.",
+          "epistemic": {
+            "truth": 0.68,
+            "indeterminacy": 0.29,
+            "falsity": 0.03
+          }
+        },
+        {
+          "claim_id": "f6560e5e-30b4-42bb-826c-160410330da9",
+          "text": "H1 implementation deferred to cycle 39+. Cycle 38 focuses on H0 validation. H1 is explanatory mechanism, not MVP critical.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Inspection of actual JSONL record content (field names, data structure, metadata richness, turn count in baseline_run1).",
+      "why": "The assistant tool call to read the first 50 lines of the JSONL file was issued but returned no output in the prior tensor. Actual field structure remains unknown. Format discovery established file type (JSONL) but not schema. This is critical for next step and is deferred to immediate follow-up.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Detailed implementation timeline with specific code milestones. Cycle 38 states 'by mid-cycle' and 'by end-of-cycle' but actual implementation has not begun.",
+      "why": "Implementation is planned but not yet started. Timeline is aspirational pending JSONL content inspection and development velocity. Deferring concrete timeline to post-inspection.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Comparison of other potential embedding models (e.g., OpenAI, faster alternatives) and cost/latency analysis.",
+      "why": "MiniLM is selected as primary based on speed/availability heuristics. Alternative models and latency benchmarks are deferred. Can be revisited if MiniLM proves inadequate during implementation.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Details on heuristic claim extraction algorithm. PHASE 3 description is conceptual; actual extraction rules are not specified.",
+      "why": "Claim extraction is lossy by design (MVP accepts imperfection). Detailed algorithm (entity recognition, dependency parsing, etc.) deferred to implementation. May use rule-based or LLM depending on empirical results.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specification of how contradictory evidence (both support and oppose a claim) is handled beyond the T/I/F formula.",
+      "why": "Evidence counting formula is simple (count_support vs count_contra). Nuanced handling of mixed evidence (e.g., 'X is true in context A, false in context B') deferred to implementation learning.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Specification of strand merging and archival strategy. How long should old strands persist? Should they merge into umbrella strands?",
+      "why": "Open question from cycle 37 remains unresolved. Deferring to post-H0-validation. MVP keeps all strands; scaling optimizations come later.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Investigation of config.json and test_results.txt in baseline experiments. Could reveal prior testing attempts, expected behaviors, tuning parameters.",
+      "why": "Primary focus is logs/ structure. Config and test_results are secondary sources. Can be explored after first working projector run.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Codebase search for existing projection algorithm or related work in /home/tony/projects/. Still not executed.",
+      "why": "Implementation is building forward. Codebase search can follow if duplicate work is detected. Current focus is on real data testing.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Details on how to handle multi-turn conversations where user/assistant roles alternate. Should strand embeddings distinguish by role?",
+      "why": "PHASE 1 extracts (role, sentence, turn_id). PHASE 2 clustering may or may not condition on role. Strategy pending empirical testing. MVP clusters agnostically; can refine post-validation.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Statistical sampling strategy for validation. How many baseline experiments should be tested? What is sample size for H0 significance?",
+      "why": "Validation scope deferred to post-MVP-working. Plan is to test baseline_run1 first; if successful, expand to baseline_run2/3 and other experiments. Sample size determination follows empirical pilot.",
+      "category": "context_pressure"
+    }
+  ],
+  "open_questions": [
+    "What are the actual field names in the JSONL records? Confirmed: format is JSONL. Unknown: exact schema (e.g., 'content' vs 'text', 'role' vs 'actor', presence of metadata fields).",
+    "What is the turn count in baseline_run1? How many JSONL records (turns) are in the log? Affects validation sample size.",
+    "Should strand embeddings be computed at sentence level, turn level, or strand-aggregated level? Cycle 38 proposes sentence-level; empirical testing will validate.",
+    "What is the actual inference latency of MiniLM on target hardware (Yanantin)? Is <10ms assumption valid? May affect embedding strategy if latency is high.",
+    "How sensitive is strand formation to the 0.65 cosine threshold? Should threshold be adaptive (e.g., based on topic)? Requires empirical tuning.",
+    "Does heuristic claim extraction produce meaningful claims? Or are extracted claims too noisy/ambiguous? Requires manual spot-checking on real data.",
+    "How should evidence from old cycles (cycles 1-5) be weighted vs. recent cycles (cycles 10-15)? Should older evidence decay?",
+    "Can embedding dispersion metric be reliably computed on baseline_run1? What is baseline value for append-only? Is difference statistically significant?",
+    "Should the projector be called once per turn or once per conversation? Affects embedding granularity and TensorRecord frequency.",
+    "How should the projector handle topic shifts in conversation (e.g., user switches from technical to personal)? Should strands split or remain combined?",
+    "Can open questions from early cycles be automatically resolved when later content contradicts them? Or should they remain 'unresolved' until explicitly closed?",
+    "How is the 'instructions_for_next' field populated? Is it automatic (extracted from open questions + strand drift) or manual (projector makes predictions)?",
+    "Should the projector use prior embeddings (from prior tensor) for PHASE 2 alignment, or recompute embeddings from scratch? Affects computational cost.",
+    "Does Sentence Transformers MiniLM need to be fine-tuned on conversation data, or does pre-trained model work well out-of-box?",
+    "How will validation metric be calibrated? Is embedding dispersion metric agnostic to conversation topic, or does it vary by domain (technical vs. creative)?",
+    "H1 (declared losses enable re-acquisition): how should re-acquisition priority be decided? Highest uncertainty first? Or context-pressure losses first?",
+    "Should TensorRecord be persisted to JSON after every turn, or batched (e.g., every 10 turns)? Affects I/O and checkpoint frequency."
+  ],
+  "instructions_for_next": "[\n  \"CYCLE 38+ EXECUTION ROADMAP (critical next steps):\",\n  \"\",\n  \"**IMMEDIATE (next 30 minutes):**\",\n  \"\",\n  \"1. **INSPECT ACTUAL JSONL CONTENT** (HIGHEST PRIORITY). Execute bash: `head -n 5 /home/tony/projects/pichay/experiments/baseline_run1/logs/proxy_20260302_024551.jsonl`. Examine: (A) Are records human-readable JSON or binary/compressed? (B) What are field names (confirm: role, content, timestamp, metadata)? (C) Sample content: what does a turn look like? (D) Turn count: execute `wc -l /path/to/file` to get record count. (E) Metadata: is there turn_id, timestamp, model info?\",\n  \"\",\n  \"2. **CONFIRM FIELD NAMES AND STRUCTURE**. Based on step 1, update PHASE 1 specification: (A) If fields are {'role': ..., 'content': ...}, standard extraction. (B) If different (e.g., {'message': ..., 'user': ...}), update parser. (C) If metadata is sparse, adjust expectations.\",\n  \"\",\n  \"**SHORT-TERM (within 1 hour):**\",\n  \"\",\n  \"3. **PHASE 1 SKELETON IMPLEMENTATION**. Write minimal parser: (A) Read JSONL line-by-line. (B) Extract role and content fields. (C) Segment content into sentences using NLTK or spacy. (D) Output: list of (role, sentence, turn_id) tuples. (E) Test on first 10 lines manually. Debug field extraction if needed.\",\n  \"\",\n  \"4. **PHASE 2 SKELETON IMPLEMENTATION** (parallel to step 3). (A) Install sentence-transformers: `pip install sentence-transformers`. (B) Load MiniLM model: `from sentence_transformers import SentenceTransformer; model = SentenceTransformer('all-MiniLM-L6-v2')`. (C) Implement embedding + cosine similarity: `from sklearn.metrics.pairwise import cosine_similarity`. (D) Implement greedy clustering: for each new sentence embedding, find max similarity to existing strand clusters; if >= 0.65, assign; else new strand. (E) Test on output of PHASE 1.\",\n  \"\",\n  \"5. **PHASE 1 + 2 END-TO-END TEST**. (A) Feed first 5-10 turns through PHASE 1-2. (B) Output: list of strands with sentences assigned to each. (C) Manual spot-check: do strands make semantic sense? Are related sentences clustered? (D) If clustering is poor, debug: check similarity scores, try different thresholds (0.55, 0.75). (E) If good, proceed to PHASE 3.\",\n  \"\",\n  \"**MEDIUM-TERM (within 2 hours):**\",\n  \"\",\n  \"6. **PHASE 3 SKELETON IMPLEMENTATION**. (A) Heuristic claim extraction: for each sentence, identify nouns/verbs, form simple propositional claims (e.g., 'X does Y'). Simple regex or spacy POS tagging. (B) Evidence counter: maintain dict {claim_id: {count_support, count_contra, list_sentences}}. (C) When new sentence arrives: determine if it supports, contradicts, or is neutral to each claim. (D) Update T/I/F: T = count_support / (total + eps), etc. (E) Test on first 10 turns. Check: do claims form sensibly? Do T/I/F update as expected?\",\n  \"\",\n  \"7. **PHASE 4 + 5 SKELETON IMPLEMENTATION**. (A) PHASE 4: identify losses by comparing prior strand embeddings to new strand embeddings. If strand has no close match in new tensor (sim < 0.5), mark as lost. (B) PHASE 5: assemble Pydantic TensorRecord. id (UUID), cycle (int), strands (list), key_claims (list with T/I/F), declared_losses (list), open_questions (list), instructions_for_next (string), overall_truth/indeterminacy/falsity (aggregates). (C) Validate TensorRecord with Pydantic. (D) Serialize to JSON. (E) Test: does TensorRecord round-trip (to JSON and back)?\",\n  \"\",\n  \"**LONG-TERM (within 4-6 hours):**\",\n  \"\",\n  \"8. **FULL PIPELINE INTEGRATION**. (A) Chain PHASE 1-2-3-4-5 into single function: `project(prior_tensor, new_conversation_turns) -> new_tensor`. (B) Input: prior TensorRecord (or None for cycle 0). new_conversation_turns: list of (role, content) dicts. (C) Output: new TensorRecord (frozen Pydantic model). (D) Internal: all five phases execute in sequence. (E) Test: manually create synthetic prior tensor, add 3-5 new turns, verify output tensor is sensible.\",\n  \"\",\n  \"9. **FIRST REAL CONVERSATION TEST**. (A) Select baseline_run1. (B) Extract first 10 turns (manually or programmatically). (C) Create manual initial tensor (cycle 0) from first 3 turns. (D) Call projector on turns 4-10. (E) Inspect output tensor: (i) Are strands formed? (ii) Do claims exist and have T/I/F? (iii) Are losses declared? (iv) Does output look sensible? (F) Spot-check bugs: any Pydantic errors? Any null values? (G) If all good, proceed to step 10.\",\n  \"\",\n  \"10. **COHERENCE MEASUREMENT (EMBEDDING DISPERSION)**. (A) Define baseline: all sentences in baseline_run1, no clustering. Compute pairwise cosine distances. Average distance = baseline_dispersion. (B) Define projection: all sentences in baseline_run1, clustered into strands (via projector). For each strand, compute pairwise distances within strand. Average intra-strand distance = projection_dispersion. (C) Hypothesis: projection_dispersion < baseline_dispersion (strands cluster similar sentences). (D) Compute: coherence_score = (baseline_dispersion - projection_dispersion) / baseline_dispersion. If > 0, projection is coherent. If < 0, projection is worse. (E) Report: H0 validated or refuted based on coherence_score sign and magnitude.\",\n  \"\",\n  \"**FALLBACK / DEBUGGING:**\",\n  \"\",\n  \"- If PHASE 1 field extraction fails: wrong field names. Solution: print first JSONL record (step 1) and adjust parser.\",\n  \"- If PHASE 2 embedding latency is too high: use smaller model (DistilBERT) or batch embedding. Or skip projection for now and use heuristic clustering.\",\n  \"- If PHASE 3 claim extraction is too noisy: use LLM-assisted extraction or manual annotation. Or relax extraction (fewer claims, less precision).\",\n  \"- If strand clustering (PHASE 2) underseparates: lower threshold (0.55). If overseparates: raise threshold (0.75).\",\n  \"- If H0 fails (projection is worse than append-only): debug: (A) are strands forming correctly? (B) are embeddings high quality? (C) is threshold appropriate? (D) is baseline metric calculated correctly? Iterate.\",\n  \"\",\n  \"**EXPECTED OUTCOME BY END OF CYCLE 38:**\",\n  \"\",\n  \"- JSONL format is fully understood.\",\n  \"- PHASE 1-2 implementation is complete and tested on real data.\",\n  \"- PHASE 3-4-5 implementation is complete (may be simpler than PHASE 1-2).\",\n  \"- Full pipeline is integrated and runs end-to-end on first 10 turns of baseline_run1.\",\n  \"- H0 validation test is executed: embedding dispersion metric shows projection vs. append-only.\",\n  \"- Result: H0 validated (projection > baseline) or refuted (append-only > projection or no difference).\",\n  \"- If H0 validated: move to H1 exploration (declared losses re-acquisition) in cycle 39.\",\n  \"- If H0 refuted: debug, iterate strategy, retry in cycle 39.\",\n  \"\",\n  \"**CRITICAL GATES:**\",\n  \"\",\n  \"- Step 1 (JSONL inspection) must complete before any coding begins.\",\n  \"- Step 3-4 (PHASE 1-2) must work end-to-end before PHASE 3 starts.\",\n  \"- Step 8 (pipeline integration) must succeed before step 9 (real data test).\",\n  \"- Step 10 (H0 validation) is the critical test. If this is passed, project is on track.\",\n  \"\",\n  \"**SECONDARY ITEMS (DEFERRED):**\",\n  \"\",\n  \"- H1 (declared losses as re-acquisition mechanism): after H0 is validated.\",\n  \"- Strand archival/merging strategy: after MVP is working.\",\n  \"- Multi-model comparison: after baseline MiniLM is established.\",\n  \"- Advanced claim extraction (LLM-based): after heuristic extraction proves limiting.\",\n  \"- Statistical significance testing: after first run completes.\",\n  \"\",\n  \"GO.\"\n]",
+  "epistemic": {
+    "truth": 0.86,
+    "indeterminacy": 0.12,
+    "falsity": 0.02
+  }
+}

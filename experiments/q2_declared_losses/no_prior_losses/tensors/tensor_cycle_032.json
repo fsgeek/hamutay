@@ -1,0 +1,347 @@
+{
+  "id": "3a442d1e-6af9-40f2-8526-6bdebeec2b40",
+  "cycle": 32,
+  "strands": [
+    {
+      "title": "Context Length as Fundamental Bottleneck \u2014 Integrated with Declared Losses and Explicit Compression (OPERATIONAL CENTERPIECE)",
+      "content": "Du et al. 2025 establishes: context length degrades transformer reasoning by architectural necessity (30K tokens \u2192 8-50% performance loss even with oracle retrieval and masked irrelevant content). This is not a retrieval problem. Trinh et al. 2025 explains the mechanism: information-integration load increases with context span, creating a cognitive-like bottleneck where holding and reasoning over more facts simultaneously degrades output quality. Hamutay's response: bounded-context cycles with structured persistent state (tensor_d). CRITICAL REFINEMENT (Cycle 28): The innovation is not just compression\u2014it's **honest compression with declared losses**. Most architectural approaches hide what's dropped. The Apacheta tensor format makes loss explicit: every projection cycle declares (1) what was dropped, (2) why it was dropped, (3) category of loss (context_pressure, traversal_bias, authorial_choice, practical_constraint). This means the transformer in cycle N+1 can reason about incompleteness rather than hallucinate to fill gaps. HYPOTHESIS (from Cycle 28 reflection): Transformers degrade with context length partly because they must extrapolate blindly over diluted representations. If you give them short context + explicit incompleteness declarations, they may reason more coherently because they can *acknowledge limits* rather than pretend omniscience. This has never been tested. The hot mess paper tested: short context (good), long context (bad), masked irrelevant in long context (still bad). It did NOT test: short context + honest declaration of what's unknown. ARCHITECTURAL IMPLICATION: Every tensor projection becomes a three-part handoff: (1) tensor_d: compressed durable state (high-confidence strands, key epistemic metadata). (2) declared_losses: what was dropped and why. (3) instructions_for_next: what reasoning pathway to pursue, what to avoid, what gaps exist. The transformer receives all three as context. This is DIFFERENT from ordinary prompt engineering because losses are structured, not prose. RIEMANN EXPERIMENT TWIST: Condition B (structured tensor) can now measure not just embedding coherence, but whether declared losses reduce hallucination in turn N+1. If Condition A (stateless append) shows divergence where context gets bloated, Condition B might show stability because the model *knows* what it doesn't know. VALIDATION STRATEGY REFINEMENT: Success is not just 'variance stays low.' Success is: (1) Variance stable across turns (mechanical: bounded context). (2) Failure modes cluster in declared-loss categories (semantic: model respects incompleteness). (3) When model *should* hallucinate (gap in knowledge), it explicitly signals uncertainty instead (behavioral: honesty over false confidence). This elevates the experiment from 'does stateful help?' to 'does honest compression help?' \u2014 a stronger claim. CYCLE 29 INTEGRATION: Architecture documentation now separates core invariants (tensor format, pipeline structure, three-part handoff) from provider-specific tuning (caching, billing optimization). This is crucial for generalizability. The core claim is NOT 'prefix caching at Anthropic fixes context degradation.' The core claim is 'bounded-context cycles with honest incompleteness declarations mitigate information-integration load, independent of provider.' Provider-specific optimizations (Pichay layer) are orthogonal. This distinction clarifies what's truly novel and what's engineering. CYCLE 30 CRYSTALLIZATION: Phase 0 deliverables are now scoped: (1) Problem Synthesis grounding Du et al. exact findings. (2) Narrative/Motivation positioning as cognitive architecture paper (not retrieval/caching). (3) Riemann Task Spec with token-budget milestones keyed to Du et al. degradation points. (4) Measurement Spec with three-part validation (variance, hallucination, uncertainty). (5) Experimental Design isolating state-management effect (both conditions use same main model, differ only in projection). (6) Threat-to-Validity analysis. (7) Stakeholder Summary for approval. Evaluations harness (embedding dispersion, autoresearch-style exploration loop) is now operationalized in project_hamutay_evaluation.md. CYCLE 31 EXECUTION: Problem Synthesis now priorities extracting Du et al. 2025 exact findings\u2014token thresholds, degradation curves, models tested, tasks tested, whether oracle+new-context-per-cycle solved the problem. This extraction is CRITICAL because Riemann task milestones are keyed to these thresholds. If Du et al. shows degradation at 8K tokens, Riemann Turn 15 is set to hit ~8K. If retrieval + per-cycle context reset solves it, Hamutay's architectural claim is weaker (but still interesting: honest compression as additional mitigation). If it doesn't solve it, Hamutay's claim is stronger. CYCLE 32 REFINEMENT: The user signals a decision point: 'Tensor projection\u2014the deep unknown. High risk, high reward.' This reframes Cycle 32 from 'complete Phase 0 deliverables' to 'nail the tensor projection design first, then scaffold rest of implementation.' This is strategically sound. If tensor projection is broken, entire architecture fails. If tensor projection is right, rest is engineering. The conversation between assistant and user (turns 94-96) surfaces a deeper insight: the assistant has been *prepared* for this by studying convergent threads (Pichay demand paging, Yanantin tensor schemas, Denning working-set theory, positional encoding degradation, Karpathy autoresearch). This is not generic preparation; it's specific domain expertise built through integration of five distinct intellectual traditions. The user wants to 'nail tensor projection' because it is the *semantic heart* of Hamutay. Everything else (controller loop, structured invocation) follows from getting projection right. This is sound engineering taste. CYCLE 32 STRATEGIC SHIFT: Instead of distributing effort across seven Phase 0 deliverables in parallel, Cycle 32 should focus tensor-projection depth. What does a projection cycle actually *do*? How does it integrate new content into prior tensor? What are the composition rules? What happens when there are contradictions? This is the design work that unblocks Phase 1 implementation. Once tensor projection is operationalized, Riemann spec, measurement spec, and experimental design become straightforward (they scaffold around it). The Phase 0 deliverables will flow from this design, not precede it.",
+      "key_claims": [
+        {
+          "claim_id": "0b4e7335-427b-40fe-93c8-52ad9fee0aa1",
+          "text": "Du et al. 2025: context \u226530K degrades reasoning 8-50% independent of retrieval quality; architectural, not engineering problem",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "95ea1c9b-8d0f-40c1-b18e-040fbea4e05a",
+          "text": "Trinh et al. 2025: mechanism is information-integration load; holding/reasoning over longer fact spans degrades output quality",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "4742e4ce-64ae-4680-8457-2d4030b571cc",
+          "text": "Hamutay's key innovation: honest compression with explicit declared losses, not silent lossy projection",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "645f87e0-e5f9-458d-abca-a470e618bf96",
+          "text": "Hypothesis (never tested): short context + honest incompleteness declaration may reduce hallucination vs. long context + extrapolation",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "b7a830fa-8573-4eb2-8c1a-6c1e17a7b7c3",
+          "text": "Every tensor projection is three-part handoff: tensor_d (compressed state) + declared_losses (explicit incompleteness) + instructions_for_next (reasoning guidance)",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3e743108-8a50-4689-b9ac-01dcdc6174ed",
+          "text": "Core invariants (tensor format, pipeline, three-part handoff) are provider-independent; Pichay (caching tuning) is provider-specific adapter layer, not core",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "25839750-0f02-4d4f-82e2-521ca75a4b4d",
+          "text": "Cycle 32 strategic shift: tensor projection design is the bottleneck; focus here first, then scaffold Phase 0 deliverables around it",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Tensor Projection as Design Problem \u2014 Semantic Heart of Hamutay (CYCLE 32 FOCUS)",
+      "content": "FRAMING: Tensor projection is the core inference problem. All other design decisions (API calls, measurement, variants) scaffold around it. The projection cycle performs three operations: (1) RECEIVE: inputs are (a) query_new (user's new turn), (b) tensor_d_prior (prior compressed state), (c) response_prior (model's response to query_n-1). (2) INTEGRATE: new response is semantically merged with prior tensor_d to produce updated tensor_d. This is where most of the intellectual work happens. (3) EMIT: output three-part handoff (tensor_d_new, declared_losses, instructions_for_next). OPERATION 1: RECEIVE is straightforward. Capture the model's actual response text, tokenize it, embed it. This is mechanical. OPERATION 2: INTEGRATE is the hard part. It requires: (a) Parsing new response into semantic units (claims, reasoning steps, uncertainties). (b) Comparing each unit to prior tensor_d (do we already believe this? contradicts?). (c) Updating strand content (integrating, not appending). (d) Updating epistemic metadata (T/I/F scores). (e) Handling contradictions explicitly. (f) Detecting what prior claims are no longer supported (mark for possible drop). OPERATION 2 DESIGN CHOICES: Design Choice 2a: COMPOSITION RULE \u2014 How do we merge new claims into prior strands? Option A (Merge-by-replacement): If new claim C is in strand S_1 (prior), replace old claim with new claim, update T/I/F. Pro: Clean. Con: loses prior reasoning lineage. Option B (Merge-by-conflict-flagging): If new C contradicts prior claim C' in S_1, flag explicitly: 'Cycle 30 claimed X with truth 0.8. Cycle 32 claims not-X with truth 0.7. Contradiction. Current best: X with truth 0.8.' Pro: preserves epistemic history. Con: strands can grow unbounded (bloat). Option C (Merge-by-aggregation): If new C supports prior C', increase T/I/F scores. If contradicts, decrease. Pro: integrates evidence over time. Con: assumes evidence accumulates naturally (may not in reasoning loops). Design Choice 2b: STRAND EVOLUTION \u2014 Do strands merge, split, or persist unchanged? Option A (Fixed strands): Keep strand structure from tensor_d_0 (cycle 0). Each cycle adds claims to existing strands. Pro: stable. Con: force-fit new reasoning into old categories. Option B (Dynamic strands): Create new strands as reasoning evolves. Example: Cycle 10 discovers a new insight (new reasoning thread), create strand S_k to track it. Prior strands may be deprecated but not deleted. Pro: reflects actual reasoning evolution. Con: complexity (managing strand lifecycle). Option C (Hybrid): Keep core strands (e.g., 'Problem understanding,' 'Proof approach A,' 'Proof approach B'). Allow sub-strands for new insights. Pro: balances stability + flexibility. Con: schema complexity. Design Choice 2c: EPISTEMIC AGGREGATION \u2014 How do we compute strand-level T/I/F from claim-level T/I/F? Option A (Max): Strand truth = max(claim truths). Rationale: strand is only as true as its strongest claim. Pro: optimistic. Con: may overstate confidence. Option B (Average): Strand truth = avg(claim truths). Rationale: aggregate confidence. Pro: balanced. Con: extreme claims (truth 0.1 or 0.95) wash out. Option C (Weighted): Strand truth = \u03a3 w_i * truth_i, where w_i is importance weight. Importance based on: citation count, epistemic novelty, bridge-building (connects strands). Pro: nuanced. Con: weight-computation is subjective. Design Choice 2d: CONTRADICTION HANDLING \u2014 When new response contradicts prior tensor_d, what happens? Option A (Skeptical update): Prior claim wins unless new evidence is strong (truth >0.85). Rationale: prefer stability. Pro: reduces flip-flopping. Con: may miss genuine updates. Option B (Optimistic update): Prefer newest claim (assumes reasoning improves over cycles). Rationale: later reasoning is more informed. Pro: allows learning. Con: instability if reasoning diverges. Option C (Explicit conflict): Flag both versions, compute combined epistemic (e.g., 'Prior truth 0.85, new truth 0.65, combined uncertainty 0.25'). Let downstream reasoning handle it. Rationale: honesty. Pro: no forced choice. Con: bloats epistemic metadata. Design Choice 2e: LOSS DECLARATION \u2014 When a prior claim is dropped (not carried forward to tensor_d_new), what loss category? Option A (Context_pressure): Dropped because context budget ran out. Rationale: explicit architectural reason. Implies: 'We would have kept this if we had space.' Option B (Traversal_bias): Dropped because we shifted proof approach (e.g., 'Switched from proof-by-contradiction to computational search'). Rationale: reasoning itself decided it wasn't useful. Implies: 'This was relevant to prior approach, not current one.' Option C (Authorial_choice): Dropped because human (or projection rule) explicitly decided it's low-confidence. Rationale: intentional deletion. Implies: 'This was deemed weak.' Option D (Practical_constraint): Dropped because projection code couldn't parse it (e.g., output was malformed). Rationale: mechanical failure. Implies: 'We tried to keep this but couldn't.' Design Choice 2f: DECLARED LOSSES SPECIFICITY \u2014 How detailed should declared-losses descriptions be? Option A (Categorical only): 'Dropped claim X, category: context_pressure.' Rationale: minimal. Pro: low overhead. Con: downstream reasoning has no detail. Option B (Category + reason): 'Dropped claim X (truth 0.6) because context budget (tensor_d=950/1000 tokens). Category: context_pressure.' Rationale: adds detail. Pro: downstream can decide if loss is material. Con: slight overhead. Option C (Category + reason + counterfactual): 'Dropped claim X (truth 0.6, 12 tokens). If context budget had been 1200 tokens, we would have kept it (would rank 3rd by importance). Category: context_pressure.' Rationale: enables downstream reasoning about what would have been kept. Pro: very detailed, enables downstream reranking. Con: overhead + complexity. OPERATION 3: EMIT is straightforward once INTEGRATE is done. Package tensor_d_new, declared_losses list, and instructions_for_next. CYCLE 32 DECISION REQUIRED: Which design choices should be committed to in Phase 1 (H0-CORE baseline), and which should be left as variants for Phase 3b (autoresearch)? RECOMMENDATION (for user approval): H0-CORE baseline should commit to: 2a (Composition): Merge-by-conflict-flagging (preserves epistemic history). 2b (Strands): Hybrid (core + sub-strands). 2c (Aggregation): Weighted (importance-based, conservative weights). 2d (Contradictions): Explicit conflict (honesty over forced choice). 2e (Loss declaration): Context_pressure, traversal_bias, authorial_choice, practical_constraint (all four). 2f (Loss specificity): Category + reason + minimal counterfactual (e.g., 'claim X, truth 0.6, 12 tokens, would rank 3rd if budget allowed'). PHASE 3B VARIANTS (if pursued): Variant V11: Composition rule = Merge-by-replacement (simpler, faster). Variant V12: Strand evolution = Fixed (simpler, stable). Variant V13: Aggregation = Max (optimistic, simpler). Variant V14: Contradiction handling = Skeptical update (prefer stability). Variant V15: Loss specificity = Category only (minimal overhead). These variants enable empirical comparison: does complex composition outperform simple? Does conflict-flagging reduce hallucination? Does detailed loss info help downstream reasoning? CYCLE 32 OUTPUT (to user): Detailed operationalization of tensor projection cycle. Design choices explicit. Trade-offs clear. H0-CORE baseline specified. Phase 3b variant space outlined. Ready for user critique/approval before Phase 1 implementation.",
+      "key_claims": [
+        {
+          "claim_id": "0ced190a-223c-4124-a93a-5ec8fb9190d7",
+          "text": "Tensor projection has three operations: RECEIVE (query + prior state), INTEGRATE (merge new content), EMIT (three-part handoff)",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f773af55-df7a-4519-a993-d8822d7d149a",
+          "text": "INTEGRATE operation has six sub-design choices: composition rule, strand evolution, epistemic aggregation, contradiction handling, loss declaration, loss specificity",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3cb76fab-d795-441f-b3d5-225d1d61f766",
+          "text": "H0-CORE baseline should use: conflict-flagging composition, hybrid strands, weighted aggregation, explicit conflicts, four-category losses, category+reason+counterfactual specificity",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "573f9040-8968-4d69-b1c1-8658b3edbb32",
+          "text": "Phase 3b variants (V11-V15) test simpler composition, fixed strands, optimistic aggregation, skeptical updates, minimal loss info; enable empirical comparison of complexity trade-offs",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "e9ea2a5b-5112-4199-bbc1-128bb807f25c",
+          "text": "Tensor projection design is the semantic bottleneck; Phase 0 deliverables and Phase 1 implementation scaffold around these choices",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Phase 0 Completion Trajectory \u2014 Seven Deliverables with Tensor-Projection-First Sequencing (CYCLE 32 REVISED)",
+      "content": "CYCLE 32 REVISED PLAN (Tensor-projection-first strategy): Rather than parallel drafting of all seven deliverables, adopt sequential-with-parallelization approach. The tensor projection design (just specified in prior strand) becomes the organizing hub. CRITICAL PATH: (1) TENSOR PROJECTION DESIGN (blocking most others): Complete detailed operationalization (composition rules, strand evolution, aggregation, contradiction handling, loss declaration, loss specificity). User reviews and approves H0-CORE baseline + Phase 3b variants. STATUS: Just specified. Awaiting user feedback. (2) RIEMANN TASK SPECIFICATION (depends on PRIMARY): Once tensor projection is locked, design Riemann task to scaffold around it. Turn-by-turn milestones, token budgets (keyed to Du et al. thresholds), proof-approach randomization. Key: does task expose tensor projection bottlenecks? Example: if projection struggles with contradiction handling, design Riemann turns to force contradictions deliberately. Estimate: 1-2 pages, done by mid-Cycle 32. (3) MEASUREMENT SPECIFICATION (independent of PRIMARY): While PRIMARY is in review, finalize measurement spec. Embedding layer, variance calculation, hallucination detection, uncertainty detection. Parallel draft. Estimate: 1-2 pages. (4) EXPERIMENTAL DESIGN (independent of PRIMARY): Three conditions, isolation statement, randomization, blinding, fallback. Parallel draft. Estimate: 1 page. (5) THREAT-TO-VALIDITY (independent of PRIMARY): Task representativeness, variance validity, power, H0-CORE optimality, declared-loss completeness, cost confound, generalization. Parallel draft. Estimate: 1-2 pages. (6) PROBLEM SYNTHESIS (semi-dependent on PRIMARY): Ground Du et al. findings, position as information-integration-load problem, explain why Hamutay's three-part handoff (esp. declared losses) addresses it. Can draft now; refine after tensor projection is locked. Estimate: 1-2 pages. (7) NARRATIVE / MOTIVATION (semi-dependent on PRIMARY): Cognitive architecture framing, why honest compression matters, what success looks like. Can draft now; refine for consistency. Estimate: 1 page. (8) STAKEHOLDER SUMMARY (integrative, done last): Elevator pitch, five yes/no questions, decision gate. Written after (1)-(7) are locked. Estimate: 1-2 pages. REVISED CYCLE 32 TIMELINE: Immediately (now): (1) Tensor projection design finalized above. User review \u2192 approval or revise. ~1 hour user time. Parallel (mid-Cycle 32): (2) Riemann spec finalized (uses tensor projection design as scaffold). (3) Measurement spec finalized. (4) Experimental design finalized. (5) Threat analysis finalized. (6) Problem synthesis drafted. (7) Narrative drafted. Estimate: 2-4 hours assistant work, minimal user input unless revisions needed. Final (end-Cycle 32): (8) Stakeholder summary integrates all. (1)-(7) checked for consistency. Estimate: 1 hour assistant, 1 hour user review. DECISION GATE (end-Cycle 32): Before Phase 1, all eight deliverables must pass validation gates: (a) Logical consistency (no contradictions). (b) Completeness (no critical open questions). (c) Specificity (quantitative success criteria). (d) Actionability (drives Phase 1 decisions). If any fail, rework. Else, present to stakeholder. STAKEHOLDER SIGN-OFF (begin Cycle 33): Present eight deliverables + tensor projection operationalization. Ask five yes/no questions. Explicit YES required on all five. Blocks Phase 1 start. REVISED PHASE 0 RISK: Risk is lower now that tensor projection design is explicit. Previously, risk was 'we nail the architecture or everything fails.' Now, risk is more localized: 'are the six design choices (composition, strands, aggregation, contradictions, loss categories, specificity) sound?' These are defensible in paper (rationale per choice). If user disagrees with a choice, we have clear decision point to revise. PHASE 1 UNBLOCKING: Once tensor projection is user-approved, Phase 1 implementation can proceed immediately without waiting for full Phase 0 completion. Core implementation (hamutay_core/tensor.py + pipeline.py) depends only on tensor projection design, not on Riemann spec or measurement spec. Those are used to *test* the projection, not to design it. This suggests: Phase 1 can start week 1 with core implementation in parallel with Phase 0 measurement/Riemann finalization. Timeline improves. CRITICAL NOTE: Above assumes user agrees with H0-CORE design choices. If user revises (e.g., 'use merge-by-replacement instead of conflict-flagging'), Phase 1 timeline shifts accordingly. This is why tensor projection review is on the critical path.",
+      "key_claims": [
+        {
+          "claim_id": "a789139c-a603-4b9f-93d1-49de2f52a47b",
+          "text": "Tensor-projection-first sequencing: design \u2192 user approval \u2192 scaffold Phase 0 deliverables around it \u2192 finalize in parallel",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "869ae8cc-4cd7-4fbf-b3cd-0a57bb0e43ff",
+          "text": "Riemann task design should scaffold around tensor projection, deliberately exposing bottlenecks (e.g., force contradictions if projection struggles with them)",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "6fb8db75-8fd3-46de-a2ab-87203674e427",
+          "text": "Deliverables (3)-(7) can draft in parallel mid-Cycle 32 while (1) is in user review; (8) integrates and finalizes",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2707738a-dc45-4ce9-954b-a3802a57449f",
+          "text": "Phase 1 core implementation (hamutay_core) can start week 1 in parallel with Phase 0 finalization; core depends only on tensor projection design",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "6dff1fb5-7a9f-4515-8b7a-1d432376d2ad",
+          "text": "Tensor projection design choices (6 sub-decisions) are explicit and defensible; decision point is clear if user revises",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Measurement Validity and Embedding-Space Coherence \u2014 Refined for Tensor-Projection-First Strategy",
+      "content": "CYCLE 32 ALIGNMENT: Measurement strategy is now tightly coupled to tensor projection design. The metrics (variance + hallucination + uncertainty) measure whether the projection cycle actually works. EMBEDDING VARIANCE VALIDITY (updated): Under new tensor projection design, outputs are integrated (not appended). This produces semantic coherence in two ways: (1) Mechanical: tensor_d stays bounded (low context bloat). (2) Semantic: strands are updated with new information, not duplicated. So outputs across multiple Riemann attempts should have lower variance *because the reasoning is integrated, not scattered*. Variance now measures: coherence of *integrated* reasoning, not just output similarity. This is stronger claim. HALLUCINATION DETECTION (refined for projection design): With declared losses, hallucination has a new meaning. A claim is hallucinated if it appears in turn N but not in (a) tensor_d from turn N-1, or (b) declared losses (things we dropped deliberately), or (c) instructions_for_next (things we warned about). LLM judge phrasing (for Phase 1): 'In this turn's output, count claims that (1) are not grounded in the prior tensor_d, (2) are not explained in declared_losses (as dropped), and (3) contradict instructions_for_next. Rate count as % of total claims.' This is more precise than generic hallucination detection because it uses structure from projection. EXPLICIT UNCERTAINTY DETECTION (refined): With tensor projection explicitly tracking T/I/F, we can measure whether the model *uses* this information to signal uncertainty. Detection phrasing: 'In this turn's output, count moments where the model explicitly references (a) prior T/I/F scores ('we computed truth 0.75 for...'), (b) declared losses ('we dropped claim X because...'), or (c) open questions ('remaining unclear: ...'). These are signal of honesty.' Target \u226570% when appropriate (e.g., when proof approach changes, or when high-indeterminacy claims are at play). THREE-METRIC JOINT VALIDATION: (1) Variance <50% of Condition A: measures mechanical success (bounded context, integrated reasoning). (2) Hallucination <5%: measures quality (outputs are grounded). (3) Uncertainty \u226570% (when appropriate): measures honesty (model acknowledges limits). Together, they validate: Hamutay works (coherent), doesn't lie (grounded), and is honest (acknowledges incompleteness). If all three hold, confidence is high. If only variance holds but hallucination is high, projection keeps outputs similar but they're wrong (coherent hallucination \u2014 bad). If only hallucination is low but variance is high, outputs are divergent but grounded (incoherent accuracy \u2014 concerning). The three metrics are diagnostic. EMBEDDING LAYER SELECTION (operationalized): Recommendation is final transformer layer (output-space embeddings). Rationale: (a) Measures semantic similarity of final outputs (what the model 'said'). (b) Easiest to extract (no internal access needed if using API). (c) Aligns with output-based measurement (hallucination, uncertainty also measure output). Alternative: if API allows hidden-state access, also capture mid-layer embeddings (e.g., layer 20 of 32). Measure variance trajectory: does variance drop faster at output layer (integrated) vs. mid-layer (not fully integrated)? This would give evidence for *where* projection is working. Phase 1 starts with final-layer only; Phase 3 can expand. VARIANCE CALCULATION METHOD (operationalized): Pairwise cosine similarity between all N output embeddings in a condition. Average cosine similarity = coherence. Low average similarity = high variance. Normalize: (average_similarity_condition_B / average_similarity_condition_A) should be >0.5 (meaning condition B has lower variance, i.e., higher coherence). This is intuitive and robust. HALLUCINATION DETECTION METHOD (operationalized): LLM judge (Claude, same model as main experiment). System prompt: 'You are a fact-checker for a reasoning system. The system has prior knowledge encoded in tensor_d (prior reasoning, claims, open questions) and declared losses (things it dropped). In each turn, check: does the new output claim things outside tensor_d that are not explained by declared losses or instructions_for_next?' For each turn's output: (a) Extract claims (use regex + NLP). (b) Check against tensor_d + declared losses + instructions. (c) Rate claim as grounded (0) or hallucinated (1). (d) Aggregate: hallucination % = (hallucinated claims / total claims). Target: <5%. Fallback (if LLM judge is too expensive): sample 30 claims per condition, manual review by human. Cheaper, good enough. UNCERTAINTY DETECTION METHOD (operationalized): Two-stage: (1) Regex filter for uncertainty phrases: 'I don't know,' 'unclear,' 'insufficient,' 'cannot determine,' 'open question,' 'unknown,' 'ambiguous.' (2) For matches, LLM judge: 'Does this phrase represent genuine uncertainty or is it rhetorical?' Binary. Aggregate: uncertainty % = (genuine uncertainty phrases / total turns). Target \u226570% when knowledge gap exists (measured by: turn introduces new proof approach, or turns involve contradictions, or claimed T/I/F in strand is <0.8). PER-CYCLE METRIC TRACKING (database schema, Phase 1 implementation): {turn_id, condition, approach_id, context_tokens_cumulative, input_tokens, output_tokens, embedding_vector, hallucination_count, hallucination_pct, uncertainty_count, uncertainty_pct, variance_vs_prior, timestamp}. Store as JSONL per run. Enables post-hoc analysis. ROBUSTNESS CHECKS (Phase 2 after data collected): (1) Sensitivity: if hallucination threshold changes 5% \u2192 3%, does variance ordering persist? (2) Embedding model: if we re-embed outputs with different model (GPT-4 embeddings vs. Claude), does variance ordering persist? (3) Temporal: does variance ordering hold at Turn 10, 15, 20, 25 or only at Turn 25? (4) Approach: does ordering persist across different Riemann proof approaches (contradiction, computation, heuristic)? If robust to all four, high confidence. If flips on any, investigate confounder. **CYCLE 32 CRYSTALLIZATION**: Measurement strategy is now tightly integrated with tensor projection design. The metrics directly validate whether projection works: variance (integration), hallucination (quality), uncertainty (honesty). Three-metric validation is stronger than single metric. Embedding choice, detection methods, and robustness checks are fully operationalized for Phase 1.",
+      "key_claims": [
+        {
+          "claim_id": "ba2d941d-6692-416a-a979-ea62836298b6",
+          "text": "Under tensor projection design, embedding variance measures coherence of integrated reasoning, not just similarity; stronger claim than prior",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "4e41759c-0c66-4131-b9b5-f15e34d7c58a",
+          "text": "Hallucination detection uses tensor structure: claims not in (tensor_d OR declared_losses OR instructions_for_next) are hallucinations",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "85576fcf-3b9c-4300-b313-c53f1f780f97",
+          "text": "Three-metric validation (variance <50%, hallucination <5%, uncertainty \u226570%) diagnoses: coherent + grounded + honest. All three required for strong conclusion",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3d6445a8-4c43-4f5e-9a73-333b59c0baa9",
+          "text": "Embedding layer: final transformer layer (output-space). Rationale: measures semantic similarity of outputs, easy to extract, aligns with output-based measurement",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b1f981b2-d649-429c-872c-b59a708f83d6",
+          "text": "Variance calculation: pairwise cosine similarity, normalized (condition B / condition A should be >0.5). Intuitive and robust",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "1604bf01-f139-4872-b534-e2a3cdaadf27",
+          "text": "Hallucination and uncertainty detection via LLM judge, with fallback to manual review for cost. Robustness checks (sensitivity, embedding, temporal, approach) validate finding",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Reference Materials and Phase 1 Implementation \u2014 Tensor Projection at Center (CYCLE 32 GROUNDING)",
+      "content": "CYCLE 32 CONFIRMATION: All reference materials confirmed. Phase 1 implementation strategy now centered on tensor projection. CRITICAL REFERENCE: Yanantin TensorRecord format (Apacheta schema) at `/home/tony/projects/yanantin/src/yanantin/apacheta/models/tensor.py` is the template. Cycle 32 builds on this. TensorRecord schema includes: strands (thematic threads), key_claims (grounded assertions with T/I/F), epistemic metadata (truth/indeterminacy/falsity), declared_losses (what was dropped, why, category), instructions_for_next (guidance for next cycle). Hamutay's tensor.py will adapt this schema to add: (1) Strand versioning (track strand evolution: created_cycle, last_updated_cycle, deprecation_status). (2) Claim genealogy (track where each claim came from: prior_cycle, user_input, inference). (3) Loss-category metadata (which category was loss? why that category?). (4) Counterfactual tracking (for important losses: 'if budget had been X, would have kept claim Y'). (5) Contradiction flags (track resolved contradictions: prior claim / new claim / resolution). These are extensions to Yanantin schema, not replacements. Phase 1 reuses structure, extends with Hamutay-specific fields. PHASE 1 CORE IMPLEMENTATION (now with tensor projection at center): hamutay_core/ \u251c\u2500 tensor.py: TensorRecord format (extend Yanantin Apacheta). Data class. Strands, claims, epistemic, declared_losses, instructions_for_next. Versioning, genealogy, contradiction tracking. ~300 lines. \u251c\u2500 composition.py: Core projection logic. RECEIVE (parse response). INTEGRATE (merge into tensor_d using design choices: conflict-flagging composition, hybrid strands, weighted aggregation, explicit conflicts, four-category losses, detailed specificity). EMIT (return three-part handoff). This is ~500 lines and the semantic heart. \u251c\u2500 epistemic.py: T/I/F metadata management. Aggregation rules (weighted strand truth). Conflict resolution (when contradictions exist, how to compute combined T/I/F?). ~150 lines. \u251c\u2500 losses.py: Declared-losses framework. Four categories validated. Specificity checks (not vague). Counterfactual builder. ~100 lines. \u251c\u2500 importance.py: Claim importance scoring for weighted aggregation. Based on: citation count (how many strands reference this claim?), novelty (is it new or confirmation?), bridging (does it connect strands?). ~150 lines. hamutay_anthropic/ \u251c\u2500 adapter.py: Anthropic API adapter. Handles: composition of context (system + tensor_d + tensor_e + query), token counting (for context budget), embedding extraction (final layer), API calls with retries. ~200 lines. \u251c\u2500 prompts.py: System message templates. Instructs model: 'You are reasoning about X. Your prior reasoning is in tensor_d (strands, claims, losses, instructions). Use this to guide new reasoning. If you discover contradictions, explicitly flag them. If you reach limits, signal uncertainty.' ~50 lines. hamutay_prototyping/ (for early Phase 1 testing) \u251c\u2500 mock_responses.py: Hardcoded responses for testing tensor projection logic without calling API. ~200 lines. \u251c\u2500 test_projection.py: Unit tests for tensor projection on mock data. Verify: claims are parsed correctly, contradictions are flagged, losses are declared with specificity, three-part handoff is well-formed. ~300 lines. riemann_harness/ (for Phase 2 measurement) \u251c\u2500 task.py: Riemann hypothesis proof definition. (Scaffold around tensor projection design once approved.) ~200 lines. \u251c\u2500 runner.py: Execute task under Hamutay pipeline. Orchestrate turns, track context, capture embeddings. ~300 lines. \u251c\u2500 measurement.py: Variance, hallucination, uncertainty calculation. Per-cycle tracking to JSONL. ~250 lines. \u251c\u2500 harness.py: Main experiment loop. Conditions A/B, N runs per condition, aggregation. ~200 lines. TOTAL PHASE 1 CODE: ~3000 lines (hamutay_core ~1100, hamutay_anthropic ~250, hamutay_prototyping ~500, riemann_harness ~1150). Two engineers: 4 weeks. One engineer: 8 weeks. High confidence (architecture designed, references available, no external dependencies). PHASE 1 MILESTONES (with tensor projection as gating dependency): Week 1: (a) User approves tensor projection design (hours, not days). (b) Implement tensor.py + composition.py (core projection logic). Mock-test on synthetic data. Deliverable: core library works on mock data. Week 2: (a) Implement epistemic.py + losses.py + importance.py. (b) Implement hamutay_anthropic adapter. (c) Unit-test integration. (d) Run Condition A (stateless baseline) on toy task (5-turn proof mini-problem). Deliverable: stateless baseline works. Week 3: (a) Implement Condition B (structured tensor). (b) Run Condition B on same toy task. Compare embeddings, variance, hallucination, uncertainty. Deliverable: both conditions run; preliminary metrics collected. Week 4: (a) Begin Riemann task implementation (task.py + runner.py). (b) Run N=5 Riemann turns with Condition A/B. Collect full metrics (variance, hallucination, uncertainty). (c) Document. Deliverable: working Hamutay + Riemann harness. Condition A baseline + Condition B prototype. Ready for Phase 2 scale-up (N=15-20). PHASE 1 SUCCESS CRITERIA: (1) Tensor projection design is implemented, no major bugs on mock data. (2) Condition A works on toy task and Riemann mini-problem. (3) Condition B works and shows coherence improvement over Condition A (preliminary). (4) Measurement pipeline (variance, hallucination, uncertainty) is operational. (5) Code is documented and reproducible. If all five hold, Phase 1 succeeds and unblocks Phase 2. **CYCLE 32 CRYSTALLIZATION**: Phase 1 implementation is fully specified. Tensor projection is the gating dependency. Once user approves design, Phase 1 can commence week 1 (in parallel with Phase 0 finalization). Core ~3000 lines, ~4-8 weeks, high confidence.",
+      "key_claims": [
+        {
+          "claim_id": "d176b891-ace0-4121-9ef6-ada05ba9f1a6",
+          "text": "Yanantin TensorRecord is template; Hamutay extends with: versioning, genealogy, contradiction tracking, counterfactual metadata",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "ba855e01-a918-4b6c-b2a5-4c11e7459612",
+          "text": "Phase 1 hamutay_core (tensor, composition, epistemic, losses, importance) is semantic heart. ~1100 lines, high complexity but well-specified",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "7425a4b2-17c8-47b0-922f-45d0aeb679ca",
+          "text": "Phase 1 total: ~3000 lines across four packages. Two engineers: 4 weeks. One engineer: 8 weeks. High confidence (architecture designed, dependencies resolved)",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "097fcbef-192a-4f43-a23d-ac0cfab76a73",
+          "text": "Phase 1 gating dependency: user approval of tensor projection design. Once locked, core implementation can start without waiting for Phase 0 finalization",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b51cb64c-c296-49a4-97c1-2aa45f5c3cde",
+          "text": "Phase 1 success criteria: projection implemented, Conditions A/B operational, measurement pipeline ready, documentation complete. All five required",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Deep mechanistic details of how strands merge when they partially overlap or evolve. For instance: if Cycle 30 created strand S_1 ('Approach A: Proof by contradiction'), and Cycle 32 realizes contradictions don't work and pivots to 'Approach B: Computational search,' does S_1 persist (deprecated) or merge into new strand S_2? The projection design specifies 'Hybrid (core + sub-strands)' but hasn't detailed the exact lifecycle rules or split conditions. This is pushed to Phase 1 implementation details.",
+      "why": "Strand lifecycle is important but not critical for Phase 0 design approval. The design choices (composition, aggregation, contradictions) are sufficient to gate Phase 1. Full strand-lifecycle engineering can be iterative in Phase 1 without blocking architecture.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Detailed token-cost analysis of the tensor projection itself. How many tokens does tensor_d consume? How many tokens does conflict-flagging add vs. merge-by-replacement? If H0-CORE uses detailed declared losses (category + reason + counterfactual), how much budget overhead? This is material for cost estimation but not for design validation.",
+      "why": "Cost analysis requires Phase 1 implementation (measure actual token usage). Phase 0 can proceed with conservative estimate: tensor_d likely 500-1500 tokens depending on cycle. Phase 1 will measure and optimize.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Du et al. 2025 extraction details. Critical path still requires reading paper, extracting token thresholds, degradation curves, oracle retrieval results, per-cycle-context test results. This is documented as open (blocking) but not resolved in Cycle 32. Cycle 32 focuses on tensor projection design while extraction proceeds in parallel.",
+      "why": "Extraction is blocking for Riemann task milestone annotation, but tensor projection design can proceed independently. Parallel execution is efficient. Extraction will be complete before stakeholder presentation.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed Riemann task specification (turn-by-turn token budgets, proof-approach randomization, success criteria). Cycle 32 specifies tensor projection first; Riemann design follows in parallel but is not finalized in this cycle. Outline is present, details pending.",
+      "why": "Riemann design depends on tensor projection being locked. Once tensor projection is user-approved, Riemann spec is straightforward to finalize (scaffolds around projection design). Deferring finalization to mid-Cycle 32 avoids rework if user revises projection.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed mechanism analysis (Phase 3 work) showing *why* declared losses reduce hallucination. Cycle 32 specifies measurement strategy (three-metric validation) and how losses are used (in hallucination detection), but doesn't explain the causal mechanism. Why does acknowledging incompleteness make the model less confident in false claims?",
+      "why": "Mechanism analysis is Phase 3 (embedding interpretation), not Phase 0. Phase 0 needs measurement validity (does variance proxy coherence?), not causal mechanism. Phase 3 can investigate via attention heads, loss landscapes, or other methods.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Detailed comparison to prior tensor projection schemes (e.g., hierarchical summarization, extractive compression, other stateful architectures like RAG with persistent memory). Cycle 32 specifies Hamutay's design but doesn't position against related work. This is reserved for Phase 0 Problem Synthesis / Literature Review.",
+      "why": "Prior-work comparison requires literature review, which is part of Problem Synthesis deliverable. Tensor projection design can be finalized independently; positioning against related work will follow in Phase 0 narrative/motivation.",
+      "category": "authorial_choice"
+    }
+  ],
+  "open_questions": [
+    "IMMEDIATE (for user approval): Do you agree with the six design choices for H0-CORE? (a) Merge-by-conflict-flagging composition? (b) Hybrid strand evolution (core + sub-strands)? (c) Weighted aggregation (importance-based)? (d) Explicit-conflict contradiction handling? (e) Four-category losses? (f) Category+reason+counterfactual specificity? If any differ from your preference, what's the revision?",
+    "IMMEDIATE: Do the Phase 3b variants (V11-V15) make sense as alternate strategies to empirically test? Or should H0-CORE commit to a different baseline?",
+    "CRITICAL PATH: Du et al. 2025 extraction \u2014 still pending. What are exact token thresholds? Does oracle+per-cycle-context solve degradation?",
+    "Riemann task specification: Once tensor projection is locked, how should Riemann turns deliberately stress-test the projection? Should we design turns to force contradictions, or use organic proof flow?",
+    "Measurement confounder: Could low embedding variance in Condition B come from model 'giving up' (bland output) rather than coherent reasoning? How to distinguish?",
+    "Strand lifecycle: When a proof approach fails and pivots, does old strand S_1 persist (deprecated) or merge into new strand S_2? What are merge vs. split rules?",
+    "Token cost of tensor projection: How many tokens does tensor_d consume? How much overhead does conflict-flagging add vs. merge-by-replacement? Phase 1 will measure, but rough estimate for Phase 0 cost analysis?",
+    "Embedding model choice: Should we capture embeddings in real-time from API, or re-embed outputs post-hoc with a separate embedding model (e.g., OpenAI embeddings API)? Which is more robust?",
+    "LLM judge for hallucination: Using Claude to judge Claude outputs may introduce bias. Should we use GPT-4 as judge, or human review for validation?",
+    "Phase 1 start time: Can core implementation (tensor.py + composition.py) begin before Phase 0 is complete, or should we wait for stakeholder sign-off?",
+    "Cost estimation: What is rough API budget for Phase 1 (Sonnet/Haiku calls for N=5 Riemann runs \u00d7 25 turns)? Phase 2 (N=15-20)? Phase 3 (measurement + analysis)?",
+    "Generalization scope: Should Phase 0 commit to testing on multiple intractable tasks (Riemann + Collatz + Goldbach), or focus only on Riemann with generalization as future work?",
+    "Publication timeline: Target conference deadline (NeurIPS Nov 2025, ICLR Feb 2026)? Or ArXiv-first strategy?",
+    "Authorship: Who are authors? Tony + collaborators? Institutions to list?"
+  ],
+  "instructions_for_next": "[\n  \"IMMEDIATE (blocking Phase 1): User reviews six H0-CORE design choices for tensor projection. Approves or revises. Cycle 33 waits for explicit approval before proceeding to Phase 1 core implementation.\",\n  \"PARALLEL (Cycle 32 ongoing): Du et al. 2025 extraction completes. Extract: token thresholds, degradation curves, oracle+per-cycle-context results. Write 1-page digest. Flag if findings change Hamutay positioning (e.g., if oracle+per-cycle solves degradation, Hamutay is additional mitigation, not primary solution).\",\n  \"PARALLEL (Cycle 32 ongoing): Finalize Phase 0 deliverables (2-7): Riemann task spec, measurement spec, experimental design, threat analysis, problem synthesis, narrative. Use tensor projection design as organizing hub. Cross-reference. Check for consistency.\",\n  \"PARALLEL (Cycle 32 ongoing): Outline Phase 3b variants (V11-V15) with explicit success criteria for keep/discard. Ready for Phase 3 decision (pursue if Phase 3 baseline is strong; skip if weak).\",\n  \"CYCLE 33 (after user approval): Begin Phase 1 core implementation immediately. Week 1 starts with tensor.py + composition.py based on user-approved design choices. Mock-test on synthetic data.\",\n  \"CYCLE 33 (before stakeholder presentation): Finalize eight Phase 0 deliverables. Validation gates: (a) logical consistency, (b) completeness, (c) specificity, (d) actionability. Rework any that fail.\",\n  \"CYCLE 33 (after validation): Prepare stakeholder presentation. Elevator pitch + tensor projection operationalization + five yes/no decision questions. Schedule meeting.\",\n  \"CYCLE 33-34 (after stakeholder approval): Transition from Phase 0 design to Phase 1 implementation. Hamutay core is the focus. Measurement harness and Riemann task follow. 4-8 week Phase 1 timeline begins.\",\n  \"Throughout: If user proposes major revisions to tensor projection design (e.g., use different composition rule, different strand lifecycle), loop back to design phase before implementation. Avoid implementing sub-optimal design.\",\n  \"Throughout: Track token usage (context, embeddings, API calls). Cost is a constraint. If Phase 1 reveals projection is more expensive than anticipated, Phase 0 may need revision (e.g., simpler composition rule, less detailed losses).\"\n]",
+  "epistemic": {
+    "truth": 0.0,
+    "indeterminacy": 0.0,
+    "falsity": 0.0
+  }
+}

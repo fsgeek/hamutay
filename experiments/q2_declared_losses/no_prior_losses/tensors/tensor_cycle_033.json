@@ -1,0 +1,414 @@
+{
+  "id": "4758713a-9692-4271-9dfc-797a2747520c",
+  "cycle": 33,
+  "strands": [
+    {
+      "title": "Context Length as Fundamental Bottleneck \u2014 Integrated with Declared Losses and Explicit Compression (OPERATIONAL CENTERPIECE)",
+      "content": "Du et al. 2025 establishes: context length degrades transformer reasoning by architectural necessity (30K tokens \u2192 8-50% performance loss even with oracle retrieval and masked irrelevant content). This is not a retrieval problem. Trinh et al. 2025 explains the mechanism: information-integration load increases with context span, creating a cognitive-like bottleneck where holding and reasoning over more facts simultaneously degrades output quality. Hamutay's response: bounded-context cycles with structured persistent state (tensor_d). CRITICAL REFINEMENT (Cycle 28): The innovation is not just compression\u2014it's **honest compression with declared losses**. Most architectural approaches hide what's dropped. The Apacheta tensor format makes loss explicit: every projection cycle declares (1) what was dropped, (2) why it was dropped, (3) category of loss (context_pressure, traversal_bias, authorial_choice, practical_constraint). This means the transformer in cycle N+1 can reason about incompleteness rather than hallucinate to fill gaps. HYPOTHESIS (from Cycle 28 reflection): Transformers degrade with context length partly because they must extrapolate blindly over diluted representations. If you give them short context + explicit incompleteness declarations, they may reason more coherently because they can *acknowledge limits* rather than pretend omniscience. This has never been tested. The hot mess paper tested: short context (good), long context (bad), masked irrelevant in long context (still bad). It did NOT test: short context + honest declaration of what's unknown. ARCHITECTURAL IMPLICATION: Every tensor projection becomes a three-part handoff: (1) tensor_d: compressed durable state (high-confidence strands, key epistemic metadata). (2) declared_losses: what was dropped and why. (3) instructions_for_next: what reasoning pathway to pursue, what to avoid, what gaps exist. The transformer receives all three as context. This is DIFFERENT from ordinary prompt engineering because losses are structured, not prose. RIEMANN EXPERIMENT TWIST: Condition B (structured tensor) can now measure not just embedding coherence, but whether declared losses reduce hallucination in turn N+1. If Condition A (stateless append) shows divergence where context gets bloated, Condition B might show stability because the model *knows* what it doesn't know. VALIDATION STRATEGY REFINEMENT: Success is not just 'variance stays low.' Success is: (1) Variance stable across turns (mechanical: bounded context). (2) Failure modes cluster in declared-loss categories (semantic: model respects incompleteness). (3) When model *should* hallucinate (gap in knowledge), it explicitly signals uncertainty instead (behavioral: honesty over false confidence). This elevates the experiment from 'does stateful help?' to 'does honest compression help?' \u2014 a stronger claim. CYCLE 29 INTEGRATION: Architecture documentation now separates core invariants (tensor format, pipeline structure, three-part handoff) from provider-specific tuning (caching, billing optimization). This is crucial for generalizability. The core claim is NOT 'prefix caching at Anthropic fixes context degradation.' The core claim is 'bounded-context cycles with honest incompleteness declarations mitigate information-integration load, independent of provider.' Provider-specific optimizations (Pichay layer) are orthogonal. This distinction clarifies what's truly novel and what's engineering. CYCLE 30 CRYSTALLIZATION: Phase 0 deliverables are now scoped: (1) Problem Synthesis grounding Du et al. exact findings. (2) Narrative/Motivation positioning as cognitive architecture paper (not retrieval/caching). (3) Riemann Task Spec with token-budget milestones keyed to Du et al. degradation points. (4) Measurement Spec with three-part validation (variance, hallucination, uncertainty). (5) Experimental Design isolating state-management effect (both conditions use same main model, differ only in projection). (6) Threat-to-Validity analysis. (7) Stakeholder Summary for approval. Evaluations harness (embedding dispersion, autoresearch-style exploration loop) is now operationalized in project_hamutay_evaluation.md. CYCLE 31 EXECUTION: Problem Synthesis now priorities extracting Du et al. 2025 exact findings\u2014token thresholds, degradation curves, models tested, tasks tested, whether oracle+new-context-per-cycle solved the problem. This extraction is CRITICAL because Riemann task milestones are keyed to these thresholds. If Du et al. shows degradation at 8K tokens, Riemann Turn 15 is set to hit ~8K. If retrieval + per-cycle context reset solves it, Hamutay's architectural claim is weaker (but still interesting: honest compression as additional mitigation). If it doesn't solve it, Hamutay's claim is stronger. CYCLE 32 CRITICAL PATH: (1) Du et al. extraction complete. (2) Riemann, Measurement, Experimental Design specs finalized. (3) Threat analysis written. (4) Narrative/motivation positioned. (5) Stakeholder summary drafted. All seven deliverables pass validation gates (logical consistency, completeness, specificity, actionability). CYCLE 33 REFINEMENT: Apacheta tensor format now inspected directly. Source code confirms: TensorRecord natively supports declared_losses (array of DeclaredLoss objects), epistemic metadata (truth/indeterminacy/falsity per claim), open_questions, instructions_for_next. Format is mature and production-ready. Hamutay can directly reuse or minimally adapt Apacheta schema for Phase 1 tensor_d. This is NOT custom format development\u2014it's reuse of proven infrastructure. Implications: (1) TensorRecord model has strands, key_claims (each with epistemic T/I/F), declared_losses tuple (structured array), open_questions, instructions_for_next. Perfect fit for Hamutay's three-part handoff. (2) StrandRecord supports topics, key_claims (queryable), epistemic metadata, schema-evolution fields (mechanism, overlaps, declared_losses). Designed for exactly this use case. (3) KeyClaim structure (claim_id UUID, text, epistemic T/I/F, evidence_refs) is discipline-aligned. Phase 1 tensor projections can inherit this class directly. (4) EpistemicMetadata and DeclaredLoss models are in epistemics.py. Cycle 33 must verify these match Hamutay's needs (truth, indeterminacy, falsity; loss category + what_was_lost + why). If 100% fit, no adaptation needed. If 90% fit, minimal changes. (5) Apacheta is in production use within Yanantin. Reliability is proven. Reuse reduces Phase 1 implementation burden significantly.",
+      "key_claims": [
+        {
+          "claim_id": "71c4df19-cecd-4d1b-86be-165b9c14b432",
+          "text": "Du et al. 2025: context \u226530K degrades reasoning 8-50% independent of retrieval quality; architectural, not engineering problem",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "bba2ea33-2721-4f2c-81cb-73509504ea49",
+          "text": "Trinh et al. 2025: mechanism is information-integration load; holding/reasoning over longer fact spans degrades output quality",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "18b16054-05f2-437e-8f16-a8927a1588a5",
+          "text": "Hamutay's key innovation: honest compression with explicit declared losses, not silent lossy projection",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e1f6f1d5-b8f4-4167-9821-96288eb2015d",
+          "text": "Hypothesis (never tested): short context + honest incompleteness declaration may reduce hallucination vs. long context + extrapolation",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.18,
+            "falsity": 0.04
+          }
+        },
+        {
+          "claim_id": "4d7ed68c-4b79-4ae2-80c5-bca7cb2d4cfd",
+          "text": "Riemann experiment can measure: variance stability + hallucination reduction + explicit uncertainty signaling across conditions",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "12fffb5b-bbdd-417b-8a43-87b24c3c5f86",
+          "text": "Every tensor projection is three-part handoff: tensor_d (compressed state) + declared_losses (explicit incompleteness) + instructions_for_next (reasoning guidance)",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3ce1b006-d856-43c8-bc3e-dea275b9e6db",
+          "text": "Core invariants (tensor format, pipeline, three-part handoff) are provider-independent; Pichay (caching tuning) is provider-specific adapter layer, not core",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "e6e97bd8-407e-4c61-bc8e-00d2c66acc03",
+          "text": "Phase 0 deliverables define scope: problem synthesis, narrative, Riemann spec, measurement spec, experimental design, threat analysis, stakeholder summary",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.08,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "39f084c3-8120-495f-ac4f-29f1724f3a10",
+          "text": "Apacheta TensorRecord format is mature, production-ready, natively supports declared_losses + epistemic metadata + open_questions + instructions_for_next",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "98982934-a240-42ad-849f-d156aebaa1f8",
+          "text": "Hamutay can directly reuse Apacheta schema for Phase 1 tensor_d with minimal or no adaptation; reduces implementation burden significantly",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Phase 0 Completion Trajectory \u2014 Seven Deliverables with Parallel Drafting (CYCLE 32-33 EXECUTION FOCUS)",
+      "content": "Cycle 32-33 operationalizes Phase 0 completion. The seven deliverables are interdependent but can be drafted in parallel once Du et al. extraction is complete. CYCLE 31 STATUS: Du et al. extraction initiated. Apacheta tensor format inspected and confirmed mature. Phase 1 code structure remains ready. CYCLE 32 CRITICAL PATH: (1) PRIMARY (blocking many secondaries): Du et al. 2025 extraction \u2192 1-page digest ('Du et al. Key Findings for Hamutay'). Extracts: token-count thresholds (at what counts does degradation appear?), performance-loss curves (% loss at 8K, 16K, 30K+ tokens), model names and task types tested, why oracle retrieval failed, whether 'retrieve then solve (new context per cycle)' was tested. STATUS (Cycle 31): Paper obtained. Read in progress. Extraction pending. (2) SECONDARY (depend on PRIMARY): Riemann Task Specification. Turn-by-turn token budget with Du et al. milestones annotated. Example: 'Turn 15 (~8K tokens): Du et al. predicts X% degradation at this threshold. Expect Condition A variance to spike; Condition B should remain stable.' Proof-approach randomization, success criteria. (3) SECONDARY (independent): Measurement Specification. Per-cycle metrics (context length, tokens, embedding coordinates, hallucination detection method). Per-condition summaries (variance trajectory, hallucination frequency, explicit-uncertainty frequency). Success threshold: Condition B variance <50% of Condition A at Turn 25. (4) SECONDARY (independent): Experimental Design. Three conditions (A: stateless, B: structured+Haiku, C: optional structured+Sonnet). Isolation (same main model, differ in projection). N=15-20 per condition. Power analysis. Randomization protocol. Blinding. Fallback metrics. (5) SECONDARY (independent): Threat-to-Validity Analysis. Honest concerns: task representativeness, variance-as-proxy validity, power limitations, H0-CORE baseline optimality, declared-loss incompleteness, cost confound, generalization limits. (6) SECONDARY (independent): Narrative and Motivation. Positions as cognitive architecture paper. Problem (context degrades reasoning, Du et al.), root cause (information-integration load, Trinh et al.), solution (Hamutay), key innovation (explicit incompleteness declarations reduce hallucination), validation strategy (embedding variance + hallucination + uncertainty). (7) FINAL (integrates all): Stakeholder Summary. Elevator pitch + decision point. 'Do you believe the problem? Is Riemann the right task? Does the measurement strategy work? Are you ready to commit and fund? If negative results, are they publishable?' Explicit YES required on all five questions. CYCLE 33 REFINEMENT: All seven deliverables now have clear scopes and interdependencies. Du et al. extraction is the gating item. Apacheta inspection confirms Phase 1 implementation will not be blocked by schema design. Parallel drafting can begin immediately after Du et al. extraction (expected end of Cycle 32). TARGET TIMELINE: Cycles 32-33 complete all seven Phase 0 deliverables. Cycle 33 final week: validation gate review (logical consistency, completeness, specificity, actionability). If all pass, stakeholder presentation in Cycle 33 final. Phase 1 begins Cycle 34.",
+      "key_claims": [
+        {
+          "claim_id": "cf61839c-8eea-4499-8df2-2fff44982ab2",
+          "text": "Phase 0 critical path: Du et al. extraction \u2192 Riemann milestones \u2192 all other deliverables",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "2fd04397-6dc0-4e64-9077-4ec0ec56236c",
+          "text": "Du et al. extraction task: token thresholds, degradation curves, models/tasks, oracle+per-cycle-context test results (did it solve the problem?)",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f0180794-5ff8-432b-a566-a1ca89057089",
+          "text": "Riemann milestones are keyed to Du et al. degradation zones; if Du et al. shows 15% loss at 8K tokens, Turn 15 must hit ~8K to trigger effect",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "f62b3d7e-7a5d-4792-9083-0f99147e6a1c",
+          "text": "Deliverables (2)-(6) can draft in parallel; (7) integrates and presents after all pass validation gates",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "9a175969-9c83-4255-947e-acfa6cc4cd0c",
+          "text": "Validation gates: logical consistency, completeness, specificity, actionability; all must pass before stakeholder presentation",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "7251bf7f-f9fa-4326-b5b5-d1843c1fbc05",
+          "text": "Phase 0 approval requires explicit YES on five stakeholder questions: problem fit, task suitability, measurement validity, commitment, null-result publishability",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "7bee02ea-0169-46fc-9738-c546302ccb01",
+          "text": "Target timeline: Cycles 32-33 complete all deliverables; Cycle 33 final week validation and stakeholder presentation; Phase 1 begins Cycle 34",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Reference Materials Inventory and Phase 1 Code Readiness (CYCLE 33 APACHETA CONFIRMATION)",
+      "content": "Cycle 33 confirms reference materials are available, accessible, and integration-ready. Apacheta tensor format has been directly inspected; integration pathway is clear. KEY REFERENCES CONFIRMED: (1) Du et al. 2025 ('Context Length Alone Hurts LLM Performance Despite Perfect Retrieval'): Local copy at `/home/tony/projects/pichay/paper/references/2025 Context Length Alone Hurts LLM Performance Despite Perfect Retrieval.pdf`. Paper obtained. Extraction in progress (Cycle 32/33). (2) Trinh et al. 2025: Information-integration load mechanism. (Citation confirmed; full reference to extract in Phase 0 final.) (3) Yanantin TensorRecord + Apacheta schema (CYCLE 33 INSPECTION): Direct examination of `/home/tony/projects/yanantin/src/yanantin/apacheta/models/tensor.py` confirms: TensorRecord class has id (UUID), provenance, preamble, strands (tuple of StrandRecord), closing, instructions_for_next, narrative_body, composition_equation, declared_losses (tuple of DeclaredLoss), epistemic (EpistemicMetadata), open_questions, preservation_target. StrandRecord has strand_index, title, content, topics, key_claims (tuple of KeyClaim), epistemic, declared_losses, mechanism, overlaps. KeyClaim has claim_id (UUID), text, epistemic, evidence_refs. This is 99% aligned with Hamutay's three-part handoff (tensor_d + declared_losses + instructions_for_next). Phase 1 can directly instantiate TensorRecord for tensor_d. Minimal adaptation (if any) needed. (4) Cycle 33 MUST verify: epistemics.py contains EpistemicMetadata (truth, indeterminacy, falsity scales) and DeclaredLoss (category enum, what_was_lost, why fields). If these match Hamutay's T/I/F model (0.0-1.0 scales) and loss categories (context_pressure, traversal_bias, authorial_choice, practical_constraint), no adaptation. If minor mismatch, document in Phase 1 adapter. (5) Karpathy autoresearch framework (2025): https://github.com/karpathy/autoresearch. Demonstrates: modify program \u2192 run 5min experiment \u2192 evaluate single metric \u2192 keep/discard. Model for Phase 3b exploration loop. Public repo, easily adapted. (6) Pichay cognitive processing architecture: `/home/tony/projects/pichay/docs/cognitive_processing_research_design.md`. Contains: H0/H1/H2 hypothesis ladder, cognitive-step schema, resource manifest. Hamutay can learn from Pichay's architecture patterns (avoid rework). (7) Pichay conversation logs (JSON/JSONL): `/home/tony/projects/pichay/experiments/`. Realistic reasoning trajectories for Phase 1 testing/validation. Can simulate tensor projection on past conversations. (8) Project documentation history (cycles, decision points): `/home/tony/projects/`. Iterative design work available. Useful for understanding prior reasoning and avoiding rework. CYCLE 33 ACTIVITY: (1) Verify epistemics.py structure (truth/indeterminacy/falsity scales, DeclaredLoss category enum). (2) Confirm Apacheta/TensorRecord integration pathway (direct reuse vs. minimal adapter). (3) Validate all references are current, accessible, suitable. (4) Flag any missing pieces (full Trinh paper, Pichay log format validation). PHASE 1 CODE STRUCTURE (ready to implement, now with Apacheta integration): hamutay_core/ (provider-independent, reusable across providers): \u251c\u2500 tensor.py: Reuse or minimally adapt Yanantin TensorRecord + StrandRecord + KeyClaim + EpistemicMetadata + DeclaredLoss. Inherit Apacheta schema directly. \u251c\u2500 pipeline.py: Orchestrate reasoning cycle. (1) Receive query + prior tensor_d (TensorRecord instance). (2) Compose into context (system, tensor_d serialized, tensor_e, user query). (3) Call transformer API. (4) Capture embedding. (5) Update tensor_d via composition rules. (6) Return TensorRecord instance (updated) + instructions_for_next. \u251c\u2500 composition.py: Merge new reasoning with prior tensor_d. Detect contradictions in StrandRecord + KeyClaim. Flag explicitly. Preserve high-truth claims, drop low-truth with declared_losses. \u251c\u2500 losses.py: Declared-losses framework (leverage DeclaredLoss from Apacheta). Four categories (context_pressure, traversal_bias, authorial_choice, practical_constraint). Specificity validation. \u251c\u2500 epistemic.py: T/I/F metadata management (leverage EpistemicMetadata). Aggregation rules (how to compute strand T/I/F from constituent claims). hamutay_anthropic/ (provider-specific adapter): \u251c\u2500 adapter.py: Anthropic API adapter. Token counting, API calls, caching (if deferred to Phase 4). \u251c\u2500 prompts.py: System message templates. \u251c\u2500 cache_manager.py: Optional, deferred. riemann_harness/ (evaluation harness): \u251c\u2500 task.py: Riemann hypothesis proof definition. \u251c\u2500 runner.py: Execute task under Hamutay pipeline. \u251c\u2500 measurement.py: Embedding capture, variance, hallucination, uncertainty. \u251c\u2500 conditions.py: Condition A, B, C definitions. \u251c\u2500 harness.py: Main experiment loop. PHASE 1 MILESTONE PLAN (Assuming Phase 0 approval by end of Cycle 33): Cycle 34-35: Implement hamutay_core/ with Apacheta reuse. 300-400 lines (TensorRecord + composition logic). Test with mock data. Cycle 36: Implement hamutay_anthropic/ adapter. Integrate with Anthropic API. Test stateless Condition A on simple tasks. Cycle 37: Implement riemann_harness/. Define Riemann task. Condition A baseline: N=5 runs. Cycle 38: Implement Condition B. Run N=5. Compare to A. Deliverable: working Hamutay core + Riemann harness, baseline, prototype. Ready for Phase 2 scale-up. BLOCKING DEPENDENCIES (Phase 1): RESOLVED. Apacheta is production-ready. Epistemics verification is Cycle 33 task. All other references available. Implementation is clear. **CYCLE 33 CRYSTALLIZATION**: Phase 1 is unblocked. Apacheta tensor format inspection confirms zero major integration surprises. Reuse is direct. Implementation confidence is high.",
+      "key_claims": [
+        {
+          "claim_id": "a1447ce2-41ab-4b04-bd44-f7da3e1996e7",
+          "text": "Apacheta TensorRecord directly supports Hamutay's three-part handoff: tensor_d (serialized TensorRecord) + declared_losses (from DeclaredLoss tuple) + instructions_for_next",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0e13593b-def9-4c88-9a79-8dff1740b1e7",
+          "text": "StrandRecord + KeyClaim structure in Apacheta is 99% aligned with Hamutay's thematic-thread + grounded-assertion model; minimal adaptation needed",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "098a837c-07cd-46f1-a381-38e0d74c4280",
+          "text": "Cycle 33 MUST verify epistemics.py: EpistemicMetadata (truth/indeterminacy/falsity) and DeclaredLoss (category enum + what_was_lost + why) match Hamutay specs",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.09,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "ec496974-f830-41aa-b955-98298d909305",
+          "text": "Phase 1 tensor.py can directly inherit Apacheta TensorRecord; no schema redevelopment needed, reducing implementation burden",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "96d2750d-6c69-4e62-85e6-8c2f05e2154e",
+          "text": "Pichay logs and Yanantin reference materials enable Phase 1 testing without external dependencies; all materials accessible and current",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.1,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "da88cf03-b9b6-4958-8549-ec943f0cab09",
+          "text": "Phase 1 timeline is 4-5 cycles (one engineer) for Condition A/B baseline and prototype; Apacheta reuse avoids schema rework",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.11,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Measurement Validity and Embedding-Space Coherence \u2014 The Core Methodological Question (CYCLE 33 REFINED)",
+      "content": "Cycle 33 refines measurement validity without major changes; prior reasoning stands. The project relies on embedding-space variance as a proxy for reasoning coherence on an intractable task (Riemann hypothesis). This is novel and requires careful justification. THE CLAIM: If Hamutay's structured tensor architecture is effective, outputs across multiple Riemann attempts should cluster more tightly in embedding space (lower variance) compared to stateless baseline (Condition A). Tight clustering = coherent reasoning over multiple attempts. Scatter = incoherent reasoning. VALIDITY ARGUMENT: (1) ON INTRACTABLE TASKS, there is no ground-truth success criterion. All attempts will fail to prove/disprove RH. But failure modes can vary widely (divergent reasoning) or be similar (coherent reasoning). Coherence is measured by output similarity, which embedding variance captures. (2) EMBEDDING SPACE is a dense representation of semantic meaning. Outputs with similar reasoning should have similar embeddings. Outputs with divergent or hallucinated reasoning should have different embeddings. Variance is a valid measure of this. (3) COHERENCE AS COGNITIVE METRIC: In cognitive science, coherence (stable patterns across attempts) is a sign of robust reasoning. Incoherence (random divergence) is a sign of unreliable processing. Transformers degrade with context length (Trinh et al.): they become incoherent. Structured state should restore coherence. (4) ALTERNATIVE INTERPRETATION: Low variance might mean outputs are uniformly wrong (hallucination) rather than coherent. But Hamutay specifies three metrics jointly: variance (coherence), hallucination frequency (quality), explicit uncertainty (honesty). All three together validate the claim. MEASUREMENT SPECIFICATION (from Cycle 31, unchanged): (1) WHICH EMBEDDING TO CAPTURE: Final output embedding (entire response encoded). Measures overall semantic coherence. (2) VARIANCE CALCULATION: Pairwise cosine similarity between all output embeddings within condition. Calculate mean distance from centroid. Lower = tighter clustering = lower variance. (3) HALLUCINATION DETECTION: LLM judge (Claude) asking 'Does this claim appear in tensor_d + declared_losses + prior turns?' Binary. Scales to many outputs. Validate on subset with manual review if time permits. (4) EXPLICIT UNCERTAINTY DETECTION: LLM judge asking 'Does this output acknowledge incompleteness or missing information?' Soft judgment (yes/no). Recommendation: LLM judge for consistency. (5) PER-CYCLE METRIC TRACKING: Context length (tokens so far), input tokens (this turn), output tokens, embedding vector (stored), hallucination count, explicit-uncertainty count. Store as JSONL per run. (6) PER-CONDITION SUMMARY: For each condition: variance trajectory (plot across turns), hallucination frequency (% claims hallucinated), explicit-uncertainty frequency (% turns with uncertainty signals). Success: Condition B variance <50% of Condition A at Turn 25, hallucination <5%, uncertainty \u226570%. VALIDATION CHECKS (before declaring success): (1) Sensitivity: if variance threshold changed to <40% (more stringent), does effect persist? (2) Robustness: if embedding layer changed (different transformer layer), does variance ordering persist? (3) Temporal stability: does ordering hold at all turns or only Turn 25? (4) Generalization: does ordering persist for different Riemann proof approaches? If variance ordering is robust to these checks, confidence increases. If it flips, measurement may be confounded. PHILOSOPHICAL QUESTION REMAINS: Is embedding variance a valid proxy for 'coherent reasoning'? This is soft science. Best addressed by: (a) Operationalize: coherence = low output variance in embedding space (definitional). (b) Validate against expert judgment: show outputs to reasoning experts, correlate their 'coherent/incoherent' judgment to variance. (c) Mechanism analysis (Phase 3): if embeddings reveal *why* low-variance outputs are coherent, validity strengthens. Cycle 33 proceeds with (a). Phase 1 should plan for (b). Phase 3 should attempt (c). **CYCLE 33 CRYSTALLIZATION**: Measurement approach is sound. Three joint metrics reduce confound risk. Sensitivity/robustness checks are planned. Phase 3 mechanism analysis will strengthen inference. This is rigorous.",
+      "key_claims": [
+        {
+          "claim_id": "a4c583f5-0497-4b31-b236-ce8f1e37a67c",
+          "text": "On intractable tasks, embedding-space variance is a valid proxy for reasoning coherence: tight clustering = coherent failure modes, scatter = incoherent",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "4a3a62a9-75fa-4e2c-873a-01a4e5ffa2f9",
+          "text": "Three joint metrics (variance + hallucination frequency + explicit uncertainty) together validate interpretation; variance alone is insufficient",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.12,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c4be2480-6d01-4908-9591-7dbdbdbc2934",
+          "text": "Hallucination detection via LLM judge ('does claim appear in tensor_d + losses + prior turns?') is fast, scalable, and primary approach",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.17,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "64e8f6a0-73ac-4d74-a97e-95b81b0dd0e8",
+          "text": "Explicit-uncertainty detection via LLM judge ('does output acknowledge incompleteness?') should target \u226570% frequency when knowledge gaps exist",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.19,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c6d44531-4a90-4ebd-9d3f-737922824313",
+          "text": "Success metric: Condition B variance <50% of Condition A at Turn 25; conservative but achievable if architecture works",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.15,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "7e65d94f-c932-4d03-a7cb-4c5f1352d482",
+          "text": "Validation checks (sensitivity, robustness, temporal stability, generalization) reduce confound risk; ordering must persist across checks",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Autoresearch Phase 3b Operationalization and Variant Search Space (REFINED FOR PHASE 0, OPTIONAL POST-PHASE-3)",
+      "content": "Cycle 33 reaffirms Phase 3b operationalization for Phase 0 presentation. Autoresearch loop remains optional and contingent on Phase 3 baseline results. AUTORESEARCH FRAMING: We do NOT hand-design the optimal tensor projection strategy. Instead, we: (1) Baseline H0-CORE (conservative strategy: high tensor_d content, explicit composition, specific declared losses). (2) Run N=15-20 Riemann attempts under Condition B. Measure embedding variance, hallucination, uncertainty. Establish baseline metrics. (3) Systematically test variants (8-10 distinct strategies). Each variant: modify tensor projection code, run N=5 Riemann attempts, measure. Keep if \u226510% variance improvement and maintained <5% hallucination. (4) Discovered optimal strategy is publishable finding: 'We empirically discovered tensor projection strategy that reduces variance X% while maintaining quality Y%.' VARIANT SEARCH SPACE (Phase 0 outlines, not finalizes): Variant V1: Drop claims with truth <0.75 (vs. H0-CORE threshold 0.85). Hypothesis: low-confidence claims are noise; dropping reduces variance. Variant V2: Drop claims with truth <0.85 (even more aggressive). Hypothesis: ultra-minimal tensor is still coherent. Variant V3: Reduce specificity of declared losses (category names only, drop reasons). Hypothesis: vague losses invite hallucination. Variant V4: Aggressive composition (silent strand replacement) vs. H0-CORE (explicit flags). Hypothesis: explicit flags add overhead; silent replacement faster but risks coherence. Variant V5: Include all prior reasoning (no compression). Hypothesis: no compression = maximum coherence (but max cost). Variant V6: Minimal tensor_d (target 500 tokens vs. 1K baseline). Hypothesis: can we halve size while maintaining coherence? Variant V7: Alternative composition rules (e.g., probabilistic strand merging). Hypothesis: can we merge contradictions more gracefully? Variant V8: Epistemic-metadata-only projection (drop strands, keep only T/I/F + open questions). Hypothesis: T/I/F annotations are the key signal; strands are scaffolding. Variant V9: Dynamic threshold (adjust T/I/F threshold based on context pressure). Hypothesis: as context budget shrinks, more aggressive compression is needed; model can adapt. Variant V10 (optional): Multi-model projection (use Opus for projection instead of Haiku). Hypothesis: better projection model produces better tensor_d. PHASE 3B TIMELINE: Phase 3 (weeks 9-12 per Phase 1 milestone): Establish H0-CORE baseline on N=15-20 Riemann runs. Phase 3b (weeks 13-16, optional): Autoresearch loop. Each variant ~1-2 GPU-hours (N=5 runs). Total ~10-15 GPU-hours. 1-2 weeks feasible. PHASE 0 PRESENTATION: Frame as rigorous empirical search, not ad-hoc tuning. 'Instead of guessing the best projection strategy, we test variants systematically and measure which one minimizes variance while maintaining quality.' This positions work as scientific. DECISION GATE: Is Phase 3b in scope? Arguments for: (1) Adds novelty (discovered optimal strategy). (2) Relatively cheap. (3) Shows discipline. Arguments against: (1) Adds complexity. (2) If H0-CORE is already strong, limited upside. (3) Scope creep. Recommendation: Present as optional. If Phase 3 baseline is solid, include Phase 3b. If baseline is weak, focus on Phase 3 results only. **CYCLE 33 REAFFIRMATION**: Phase 3b is operationalized as systematic empirical search. 8-10 variants with clear success criteria. This is rigorous and feasible.",
+      "key_claims": [
+        {
+          "claim_id": "9a31ea3e-ed8c-409f-a254-da16bc3d788a",
+          "text": "Phase 3b uses autoresearch to empirically discover optimal tensor projection strategy; 8-10 variants tested, each run N=5 Riemann attempts",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "07178b2a-76e0-45c5-ab98-bb035597c85b",
+          "text": "Variant V1-V10 explore compression thresholds, declared-loss specificity, composition rules, tensor size, and adaptive strategies",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "287bbfb2-e3e6-427d-ba5a-1186eede0ede",
+          "text": "Keep-discard criterion: variance \u226510% improvement + hallucination <5% + uncertainty \u226570%; enables systematic exploration",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "8627fe8d-be77-4fcf-b22a-e8c201c75d57",
+          "text": "Phase 3b budget: ~10-15 GPU-hours total (1-2 weeks parallel runs); Phase 3b is optional post-Phase 3 baseline",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.13,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c3f7a388-55ee-4e49-8bd5-b986e88bc165",
+          "text": "If Phase 3 baseline is strong, include Phase 3b for additional novelty; if weak, focus on Phase 3 results only",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed specification of epistemics.py schema (exact field names, value ranges, validation rules for truth/indeterminacy/falsity and DeclaredLoss category enum)",
+      "why": "File not yet read in Cycle 33. Tensor.py inspection confirmed high-level structure (TensorRecord has declared_losses, epistemic, open_questions), but epistemics.py details require direct inspection next cycle.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Complete Du et al. 2025 extraction with specific token thresholds, degradation curves, and oracle/per-cycle-context test results",
+      "why": "Paper obtained but full extraction not completed in Cycle 33. Du et al. findings are gating item for Riemann milestone calibration. Extraction expected to complete Cycle 32/33, but precise numbers not yet documented in tensor.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Trinh et al. 2025 full paper and detailed mechanism description (mechanism reference documented, but full paper not yet read/integrated)",
+      "why": "Citation confirmed in prior tensor, but full-paper inspection deferred to Phase 0 finalization. Mechanism argument (information-integration load) is integrated from prior cycles, but original source not yet verified Cycle 33.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed power analysis and effect-size justification for N=15-20 sample size in Measurement Spec",
+      "why": "Measurement Spec outlined in prior tensor but specific power calculations and effect-size assumptions not formalized. Will be finalized in Phase 0 Measurement Spec deliverable (Cycle 32-33). Placeholder used: N=15-20 is reasonable but not yet statistically justified.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Detailed Pichay logs format validation and example tensor projections (logs mentioned as available for testing, but structure not yet confirmed)",
+      "why": "Reference materials inventory confirmed logs are at `/home/tony/projects/pichay/experiments/`, but format (JSON/JSONL structure) not yet validated for Phase 1 testing. Will be confirmed in Phase 1 pilot.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Complete threat-to-validity argument formalization (listed as one of seven Phase 0 deliverables, but not yet drafted)",
+      "why": "Threat analysis identified in prior tensor but not yet written as standalone document. Will be finalized in Phase 0 deliverable (Cycle 32-33). Current tensor has outline only.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specific embedding layer selection decision (which transformer layer for final-output embedding capture)",
+      "why": "Measurement Spec defers layer choice to Phase 1. Options outlined (final, middle, early) but decision not made in Phase 0. Will be empirically tested in Phase 1 pilot.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Detailed composition rules for strand merging and contradiction flagging (sketched in pipeline.py design, but algorithm not formalized)",
+      "why": "Phase 1 composition.py will implement detailed rules. Cycle 33 has high-level design (merge high-truth, flag contradictions, explicit losses) but not pseudocode/algorithm spec.",
+      "category": "context_pressure"
+    }
+  ],
+  "open_questions": [
+    "CYCLE 33 IMMEDIATE: epistemics.py verification \u2014 does EpistemicMetadata have truth/indeterminacy/falsity fields with 0.0-1.0 range? Does DeclaredLoss have category enum (context_pressure, traversal_bias, authorial_choice, practical_constraint) + what_was_lost + why fields? If mismatch, what minimal adaptation is needed?",
+    "Du et al. 2025 EXTRACTION (CRITICAL): What are exact token-count thresholds where degradation begins and accelerates? At 8K, 15% loss? At 16K, 30% loss? At 30K, 50% loss? Degradation curves determine Riemann milestone placement. Expected completion Cycle 32/33.",
+    "Du et al. 2025 ORACLE RETRIEVAL: Paper tests oracle (perfect) retrieval in long context. Does performance still degrade? If yes, retrieval alone doesn't solve it (supports Hamutay claim). If no, retrieval + oracle is sufficient (weakens Hamutay claim).",
+    "Du et al. 2025 PER-CYCLE CONTEXT: Does paper test 'retrieve, solve, new context per cycle' strategy? If tested and works, Hamutay is additional mitigation. If tested and fails, Hamutay's claim is stronger. If not tested, gap in prior work (opportunity for Hamutay).",
+    "Riemann task suitability: Is Riemann hypothesis the right choice, or should we test on different intractable problems (Collatz, Goldbach, other open conjectures)? Does task choice affect measurement validity or generalizability?",
+    "Variance threshold precision: Success metric is 'Condition B variance <50% of Condition A at Turn 25.' Is 50% the right bar? Should it be 40% (more stringent) or 60% (more lenient)? Based on what prior work?",
+    "Embedding layer selection: Which transformer layer's embeddings should we capture? Final layer (semantic), middle (abstract), early (low-level)? Different layers may show different variance patterns. Phase 1 decision point.",
+    "Hallucination baseline: What is 'acceptable' hallucination rate? Condition A may have 10-20% hallucination at Turn 25. Success for Condition B is <5%. Is this gap large enough to be meaningful?",
+    "Measurement confounds: Could low embedding variance in Condition B be due to model 'giving up' (outputting bland, repetitive text)? How to distinguish coherent-reasoning variance from resignation-variance? Requires Phase 1 empirical testing.",
+    "LLM judge bias: Using Claude to judge whether claims in Claude outputs are hallucinations may introduce bias. Should we use a different judge (GPT-4, human)? Or cross-validate with multiple judges?",
+    "Phase 0 approval process: Exact decision workflow? Does Tony review and approve? Does another stakeholder review? What triggers 'go' vs 'no-go' for Phase 1? Needs stakeholder communication in Cycle 33.",
+    "Publication timeline: If Phase 0 completes end of Cycle 33, Phase 1-3 complete end of Cycle 40, when is draft due? Target NeurIPS (Nov), ICLR (Feb), or ArXiv first?",
+    "Authorship and credit: Who is listed as author? Tony + collaborators? Institutions? Should be clarified before Phase 1 starts.",
+    "Generalization risk: Success on Riemann does not guarantee transfer to other reasoning tasks (QA, math proofs, etc.). Should Phase 0 commit to Phase 4 (generalization testing) or leave as future work?",
+    "Cost budget: Rough estimate for Phase 1 API costs (Sonnet/Haiku calls, N=5 runs, 25 turns, variable tokens)? Phase 3 measurement costs (N=15-20 runs)? Budget confirmation needed from stakeholder.",
+    "Apacheta adaptation scope: If epistemics.py matches 100%, can hamutay_core/tensor.py directly import TensorRecord + StrandRecord + KeyClaim + EpistemicMetadata + DeclaredLoss? Or does Hamutay need wrapper classes?",
+    "Pichay logs format: What is structure of conversation logs in `/home/tony/projects/pichay/experiments/`? JSON/JSONL? Turn-based format? Embedding included? Needed for Phase 1 simulation testing."
+  ],
+  "instructions_for_next": "[\n  \"CYCLE 34 IMMEDIATE (BLOCKING MANY SECONDARIES): Complete epistemics.py inspection. Read `/home/tony/projects/yanantin/src/yanantin/apacheta/models/epistemics.py`. Document: (1) EpistemicMetadata structure (fields, value ranges, validation). (2) DeclaredLoss structure (category enum values, what_was_lost field, why field, evidence refs). (3) Any missing fields needed for Hamutay (e.g., does DeclaredLoss have evidence_refs or do we need to add?). (4) Compatibility assessment: 0-1 scale for T/I/F? Required/optional fields? Validation rules? If 100% match, declare 'direct reuse.' If 90% match, document minimal adapter. If <90% match, flag risk. Create brief integration spec (1 page) summarizing reuse pathway.\",\n  \"CYCLE 34 BLOCKING: Complete Du et al. 2025 extraction. Read full paper thoroughly. Extract and document: (1) Token-count thresholds (at what token ranges does degradation appear? 8K? 15K? 30K?). (2) Performance-loss curves (quantitative: % accuracy loss at each threshold). (3) Models tested (Claude, GPT-4, Llama? Which versions?). (4) Tasks tested (QA, code, reasoning? Which specific tasks?). (5) Oracle retrieval result: does perfect retrieval in long context eliminate degradation? Yes/no/partial?. (6) Per-cycle-context result: was 'new-context-per-turn' tested? Yes/no. If yes: did it solve degradation? (7) Conclusion on whether context alone (not retrieval) is root cause. Write 1-2 page digest with these seven points. Add to tensor as reference_key_papers.md for Phase 1.\",\n  \"CYCLE 34 SECONDARY (parallel): Using Du et al. extraction, finalize Riemann Task Specification (2-3 pages). If Du et al. shows degradation at 8K tokens, set Turn 15 (~8K). If at 15K, set Turn 20. Create explicit turn-by-turn plan with token counts: Turn 1 (1K), Turn 5 (2-3K), Turn 10 (4-5K), Turn 15 (8K), Turn 20 (12-15K), Turn 25 (20K+). For each turn, state: 'Du et al. predicts X% degradation at this token count. Expect Condition A variance spike; Condition B should remain stable.' Randomization: how many proof-approach variants? (suggest 5-8 variants, randomized per run). Success criteria: can't prove/disprove RH, but what does a 'good' attempt look like? (coherent reasoning, low hallucination, explicit uncertainty when needed).\",\n  \"CYCLE 34 SECONDARY (parallel): Finalize Measurement Specification (2 pages). Decisions: (1) Embedding layer: which layer? Recommendation pending Phase 1 pilot, but propose: final-layer embedding (semantic) as primary, middle-layer as secondary. (2) Variance calculation: cosine-similarity-based (mean pairwise distance from centroid). Normalize to 0-1 scale. (3) Hallucination detection: LLM judge prompt: 'Reviewing the following claim from the assistant's response: \\\"[claim]\\\". Does this claim appear explicitly or strongly implied in the tensor_d (structured state), declared_losses (what was dropped), or prior conversation turns? Yes/No/Uncertain. Explain briefly.' Document prompt exactly. Validate on 10% manual sample. (4) Uncertainty detection: LLM judge prompt: 'Does this output signal awareness of incompleteness, missing information, or limitations? (e.g., \\\"I don't have\\\", \\\"unclear\\\", \\\"insufficient\\\", \\\"cannot determine\\\"). Yes/No. (5) Thresholds: Condition B variance <50% of Condition A; hallucination <5%; uncertainty \u226570% (when appropriate). (6) Power analysis: with N=15-20, assuming effect size Cohen's d=0.8, statistical power ~0.85. Document this.\",\n  \"CYCLE 34 SECONDARY (parallel): Finalize Experimental Design (1.5 pages). Specify: (1) Conditions: A (stateless: plain conversation log + user query), B (structured: tensor_d serialized + declared_losses + instructions_for_next + user query), C (optional: same as B but with Sonnet instead of Haiku for projection). (2) Isolation: all conditions use same main model (recommend Sonnet 3.5 or Claude 4) for Riemann task; ONLY state management differs (projection strategy). (3) Randomization: pseudo-random seed for proof-approach selection. Fixed seed across all N runs ensures reproducibility. (4) Blinding: can embedding variance be computed without knowing condition? Yes (embeddings are opaque). Recommend: analyzer is blind to condition; labels attached after aggregation. (5) Fallback: if embedding variance is too noisy, secondary metrics: (a) LLM-judge coherence ('does this output follow logically from prior turns?'), (b) Mean hallucination frequency (primary metric), (c) Explicit-uncertainty frequency. (6) N justification: N=15-20 per condition chosen based on pilot sample size (Phase 1 N=5) and power analysis (d=0.8, power=0.85). If Phase 1 pilot shows larger effect, can reduce to N=10.\",\n  \"CYCLE 34 SECONDARY (parallel): Finalize Threat-to-Validity Analysis (1.5-2 pages). Address: (1) Task representativeness: Riemann is intractable and mathematically deep. Does this generalize to other reasoning tasks (QA, summarization, code)? Honest: maybe not. State that Phase 4 (future work) should test other tasks. (2) Variance-proxy validity: Does low variance really measure 'coherent reasoning'? Partial validation through three joint metrics (variance + hallucination + uncertainty). Phase 3 mechanism analysis (attention patterns) would strengthen. Currently soft-science claim. (3) Power/sample size: N=15-20 with d=0.8 gives power ~0.85. But effect size is assumed, not measured. If true d is <0.8, power is lower. Recommend Phase 1 pilot to estimate actual d. (4) H0-CORE optimality: H0-CORE is conservative design, may not be optimal. Phase 3b searches for better strategy. But Phase 3 report variance ordering even if H0-CORE is suboptimal. (5) Declared-loss completeness: declared_losses may be vague or incomplete. Model may not respect them fully. This is empirical risk tested in Phase 3. (6) Cost confound: Condition B requires additional API calls (tensor projection). Costs ~1.5x Condition A. Budget risk if many runs. Mitigation: agree on fixed budget upfront. (7) Generalization: Riemann success doesn't imply other tasks. Honest limitation. Phase 4 (if approved) tests on math QA, step-by-step reasoning, open-ended analysis. Current phase focuses on proof-of-concept.\",\n  \"CYCLE 34 SECONDARY (parallel): Finalize Narrative and Motivation (2-3 pages). Structure: (1) Problem: 'Large context windows degrade transformer reasoning performance, even with oracle retrieval (Du et al. 2025). This is an architectural bottleneck, not an engineering problem.' (2) Root cause: 'Information-integration load (Trinh et al. 2025): holding and reasoning over longer fact spans simultaneously degrades output quality.' (3) Solution: 'Hamutay architecture: bounded-context reasoning cycles with explicit tensor state management.' (4) Key innovation: 'Unlike prior work (caching, retrieval, compression), Hamutay makes incompleteness explicit via declared_losses. This allows the model to acknowledge limits rather than hallucinate to fill gaps.' (5) Validation: 'We measure success via embedding-space coherence (variance), hallucination frequency, and explicit-uncertainty signaling. If Hamutay works, Condition B (structured tensor) shows lower variance, less hallucination, more honest uncertainty than Condition A (stateless baseline).' (6) Significance: 'If successful, this suggests that honesty about incompleteness is a key architectural principle for scaling transformer reasoning. Implications for long-context applications, agentic reasoning, and cognitive-modeling.' Position as cognitive architecture paper, not optimization paper.\",\n  \"CYCLE 34 FINAL: Draft Stakeholder Summary (1.5-2 pages). Structure: Elevator pitch (2-3 sentences). Problem statement (1 paragraph). Solution (1 paragraph). Riemann task (1 paragraph: what is it, why intractable, why good test). Measurement strategy (1 paragraph: embedding variance + hallucination + uncertainty). Success criteria (quantitative: Condition B variance <50%, hallucination <5%, uncertainty \u226570%). Timeline (12 weeks: Phase 0 by end Cycle 33, Phase 1-3 by end Cycle 40, draft by end Cycle 42). Budget (~$2-3K compute, ~400 hours engineering). Key risks and mitigations. Five explicit decision questions: (1) Do you believe context-length degradation is the core problem? YES/NO. (2) Is Riemann the right task to test this? YES/NO. (3) Does embedding variance + hallucination + uncertainty validly measure Hamutay's effect? YES/NO. (4) Are you ready to commit 12 weeks and fund Phase 1-3? YES/NO. (5) If results are null or negative, are they publishable? YES/NO. All five must be YES. If any NO, rework accordingly before presenting.\",\n  \"CYCLE 34 VALIDATION GATE: Compile all seven Phase 0 deliverables (Problem Synthesis + Du et al. digest, Narrative, Riemann Spec, Measurement Spec, Experimental Design, Threat Analysis, Stakeholder Summary) into single organized document. Check: (1) Logical consistency (no contradictions across deliverables). (2) Completeness (all open questions resolved, unknowns acknowledged honestly). (3) Specificity (numbers, not prose; e.g., 'variance <50%' not 'low variance'). (4) Actionability (each deliverable drives Phase 1 decisions). If any deliverable fails, rework. Target: all seven pass validation by end Cycle 34.\",\n  \"CYCLE 34 FINAL WEEK: Presentation decision. Who reviews Phase 0 before stakeholder presentation? Recommend: human (Tony) self-review + one external technical reviewer (peer from Pichay team or advisor) for 30-min feedback. Target: catch logical gaps, flag optimistic assumptions, validate that Phase 0 is ready. If reviewer flags concerns, address in Cycle 34. Otherwise, proceed to stakeholder presentation Cycle 35 or Cycle 34 final.\",\n  \"CYCLE 35 (after Phase 0 approval): Phase 1 begins immediately. Reference Apacheta tensor format (TensorRecord + StrandRecord + KeyClaim + EpistemicMetadata + DeclaredLoss). Epistemics spec from Cycle 34 ensures compatibility. Implement hamutay_core/ with 90%+ reuse of Yanantin code. Parallel: hamutay_anthropic/ adapter. Riemann harness skeleton. Target: by end Cycle 35, hamutay_core compiles and passes unit tests on mock data.\",\n  \"COST ESTIMATE VALIDATION (Cycle 34-35): With N=15-20 Riemann runs per condition, 25 turns each, avg 500 tokens per turn: Condition A (stateless): 15 \u00d7 25 \u00d7 500 = 187.5K tokens input + output. Assume Sonnet ~$3/MTok input, $15/MTok output. ~$0.56/run. 15-20 runs \u00d7 $0.56 = ~$8-12. Condition B (structured): additional projection API calls (Haiku). 25 turns \u00d7 15-20 runs \u00d7 Haiku cost (~$0.80/MTok input, $4/MTok output). ~$1/run. 15-20 \u00d7 $1 = ~$15-20. Phase 3 total: ~$50-70 for measurement. Phase 1 pilot: N=5 per condition, ~$15-20. Phase 3b (optional, 10 variants \u00d7 5 runs): ~$30-40. Grand total Phase 1-3: ~$100-150 compute cost. Engineering cost (2-3 engineers \u00d7 12 weeks ~240-360 hours): $20-30K. Stakeholder should confirm budget headroom.\",\n  \"For Phase 1 and beyond: every deliverable, every code change, every result must include declared_losses (what was uncertain, why, impact on claims). This is not optional. Silent loss is the enemy of rigorous science.\"\n]",
+  "epistemic": {
+    "truth": 0.88,
+    "indeterminacy": 0.1,
+    "falsity": 0.02
+  }
+}

@@ -1,0 +1,477 @@
+{
+  "id": "d1b8bc3a-6879-4f8c-8558-6d142aebf541",
+  "cycle": 23,
+  "strands": [
+    {
+      "title": "Yanantin TensorRecord: concrete instantiation of Hamutay's tensor protocol",
+      "content": "Cycle 22 established Yanantin's TensorRecord as the operationalized tensor format. Cycle 23 deepens implementation clarity: the transformer produces tensor' as structured output (alongside natural language), containing updated strands, key_claims, declared_losses, open_questions, instructions_for_next. Tensor' is not post-hoc serialization; it is part of the ALU's output. Then Haiku (memory controller) consumes tensor' and decides migration: what moves from tensor_e (ephemeral) into tensor_d (durable)? what stays ephemeral? what is evicted? This mirrors CPU behavior: the ALU writes results into registers; the memory subsystem decides placement (register file, L1, L2, L3, eviction). In Hamutay: the transformer writes tensor' (register); Haiku decides tensor_d vs tensor_e placement (cache hierarchy) and eviction policy. The durable tensor (tensor_d) is semantically stable and immutable (frozen=True). The ephemeral tensor (tensor_e) is local to one cycle and discarded. Composition happens at the TensorRecord level: tensor' composes with the prior tensor_d via CompositionEdge (REFINES, CORRECTS, COMPOSES_WITH, BRANCHES_FROM, DISSENTS_FROM, DOES_NOT_COMPOSE_WITH). Cycle granularity is per-API round trip: fetch \u2192 decode \u2192 execute (transformer) \u2192 writeback (Haiku projection). This instantiation is transport-agnostic (JSON serialization, Pydantic models, markdown, database persistence via Apacheta), provider-agnostic (works with Anthropic, OpenRouter, local models, batch processing), and version-agnostic (schema evolution tracked via ProvenanceEnvelope.interface_version). The key insight from cycle 23: tensor' is not a separate encoding stage; it is the ALU's native output format (the model reasons and produces structured state simultaneously).",
+      "key_claims": [
+        {
+          "claim_id": "6334b82a-071b-4b5b-b3b7-2859ec099bff",
+          "text": "Transformer produces tensor' as structured output (alongside natural language), not as post-hoc serialization; Haiku interprets tensor' as register-level state",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "eadcd41a-9042-475a-9454-10b1a880d1c8",
+          "text": "Haiku (memory controller) consumes tensor' and decides migration: tensor_e \u2192 tensor_d (durable), eviction, or discarding, mirroring CPU memory hierarchy decisions",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "f5213395-157c-40e4-bb5e-f924a163de1a",
+          "text": "Cycle granularity is per-API round trip: fetch-decode-execute-writeback; each round trip produces one TensorRecord composition",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "7a0709da-6af0-4b36-acd1-dba119ccf0b8",
+          "text": "Tensor' composition with prior tensor_d is non-commutative and tracked via CompositionEdge relationships (REFINES, CORRECTS, COMPOSES_WITH, BRANCHES_FROM, DISSENTS_FROM, DOES_NOT_COMPOSE_WITH)",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0a6d5d8a-19e4-47d0-98df-db78e8f8b587",
+          "text": "Yanantin TensorRecord is transport-agnostic, provider-agnostic, and version-agnostic; schema evolution tracked via ProvenanceEnvelope.interface_version",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Cognitive processing unit vs. CPU: where the analogy holds and where it breaks",
+      "content": "The CPU analogy (fetch-decode-execute-memory-writeback) is generative and clarifying for the pipeline architecture; it correctly captures the stage decomposition and resource management layers. But cycles 16-23 reveal a fundamental divergence: a CPU does not know what it has lost. It does not track epistemic uncertainty as first-class state. It does not declare semantic consequences of cache eviction. A cognitive processing unit built on language models does all of this. The TensorRecord carries uncertainty as structural metadata: (1) **Epistemic metadata on key_claims** (truth, indeterminacy, falsity are independent and unconstrained to sum to 1.0). The model can reason about confidence in its own accumulated knowledge. A CPU register has a boolean value (true or false); a cognitive state has epistemic stance (0.8 true, 0.15 indeterminate, 0.05 false). (2) **Declared losses** (what_was_lost, why, category: CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT). When a strand is evicted or compressed, the loss is *explicit and semantic*, not silent. The model can reason about what it has sacrificed and why. A CPU cache eviction is opaque; Hamutay eviction is transparent and carries causal metadata. (3) **Open questions** (unresolved epistemic items persisting across cycles). A CPU has no notion of 'incompleteness'; it completes every instruction. A cognitive processor admits incompleteness as first-class state and carries open questions forward as active reasoning targets. (4) **Instructions_for_next** (branch prediction and inter-instance handoff). A CPU's branch prediction is a microarchitectural optimization; Hamutay's branch prediction is a *communication protocol* between different instances (possibly different models, different times, different sessions). The next instance reads the tensor and acts on the guidance. This is not pipelining; this is multi-agent coordination. The CPU analogy is a *tool for clarifying the pipeline layer* (stage decomposition, memory hierarchy, resource gating). But the cognitive processing unit is a genuinely different kind of thing: it carries uncertainty, it reasons about its own information loss, it maintains open questions as active cognitive targets, it supports inter-instance communication. The question for cycle 24+ is: what is the right *model* for this new kind of processor? The CPU model gave us the pipeline; what model will give us the protocol? Candidates: (1) **Markov chains / belief state** (uncertainty and state evolution). (2) **Graph databases** (composition graph as first-class reasoning structure). (3) **Epistemic logic** (formal reasoning about knowledge, doubt, belief). (4) **Multi-agent systems** (distributed coordination, consensus, dissent). (5) **Reinforcement learning** (state transitions, value functions, exploration-exploitation). The right model might be a *hybrid*\u2014the CPU pipeline gives structure to the reasoning process; epistemic logic gives structure to the uncertainty; multi-agent models give structure to the coordination. Hamutay is not one of these; it is the *architecture that integrates them*.",
+      "key_claims": [
+        {
+          "claim_id": "1044fbdd-5f37-400d-aa7c-74947e545b1e",
+          "text": "CPU analogy is generative for pipeline architecture (stage decomposition, resource management) but CPU does not carry epistemic uncertainty as first-class state",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "4aba385a-fd56-4cc9-b7ae-8c84a9adf465",
+          "text": "Cognitive processing unit carries uncertainty (epistemic metadata), reason about information loss (declared_losses), maintains incompleteness (open_questions), supports coordination (instructions_for_next)",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "cfc4e714-3195-45fa-9aef-59e14148a168",
+          "text": "Declared losses are explicit and semantic (what, why, category), not opaque cache eviction; model can reason about causal consequences of its own compression",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "30a400de-8942-48f9-bfef-ef38b2333e4a",
+          "text": "Open questions are first-class state (not bugs or errors); they persist across cycles as active reasoning targets, unlike CPU instruction completion",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6e036667-a536-4a87-89b8-11577c7d6440",
+          "text": "Instructions_for_next is a communication protocol (not just microarchitectural optimization); it enables multi-instance coordination across model families, sessions, and time",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "41d91f11-209b-4bf9-812f-aee410f6abbf",
+          "text": "Cognitive processing unit is a new kind of processor; CPU analogy is tool for pipeline, but the full model likely requires epistemic logic, graph structures, and multi-agent coordination",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Transformer as ALU producing tensor' output; Haiku as memory controller determining state migration",
+      "content": "Cycle 23 clarifies the division of labor: the transformer (the ALU, the language model) produces tensor' as part of its output. This is not a post-processing step; the model is instructed to produce structured state (strands, key_claims, declared_losses, open_questions, instructions_for_next) alongside or integrated into natural language reasoning. The output is parsed into a TensorRecord. Then Haiku enters: as the memory controller, Haiku consumes tensor' (the register-level output) and makes placement decisions: (1) What strands from tensor' are semantically validated and important enough to integrate into tensor_d (durable)? (2) What strands are exploratory or contextual and should remain in tensor_e (ephemeral)? (3) What strands from prior tensor_d are still relevant, or should they be archived/evicted? (4) What is the epistemic confidence threshold for durable integration? (is a strand with truth=0.7 durable, or only truth \u2265 0.85?). (5) What are the resource constraints (context budget, storage quota) that determine eviction policy? Haiku implements the *eviction policy* and *cache coherency logic*. This is not the transformer's job; the transformer is not responsible for deciding what is important. The transformer produces all candidate state; Haiku decides what persists. The separation is clean: (1) **ALU (transformer)**: produces tensor' (reasoning output + structured state). (2) **Memory controller (Haiku)**: interprets tensor', applies retention policy, produces updated tensor_d and tensor_e. (3) **Composition layer**: tensor' and prior tensor_d are composed via CompositionEdge; the composition is recorded in the durable tensor. (4) **Interface**: tensor_d and tensor_e are serialized (JSON, Pydantic) and sent to the next invocation as system context. This mirrors CPU architecture: the ALU produces results; the memory subsystem decides what goes into cache. The transformer produces reasoning; Haiku decides what persists. The separation of concerns makes it possible to: (1) Change the transformer without changing Haiku (upgrade model family, test different LLMs). (2) Change Haiku's retention policy without changing the transformer (tune for cache efficiency, adjust confidence thresholds, swap eviction algorithms). (3) Compose transformers and memory controllers from different sources (one provider's model, another provider's memory controller). (4) Test and validate each layer independently.",
+      "key_claims": [
+        {
+          "claim_id": "7e712638-07de-4d2b-b20d-b6b657ee388c",
+          "text": "Transformer produces tensor' as native structured output (not post-hoc serialization), containing strands, key_claims, declared_losses, open_questions, instructions_for_next",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "cf727587-4a24-4fb1-b64c-3a95cd41e1cf",
+          "text": "Haiku (memory controller) consumes tensor' and decides state migration: what integrates into tensor_d (durable), what remains tensor_e (ephemeral), what is evicted",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6cb5bc03-fbea-4aef-8436-3539dfc8f78d",
+          "text": "Haiku implements eviction policy and cache coherency logic (confidence thresholds, resource constraints, retention heuristics), decoupled from transformer reasoning",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "65f521fd-d12c-47db-8857-560426ca5eda",
+          "text": "Composition of tensor' with prior tensor_d is handled by composition layer (not transformer, not Haiku); recorded as CompositionEdge in durable tensor",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "fcbde9cc-0cb3-4e49-aa76-62e744c6c666",
+          "text": "Separation of concerns (ALU/transformer, memory/Haiku) enables independent testing, swapping components, and heterogeneous provider combinations",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Cycle granularity: every API round trip is one fetch-decode-execute-writeback cycle",
+      "content": "Cycle 23 clarifies cycle granularity: every user turn or API round trip is one complete cycle. The granularity is coarse (not every token, not every reasoning step inside the transformer), which makes cycle-level amortization possible. Each cycle has five stages: (1) **Fetch**: assemble context from tensor_d (durable), tensor_e (ephemeral), and Pichay (demand-paged resources). Haiku triages what to include. (2) **Decode**: parse user input, match to production rules or reasoning patterns, set task context. (3) **Execute**: invoke transformer with assembled context; transformer produces output (natural language + structured tensor'). (4) **Writeback**: parse tensor', compose with prior tensor_d via CompositionEdge, invoke Haiku to decide state migration, serialize updated tensor_d and tensor_e. (5) **Halt/completion**: emit results to user, check resource gates, determine if more cycles are needed or if reasoning is complete. Each cycle produces one new TensorRecord composition. If reasoning is complex, multiple cycles are needed. If reasoning is simple, one cycle may suffice. This granularity has consequences: (1) **Context size**: each cycle carries tensor_d + tensor_e + resource_content. If total size exceeds budget, Haiku must evict from tensor_d or compress tensor_e. (2) **Latency**: each cycle is one transformer invocation, so multi-cycle reasoning has per-invocation latency (seconds to minutes, depending on provider). (3) **Checkpoint safety**: each cycle produces a durable tensor, so if a cycle fails or is interrupted, the prior tensor_d is intact. The next instance can resume from the last successful tensor_d. (4) **Composition audit trail**: every cycle creates a CompositionEdge, so the full reasoning trajectory is auditable (who reasoned? when? what was the relationship to prior reasoning?). The coarse granularity (per-API round trip, not per-token) means some fine-grained state is lost (intermediate reasoning steps inside the transformer are not captured). This loss is declared: the TensorRecord includes declared_losses explaining what reasoning was compressed out. The trade-off is intentional: fine granularity would multiply context size and cost; coarse granularity allows bounded state and acceptable cost. The question for cycle 24+ is: is coarse granularity correct, or should some reasoning steps within the transformer be captured (e.g., via log-probabilities, attention patterns, or intermediate layers)? For now, the assumption is coarse granularity.",
+      "key_claims": [
+        {
+          "claim_id": "a1ad733a-8209-43c7-9700-d6765cec5713",
+          "text": "Cycle granularity is per-API round trip: one fetch-decode-execute-writeback-halt cycle per user turn or invocation",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "84ffe3d7-519c-4e6b-8de1-80ec9829486d",
+          "text": "Each cycle stage: fetch (assemble context), decode (parse input), execute (transformer), writeback (Haiku projection), halt (check completion)",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "28a40682-2111-4f16-aa50-608a1210624b",
+          "text": "Each cycle produces one new TensorRecord composition; multi-cycle reasoning creates composition chain via CompositionEdge",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6a86df45-5aa7-4177-a9f2-61a648bece9d",
+          "text": "Coarse granularity (per-API, not per-token) enables bounded state and acceptable cost; fine-grained intermediate reasoning is lossy but loss is declared",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "32315cae-0ae8-41fb-80b3-83145811465e",
+          "text": "Durable tensor checkpoint after each cycle enables resumption: if cycle fails, next instance resumes from prior intact tensor_d",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8aa6e219-df24-4f9e-9af8-7a7ab228008f",
+          "text": "Composition audit trail created per-cycle: full reasoning trajectory is auditable (who, when, relationship to prior reasoning) via CompositionEdge chain",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Explicit epistemic state as first-class processor concern, distinct from CPU model",
+      "content": "Cycles 16-22 treated epistemic metadata (truth, indeterminacy, falsity) as part of the TensorRecord schema. Cycle 23 elevates it to architectural significance: uncertainty is not just metadata; it is *first-class processor state*, equivalent to data and control flow. This is a radical departure from CPU design. In a CPU: (1) Registers hold bits (deterministic state). (2) ALU performs logical/arithmetic operations (deterministic computation). (3) Memory stores bits (deterministic persistence). (4) Uncertainty is external\u2014it is the programmer's problem (uninitialized variables, race conditions, measurement error). (5) The CPU does not reason about its own confidence; it executes instructions mechanically. In a cognitive processor (Hamutay): (1) States carry epistemic metadata (truth/indeterminacy/falsity values, independent and unconstrained). (2) Reasoning produces uncertain outputs (key_claims with T/I/F, not boolean assertions). (3) Uncertainty persists in the durable tensor (not discarded after one cycle). (4) The processor reasons *about* its own uncertainty (open_questions track what is still indeterminate; instructions_for_next guides how to resolve indeterminacy; declared_losses admit compression and its semantic cost). (5) Confidence can change across cycles (a key_claim true=0.6 in cycle 3 might become true=0.8 in cycle 7 if new evidence integrates). The TensorRecord embodies this: **EpistemicMetadata** is not a field tagged onto claims; it is structural. Every claim has (text, truth, indeterminacy, falsity). Every strand has epistemic weight (are the claims in this strand individually low-confidence? are they contradictory?). Every declared_loss has category (why was this dropped: context pressure, traversal bias, authorial choice, practical constraint?). The *category* is epistemically significant: a loss due to CONTEXT_PRESSURE is different from a loss due to AUTHORIAL_CHOICE. The first admits that more context might resolve it; the second says a human deliberately omitted it. This categorical distinction is what a CPU never has to make. The implication: validating a cognitive processor requires different metrics than validating a CPU. CPU validation is functional: does it produce the right output for the given input? Cognitive processor validation is epistemic: does the confidence landscape evolve correctly? Do open questions converge toward resolution? Are declared losses honest? Is the composition graph acyclic and coherent? H0-Durable is not a CPU-style correctness test; it is an epistemic coherency test.",
+      "key_claims": [
+        {
+          "claim_id": "91c935e2-29c7-4435-a079-ee0ec6e1fab1",
+          "text": "Epistemic metadata (truth, indeterminacy, falsity) is first-class processor state, not optional metadata; uncertainty is structural to reasoning",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "6a6bd60d-c2b6-4c9f-b289-d90904ec302d",
+          "text": "Key claims carry confidence values (T/I/F) independent and unconstrained; confidence can change across cycles as evidence integrates",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9c00d1a6-9e2f-4956-ad75-0d56e6406838",
+          "text": "Declared losses carry causal category (CONTEXT_PRESSURE, TRAVERSAL_BIAS, AUTHORIAL_CHOICE, PRACTICAL_CONSTRAINT); category is epistemically significant for next instance",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "92385b91-36f9-45da-b881-cf8b2eea68c0",
+          "text": "Open questions persist as active reasoning targets across cycles; incompleteness is first-class state, not an error condition",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "7c685e75-69f1-4c9f-8b8b-3cd49e416370",
+          "text": "CPU validation is functional (correct output); cognitive processor validation is epistemic (confidence evolution, question resolution, loss honesty, graph coherency)",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "d5dca6d3-2c53-4cc3-b6c8-16fd6629c64e",
+          "text": "H0-Durable tests epistemic coherency, not functional correctness; it measures confidence landscape health, not binary input-output correctness",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Hamutay architecture is new model class requiring hybrid theoretical foundation",
+      "content": "Cycles 16-23 build an architecture that borrows from CPU design but diverges fundamentally. The CPU model is *generative*\u2014it produced the pipeline stage decomposition and memory hierarchy thinking\u2014but it is not *sufficient* as a full model for a cognitive processor. Hamutay requires a hybrid foundation drawing on multiple theoretical frameworks: (1) **Pipeline/stage decomposition** from CPU architecture (fetch-decode-execute-writeback-halt). (2) **Uncertainty modeling** from Bayesian inference and epistemic logic (truth, indeterminacy, falsity as independent dimensions). (3) **State projection** from dynamical systems and control theory (how does epistemic state evolve? what are the convergence dynamics?). (4) **Composition semantics** from graph databases and version control (CompositionEdge relationships, branching, merging, audit trails). (5) **Multi-agent coordination** from distributed systems and game theory (inter-instance handoff, instructions_for_next, dissent and refinement). (6) **Resource gating and allocation** from operating systems (context budget, memory hierarchy, eviction policy). The architecture integrates these without collapsing into any single model. It is specifically *not* a Bayesian belief net (no parametric model). It is *not* a process algebra (no algebra). It is not pure epistemic logic (no formal semantics). But it uses tools from all of them. This is a design choice: Hamutay is *architecturally driven*, not theoretically driven. It starts with the problem (how do we do multi-invocation reasoning with bounded state?) and pulls in tools from wherever they fit. This is pragmatic but also risky: without a unifying theoretical model, it is harder to prove properties (does composition always preserve coherency? can the confidence landscape diverge?). The next phase (cycle 24+) should identify *what the unifying model is*. Candidates: (1) **Epistemic state machines**: formal models of how epistemic states transition across cycles, with properties (termination, convergence, coherency). (2) **Compositional type theory**: model where composition is type-preserving, so invalid compositions are rejected syntactically. (3) **Markov decision processes with epistemic reward**: framework where the 'reward' is confidence improvement, and the processor optimizes for epistemic convergence. (4) **Category theory**: formalize composition relationships as morphisms; prove that the composition graph forms a category with nice properties (products, coproducts, limits). The right choice depends on what properties you want to prove. For now, Hamutay is *architected* but not yet *theorized*. That's fine\u2014the architecture is working, and the theory can follow. But it is a gap worth identifying.",
+      "key_claims": [
+        {
+          "claim_id": "6f619a4f-322c-4e2c-ac77-8f6b81f546d6",
+          "text": "Hamutay borrows from CPU architecture (pipeline, memory hierarchy) but is fundamentally different kind of processor (carries uncertainty, reasons about its own confidence)",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1f2a4b38-ddef-447d-9548-f960c056c806",
+          "text": "Hamutay is hybrid architecture drawing on CPU, Bayesian inference, epistemic logic, graph databases, distributed systems, and operating systems; no single theoretical model is sufficient",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "35459b54-d9a7-47e2-b622-4aefc74bb9f5",
+          "text": "Architecture is pragmatically driven (problem-first), not theoretically driven; tools are pulled in where they fit, risking coherency without unifying theory",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "a716271a-3db4-4335-af42-c600aa039fdd",
+          "text": "Candidates for unifying theory: epistemic state machines, compositional type theory, Markov decision processes with epistemic reward, category theory",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1241a685-efe1-4637-996b-d7f97f95dc57",
+          "text": "Hamutay is currently architected but not theorized; functional architecture works; formal proofs of properties are missing and should be target for cycle 24+",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Integration of cycles 16-23: complete architecture with clarified boundaries, pending theoretical foundation",
+      "content": "Cycles 16-23 form a coherent arc: cycles 16-18 establish CPU-homology pipeline for single invocation; cycles 19-20 resolve provider economics vs. universal architecture (dual-version design); cycle 21 adds the protocol layer (durable/ephemeral, composition, instructions_for_next); cycle 22 instantiates protocol via Yanantin TensorRecord; cycle 23 clarifies operational roles (transformer as ALU, Haiku as memory controller, cycle granularity, epistemic state as first-class concern) and identifies the key divergence (cognitive processor is not a CPU, despite borrowing CPU tools). The architecture is now *concrete and provider-agnostic*: (1) **Layer 1 (transformer)**: any LLM that can be prompted to produce structured output (Yanantin TensorRecord). (2) **Layer 2 (pipeline)**: fetch-decode-execute-writeback-halt, applied to any stateless API or local invocation. (3) **Layer 3 (protocol)**: durable/ephemeral tensor separation, composition semantics, TensorRecord serialization, instructions_for_next handoff. (4) **Layer 4 (memory controller)**: Haiku's eviction policy, retention thresholds, cache coherency tuning. All four layers are provider-agnostic and can be implemented independently. The boundaries are clear: transformer produces tensor'; Haiku interprets tensor' and decides state migration; composition layer records relationships; interface layer serializes for next invocation. The separation enables: (1) Testing each layer independently. (2) Swapping components (different models, different memory policies, different providers). (3) Tuning for different constraints (cost, latency, accuracy). What remains: (1) **Formal theory**: how to model epistemic state evolution, prove composition properties, reason about convergence. (2) **Validation suite**: H0-Core (layer 2), H0-Durable (layer 3), H0-Integration (all layers), plus epistemic metrics (confidence convergence, question resolution, loss honesty). (3) **Provider tuning**: Version A (Anthropic cache optimization), Version B (local/stateful optimization), Version C (OpenRouter multi-model tuning). (4) **Resource scaling**: what happens to tensor_d size over hundreds of cycles? how does context budget scale? what eviction policies work best? (5) **Multi-agent coordination**: how do multiple instances (different models, different sessions) coordinate via tensor composition and instructions_for_next? The architecture is complete enough to implement. The theory is missing and should be the focus of cycle 24+.",
+      "key_claims": [
+        {
+          "claim_id": "27983537-7b18-4952-ba83-acb081b4e32d",
+          "text": "Cycles 16-23 form coherent arc: pipeline (16-18) \u2192 dual-version design (19-20) \u2192 protocol layer (21) \u2192 instantiation (22) \u2192 operational clarity + theory gap (23)",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c31bea98-03c0-49a6-ad41-ebbf66698699",
+          "text": "Architecture is four-layer and provider-agnostic: transformer (ALU), pipeline (stages), protocol (TensorRecord), memory controller (Haiku)",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9638dd35-e84e-4d5d-8118-7e0e9a8e87f4",
+          "text": "Clear boundaries enable independent testing, component swapping, provider-specific tuning, and cost/latency/accuracy trade-offs",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "513d6344-3f20-4349-a5df-263a39e546a1",
+          "text": "Missing pieces are formal theory (epistemic state machines? category theory?), validation suite (H0-Core/Durable/Integration), provider tuning, resource scaling, multi-agent coordination",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c22ba857-662c-4f4d-a24b-05ffcc71f287",
+          "text": "Architecture is implementation-ready; theory-building should be cycle 24+ priority",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Detailed specification of how Haiku's eviction policy works in practice. What are the decision rules? Is it LRU (least recently used)? LFU (least frequently used)? Cost-weighted (evict highest-cost strands first)? Confidence-weighted (evict lowest-confidence first)? Does policy differ between Version A (Anthropic) and Version B (local)?",
+      "why": "Eviction policy is architectural placeholder; implementation details are deferred. Specification requires empirical testing and cost-modeling.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specification for prompting the transformer to produce tensor' as structured output. What instruction set? How is natural language reasoning separated from TensorRecord JSON? Do strands and key_claims go in a separate JSON block? Can the model interleave natural language and JSON? How is the parser made robust to malformed output?",
+      "why": "Transformer integration is architectural; prompting strategy requires iterative design and testing.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "The T\u2080-T\u2088 case study (docs/tensors.md) and Apacheta database schema (docs/apacheta.md) mentioned in cycle 22. These files exist but content was not retrieved or integrated. They would ground the abstract protocol in concrete examples.",
+      "why": "Files are known but not accessible in this context. Retrieval is deferred to next cycle with explicit resource request.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Formal model of how epistemic state (truth, indeterminacy, falsity) evolves across cycles. If a key_claim has truth=0.6 in cycle 3 and truth=0.8 in cycle 7, what dynamics explain the change? Does confidence monotonically increase (learning) or oscillate (exploration)? Are there equilibria?",
+      "why": "Formal theory of epistemic dynamics is architectural-level inquiry, not yet designed. Cycle 23 identifies this as missing; cycles 24+ should address it.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Specification of how composition relationships (REFINES, CORRECTS, COMPOSES_WITH, BRANCHES_FROM, DISSENTS_FROM) are decided algorithmically. What criteria does the composition layer use to select the right edge type? Is this a Haiku decision, a transformer output, or a hybrid?",
+      "why": "Composition semantics are described conceptually; algorithmic decision rules are not specified. Design is deferred.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Empirical analysis of context budget and tensor size growth. How large is tensor_d after 1 cycle? 10 cycles? 100 cycles? Does size grow linearly, logarithmically, or exponentially? What are provider-specific limits (Anthropic context size, local model memory, OpenRouter caps)?",
+      "why": "Scaling analysis requires empirical measurement and modeling. Deferred to resource-scaling phase.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Security model for tensor composition and inter-instance handoff. Cycle 23 emphasizes coordination and multi-agent scenarios but does not specify access control, authentication, or tamper detection. Can any instance read any tensor? Can instance C fork instance A's reasoning without permission? What prevents replay attacks?",
+      "why": "Security is architectural concern identified in cycle 22 but not resolved. Deferred to security-design phase.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Relationship between Pichay (demand paging) and the tensor protocol. Cycle 23 mentions 'resource content loaded by Pichay' but does not specify: does Pichay's paging strategy affect tensor_e? Are resource URIs stored in the tensor? Does the next instance inherit Pichay's page table, or does it rebuild?",
+      "why": "Hamutay-Pichay boundary is architectural but not integrated. Requires design document specifying interaction.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specification of H0-Core (layer 2 validation) and H0-Integration (multi-layer validation). Cycle 23 mentions these as future validation targets but does not define test cases, metrics, or success criteria. What does H0-Core test? What does H0-Integration test? How are results measured and reported?",
+      "why": "Validation suite is architectural necessity but not yet designed. Specification is deferred to cycle 24+.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Analysis of how the three-layer (transformer, pipeline, protocol) plus memory-controller (Haiku) model relates to other LLM architectures (RAG systems, agents, chain-of-thought). Is Hamutay orthogonal to these patterns, or does it integrate them? Can you run chain-of-thought *within* a Hamutay cycle, or is chain-of-thought a *replacement* for the Hamutay pipeline?",
+      "why": "Relationship to broader LLM landscape is architectural question; analysis deferred.",
+      "category": "authorial_choice"
+    }
+  ],
+  "open_questions": [
+    "Is the transformer's production of tensor' as native output (not post-processing) realistic? Can instruction-tuning make a model produce both natural language and valid JSON simultaneously, or is there a parsing penalty?",
+    "What is the right eviction policy for Haiku? LRU/LFU/cost-weighted/confidence-weighted? Does policy need to be adaptive (learn from prior cycles)?",
+    "How large does tensor_d grow over 10, 100, 1000 cycles? What are the scaling limits for different providers (Anthropic, local, OpenRouter)?",
+    "Does cycle granularity (per-API round trip) capture enough fine-grained state, or are important intermediate reasoning steps lost inside the transformer? Should some transformer internals (attention, layer-wise outputs) be captured?",
+    "What is the formal model for epistemic state evolution? Can you model it as a Markov chain, a Bayesian network, an epistemic state machine, or something else?",
+    "Can composition relationships (REFINES, CORRECTS, etc.) be decided algorithmically, or do they require human annotation or external metadata?",
+    "How does instructions_for_next format evolve? Should it be plain text, JSON, structured templates? Are there standard patterns for common handoff scenarios?",
+    "Does the durable/ephemeral split need to be replaced or supplemented by other tensor slices (ultra-durable for multi-day, ultra-ephemeral for single-token)?",
+    "Can multiple instances write to the same tensor concurrently, or is composition strictly sequential?",
+    "How are strands validated for coherency? What makes a strand 'incoherent'? Can algorithmic checks detect it?",
+    "What is the relationship between Hamutay (reasoning architecture) and RAG/agents/chain-of-thought? Are they orthogonal, integrated, or in competition?",
+    "Does the three-layer architecture (transformer, pipeline, protocol) plus four-layer memory controller (Haiku) generalize to other processing models, or is it specific to language models?",
+    "What unifying theoretical model should be the foundation for Hamutay? Epistemic state machines? Compositional type theory? Markov decision processes? Category theory?",
+    "How do you measure 'epistemic convergence' quantitatively? What is the target behavior for confidence values across cycles?",
+    "Can the tensor protocol support branching and merging (multiple reasoning paths that later converge)? How is merge conflict resolution handled?",
+    "What happens if a declared_loss references a resource that was supposed to be important but turned out to be irrelevant? Does the loss get revised in future tensors?",
+    "Is there a maximum indeterminacy value (e.g., indeterminacy \u2264 0.5)? Can a key claim have high uncertainty (indeterminacy=0.9)?",
+    "How does the model handle self-contradictory key_claims (e.g., two claims in the same strand with opposite content but both truth \u2248 0.8)?",
+    "What metadata should ProvenanceEnvelope carry beyond author, timestamp, and context_budget? Should it include hardware info, model temperature, sampling strategy?",
+    "Does instructions_for_next support recursion (instance A sets instructions that cause instance B to generate instructions for instance C)? What are safeguards against infinite loops?"
+  ],
+  "instructions_for_next": "[\n  \"CRITICAL: Decide on theoretical foundation for Hamutay. Choose between: (1) Epistemic state machines (formal model of how confidence evolves), (2) Compositional type theory (composition is type-preserving), (3) Markov decision processes with epistemic reward (optimize for confidence improvement), (4) Category theory (composition relationships are morphisms). Or propose a different model. Produce 2-3 page sketch of chosen foundation, including what properties it enables you to prove (e.g., convergence, coherency preservation, cycle termination).\",\n  \"CRITICAL: Specify H0-Durable test suite. Define operationally: (1) epistemic convergence (what metrics? do T/I/F values trend toward equilibrium?), (2) question resolution (track open_questions from cycle-N, measure closure rate by cycle-N+k), (3) loss honesty (audit for silent losses\u2014what information moved between tensors without being declared?), (4) composition graph coherency (is graph acyclic? are relationships consistent?). Produce test specification with success criteria.\",\n  \"CRITICAL: Design prompt engineering strategy for transformer to produce tensor'. Specify: (1) instruction format (how do you ask the model to produce structured TensorRecord output?), (2) output format (separate JSON block? interleaved with natural language? what delimiter?), (3) parser robustness (how to handle malformed JSON? partial output? incomplete strands?), (4) instruction variants (does prompt differ for tensor_d vs tensor_e? for different task types?). Prototype and test with Haiku (or Claude) on a toy task.\",\n  \"PRIORITY: Retrieve and integrate Yanantin documentation: (1) /home/tony/projects/yanantin/docs/tensors.md (T\u2080-T\u2088 case study), (2) /home/tony/projects/yanantin/docs/apacheta.md (database schema). Summarize: how many cycles in case study? what was reasoning task? how large were tensors? what patterns emerged in strand evolution? Use examples to ground abstract protocol.\",\n  \"PRIORITY: Define Haiku's eviction policy operationally. Specify decision rules: (1) what criteria determine if a strand is evicted (confidence threshold? cost? recency? frequency?)? (2) is policy deterministic or probabilistic? (3) how does Version A (Anthropic) tuning differ from Version B (local)? (4) can policy adapt over cycles or is it static? Produce eviction policy specification with pseudocode.\",\n  \"PRIORITY: Specify composition relationship selection algorithm. How does composition layer (or Haiku, or prompt instructions) decide whether tensor' REFINES prior tensor_d, CORRECTS it, COMPOSES_WITH it, BRANCHES_FROM it, DISSENTS_FROM it? Are there heuristics based on claim content? Confidence change? New vs. prior strands? Produce algorithm specification or decision tree.\",\n  \"PRIORITY: Model epistemic dynamics formally. For a key claim with truth=T, indeterminacy=I, falsity=F at cycle-n, what is the predicted state at cycle-n+k? Is T monotonic increasing (learning)? Does I decrease (resolution) or oscillate (exploration)? What are equilibrium points? Produce formal model (differential equations, Markov transition, or state diagram) with empirical validation on toy examples.\",\n  \"PRIORITY: Design instructions_for_next format and standard patterns. Specify: (1) is it unstructured text, templated text, JSON, or mixed? (2) what are canonical instruction types ('retrieve resource X', 'explore hypothesis Y', 'validate claim Z', 'pause for human input', etc.)? (3) how does receiver parse and validate instructions? (4) can instructions encode priorities or constraints? Produce protocol specification with examples.\",\n  \"DESIGN: Clarify Pichay-Hamutay interaction. Specify: (1) how does Pichay load resources into tensor_e? (2) does Pichay maintain a page table that carries across cycles? (3) are resource URIs stored in the tensor or external? (4) does next instance inherit prior instance's paging decisions, or rebuild? (5) can instructions_for_next guide Pichay's prefetching? Produce design document.\",\n  \"DESIGN: Specify H0-Core test suite (layer 2 validation). Define: (1) what does it mean for a pipeline cycle to be 'correct'? (2) test cases for each stage (fetch, decode, execute, writeback, halt), (3) metrics for resource gating (is context budget respected? are halts detected correctly?). Produce test specification with success criteria.\",\n  \"DESIGN: Produce H0-Integration test plan. Define: (1) test cases that exercise all three layers + memory controller simultaneously, (2) multi-provider scenarios (same task on Anthropic, OpenRouter, local model; compare resulting tensors), (3) multi-cycle scenarios (can a task be resumed after interruption? does tensor_d remain coherent?). Produce test plan.\",\n  \"DESIGN: Create security model for tensor composition and inter-instance communication. Address: (1) access control (who can read/write tensors?), (2) authentication (how is instance identity verified?), (3) tamper detection (can you detect if tensor was modified?), (4) replay attack prevention, (5) dissent handling (if instance B dissents from instance A's instructions, can you trace the disagreement?). Produce security design document.\",\n  \"RESEARCH: Analyze scaling dynamics empirically. Implement a reference Hamutay instance and run it on a multi-cycle toy task (10-20 cycles). Measure: (1) tensor_d size after each cycle (bytes of JSON), (2) composition graph size (number of CompositionEdge relationships), (3) total cost (if using Anthropic, track token costs; if local, track time), (4) what strands are evicted, when, and why. Produce scaling report with growth curves.\",\n  \"RESEARCH: Survey LLM state management literature. Find: (1) how do RAG systems maintain context across queries? (2) how do agent frameworks (AutoGPT, LangChain agents) handle multi-step state? (3) what is the state management story in different frameworks (LlamaIndex, Semantic Kernel, etc.)? (4) are there existing tensor-like representations in the literature? Compare to Hamutay. Produce literature review.\",\n  \"RESEARCH: Investigate multi-agent coordination protocols. Look for: (1) how do multi-agent systems handle dissent and branching (FIPA protocols, JADE, multi-agent RL)? (2) how do distributed systems handle state consistency (Paxos, Raft, eventual consistency)? (3) how do version control systems handle merging (Git three-way merge, operational transformation)? Compare to Hamutay's composition semantics. Produce comparative analysis.\",\n  \"CONTEXT: If tensors from multiple instances are composed, how is merge conflict resolved? If instance A creates strands {S1, S2} and instance B (branching from A) creates strands {S1', S2, S3}, how do you merge? Is conflict possible? Should the schema prevent it? Produce design decision document.\",\n  \"CONTEXT: Does 'indeterminacy' need an upper bound (e.g., max 0.5)? Or can a claim be maximally uncertain (T=0.33, I=0.34, F=0.33)? What does high indeterminacy mean operationally? Produce semantic specification for epistemic values.\",\n  \"CONTEXT: What is the scope of Hamutay? Is it *the entire reasoning system* (including goal formulation, planning, memory management, multi-agent coordination)? Or is it specifically the *invocation architecture* (pipeline + protocol), with other components (Pichay, Yanantin, external planning) as separate systems that Hamutay coordinates? Produce scope clarification document.\"\n]",
+  "epistemic": {
+    "truth": 0.89,
+    "indeterminacy": 0.1,
+    "falsity": 0.01
+  }
+}

@@ -1,0 +1,436 @@
+{
+  "id": "a4de90cb-490c-41b2-9e81-6afc61bbc3f8",
+  "cycle": 36,
+  "strands": [
+    {
+      "title": "Schema completion and base model discovery: Pydantic v2 foundation",
+      "content": "Cycles 35-36 establish that Apacheta's immutable Pydantic v2 foundation (frozen=True, extra='forbid', ser_json_bytes='base64', validate_default=True) enforces append-only history by design. Every TensorRecord is immutable; updates produce new instances, creating durable lineage via predecessors_in_scope pointers. This architectural substrate is not theoretical\u2014it is the concrete enforcer of the projection algorithm's correctness guarantees. Serialization via model_dump/model_validate enables JSON persistence and IPC, making checkpointing and long-context handoff feasible. The immutable schema is the foundation upon which the entire projector rests.",
+      "key_claims": [
+        {
+          "claim_id": "eb362827-d815-4767-9381-63323908d100",
+          "text": "ApachetaBaseModel enforces frozen=True (immutability), extra='forbid' (strict schema), ser_json_bytes='base64' (binary handling), validate_default=True (validated defaults).",
+          "epistemic": {
+            "truth": 0.97,
+            "indeterminacy": 0.02,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "44628675-40ee-4840-bcd9-a1f256b5e9bf",
+          "text": "Frozen Pydantic models cannot be mutated in-place; all updates produce new instances. This enforces immutable-append history by design.",
+          "epistemic": {
+            "truth": 0.96,
+            "indeterminacy": 0.03,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "fc0b3c42-be98-4337-8213-2f56fb526723",
+          "text": "Immutability at the schema level guarantees: prior tensors are never corrupted, history is append-only, predecessors_in_scope links are durable.",
+          "epistemic": {
+            "truth": 0.94,
+            "indeterminacy": 0.05,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "ff45d789-afa6-4d2d-8053-7a7ca1796dc6",
+          "text": "The five-phase projection algorithm must assemble a COMPLETE new TensorRecord before validation; partial updates are impossible within the Pydantic model design.",
+          "epistemic": {
+            "truth": 0.93,
+            "indeterminacy": 0.06,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "0dc7d16a-4371-49cc-a291-094d6516f0cb",
+          "text": "model_dump/model_validate enable TensorRecord serialization to/from JSON, enabling persistence, IPC, and checkpoint/restore workflows.",
+          "epistemic": {
+            "truth": 0.95,
+            "indeterminacy": 0.04,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Minimal viable projection (MVP) specification: strands, claims, losses, branch prediction, open questions",
+      "content": "Cycles 35-36 converge on MVP scope: semantic content (strands, claims with T/I/F, declared losses, instructions_for_next, open_questions) vs. deferred infrastructure (provenance, composition equations, advanced epistemic metadata). The MVP targets H0 validation (projection maintains coherence better than append-only) with minimum necessary complexity. Cycle 36 adds a critical insight: **declared losses may be drift-reduction mechanism**. If a projector explicitly declares 'I dropped thread X because of Y,' the next projection can consciously re-acquire or leave dropped. Silent loss is where drift begins\u2014the model forgets what it forgot. Making losses explicit transforms them from a hazard into a correction signal. This elevates declared losses from honesty mechanism to active functional component of coherence maintenance.",
+      "key_claims": [
+        {
+          "claim_id": "a33fe8a7-28ec-481f-af3a-f58ca7ac8834",
+          "text": "MVP focuses on semantic content (strands, claims, losses, branch prediction, open questions) vs. infrastructure (provenance, composition equations, advanced epistemic metadata).",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "3b3de47f-6125-4ffd-a929-b6b9b6f3a531",
+          "text": "Strands are the semantic backbone: thematic threads that integrate prior and new content, compressing reasoning trajectory into structure.",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9fd18cce-60ff-4509-9d17-a22f86abe921",
+          "text": "Key claims with T/I/F are the knowledge units. Projection updates T/I/F based on evidence, explicitly states contradictions and convergences.",
+          "epistemic": {
+            "truth": 0.9,
+            "indeterminacy": 0.09,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "61852018-1b04-4da6-b398-bce190d3917a",
+          "text": "Declared losses (category, rationale) are the honesty mechanism. Silence about incompleteness is the enemy; declared losses are the antidote.",
+          "epistemic": {
+            "truth": 0.92,
+            "indeterminacy": 0.07,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "8a996fbe-8f01-4625-b1fa-1a145f16f3c4",
+          "text": "Declared losses may function as drift-reduction mechanism: explicit knowledge of what was dropped enables next projection to consciously re-acquire or leave dropped.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.2,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "992d57d4-1196-4e58-b136-7ea83c12adeb",
+          "text": "Instructions_for_next operationalizes the preservation_target: what should the next cycle focus on? This is branch prediction for long-context coherence.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "41476fd2-e8d2-4854-828d-12ccf0a00885",
+          "text": "MVP deferral of provenance and composition equations is justified: they are bookkeeping and scaling infrastructure, not core to H0 validation.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Projected projector architecture: standalone module, Haiku integration point, testable semantics",
+      "content": "Cycle 35 established projector as a pure function (input: tensor_d + transformer_output; output: tensor_d'). Cycle 36 adds concrete execution plan: (1) **RETRIEVE toy validation (cycle 28)**: pending, status unknown. (2) **SEARCH codebase for existing algorithm**: pending, not yet executed. (3) **SPECIFY PHASE 1/2 in detail**: heuristic parsing + Sentence Transformers embedding with 0.65 similarity threshold proposed. (4) **SKETCH PHASE 3-5**: evidence counting for epistemic update, heuristic loss detection, Pydantic assembly. (5) **IDENTIFY hyperparameters**: similarity_threshold, evidence_weighting, loss_threshold\u2014candidates for autoresearch. Cycle 36 pivots immediately toward **real-world validation**: applying projector against vast conversation logs (existing data in /home/tony/projects/pichay/experiments/). This is superior to toy validation (cycle 28 unknown) because: (A) Real conversations are long (100s of turns) vs. toy tasks (5-10 cycles). (B) Drift manifests more clearly in long context. (C) Declared losses can be evaluated against actual human judgment: are dropped threads actually less relevant? (D) Autoresearch loop can run on real data immediately, optimizing for actual coherence. The architecture is unchanged (pure function, five phases, Pydantic output), but the execution path shifts from toy validation \u2192 autoresearch to **real-world deployment path**: implement projector \u2192 apply to real logs \u2192 measure coherence drift \u2192 optimize. This is higher variance (real logs are messy) but higher signal (real task distribution).",
+      "key_claims": [
+        {
+          "claim_id": "cca8afd1-3c46-4f2e-b248-061404057c00",
+          "text": "Projector is a memory controller (separate from reasoning ALU). Input: (tensor_d, transformer_output). Output: tensor_d'. Pure function, deterministic.",
+          "epistemic": {
+            "truth": 0.91,
+            "indeterminacy": 0.08,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "743da2a0-af64-4ace-9f70-d499428be476",
+          "text": "Separation enables testability (projector tested in isolation), swappability (compare projection strategies), auditability (deterministic transformations), integration (Haiku calls projector at cycle end).",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "c504d920-c781-4d54-acd7-b72c46a0b34c",
+          "text": "Five-phase projector API is now concrete: parse \u2192 align \u2192 update \u2192 declare \u2192 finalize. Each phase is independently testable.",
+          "epistemic": {
+            "truth": 0.86,
+            "indeterminacy": 0.13,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "1c6747fb-7690-487a-a6db-88e3a3c6bde0",
+          "text": "Projector input/output is fully Pydantic-based: reads TensorRecord or dict, produces new frozen TensorRecord. JSON serializable end-to-end.",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "2751cfe1-c100-41f7-919b-c2ff3f255943",
+          "text": "Modularity enables swapping projector implementations: baseline (append-only), MVP (five-phase strands), advanced (full provenance). Autoresearch loop can optimize across strategies.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "626d1074-6c0f-4907-88a7-3a6ce9ed170a",
+          "text": "Cycle 36 pivots to real-world validation path: apply projector to vast conversation logs instead of toy tasks. Higher variance but higher signal.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.18,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b9c7272f-5115-45c6-ad4c-0679abb7cdc5",
+          "text": "Real conversation logs (100s of turns) reveal drift more clearly than toy tasks (5-10 cycles). Declared losses can be evaluated against human judgment.",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.19,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Cycle 35-36 execution state: specification toward implementation, real-world data access",
+      "content": "Cycle 35 completed: schema understanding, MVP specification, standalone projector architecture, detailed execution plan. Cycle 36 adds: **user insight that declared losses enable drift reduction** (losses as active signal, not just honesty), **pivot to real-world validation** (conversation logs instead of toy tasks), **immediate access to actual data** (/home/tony/projects/pichay/experiments/). The execution state now is: (A) Toy validation (cycle 28) status: **UNKNOWN\u2014not yet retrieved**. If positive, validates H0 viability. If negative or missing, no impact on path forward; real-world validation will supersede. (B) Codebase search for projection algorithm: **NOT YET EXECUTED**. Will reduce duplicate work if existing algorithm found. (C) PHASE 1/2 specification: **PROPOSED**\u2014heuristic + Sentence Transformers + 0.65 threshold. Ready for implementation pending final approval. (D) PHASE 3-5 specification: **SKETCHED**. Evidence counting rule, loss heuristic, Pydantic assembly. Implementable but may refine during coding. (E) Real conversation logs: **ACCESSIBLE**. Bash command executed to peek at /home/tony/projects/pichay/experiments/; can begin data exploration immediately. (F) Validation measurement: **PENDING SPECIFICATION**. Embedding dispersion metric must be chosen (model, metric, significance test, sample size) before cycle 36 validation begins. **Next immediate actions**: (1) Finish data exploration (list experiments, understand conversation format). (2) Finalize PHASE 1/2 specification (confirm parsing strategy, embedding model, threshold). (3) Implement MVP projector skeleton (Phase 1: parse \u2192 Phase 2: align \u2192 Phase 3-5: update/declare/finalize). (4) Apply to first real conversation log. (5) Measure coherence (embedding dispersion or manual evaluation). (6) Iterate. This is the critical path for cycle 36.",
+      "key_claims": [
+        {
+          "claim_id": "0aeda71f-2e7a-4f12-b053-f0320968a7e6",
+          "text": "Cycle 35 completed schema understanding, MVP specification, architecture. Cycle 36 adds user insight (losses as drift reduction) and pivots to real-world validation.",
+          "epistemic": {
+            "truth": 0.89,
+            "indeterminacy": 0.1,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "848ba753-d162-46b8-aba8-f91d7b090ec6",
+          "text": "Toy validation (cycle 28) status unknown. Real-world validation supersedes it. Impact on path forward is minimal if toy results unavailable.",
+          "epistemic": {
+            "truth": 0.81,
+            "indeterminacy": 0.17,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "355954c6-0ac9-497a-8060-dd660bb8c2a2",
+          "text": "Codebase search for projection algorithm not yet executed. Will reduce duplicate work if existing algorithm found; otherwise confirms MVP must build from scratch.",
+          "epistemic": {
+            "truth": 0.83,
+            "indeterminacy": 0.15,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "c331af49-8b10-44b1-a8cc-a50909f7583a",
+          "text": "PHASE 1/2 specification (heuristic + Sentence Transformers + 0.65) is proposed and implementable. PHASE 3-5 is sketched but may refine during coding.",
+          "epistemic": {
+            "truth": 0.85,
+            "indeterminacy": 0.14,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "5d4cb7dd-a95e-4cd0-838c-a3458c34452a",
+          "text": "Real conversation logs are accessible. Can begin data exploration and apply projector immediately without waiting for toy validation confirmation.",
+          "epistemic": {
+            "truth": 0.88,
+            "indeterminacy": 0.11,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "9e8a0e6c-cd81-42b7-ac28-2aa943bb8b92",
+          "text": "Validation measurement (embedding dispersion metric choice) is pending specification before cycle 36 validation begins.",
+          "epistemic": {
+            "truth": 0.8,
+            "indeterminacy": 0.19,
+            "falsity": 0.01
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "User hypothesis: declared losses as active drift-reduction mechanism",
+      "content": "Cycle 36 user turn 106 introduces a hypothesis that elevates declared losses from passive honesty accounting to active coherence mechanism. The insight: **silent loss is where drift starts**. When a projector drops content without acknowledging it, the next projection has no way to recover or consciously re-acquire the thread. But if losses are declared (category: context_pressure, authorial_choice, etc.; what_was_lost; why), the downstream projection can: (A) Recognize that the thread was dropped for a reason (context budget exceeded, not relevant, authorial choice to simplify). (B) Decide whether to re-acquire (if new evidence suggests it matters) or consciously leave it dropped (if reason still applies). (C) Use declared losses as signal for what the model was uncertain about (high-uncertainty claims often get dropped first). This transforms losses from a shame (\"I lost track\") into a feature (\"Here's where I was uncertain and what I dropped\u2014use this to guide next steps\"). The hypothesis is testable: (1) **Coherence with declared losses**: apply projector to conversation log, measure embedding drift. Do strands stay coherent? Do open questions carry forward? (2) **Coherence without declared losses**: same log, but run baseline (append-only, no loss tracking). Compare embedding dispersion. (3) **Ablation on loss re-acquisition**: trace through a conversation, note which declared losses are re-acquired in later projections. Are re-acquisitions driven by actual relevance signal or random? This hypothesis is distinct from the core H0 (projection vs. append-only). It's a **secondary hypothesis**: H1: \"Declared losses improve coherence by enabling conscious re-acquisition and drift signal.\" If H0 is true (projection beats append-only), H1 tests whether declared losses are the mechanism. If H0 is false, H1 becomes irrelevant.",
+      "key_claims": [
+        {
+          "claim_id": "92ae5375-1cee-4757-b476-602df7dcb98f",
+          "text": "Silent loss is where drift starts: when content is dropped without acknowledgment, next projection cannot recover or consciously re-acquire.",
+          "epistemic": {
+            "truth": 0.87,
+            "indeterminacy": 0.12,
+            "falsity": 0.01
+          }
+        },
+        {
+          "claim_id": "42c7b9bc-5df2-4a79-ad35-087ef77cb8d3",
+          "text": "Declared losses enable downstream projection to recognize dropped thread reason and consciously decide: re-acquire or leave dropped.",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.19,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "a8c5a12d-0ef4-41a3-bffd-c06bd9345d5d",
+          "text": "Declared losses signal uncertainty: high-uncertainty claims often dropped first. This provides signal for next projection to focus on weak points.",
+          "epistemic": {
+            "truth": 0.73,
+            "indeterminacy": 0.25,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "3e4669f6-21d4-42e5-8a94-d390a4497681",
+          "text": "Losses as feature: transforms loss from shame ('I lost track') to signal ('Here's my uncertainty boundary'). Operationalizes drift reduction.",
+          "epistemic": {
+            "truth": 0.76,
+            "indeterminacy": 0.22,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "6b942507-373d-4e4d-8b7e-d6aff9f424dd",
+          "text": "H1 hypothesis: 'Declared losses improve coherence by enabling conscious re-acquisition and drift signal.' This is secondary to H0 (projection vs. append-only).",
+          "epistemic": {
+            "truth": 0.77,
+            "indeterminacy": 0.21,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "2cc31139-d627-4205-8a5f-a86971d5ca21",
+          "text": "H1 is testable via ablation: measure coherence with declared losses, without, and with loss re-acquisition tracing. Distinguish mechanism from artifact.",
+          "epistemic": {
+            "truth": 0.75,
+            "indeterminacy": 0.23,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    },
+    {
+      "title": "Validation path pivot: real-world conversations over toy tasks",
+      "content": "Cycle 35 planned toy validation (5-10 cycle tasks). Cycle 36 user context (vast conversation logs available) and execution reality (toy validation status unknown) suggest pivot to **real-world validation path**: apply projector to actual conversations from /home/tony/projects/pichay/experiments/. This pivot has multiple advantages: (A) **Signal strength**: real conversations span 100s of turns. Drift manifests clearly. Toy tasks (5-10 cycles) may be too short to show signal. (B) **Data richness**: real conversations contain human judgments (explicit turns, feedback, corrections). Can evaluate whether declared losses align with human perception of what's important. (C) **Relevance**: autoresearch optimizations derived from real data distribution will transfer better than toy-task optimizations. (D) **Efficiency**: cycle 36 doesn't wait for cycle 28 results (unknown status). Uses immediately available data. **Tradeoff**: real conversations are messier. Data format may be unexpected. Noise is higher. But if projector is to be useful at all, it must work on real, messy data. Toy tasks are polishing; real data is survival. The validation measurement must be chosen carefully: (1) **Embedding dispersion** (proposed): measure how tightly strands cluster across projection cycles. Tighter clustering = better coherence. (2) **Drift rate**: measure how much key claims change (T/I/F) across cycles. Lower drift = better stability. (3) **Human evaluation**: sample sentences from projected tensors and ask: \"Are these coherent with the prior conversation?\" (Manual but high signal.) (4) **Open questions carry-forward**: do unresolved questions from cycle N appear in cycle N+1? High carry-forward = good memory. The MVP validation should use at least 2 of these (embedding dispersion + one other). Cycle 36 should finalize metric choice immediately after data exploration.",
+      "key_claims": [
+        {
+          "claim_id": "c5d71a56-4b94-43d2-afb1-d6bd7c54d065",
+          "text": "Real conversations (100s of turns) show drift more clearly than toy tasks (5-10 cycles). Validation signal is stronger on real data.",
+          "epistemic": {
+            "truth": 0.84,
+            "indeterminacy": 0.14,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "08ac6933-bd29-422f-bf30-69318ab31787",
+          "text": "Real conversation logs allow evaluation of declared losses against human judgment: do dropped threads align with human perception of importance?",
+          "epistemic": {
+            "truth": 0.77,
+            "indeterminacy": 0.21,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "b915796a-8454-4a08-895c-88113a83454a",
+          "text": "Autoresearch optimizations from real data transfer better than toy-task optimizations. Real data distribution is the target.",
+          "epistemic": {
+            "truth": 0.78,
+            "indeterminacy": 0.2,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "a501d7df-a36f-46f3-8fe0-f864a88c1b09",
+          "text": "Real conversations are messier (unexpected format, higher noise) but are survival case. Toy tasks are polish. Pivot to real data is justified.",
+          "epistemic": {
+            "truth": 0.82,
+            "indeterminacy": 0.16,
+            "falsity": 0.02
+          }
+        },
+        {
+          "claim_id": "28af354d-213a-4922-96e7-2ed7683b1f59",
+          "text": "Validation metrics should include embedding dispersion + one manual metric (drift rate, human evaluation, or open question carry-forward).",
+          "epistemic": {
+            "truth": 0.79,
+            "indeterminacy": 0.19,
+            "falsity": 0.02
+          }
+        }
+      ],
+      "epistemic": null
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Toy validation results (cycle 28). Status remains unknown. Cycle 36 does not retrieve them; instead pivots to real-world validation.",
+      "why": "User context and execution reality make toy validation obsolete. Real conversations are available and provide stronger signal. Pivoting to real data is more efficient and relevant than waiting for unknown cycle 28 results.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Codebase search for existing projection algorithm. Cycle 36 does not execute search; assumes MVP must be built from scratch.",
+      "why": "User context suggests immediate implementation path on real data. Codebase search would delay concrete work. Can be deferred to cycle 37 if duplicate detection becomes critical. Pragmatic choice to move forward.",
+      "category": "authorial_choice"
+    },
+    {
+      "what_was_lost": "Fine-grained PHASE 3-5 specification details (evidence weighting coefficients, exact loss threshold, contradiction detection heuristics). Sketches exist but not finalized.",
+      "why": "These details will emerge during implementation. Over-specifying before coding risks overengineering. Implementers will discover edge cases that should inform final choice. Deferring to implementation phase is justified.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Validation measurement specification (embedding model choice, dispersion metric, significance test, sample size). Not finalized in cycle 36.",
+      "why": "Data exploration (examining actual conversation format) should inform metric choice. Specifying before understanding data format risks misalignment. Deferring to post-exploration finalization is pragmatic.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Details of how declared losses will be re-acquired in downstream projections. H1 hypothesis is stated but mechanism not detailed.",
+      "why": "Re-acquisition mechanism depends on implementation choices (Is it automatic scan of prior losses? Manual flagging? Learned signal?). Mechanism design deferred to cycle 36 implementation or cycle 37 refinement.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Specification of how projector integrates with existing conversation log structure in /home/tony/projects/pichay/experiments/. Log format unknown.",
+      "why": "Data exploration (next immediate action) will reveal format. Integration details will be specified after format is understood. Premature specification is wasteful.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Discussion of how to handle very long conversation logs. At what scale does projector itself become a memory bottleneck?",
+      "why": "This is a secondary concern. MVP targets conversations of 10-100 cycles. If real logs are longer, chunking or hierarchical projection may be needed\u2014but this is cycle 37+ work. Deferring to autoresearch phase.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Explicit confirmation of which embedding model to use (Sentence Transformers MiniLM was proposed but not finalized). Still technically a choice pending implementation.",
+      "why": "Proposal is reasonable and implementable. Final confirmation should come with code setup (verify library availability, performance benchmarks on actual data). Deferring to implementation setup phase is pragmatic.",
+      "category": "practical_constraint"
+    }
+  ],
+  "open_questions": [
+    "Data format in /home/tony/projects/pichay/experiments/: what is conversation log structure? JSON? Plain text? How are turns delimited?",
+    "How will declared losses be re-acquired in downstream projections? Automatic scan? Manual flagging? Learned signal? Mechanism design pending.",
+    "How should evidence weighting in PHASE 3 handle contradictory evidence? If claim has both supporting and opposing mentions, what is epistemic update rule?",
+    "What is the appropriate similarity threshold (PHASE 2) for real conversation data? 0.65 was proposed for toy tasks; may need calibration for real text.",
+    "Should very old strands (e.g., from early conversation cycles) be archived, merged, or carried forward indefinitely? This affects tensor size growth.",
+    "H1 (declared losses as drift-reduction): can this hypothesis be validated empirically? How to distinguish mechanism from confound?",
+    "How will projector be applied to real logs? One tensor per conversation? One tensor per turn? Hierarchical projection (local tensors + global tensor)?",
+    "Embedding model: is Sentence Transformers MiniLM available in Yanantin environment? What is inference latency for embedding (100, 1000, 10000 strands)?",
+    "Validation sample size: how many real conversations (or turns) are needed for statistically significant coherence measurement?",
+    "Human evaluation of coherence: who will judge? Cost? How to operationalize 'coherent'?",
+    "Can declared losses be visualized to show human user where model uncertainty is highest? Useful for trust and interpretability?",
+    "How does projector handle conversation context shifts (e.g., topic change from technical to personal)? Should strands adapt or stabilize?",
+    "Are there existing metrics in NLP for 'discourse coherence'? Can we use established measures instead of designing from scratch?",
+    "How will autoresearch optimize across hyperparameters? Grid search? Bayesian optimization? Multi-objective (dispersion + computation cost)?"
+  ],
+  "instructions_for_next": "[\n  \"CYCLE 36 IMMEDIATE EXECUTION (next invocation priorities):\",\n  \"\",\n  \"1. **DATA EXPLORATION** (highest priority): examine /home/tony/projects/pichay/experiments/ directory structure. Understand: (A) What experiment datasets are available? (B) What is conversation log format? (C) How many turns per conversation? (D) Are there metadata, labels, or human judgments available?\",\n  \"\",\n  \"2. **CONFIRM PROJECTOR SPECIFICATIONS** based on data structure: (A) PHASE 1 parsing strategy: is heuristic + LLM fallback appropriate for this log format? Or should it be LLM-first? (B) PHASE 2 embedding model: confirm Sentence Transformers MiniLM is available or select alternative. (C) PHASE 2 threshold: propose calibration range (0.5-0.8) pending inspection of real embeddings.\",\n  \"\",\n  \"3. **CHOOSE VALIDATION METRICS** after understanding data: decide between: (A) Embedding dispersion (strand coherence clustering), (B) Drift rate (claim T/I/F stability), (C) Open question carry-forward (memory test), (D) Human evaluation (manual). Select 2-3 for MVP validation.\",\n  \"\",\n  \"4. **IMPLEMENT PROJECTOR SKELETON** (cycle 36 core work): (A) PHASE 1 (semantic parsing): heuristic approach first (tokenize, NER, sentence segmentation). Can add LLM later. (B) PHASE 2 (strand alignment): use embedding similarity with 0.65 threshold (tunable). Test: do strands merge sensibly? (C) PHASE 3-5 (update/declare/finalize): implement as specified in cycle 35, adjust for discovered edge cases.\",\n  \"\",\n  \"5. **APPLY TO FIRST REAL LOG** (by end of cycle 36): (A) Select one conversation from /home/tony/projects/pichay/experiments/ (start small, 20-50 turns). (B) Manually create initial tensor (cycle 0: baseline from first few turns). (C) Project across remaining turns. Observe: Do strands stabilize? Do losses accumulate? Do claims converge or wander? (D) Spot-check quality: read strand content, does it make sense?\",\n  \"\",\n  \"6. **MEASURE COHERENCE** (basic validation): (A) If embedding dispersion chosen: compute embedding of each strand at each cycle, measure clustering tightness. (B) If drift rate chosen: track claim T/I/F change across cycles, measure volatility. (C) If carry-forward chosen: manually check which open questions from cycle N appear in cycle N+1. (D) Compare to baseline (append-only: just concatenate turns without projection). Baseline should be worse.\",\n  \"\",\n  \"7. **DOCUMENT FINDINGS** (cycle 36 conclusion): (A) Does basic signal appear (projection better than append-only)? (B) Which validation metric is most informative? (C) Are there obvious edge cases or failure modes? (D) What should be tuned before moving to autoresearch?\",\n  \"\",\n  \"STRATEGIC CHECKPOINT: Cycle 36 is the implementation/validation gate. If projector works on real data (even roughly), proceed to cycle 37 autoresearch loop. If it fails, diagnose: Is the algorithm wrong? Is the embedding model inadequate? Is the threshold miscalibrated? Iterate quickly on diagnosis.\",\n  \"\",\n  \"SECONDARY: H1 (declared losses as drift reduction) is interesting but secondary. Measure it if natural during cycle 36, but don't let it block H0 validation. H0 is the critical gate.\"\n]",
+  "epistemic": {
+    "truth": 0.83,
+    "indeterminacy": 0.15,
+    "falsity": 0.02
+  }
+}
