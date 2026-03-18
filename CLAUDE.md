@@ -39,3 +39,27 @@ Use `uv run` — there is no system Python. Dependencies are managed via `pyproj
 
 Experiment results go in `experiments/`. Save prepared contexts to avoid redundant API
 calls (~$8 per full preparation run through Haiku).
+
+### Experiment comparability
+
+All experiments that use tensor projection MUST use the `Projector` class from
+`projector.py` rather than making raw API calls. The Projector encapsulates:
+
+- The full `PROJECTION_SCHEMA` with field descriptions that guide output structure.
+  A stripped-down schema produces structurally different tensors.
+- Collapse detection and checkpoint/recovery (retry from last good tensor).
+- Precursor detection (`declared_losses` or `instructions_for_next` going empty).
+- Escalation policy hooks.
+
+The Q1 declared losses experiment (2026-03-16) used raw API calls with a simplified
+schema and no recovery. This produced 4-6 collapses per condition vs 0 in the original
+observation run. The results are valid for comparing conditions *against each other*
+(both had the same confounds) but are NOT comparable to prior experiments.
+
+When varying projection behavior for an experiment, subclass `Projector` or modify
+the tensor fed to `_build_projection_prompt` — don't reimplement the projection call.
+
+Similarly, `max_tokens` must match across experiments. The `Projector` currently uses
+16384; this should be the Haiku 4.5 maximum (64000 with streaming) per the
+"max_tokens is a guillotine" note above. Any change should be made in `Projector`
+itself so all experiments pick it up.

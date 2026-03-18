@@ -306,7 +306,7 @@ def run_step2(
 
     with client.messages.stream(
         model=model,
-        max_tokens=65536,
+        max_tokens=64000,
         system=system_prompt,
         messages=[{
             "role": "user",

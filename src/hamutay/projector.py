@@ -11,9 +11,12 @@ decides what goes into the registers for the next cycle.
 
 from __future__ import annotations
 
-import json
+from typing import TYPE_CHECKING
 
 import anthropic
+
+if TYPE_CHECKING:
+    from hamutay.backend import ProjectionBackend
 
 from hamutay.tensor import (
     DeclaredLoss,
@@ -352,8 +355,15 @@ class Projector:
         collapse_threshold: float = 0.3,
         max_retries: int = 2,
         escalation_policy: EscalationPolicy | None = None,
+        backend: ProjectionBackend | None = None,
     ):
-        self.client = client or anthropic.Anthropic()
+        # Backend takes precedence. If not provided, wrap the client
+        # in an AnthropicBackend for backward compatibility.
+        if backend is not None:
+            self._backend = backend
+        else:
+            from hamutay.backend import AnthropicBackend
+            self._backend = AnthropicBackend(client=client or anthropic.Anthropic())
         self.model = model
         self._cycle = 0
         self._current_tensor: Tensor | None = None
@@ -419,7 +429,7 @@ class Projector:
     def _do_projection(
         self, new_content: str, model_override: str | None = None
     ) -> tuple[Tensor, str]:
-        """Execute one projection call against the API.
+        """Execute one projection call via the backend.
 
         Returns (tensor, stop_reason) so callers can detect truncation.
         """
@@ -428,35 +438,15 @@ class Projector:
             self._current_tensor, new_content, self._cycle
         )
 
-        response = self.client.messages.create(
-            model=model,
-            max_tokens=16384,
-            messages=[{"role": "user", "content": prompt}],
-            tools=[
-                {
-                    "name": "emit_tensor",
-                    "description": "Emit the updated tensor projection",
-                    "input_schema": PROJECTION_SCHEMA,
-                }
-            ],
-            tool_choice={"type": "tool", "name": "emit_tensor"},
+        raw_tensor, stop_reason = self._backend.call_projection(
+            model=model, max_tokens=64000, prompt=prompt,
         )
 
-        stop_reason = response.stop_reason or "unknown"
-
-        # Check for truncation
         if stop_reason == "max_tokens":
             print(f"    WARNING: cycle {self._cycle} hit max_tokens — "
                   f"tensor may be truncated")
 
-        # Extract the tool use result
-        for block in response.content:
-            if block.type == "tool_use" and block.name == "emit_tensor":
-                return _parse_projection(block.input, self._cycle), stop_reason
-
-        raise RuntimeError(
-            f"Projector model did not emit tensor on cycle {self._cycle}"
-        )
+        return _parse_projection(raw_tensor, self._cycle), stop_reason
 
     def project(self, new_content: str) -> Tensor:
         """Project new content into the tensor, returning the updated tensor.
