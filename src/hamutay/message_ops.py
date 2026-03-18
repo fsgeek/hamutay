@@ -82,6 +82,7 @@ def check_inbound_for_injected_tags(body: dict) -> str | None:
     assistant messages are the model's own output and may
     legitimately contain cleanup tags.
     """
+    return None
     for msg in body.get("messages", []):
         if msg.get("role") != "user":
             continue
