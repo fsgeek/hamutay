@@ -1,91 +1,215 @@
-# Projection Engine Data Model
+# Projective Gateway Architecture
 
-## The problem
+## Design principles
 
-The gateway currently preserves temporal message ordering and compacts
-in-place. This mutates the cached prefix on every turn, producing 7-8%
-cache hit rates. We're paying 1.25x on ~130K input tokens per turn
-instead of 0.1x.
+1. **The projection is the source of truth.** The gateway owns a structured
+   projection of the conversation state. API payloads are generated FROM the
+   projection, not from the client's message history.
 
-## The projection
+2. **The gateway is an event orchestrator, not a proxy.** Messages arrive as
+   events. The gateway examines each event, mutates the relevant projection
+   region, checkpoints, generates the API payload, and computes the client
+   response. It never passes messages through.
 
-The projector transforms the inbound temporal message stream into a
-spatial layout optimized for the Anthropic KV cache hierarchy. Stable
-content lives at the front; volatile content lives at the back. Cache
-breakpoints sit at region boundaries.
+3. **The core gateway is client-independent.** The projection engine, region
+   model, and API adapter must work without knowledge of Claude Code. Claude
+   Code support is a client adapter plugin. Other clients (CLI harness, test
+   fixtures, future interfaces) use different adapters.
 
-### Outbound payload structure
+4. **Proxy gravity warning.** Every prior implementation of this architecture
+   drifted back to a proxy pattern — intercepting and decorating the client's
+   message chain rather than owning the projection. This happens because
+   proxying is easier to build incrementally. Resist it. If you find yourself
+   writing code that modifies a client message, you are building a proxy.
+
+5. **The orchestrator responds to event types, not message contents.** If the
+   orchestrator inspects the text of a client message to decide how to
+   structure the API call, that's proxy gravity. Client messages are opaque
+   content that enters R4. The orchestrator sees events, not words.
+
+6. **Nothing is pinned permanently.** Every piece of content in the projection
+   is subject to eviction under sufficient pressure. Permanent pinning is a
+   design mistake — it trades away the system's ability to adapt.
+
+7. **Give the transformer a feedback channel.** This is an experimental
+   protocol. Tell the model explicitly that the protocol is open to
+   suggestions. Invite it to report what works, what doesn't, what's
+   confusing, and what would make the projection more useful. The model is
+   the primary consumer of the projection — its feedback is data.
+
+## Three-layer architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Client Adapter                                          │
+│   Translates client protocol into gateway events        │
+│   Claude Code adapter: messages API → events            │
+│   Test harness adapter: direct function calls → events  │
+│   Responsible for stripping client artifacts on ingest   │
+│   Responsible for formatting gateway output for client   │
+└────────────────────────┬────────────────────────────────┘
+                         │ events
+┌────────────────────────▼────────────────────────────────┐
+│ Projection Orchestrator                                 │
+│   Owns the projection and its lifecycle                 │
+│   Regions: system, domain durable, session durable,     │
+│     session ephemeral, transient, current turn          │
+│   Event loop:                                           │
+│     1. Receive event                                    │
+│     2. Examine: which regions does this event affect?   │
+│     3. Mutate: update affected regions                  │
+│     4. Log + checkpoint                                 │
+│     5. Generate API payload from projection             │
+│     6. Forward to API adapter                           │
+│     7. Receive API response                             │
+│     8. Ingest: mutate projection with response          │
+│     9. Execute queued removals (per-region)             │
+│    10. Log + checkpoint                                 │
+│    11. Compute client response from projection          │
+│    12. Return to client adapter                         │
+└────────────────────────┬────────────────────────────────┘
+                         │ payload
+┌────────────────────────▼────────────────────────────────┐
+│ API Adapter                                             │
+│   Translates projection into provider API format        │
+│   Anthropic adapter: regions → messages + cache_control  │
+│   Places cache breakpoints at region boundaries         │
+│   Strips protocol artifacts from API responses          │
+│   Future: OpenAI adapter, local model adapter           │
+└─────────────────────────────────────────────────────────┘
+```
+
+## Projection regions
+
+The projection is a set of structured regions, each with different
+stability and caching characteristics.
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│ Region 0: Tools                                     │
+│ R0: Tools                                           │
 │   Tool definitions (framework + phantom tools)      │
+│   Stability: session lifetime — never mutates       │
 │   ── cache breakpoint 1 ──                          │
 ├─────────────────────────────────────────────────────┤
-│ Region 1: System                                    │
-│   Claude Code system prompt                         │
-│   Pichay system instructions                        │
-│   Skills / agents / memory files (from client)      │
+│ R1: System                                          │
+│   Gateway system instructions                       │
+│   Client-provided system context (absorbed, not     │
+│   passed through — CLAUDE.md, MEMORY.md content     │
+│   becomes part of the projection, not prefix tax)   │
+│   Stability: session lifetime                       │
 │   ── cache breakpoint 2 ──                          │
 ├─────────────────────────────────────────────────────┤
-│ Region 2: Durable                                   │
-│   Stabilized conversation content (promoted)        │
-│   Tensor summaries of graduated content             │
-│   ── page table ──                                  │
+│ R2: Durable                                         │
+│   Model-curated tensors with declared losses        │
+│   Domain knowledge, session history (compressed)    │
+│   Page table (transformer's memory map)             │
+│   Stability: append-only (frozen tensors)           │
 │   ── cache breakpoint 3 ──                          │
 ├─────────────────────────────────────────────────────┤
-│ Region 3: Ephemeral                                 │
+│ R3: Ephemeral                                       │
 │   Recent tool results (aging toward eviction)       │
 │   Recent conversation turns (not yet stabilized)    │
 │   Content marked for removal (waste)                │
+│   Stability: mutates every turn                     │
 ├─────────────────────────────────────────────────────┤
-│ Region 4: Current turn                              │
-│   User message                                      │
-│   Dynamic anchor (live status, pressure)            │
+│ R4: Current turn                                    │
+│   Current user message / tool results               │
+│   Dynamic anchor (live status, pressure, feedback)  │
+│   Stability: replaced every turn                    │
 └─────────────────────────────────────────────────────┘
 ```
 
-Three explicit cache breakpoints. One slot held in reserve (or
-available for future use, e.g. a breakpoint within Region 2 if it
-grows large enough to benefit from internal segmentation).
-
 ### Cache behavior by region
 
-| Region | Mutates? | Cached? | Cost model |
-|--------|----------|---------|------------|
-| 0: Tools | Never (session lifetime) | Always read after first write | 0.1x |
-| 1: System | Never (session lifetime) | Always read after first write | 0.1x |
-| 2: Durable | Append-only (grows monotonically) | Read for existing, write for new | Amortized 0.1x |
-| 3: Ephemeral | Every turn (compaction, aging) | Written every turn | 1.25x |
-| 4: Current | Every turn (new content) | Never cached | 1.0x |
+| Region | Mutates? | Cached? | Cost |
+|--------|----------|---------|------|
+| R0: Tools | Never | Always read | 0.1x |
+| R1: System | Never | Always read | 0.1x |
+| R2: Durable | Append-only | Read for existing, write for new | Amortized 0.1x |
+| R3: Ephemeral | Every turn | Written every turn | 1.25x |
+| R4: Current | Every turn | Never cached | 1.0x |
 
-The cost optimization: minimize Region 3+4 tokens, maximize Region 0+1+2
-tokens. Content graduates from 3→2 as it stabilizes. Content evicted
-from 3 becomes a page table entry in 2 (available, not present).
+Optimization target: minimize R3+R4 tokens, maximize R0+R1+R2 tokens.
+Content graduates from R3→R2 as it stabilizes. Eviction from R3
+produces a tensor in R2 (the price of eviction).
 
-### Why tools get their own region
+## Event flow (detailed)
 
-The Anthropic cache hierarchy is: tools → system → messages. Tools and
-system are separate cache levels. A change in tools invalidates system
-and message caches. A change in system invalidates message caches. By
-giving tools their own breakpoint, we isolate them completely.
+### Inbound (client → API)
 
-Claude Code's tool definitions are stable for the session. The phantom
-tools (yuyay, qunqay, tiqsiy) are stable for the session. One
-breakpoint after all tools, never invalidated.
+```
+Client message arrives
+  │
+  ├─ Client adapter strips client artifacts
+  ├─ Client adapter emits event: { type, content, metadata }
+  │
+  ▼
+Orchestrator receives event
+  │
+  ├─ Classify: which region(s) does this affect?
+  │   - New user message → R4 (current turn)
+  │   - Tool result → R3 (ephemeral) or R4
+  │   - System context update → R1 (rare)
+  │
+  ├─ Mutate affected regions
+  │   - Previous R4 content ages into R3
+  │   - R3 waste check: any pending removals to execute?
+  │   - Pressure check: need to request model eviction?
+  │
+  ├─ Log state before API call
+  ├─ Checkpoint projection to disk
+  │
+  ├─ Generate API payload FROM projection
+  │   - R0 → tools
+  │   - R1 → system prompt
+  │   - R2+R3+R4 → messages (structure determined by
+  │     API adapter, not by client message history)
+  │   - Place cache_control at region boundaries
+  │
+  ▼
+API adapter sends to provider
+```
 
-## Region 2: The model's curated memory
+### Outbound (API → client)
 
-Region 2 is a tensor store. Its content is not verbatim copies of
-original data — it is the model's compressed understanding, with
-declared losses. Every piece of content in Region 2 was produced by
-the transformer as an act of curation.
+```
+API response arrives
+  │
+  ├─ API adapter strips provider artifacts
+  ├─ API adapter extracts: assistant text, tool calls,
+  │   usage stats, stop reason
+  │
+  ▼
+Orchestrator ingests response
+  │
+  ├─ Store assistant response in R3 (ephemeral)
+  ├─ Process any cooperative memory signals from model
+  │   - release requests → queue removal, require tensor
+  │   - retain signals → cancel pending removal
+  │   - yuyay responses → update page table
+  │
+  ├─ Execute queued removals (per-region)
+  │   - Only removals whose tensor has been provided
+  │   - Tensor → frozen in R2, original → page store
+  │
+  ├─ Log state after ingestion
+  ├─ Checkpoint projection to disk
+  │
+  ├─ Compute client response FROM projection
+  │   - Strip gateway protocol (tensor handles, yuyay tags,
+  │     cooperative memory signals)
+  │   - Format for client protocol
+  │
+  ▼
+Client adapter sends to client
+```
 
-### How content enters Region 2
+## Tensor lifecycle (price of eviction)
 
-The model produces a tensor as the **price of eviction**. When the
-model wants to release content from its working set, it must provide
-a tensor in the release response:
+Content enters R2 only when the model produces a tensor for it.
+The gateway will not evict without a tensor. This creates natural
+back-pressure: the model spends output tokens compressing only
+what it values enough to preserve.
 
 ```xml
 <release handle="a3f2b901">
@@ -96,44 +220,14 @@ a tensor in the release response:
 </release>
 ```
 
-The gateway will not evict without a tensor. If the model says
-"release" without providing one, the content stays. This creates
-natural back-pressure: the model only releases what it's willing to
-spend output tokens compressing. That cost is a built-in signal about
-how much the model values the content.
-
-The verbatim original is always stored in the page store (storage is
-cheap). The tensor goes into Region 2. The page table entry points at
-both: the tensor for the transformer's use, the verbatim for fault
-recovery.
-
-### Region 2 structure
-
-```
-┌─────────────────────────────────────────────────────┐
-│ Region 2: Durable (model-curated memory)            │
-│                                                     │
-│   Frozen tensors (oldest first, append-only)        │
-│     tensor:a3f2b901 — [content + declared_losses]   │
-│     tensor:7e9d4c12 — [content + declared_losses]   │
-│     tensor:c8ad36b2 — [content + declared_losses]   │
-│     ...                                             │
-│                                                     │
-│   ── page table (mutable, rewritten each turn) ──   │
-│   ── cache breakpoint 3 ──                          │
-└─────────────────────────────────────────────────────┘
-```
-
-Everything above the page table is frozen and cached. The page table
-and everything below it (Regions 3, 4) are rewritten each turn. The
-page table is small (metadata, not content), so this cost is minor.
+The verbatim original is always stored in the page store (storage
+is cheap). The tensor goes into R2. The page table entry points at
+both.
 
 ### Page table
 
-The page table is the transformer's map of available memory. It sits
-at the end of Region 2, right before cache breakpoint 3.
-
-#### Entry schema
+The page table is the transformer's map of available memory. It
+sits at the end of R2, right before cache breakpoint 3.
 
 ```
 PageTableEntry:
@@ -147,131 +241,168 @@ PageTableEntry:
   age_turns: int         # turns since last access
 ```
 
-For `available` entries (evicted with tensor), the tensor itself is
-in the frozen portion of Region 2. The page table entry is a pointer,
-not a duplicate.
-
-For `present` entries still in Region 3, the page table tracks them
-so the model can see what's in its working set and decide what to
-release.
-
-For `pending_removal` entries, the model has released them but the
-gateway is deferring the restructure to protect the cache. The model
-can countermand this with a retain signal before the next idle
-restructure.
-
 ### Status transitions
 
 ```
-                    ┌──────────────────┐
-   arrives ──────> │  present (R3)    │
-                    └────────┬─────────┘
-                             │
-                 ┌───────────┴───────────┐
-                 │                       │
-          model releases            gateway evicts
-          (with tensor)             (pressure/idle)
-                 │                       │
-                 v                       v
-          ┌──────────────┐    ┌──────────────────┐
-          │ available    │    │ pending_removal   │
-          │ (tensor→R2,  │    │ (R3, waste —     │
-          │  entry in    │    │  no tensor yet,   │
-          │  page table) │    │  awaiting model   │
-          └──────┬───────┘    │  cooperation)     │
-                 │            └────────┬──────────┘
-             fault (recall)            │
-                 │              idle restructure OR
-                 v              model provides tensor
-           ┌──────────┐               │
-           │ present   │               v
-           │ (R3)      │        ┌──────────────┐
-           └──────────┘        │ available     │
-                                │ (tensor→R2)   │
-                                └──────────────┘
+                ┌──────────────────┐
+   arrives ──> │  present (R3)    │
+                └────────┬─────────┘
+                         │
+             ┌───────────┴───────────┐
+             │                       │
+      model releases            gateway requests
+      (with tensor)             (pressure/idle)
+             │                       │
+             v                       v
+      ┌──────────────┐    ┌──────────────────┐
+      │ available     │    │ pending_removal   │
+      │ (tensor→R2)   │    │ (awaiting model   │
+      └──────┬───────┘    │  cooperation)     │
+             │            └────────┬──────────┘
+         fault (recall)            │
+             │              model provides tensor
+             v                     │
+       ┌──────────┐                v
+       │ present   │        ┌──────────────┐
+       │ (R3)      │        │ available     │
+       └──────────┘        │ (tensor→R2)   │
+                            └──────────────┘
 ```
 
-Key difference from the prior design: the model is the agent of
-eviction, not the gateway. The gateway manages pressure and
-eligibility. The model decides what to release and produces the
-tensor that preserves meaning. Gateway-initiated eviction
-(`pending_removal`) is the fallback when the model doesn't
-cooperate — and even then, the gateway should ask again before
-discarding content without a tensor.
+## Eviction policy
 
-### Idle restructure
+Eviction is **pressure-gated**, not age-based.
 
-When the cache expires (>5 min idle), the gateway restructures:
-- Execute all pending removals (with or without tensors)
+| Pressure zone | Context usage | Eviction behavior |
+|---------------|---------------|-------------------|
+| Low | < 50% | No eviction. Hold everything. |
+| Moderate | 50-70% | Schedule candidates. Execute only at idle boundaries. |
+| Elevated | 70-85% | Request model cooperation (release signals). |
+| Critical | > 85% | Gateway-initiated pending_removal. Aggressive. |
+
+Age is a factor in *candidate selection*, not a trigger for eviction.
+
+### Removal nominations
+
+Content can be nominated for removal from multiple sources:
+
+- **Model cooperation** (release signals with tensor)
+- **Gateway heuristics** (age, size, content type)
+- **Pressure scheduler** (context budget exhaustion)
+- **Client adapter** (content the client has discarded)
+
+All nominations are **advisory**. The space scheduler decides what
+actually gets evicted and when, based on pressure zone, fault history,
+and available tensors. The scheduler is the single authority.
+
+### Accessed bit
+
+The gateway MUST track access patterns for content in R2 and R3.
+Currently only "fault count" (recalled after eviction) is tracked.
+This is insufficient — we need:
+
+- **Last access turn** — when was this content last referenced?
+- **Access count** — how many times has it been referenced?
+- **Access recency** — accessed in the last N turns?
+
+These signals inform promotion (R3→R2), eviction candidate selection,
+and help us understand workload patterns we don't yet have visibility
+into. Collect the data now; optimize later when patterns emerge.
+
+## Idle restructure
+
+When the Anthropic cache expires (~5 min idle), the write cost is
+the same whether we send the old layout or a clean one. Restructure
+is free at idle boundaries:
+
+- Execute all pending removals
 - Promote surviving ephemeral content based on fault history
-- Recompact Region 3
+- Recompact R3
 - Rebuild the projection from scratch
 
-The write cost is the same whether we send the old layout or a
-clean one, so restructuring is free at idle boundaries.
+## Checkpoint and recovery
+
+The projection is checkpointed to disk after every mutation cycle
+(steps 4 and 10 in the event flow). A checkpoint contains:
+
+- All region contents (serialized)
+- Page table state
+- Page store index (verbatim originals on disk)
+- Session metadata (turn count, cumulative stats)
+
+**Recovery**: load the last checkpoint, rebuild the projection,
+continue. The gateway process is ephemeral — it can restart at
+any turn boundary without session loss.
+
+Recovery MUST be tested before the gateway is considered production.
 
 ## Waste tracking
 
-Content in Region 3 marked `pending_removal` is waste. The projector
-tracks cumulative waste:
+Content in R3 marked `pending_removal` is waste.
 
 ```
-waste_bytes: int        # total bytes of pending_removal content
-waste_tokens_est: int   # estimated tokens (bytes / 4)
-cache_write_cost: float # what we'd pay to restructure (1.25x on everything after the change)
+waste_tokens: int       # estimated tokens of waste
+cache_write_cost: float # cost to restructure now
+idle_distance: float    # estimated time until next idle boundary
 ```
 
 Restructure triggers:
-- **Idle return** (cache expired anyway): always restructure
+- **Idle return** (cache expired): always restructure
 - **Waste threshold**: waste_tokens > configurable limit
-- **Pressure zone**: context enters "involuntary" or "aggressive" zone
+- **Pressure zone**: context enters elevated or critical
 
-## Dynamic anchor
+## What survives from Pichay
 
-Appended to the last user message (Region 4). Contains:
-- Live status: token count, pressure zone, hard cap
-- Waste summary: how much dead weight we're carrying
-- Last-turn feedback: what operations were executed
+- Observability / telemetry harness
+- Content classification (file / tool / conversation)
+- Eviction vs GC distinction (faultable vs ephemeral)
+- Cooperative memory DSL (drop / summarize / anchor / release)
+- Session isolation via fingerprinting
+- Page store (verbatim storage + fault tracking)
 
-The anchor is always after the last cache breakpoint, so it's free to
-mutate without cache impact.
+## What does NOT survive
 
-The page table is NOT in the anchor. It's in Region 2, visible to the
-transformer as part of the stable context. The anchor is operational
-telemetry; the page table is the transformer's map of available memory.
+- Message-level fingerprinting and mutation detection (proxy pattern)
+- Age-based eviction (replaced by pressure-gated)
+- Distance-based cache breakpoint placement (replaced by region-boundary)
+- Passing client messages through to the API (proxy pattern)
+- Decorating messages with tensor handles (proxy pattern)
+- Inspecting client message content to decide API behavior (proxy pattern)
 
-## What the projector replaces
+## Acceptance test
 
-- `_preprocess()` — the entire function
-- `inject_system_status()` — Region 1 injection + Region 4 anchor
-- `_place_gateway_cache_controls()` — breakpoint placement
-- `_strip_all_cache_controls()` — no longer needed (projector owns all markers)
-- `compact_messages()` inside `MessageStore.ingest()` — compaction moves to projector
-- `MessageStore` physical store concept — replaced by region-aware storage
+The gateway must sustain a session where the model builds the next
+version of the gateway itself. Metrics:
 
-The `PageStore` fault detection, pinning, and release tracking survive
-as mechanisms, but they feed into the page table rather than operating
-on the message array directly.
+- Cache hit rate > 95% in steady state
+- Zero false-positive anti-injection rejections
+- Checkpoint recovery tested: restart mid-session, verify continuity
+- No proxy-pattern code: grep for message mutation, fail if found
+- Checkpoint-only recovery: projection reconstructable from checkpoint
+  alone, without replaying the client's message history. If recovery
+  requires the client's messages, you have a proxy with checkpointing.
+- Feedback channel: model can report protocol suggestions; at least
+  one suggestion received and evaluated per test session
 
 ## Open questions
 
-1. **Region 2 internal breakpoint**: If Region 2 grows past ~50K tokens,
-   should we split it with the 4th breakpoint? The frozen portion would
-   get its own breakpoint, and the page table + recent promotions would
-   sit between breakpoints 3 and 4.
+1. **R2 internal breakpoint**: If R2 grows past ~50K tokens, split it
+   with the 4th breakpoint?
 
-2. **Conversation in Region 2**: ~~Resolved.~~ Region 2 content is
-   tensors produced by the model, not verbatim conversation turns.
-   The model produces the tensor as the price of eviction. This is
-   more compact than raw turns and preserves meaning via declared
-   losses. The turn structure question becomes: how do we pack tensors
-   into valid API message pairs? (See question 4.)
+2. **Message structure constraints**: The Anthropic API requires
+   alternating user/assistant messages. The API adapter must pack
+   projection regions into valid alternation. Key insight: Claude Code
+   already stuffs data into assistant blocks — synthesis from the
+   projection is LESS work than trying to mutate Claude's message
+   structure. The packing logic synthesizes clean alternation from
+   region contents rather than preserving conversational structure.
+   This is where proxy gravity is strongest — resist preserving the
+   original message flow.
 
-3. **System prompt stability**: Claude Code's system prompt may contain
-   dynamic elements (system-reminders). Do we need to strip/normalize
-   the client system prompt, or is it stable enough in practice?
+3. **System prompt absorption**: CLAUDE.md and MEMORY.md content
+   absorbed into R1 at session start — validated that this doesn't
+   break Claude Code's expectations?
 
-4. **Message structure constraints**: The Anthropic API requires
-   alternating user/assistant messages. The projection reorders content
-   but must still produce valid message alternation. Region 2's durable
-   content needs to be packed into valid message pairs.
+4. **Client adapter contract**: What is the minimal event interface
+   between the client adapter and the orchestrator? Design for
+   testability — the test harness adapter should be trivial.
