@@ -11,12 +11,12 @@ decides what goes into the registers for the next cycle.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Callable
 
 import anthropic
 
 if TYPE_CHECKING:
-    from hamutay.backend import ProjectionBackend
+    from hamutay.backend import ProjectionBackend, ProjectionResult
 
 from hamutay.tensor import (
     DeclaredLoss,
@@ -356,6 +356,7 @@ class Projector:
         max_retries: int = 2,
         escalation_policy: EscalationPolicy | None = None,
         backend: ProjectionBackend | None = None,
+        on_tensor: Callable[[Tensor, dict], None] | None = None,
     ):
         # Backend takes precedence. If not provided, wrap the client
         # in an AnthropicBackend for backward compatibility.
@@ -372,8 +373,12 @@ class Projector:
         self._max_retries = max_retries
         self._escalation_policy = escalation_policy
         self._precursor_detected = False
+        self._on_tensor = on_tensor
         self.escalation_log: list[dict] = []
         self.last_stop_reason: str = ""
+        self.total_input_tokens: int = 0
+        self.total_output_tokens: int = 0
+        self.usage_log: list[dict] = []
 
     @property
     def current_tensor(self) -> Tensor | None:
@@ -428,25 +433,37 @@ class Projector:
 
     def _do_projection(
         self, new_content: str, model_override: str | None = None
-    ) -> tuple[Tensor, str]:
+    ) -> tuple[Tensor, ProjectionResult]:
         """Execute one projection call via the backend.
 
-        Returns (tensor, stop_reason) so callers can detect truncation.
+        Returns (parsed_tensor, raw_result) so callers can access
+        stop_reason, usage, and the raw tensor dict.
         """
         model = model_override or self.model
         prompt = _build_projection_prompt(
             self._current_tensor, new_content, self._cycle
         )
 
-        raw_tensor, stop_reason = self._backend.call_projection(
+        result = self._backend.call_projection(
             model=model, max_tokens=64000, prompt=prompt,
         )
 
-        if stop_reason == "max_tokens":
+        self.total_input_tokens += result.input_tokens
+        self.total_output_tokens += result.output_tokens
+        self.usage_log.append({
+            "cycle": self._cycle,
+            "input_tokens": result.input_tokens,
+            "output_tokens": result.output_tokens,
+            "cache_read_tokens": result.cache_read_tokens,
+            "cache_creation_tokens": result.cache_creation_tokens,
+            "stop_reason": result.stop_reason,
+        })
+
+        if result.stop_reason == "max_tokens":
             print(f"    WARNING: cycle {self._cycle} hit max_tokens — "
                   f"tensor may be truncated")
 
-        return _parse_projection(raw_tensor, self._cycle), stop_reason
+        return _parse_projection(result.tensor, self._cycle), result
 
     def project(self, new_content: str) -> Tensor:
         """Project new content into the tensor, returning the updated tensor.
@@ -473,8 +490,8 @@ class Projector:
         if escalated:
             print(f"    ESCALATED to {model} at cycle {self._cycle}")
 
-        tensor, stop_reason = self._do_projection(new_content, model_override=model)
-        self.last_stop_reason = stop_reason
+        tensor, proj_result = self._do_projection(new_content, model_override=model)
+        self.last_stop_reason = proj_result.stop_reason
 
         # Log escalation decision
         self.escalation_log.append({
@@ -486,7 +503,7 @@ class Projector:
             "n_strands": len(tensor.strands),
             "n_losses": len(tensor.declared_losses),
             "has_ifn": bool(tensor.instructions_for_next),
-            "stop_reason": stop_reason,
+            "stop_reason": proj_result.stop_reason,
         })
 
         if self._is_collapsed(tensor):
@@ -507,10 +524,10 @@ class Projector:
                           f"(cycle {self._last_good_tensor.cycle}) "
                           f"using {recovery_model}")
 
-                tensor, stop_reason = self._do_projection(
+                tensor, proj_result = self._do_projection(
                     new_content, model_override=recovery_model
                 )
-                self.last_stop_reason = stop_reason
+                self.last_stop_reason = proj_result.stop_reason
                 if not self._is_collapsed(tensor):
                     print(f"    RECOVERED: {tensor.token_estimate()} tokens")
                     break
@@ -530,4 +547,8 @@ class Projector:
             self._last_good_tensor = self._current_tensor
 
         self._current_tensor = tensor
+
+        if self._on_tensor is not None:
+            self._on_tensor(tensor, self.usage_log[-1] if self.usage_log else {})
+
         return tensor

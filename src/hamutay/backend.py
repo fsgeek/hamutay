@@ -12,6 +12,7 @@ Two backends:
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from typing import Protocol
 
 import anthropic
@@ -20,20 +21,32 @@ import httpx
 from hamutay.projector import PROJECTION_SCHEMA
 
 
-class ProjectionBackend(Protocol):
-    """Minimal interface a Projector needs from its transport layer.
+@dataclass
+class ProjectionResult:
+    """What comes back from a single projection call."""
 
-    One method: send a projection request, get back the raw tensor
-    dict and a normalized stop reason.
-    """
+    tensor: dict
+    stop_reason: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_creation_tokens: int = 0
+
+    @property
+    def total_tokens(self) -> int:
+        return self.input_tokens + self.output_tokens
+
+
+class ProjectionBackend(Protocol):
+    """Minimal interface a Projector needs from its transport layer."""
 
     def call_projection(
         self,
         model: str,
         max_tokens: int,
         prompt: str,
-    ) -> tuple[dict, str]:
-        """Send a projection prompt, return (raw_tensor_dict, stop_reason).
+    ) -> ProjectionResult:
+        """Send a projection prompt, return a ProjectionResult.
 
         Stop reasons are normalized:
           - "end_turn" or "tool_use": normal completion
@@ -60,21 +73,7 @@ class AnthropicBackend:
         model: str,
         max_tokens: int,
         prompt: str,
-    ) -> tuple[dict, str]:
-        api_params = dict(
-            model=model,
-            max_tokens=max_tokens,
-            messages=[{"role": "user", "content": prompt}],
-            tools=[
-                {
-                    "name": "emit_tensor",
-                    "description": "Emit the updated tensor projection",
-                    "input_schema": PROJECTION_SCHEMA,
-                }
-            ],
-            tool_choice={"type": "tool", "name": "emit_tensor"},
-        )
-
+    ) -> ProjectionResult:
         try:
             with self.client.messages.stream(
                 model=model,
@@ -97,9 +96,22 @@ class AnthropicBackend:
 
         stop_reason = response.stop_reason or "unknown"
 
+        usage = getattr(response, "usage", None)
+        input_tokens = getattr(usage, "input_tokens", 0) if usage else 0
+        output_tokens = getattr(usage, "output_tokens", 0) if usage else 0
+        cache_read = getattr(usage, "cache_read_input_tokens", 0) if usage else 0
+        cache_create = getattr(usage, "cache_creation_input_tokens", 0) if usage else 0
+
         for block in response.content:
             if hasattr(block, "name") and block.type == "tool_use" and block.name == "emit_tensor":
-                return block.input, stop_reason  # type: ignore[union-attr]
+                return ProjectionResult(
+                    tensor=block.input,  # type: ignore[union-attr]
+                    stop_reason=stop_reason,
+                    input_tokens=input_tokens,
+                    output_tokens=output_tokens,
+                    cache_read_tokens=cache_read,
+                    cache_creation_tokens=cache_create,
+                )
 
         raise RuntimeError("Anthropic backend: no emit_tensor in response")
 
@@ -178,7 +190,7 @@ class OpenAIBackend:
         model: str,
         max_tokens: int,
         prompt: str,
-    ) -> tuple[dict, str]:
+    ) -> ProjectionResult:
         payload = {
             "model": model,
             "max_tokens": max_tokens,
@@ -217,7 +229,20 @@ class OpenAIBackend:
             "tool_calls": "tool_use",
         }.get(raw_stop, raw_stop)
 
+        # Extract usage if provided
+        usage = data.get("usage", {})
+        input_tokens = usage.get("prompt_tokens", 0)
+        output_tokens = usage.get("completion_tokens", 0)
+
         message = choice.get("message", {})
+
+        def _result(tensor: dict) -> ProjectionResult:
+            return ProjectionResult(
+                tensor=tensor,
+                stop_reason=stop_reason,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+            )
 
         # Primary path: tool_calls in the response
         for tc in message.get("tool_calls", []):
@@ -225,14 +250,14 @@ class OpenAIBackend:
             if fn.get("name") == "emit_tensor":
                 args = fn.get("arguments", "")
                 raw_tensor = json.loads(args) if isinstance(args, str) else args
-                return raw_tensor, stop_reason
+                return _result(raw_tensor)
 
         # Fallback: some models put JSON in content instead of tool_calls
         content = message.get("content", "")
         if content:
             raw_tensor = self._extract_json_from_content(content)
             if raw_tensor is not None:
-                return raw_tensor, stop_reason
+                return _result(raw_tensor)
 
         raise RuntimeError("OpenAI backend: no emit_tensor in response")
 

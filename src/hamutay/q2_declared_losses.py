@@ -49,7 +49,7 @@ class MaskedLossProjector(Projector):
 
     def _do_projection(
         self, new_content: str, model_override: str | None = None
-    ) -> tuple[Tensor, str]:
+    ):
         """Mask declared_losses, then delegate to parent."""
         original = self._current_tensor
 
