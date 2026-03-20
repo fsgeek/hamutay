@@ -60,6 +60,28 @@ When varying projection behavior for an experiment, subclass `Projector` or modi
 the tensor fed to `_build_projection_prompt` — don't reimplement the projection call.
 
 Similarly, `max_tokens` must match across experiments. The `Projector` currently uses
-16384; this should be the Haiku 4.5 maximum (64000 with streaming) per the
-"max_tokens is a guillotine" note above. Any change should be made in `Projector`
-itself so all experiments pick it up.
+64000 (streaming). Any change should be made in `Projector` itself so all experiments
+pick it up.
+
+### Tensor data capture
+
+Every tensor the Projector produces must be persisted. Use the `on_tensor` callback:
+
+- `TensorLog(path)` — append-only JSONL, the fallback for local work
+- `ApachetaBridge.from_duckdb(path)` — Yanantin persistence (when available)
+
+Tools that don't capture data are a perversion. Never build a consumer of the Projector
+that discards the tensors it produces.
+
+### Batch size as confound
+
+Batch size (tokens of new content per projection cycle) is the strongest predictor of
+tensor rewrite behavior. Small batches → incremental integration (14% n-gram survival).
+Large batches → structural reorganization (4% survival). Comparative experiments MUST
+control for batch size distribution or the comparison is invalid.
+
+### Chat interface
+
+`uv run python -m hamutay` starts a tensor-projected conversation. Every session
+produces research data (tensor JSONL in experiments/chat/). The chat interface is
+both a demonstration and an instrument.
