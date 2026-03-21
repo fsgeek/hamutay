@@ -317,6 +317,34 @@ class EscalateOnSize(EscalationPolicy):
         return current_tensor.token_estimate() > self.token_threshold
 
 
+class EscalateOnSustainedPrecursor(EscalationPolicy):
+    """Escalate only on consecutive precursor events.
+
+    Single-cycle precursors are part of the tensor's healthy breathing
+    rhythm (~10% of cycles, self-recovering). Only sustained precursors
+    (2+ consecutive cycles) indicate actual distress.
+
+    See experiments/metacognitive_breathing_analysis.md for evidence.
+    """
+
+    def __init__(
+        self,
+        base_model: str,
+        escalation_model: str,
+        consecutive_threshold: int = 2,
+    ):
+        super().__init__(base_model, escalation_model)
+        self.consecutive_threshold = consecutive_threshold
+        self._consecutive_precursors = 0
+
+    def should_escalate(self, cycle, current_tensor, precursor_detected):
+        if precursor_detected:
+            self._consecutive_precursors += 1
+        else:
+            self._consecutive_precursors = 0
+        return self._consecutive_precursors >= self.consecutive_threshold
+
+
 class EscalateOnPrecursorOrSize(EscalationPolicy):
     """Escalate on precursor OR size — defense in depth."""
 

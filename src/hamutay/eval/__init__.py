@@ -20,7 +20,9 @@ from hamutay.eval.divergence import (
 )
 from hamutay.eval.trajectory import (
     TrajectoryStats,
+    ProcessHealth,
     trajectory_stats,
+    process_health,
     compare_trajectories,
 )
 
@@ -32,6 +34,8 @@ __all__ = [
     "loss_distribution",
     "component_divergence",
     "TrajectoryStats",
+    "ProcessHealth",
     "trajectory_stats",
+    "process_health",
     "compare_trajectories",
 ]

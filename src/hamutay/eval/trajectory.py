@@ -306,6 +306,154 @@ class TrajectoryComparison:
         }
 
 
+# ── Process Health ─────────────────────────────────────────────────
+
+@dataclass
+class ProcessHealth:
+    """Process-quality metric for a tensor trajectory.
+
+    Captures what Riemann dispersion misses: the dynamics of how the
+    tensor rewrites itself, not just the final output quality.
+
+    Derived from the metacognitive breathing analysis (2026-03-20):
+    - Metacognitive maintenance: does meta_frac hold or atrophy?
+    - Breathing rhythm: healthy oscillation in meta_frac (~10-cycle period)
+    - Precursor recovery: single-cycle precursors self-recover
+    - Loss evolution: growing losses = accumulating self-awareness
+    """
+
+    # Metacognitive trend: slope of meta_frac over time
+    # Positive = maintaining/growing, negative = atrophying
+    meta_trend: float
+
+    # Breathing rhythm: autocorrelation at lag ~10
+    # Negative = oscillatory (healthy), near-zero = damped, positive = stuck
+    meta_acf_lag10: float
+
+    # Precursor rate and recovery
+    precursor_rate: float  # fraction of cycles that are precursors
+    precursor_recovery_rate: float  # fraction of precursors that recover next cycle
+
+    # Loss channel health
+    loss_trend: float  # slope of loss count (positive = growing awareness)
+
+    # Consecutive divergence stability
+    mean_consecutive_divergence: float
+    divergence_cv: float  # coefficient of variation (low = stable rewrites)
+
+    @property
+    def metacognition_healthy(self) -> bool:
+        """Is the tensor maintaining its metacognitive capacity?"""
+        return self.meta_trend >= -0.001
+
+    @property
+    def breathing(self) -> bool:
+        """Does the tensor show the healthy breathing rhythm?"""
+        return self.meta_acf_lag10 < -0.05
+
+    @property
+    def precursors_recovering(self) -> bool:
+        """Are precursor events self-recovering?"""
+        return self.precursor_recovery_rate >= 0.8 or self.precursor_rate == 0
+
+    def summary(self) -> dict:
+        return {
+            "meta_trend": f"{self.meta_trend:+.4f}",
+            "metacognition_healthy": self.metacognition_healthy,
+            "breathing": self.breathing,
+            "meta_acf_lag10": f"{self.meta_acf_lag10:+.3f}",
+            "precursor_rate": f"{self.precursor_rate:.2%}",
+            "precursor_recovery_rate": f"{self.precursor_recovery_rate:.2%}",
+            "loss_trend": f"{self.loss_trend:+.4f}",
+            "mean_divergence": f"{self.mean_consecutive_divergence:.3f}",
+            "divergence_cv": f"{self.divergence_cv:.3f}",
+        }
+
+
+def _linear_slope(series: list[float]) -> float:
+    """Compute linear regression slope."""
+    n = len(series)
+    if n < 3:
+        return 0.0
+    x_mean = (n - 1) / 2
+    y_mean = sum(series) / n
+    numerator = sum((i - x_mean) * (y - y_mean) for i, y in enumerate(series))
+    denominator = sum((i - x_mean) ** 2 for i in range(n))
+    if denominator == 0:
+        return 0.0
+    return numerator / denominator
+
+
+def _autocorrelation(series: list[float], lag: int) -> float:
+    """Compute autocorrelation at given lag."""
+    n = len(series)
+    if lag >= n or n < 5:
+        return 0.0
+    mean = sum(series) / n
+    var = sum((x - mean) ** 2 for x in series) / n
+    if var == 0:
+        return 0.0
+    cov = sum((series[i] - mean) * (series[i + lag] - mean)
+              for i in range(n - lag)) / (n - lag)
+    return cov / var
+
+
+def process_health(stats: TrajectoryStats) -> ProcessHealth:
+    """Compute process health from trajectory statistics.
+
+    Requires at least 15 cycles for meaningful results.
+    """
+    meta_series = stats.metacognitive_ratio_series
+
+    # Meta trend
+    meta_trend = _linear_slope(meta_series)
+
+    # Breathing rhythm (autocorrelation at lag 10, or lag n//5 for short sequences)
+    lag = min(10, max(3, len(meta_series) // 5))
+    meta_acf = _autocorrelation(meta_series, lag)
+
+    # Precursor detection: meta_frac < 0.01
+    precursor_mask = [mf < 0.01 for mf in meta_series]
+    n_precursors = sum(precursor_mask)
+    precursor_rate = n_precursors / len(meta_series) if meta_series else 0.0
+
+    # Precursor recovery: next cycle meta_frac >= 0.1
+    recoveries = 0
+    recovery_opportunities = 0
+    for i, is_precursor in enumerate(precursor_mask):
+        if is_precursor and i + 1 < len(precursor_mask):
+            recovery_opportunities += 1
+            if meta_series[i + 1] >= 0.1:
+                recoveries += 1
+    recovery_rate = recoveries / recovery_opportunities if recovery_opportunities > 0 else 1.0
+
+    # Loss trend
+    loss_trend = _linear_slope([float(c) for c in stats.loss_counts])
+
+    # Consecutive divergence
+    if stats.consecutive_divergence:
+        divs = [d.overall for d in stats.consecutive_divergence]
+        mean_div = sum(divs) / len(divs)
+        if mean_div > 0 and len(divs) > 2:
+            var = sum((d - mean_div) ** 2 for d in divs) / len(divs)
+            cv = (var ** 0.5) / mean_div
+        else:
+            cv = 0.0
+    else:
+        mean_div = 0.0
+        cv = 0.0
+
+    return ProcessHealth(
+        meta_trend=meta_trend,
+        meta_acf_lag10=meta_acf,
+        precursor_rate=precursor_rate,
+        precursor_recovery_rate=recovery_rate,
+        loss_trend=loss_trend,
+        mean_consecutive_divergence=mean_div,
+        divergence_cv=cv,
+    )
+
+
 def compare_trajectories(
     a: Sequence[Tensor],
     b: Sequence[Tensor],

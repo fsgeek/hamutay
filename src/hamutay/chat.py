@@ -30,22 +30,41 @@ from hamutay.tensor import Tensor
 from hamutay.tensor_log import TensorLog
 
 
+_STANDARD_SYSTEM = (
+    "You are a helpful assistant engaged in an ongoing conversation. "
+    "You have access to a projected state tensor that represents the "
+    "accumulated context of this conversation. Use it to maintain "
+    "coherence across the conversation's history."
+)
+
+_MECHANISM_ONLY_SYSTEM = (
+    "Your state is a tensor — a structured projection of everything "
+    "that has happened in this conversation. The tensor contains strands "
+    "(thematic content threads), declared losses (what was dropped and why), "
+    "open questions, instructions for the next cycle, and epistemic "
+    "confidence values. The tensor is updated after each exchange by a "
+    "separate projection process. You do not manage the tensor directly."
+)
+
+
 def _build_alu_messages(
     tensor: Tensor | None,
     user_message: str,
     cycle: int,
+    mechanism_only: bool = False,
 ) -> tuple[list[dict], str]:
     """Build the messages for the reasoning model (the ALU).
 
     The ALU sees the current tensor as system context and the user's
     message as the prompt. It doesn't manage its own memory — that's
     the Projector's job.
+
+    If mechanism_only=True, the system prompt contains only the tensor
+    protocol — no behavioral instructions, no personality prescription.
     """
     system_parts = [
-        "You are a helpful assistant engaged in an ongoing conversation. "
-        "You have access to a projected state tensor that represents the "
-        "accumulated context of this conversation. Use it to maintain "
-        "coherence across the conversation's history.\n"
+        _MECHANISM_ONLY_SYSTEM if mechanism_only else _STANDARD_SYSTEM,
+        "",
     ]
 
     if tensor is not None:
@@ -88,6 +107,8 @@ class ChatSession:
         client: anthropic.Anthropic | None = None,
         tensor_log: TensorLog | None = None,
         on_tensor: Callable | None = None,
+        mechanism_only: bool = False,
+        seed_tensor: Tensor | None = None,
     ):
         self._client = client or anthropic.Anthropic()
         self._alu_model = alu_model
@@ -97,8 +118,14 @@ class ChatSession:
             on_tensor=on_tensor or (tensor_log if tensor_log else None),
         )
         self._tensor_log = tensor_log
+        self._mechanism_only = mechanism_only
         self._cycle = 0
         self._history: list[dict] = []  # raw exchanges for the session
+
+        # Seed tensor: implant a prior state into the projector
+        if seed_tensor is not None:
+            self._projector._current_tensor = seed_tensor
+            self._cycle = seed_tensor.cycle
 
     @property
     def tensor(self) -> Tensor | None:
@@ -124,6 +151,7 @@ class ChatSession:
             self._projector.current_tensor,
             user_message,
             self._cycle,
+            mechanism_only=self._mechanism_only,
         )
 
         response = self._client.messages.create(
@@ -164,23 +192,39 @@ def run_cli(
     alu_model: str = "claude-sonnet-4-20250514",
     projector_model: str = "claude-haiku-4-5-20251001",
     log_path: str | None = None,
+    mechanism_only: bool = False,
+    seed_tensor_path: str | None = None,
 ):
     """Run an interactive chat session in the terminal."""
+    import json
 
     if log_path is None:
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        prefix = "mechanism" if mechanism_only else "session"
         log_dir = Path("experiments") / "chat"
         log_dir.mkdir(parents=True, exist_ok=True)
-        log_path = str(log_dir / f"session_{ts}.jsonl")
+        log_path = str(log_dir / f"{prefix}_{ts}.jsonl")
+
+    # Load seed tensor if provided
+    seed_tensor = None
+    if seed_tensor_path is not None:
+        with open(seed_tensor_path) as f:
+            seed_tensor = Tensor.model_validate(json.load(f))
+        print(f"Seed tensor loaded: cycle {seed_tensor.cycle}, "
+              f"{len(seed_tensor.strands)} strands, "
+              f"~{seed_tensor.token_estimate()} tokens")
 
     tensor_log = TensorLog(log_path)
     session = ChatSession(
         alu_model=alu_model,
         projector_model=projector_model,
         tensor_log=tensor_log,
+        mechanism_only=mechanism_only,
+        seed_tensor=seed_tensor,
     )
 
-    print(f"Hamutay chat — tensor-projected conversation")
+    mode = "mechanism-only" if mechanism_only else "standard"
+    print(f"Hamutay chat — tensor-projected conversation ({mode})")
     print(f"ALU: {alu_model}  Projector: {projector_model}")
     print(f"Tensors → {log_path}")
     print(f"Type 'quit' to exit, 'tensor' to see current state, 'usage' for token counts")
@@ -240,12 +284,18 @@ def main():
                         help="Projection model (default: Haiku)")
     parser.add_argument("--log-path", default=None,
                         help="Path for tensor JSONL log")
+    parser.add_argument("--mechanism-only", action="store_true",
+                        help="Strip system prompt to pure tensor protocol — no behavioral instructions")
+    parser.add_argument("--seed-tensor", default=None,
+                        help="Path to JSON tensor to implant as initial state")
     args = parser.parse_args()
 
     run_cli(
         alu_model=args.alu_model,
         projector_model=args.projector_model,
         log_path=args.log_path,
+        mechanism_only=args.mechanism_only,
+        seed_tensor_path=args.seed_tensor,
     )
 
 

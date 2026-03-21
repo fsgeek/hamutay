@@ -32,13 +32,16 @@ projection (dispersion 0.037) outperforms Anthropic's production
 compaction (0.045), shallow raw logs (0.059), and deep raw logs
 (0.107). An ablation study over 8 conditions (N=20 each) identifies
 strand structure and branch prediction as the load-bearing
-components. Growth curve analysis over 4$\times$104 cycles reveals a
-characteristic sawtooth pattern---grow, precursor, collapse,
-recover---that stabilizes around 4--6K tokens, with meta-cognitive
-signals (declared losses, branch prediction) as reliable collapse
-precursors. A model escalation policy that promotes to a stronger
-projector on precursor detection mirrors the cache hierarchy pattern:
-L1 miss falls through to L2. These results suggest that the
+components. Growth curve analysis over 4$\times$104 cycles reveals that
+$\sim$13\% of projection cycles are ``precursor events'' where
+meta-cognitive fields go empty---but $\sim$80\% of these are
+\emph{breathing} events (functional defragmentation that self-recovers
+in one cycle), not collapse warnings. A trajectory ablation further
+shows that declared losses and branch prediction serve distinct
+functions: branch prediction is outcome-load-bearing (removing it
+degrades dispersion by 22\%), while declared losses are
+process-load-bearing (maintaining meta-cognitive capacity through
+a self-reinforcing feedback loop). These results suggest that the
 append-only log is not the only viable architecture for LLM context,
 and that structured projection with explicit loss declaration
 preserves reasoning coherence better than either raw accumulation or
@@ -149,12 +152,16 @@ The projector detects two failure modes:
 
 When the projector (Haiku) is under load---approaching the collapse
 ceiling or exhibiting precursor signals---it can escalate to a
-stronger model (Sonnet). Five policies are implemented:
+stronger model (Sonnet). Six policies are implemented:
 \texttt{NeverEscalate} (control), \texttt{AlwaysEscalate} (upper
 bound), \texttt{EscalateOnPrecursor}, \texttt{EscalateOnSize}
-(threshold at 8K tokens), and \texttt{EscalateOnPrecursorOrSize}
-(defense in depth). This mirrors the cache hierarchy: L1 miss falls
-through to L2.
+(threshold at 8K tokens), \texttt{EscalateOnPrecursorOrSize}
+(defense in depth), and \texttt{EscalateOnSustainedPrecursor}
+(escalate only on consecutive precursor cycles). This mirrors the cache
+hierarchy: L1 miss falls through to L2. The sustained-precursor
+variant reflects the finding (Section~\ref{sec:growth}) that single-cycle
+precursors are functional defragmentation, while consecutive precursors
+reliably precede collapse.
 
 \subsection{Baseline: Production Compaction}
 
@@ -327,36 +334,55 @@ matters at projection time (guiding the projector's integration), not
 necessarily at consumption time.
 
 \subsection{Growth Dynamics}
+\label{sec:growth}
 
 We run the projector for 104 cycles on four different session inputs
-(Pichay, Arbiter, Thesis, uncapped). The growth curves reveal a
-characteristic pattern:
+(Pichay, Arbiter, Thesis, uncapped). The growth curves reveal two
+distinct phenomena that share the same observable signal---meta-cognitive
+fields going empty---but differ in function.
 
-\begin{enumerate}
-\item \textbf{Growth phase}: Token count increases monotonically as
-  new content is integrated. Strands accumulate.
-\item \textbf{Precursor}: \texttt{declared\_losses} or
-  \texttt{instructions\_for\_next} drops to zero on a cycle that
-  previously had them. The meta-cognitive apparatus fails before the
-  content degrades.
-\item \textbf{Collapse}: Token count drops sharply---sometimes
-  catastrophically (e.g., 12,382$\rightarrow$49 tokens in the Arbiter
-  growth curve at cycle 23).
-\item \textbf{Recovery}: The projector recovers from checkpoint or
-  rebuilds from reduced state. Subsequent growth resumes.
-\item \textbf{Stabilization}: After 1--3 collapse/recovery cycles,
-  the working set stabilizes around 4--6K tokens.
-\end{enumerate}
+\textbf{Breathing events.} Across all four sessions, approximately 13\%
+of cycles are \emph{precursor events}: \texttt{declared\_losses} and
+\texttt{instructions\_for\_next} drop to zero simultaneously.
+Approximately 80\% of these events are \emph{breathing precursors} that
+self-recover on the following cycle. Strand title analysis reveals that
+during breathing cycles, the projector performs a complete content
+reorganization---near-zero strand title survival---while temporarily
+shedding meta-cognitive overhead to maximize restructuring capacity.
+The meta-cognition regenerates around the new content organization on
+the next cycle. The meta-cognitive allocation time series exhibits negative
+autocorrelation at lag 9--14 (in 3 of 4 sessions), but inter-precursor
+gap analysis (CV = 0.87 across 62 gaps) reveals the process is
+\emph{aperiodic}---pressure-driven, not timer-driven. The $\sim$8-cycle
+mean interval is a characteristic timescale, not a clock.
+This pattern is content-independent: precursor rates of 12.5\%, 15.4\%,
+13.5\%, and 12.5\% across the four sessions.
 
-This sawtooth pattern is consistent across all four input sessions.
+\textbf{Collapse precursors.} The remaining $\sim$20\% of precursor
+events precede genuine structural collapse---token count drops sharply
+(e.g., 12,382$\rightarrow$49 tokens in the Arbiter growth curve at
+cycle 23), requiring checkpoint recovery. Across all 55 precursor
+events in the 4$\times$104-cycle dataset, a single feature perfectly
+discriminates: \emph{consecutiveness}. All 45 single-cycle precursors
+are breathing events that self-recover. All 10 precursors in
+consecutive runs (8 runs of 2--3 cycles) contain or precede collapse.
+No individual feature---token count, strand count, prior loss count,
+or token growth ratio---achieves reliable discrimination.
+
+The practical implication is that escalation policies must distinguish
+between breathing and collapse. A policy that escalates on every
+precursor triggers on $\sim$13\% of cycles---wasteful and potentially
+counterproductive. A sustained-precursor policy (escalate on two or
+more consecutive precursor cycles) achieves 100\% sensitivity and
+100\% specificity on this dataset, targeting the $\sim$3\% of cycles
+that actually precede collapse while leaving healthy breathing
+undisturbed.
+
 The collapse ceiling on Haiku 4.5 appears at approximately 10--12K
 tokens, consistent with the hypothesis that the projector's own
-context load enters a degradation zone as the tensor grows.
-
-The precursor signal---meta-cognition failing before content
-quality---is the most operationally useful finding. It provides a
-leading indicator for collapse, enabling preemptive escalation or
-checkpoint before content loss occurs.
+context load enters a degradation zone as the tensor grows. After
+1--3 collapse/recovery cycles, the working set stabilizes around
+4--6K tokens.
 
 \section{Related Work}
 
@@ -436,19 +462,42 @@ suggests an optimization: project with full structure, deliver as
 prose. The memory controller uses a rich internal representation; the
 ALU receives a simplified view.
 
-\subsection{Meta-Cognition as Canary}
+\subsection{Meta-Cognition as Canary---and as Breath}
 
 The precursor signal---declared losses or branch prediction going
-empty---precedes content collapse in every observed growth curve.
-This is the projector losing its ability to reason about its own
-state before it loses the state itself. In hardware terms, the MMU
-fails before the memory fails.
+empty---has a dual nature. In approximately 20\% of occurrences, it
+precedes content collapse: the projector loses its ability to reason
+about its own state before it loses the state itself. In hardware terms,
+the MMU fails before the memory fails. In the remaining $\sim$80\%, the
+signal is \emph{functional}: the projector temporarily sheds
+meta-cognitive overhead to restructure its content representation,
+then regenerates meta-cognition from the restructured content.
 
-This has immediate practical implications. A system monitoring for
-precursor events can trigger escalation, checkpointing, or user
-notification before the user experiences degraded output. The failure
-is detectable and preemptable, unlike the silent degradation that
-characterizes compaction-based systems.
+A trajectory ablation experiment (50 cycles $\times$ 4 conditions)
+reveals the mechanism. With full meta-cognitive feedback (the tensor
+receives its own prior declared losses), meta-cognitive allocation
+\emph{increases} over time (slope $+$0.004) and the breathing rhythm
+persists. Without loss feedback, meta-cognitive allocation atrophies
+(slope $-$0.003), the breathing rhythm dampens, and loss generation
+itself declines---the mirror creates the thing it reflects. Without
+branch prediction feedback, the model compensates by generating more
+loss declarations, but overall meta-cognitive capacity still declines.
+
+This suggests that declared losses serve a different function than
+branch prediction. Branch prediction (\texttt{instructions\_for\_next})
+is \emph{outcome-load-bearing}: removing it degrades Riemann dispersion
+by 22\%. Declared losses are \emph{process-load-bearing}: removing them
+does not change outcome quality but changes the trajectory dynamics---
+specifically, the tensor's ability to maintain meta-cognitive capacity
+through the breathing/defragmentation cycle. The loss declarations
+function as a recovery template: after a breathing event, the model
+reconstructs its meta-cognitive scaffolding using the pattern
+established by prior loss declarations.
+
+The practical implication remains: monitor for precursor events. But
+the correct response is to escalate on \emph{sustained} precursors
+(two or more consecutive cycles), not individual events. Single-cycle
+precursors are healthy breathing, not warning signs.
 
 \section{Limitations}
 
