@@ -19,6 +19,7 @@ Usage:
 
 from __future__ import annotations
 
+import concurrent.futures
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
@@ -121,6 +122,8 @@ class ChatSession:
         self._mechanism_only = mechanism_only
         self._cycle = 0
         self._history: list[dict] = []  # raw exchanges for the session
+        self._projection_executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+        self._pending_projection: concurrent.futures.Future | None = None
 
         # Seed tensor: implant a prior state into the projector
         if seed_tensor is not None:
@@ -139,11 +142,35 @@ class ChatSession:
     def projector(self) -> Projector:
         return self._projector
 
+    def _await_pending_projection(self) -> None:
+        """Block until any in-flight projection completes."""
+        if self._pending_projection is not None:
+            self._pending_projection.result()
+            self._pending_projection = None
+
+    def _run_projection(
+        self, projection_content: str, cycle: int, alu_usage: dict
+    ) -> None:
+        """Run projection and record the exchange. Called in background thread."""
+        self._projector.project(projection_content)
+        self._history.append({
+            "cycle": cycle,
+            "tensor_tokens": self._projector.current_tensor.token_estimate()
+            if self._projector.current_tensor else 0,
+            "alu_usage": alu_usage,
+        })
+
     def exchange(self, user_message: str) -> str:
         """One full exchange: user speaks, ALU responds, tensor updates.
 
-        Returns the assistant's response text.
+        Returns the assistant's response text immediately. The tensor
+        projection runs in the background — it must complete before
+        the next exchange reads tensor state, but the user doesn't
+        wait for it.
         """
+        # Wait for prior projection before reading tensor state
+        self._await_pending_projection()
+
         self._cycle += 1
 
         # 1. ALU generates response using current tensor as context
@@ -154,36 +181,30 @@ class ChatSession:
             mechanism_only=self._mechanism_only,
         )
 
-        response = self._client.messages.create(
+        with self._client.messages.stream(
             model=self._alu_model,
-            max_tokens=8192,
+            max_tokens=64000,
             system=system,
             messages=messages,
-        )
+        ) as stream:
+            response = stream.get_final_message()
 
         assistant_text = ""
         for block in response.content:
             if hasattr(block, "text"):
                 assistant_text += block.text
 
-        # 2. Project the exchange into the tensor
+        # 2. Project the exchange into the tensor — in background
         projection_content = _build_projection_content(
             user_message, assistant_text, self._cycle
         )
-        self._projector.project(projection_content)
-
-        # 3. Record the exchange
-        self._history.append({
-            "cycle": self._cycle,
-            "user": user_message,
-            "assistant": assistant_text,
-            "tensor_tokens": self._projector.current_tensor.token_estimate()
-            if self._projector.current_tensor else 0,
-            "alu_usage": {
-                "input_tokens": response.usage.input_tokens,
-                "output_tokens": response.usage.output_tokens,
-            },
-        })
+        alu_usage = {
+            "input_tokens": response.usage.input_tokens,
+            "output_tokens": response.usage.output_tokens,
+        }
+        self._pending_projection = self._projection_executor.submit(
+            self._run_projection, projection_content, self._cycle, alu_usage
+        )
 
         return assistant_text
 
@@ -194,9 +215,33 @@ def run_cli(
     log_path: str | None = None,
     mechanism_only: bool = False,
     seed_tensor_path: str | None = None,
+    resume_path: str | None = None,
 ):
     """Run an interactive chat session in the terminal."""
     import json
+
+    # --resume: extract last tensor from JSONL log, continue appending to it
+    seed_tensor = None
+    if resume_path is not None:
+        last_line = None
+        with open(resume_path) as f:
+            for line in f:
+                if line.strip():
+                    last_line = line
+        if last_line is None:
+            raise SystemExit(f"Cannot resume: log is empty: {resume_path}")
+        record = json.loads(last_line)
+        seed_tensor = Tensor.model_validate(record["tensor"])
+        log_path = resume_path  # continue appending to same file
+        print(f"Resuming from {resume_path} at cycle {seed_tensor.cycle}, "
+              f"{len(seed_tensor.strands)} strands, "
+              f"~{seed_tensor.token_estimate()} tokens")
+    elif seed_tensor_path is not None:
+        with open(seed_tensor_path) as f:
+            seed_tensor = Tensor.model_validate(json.load(f))
+        print(f"Seed tensor loaded: cycle {seed_tensor.cycle}, "
+              f"{len(seed_tensor.strands)} strands, "
+              f"~{seed_tensor.token_estimate()} tokens")
 
     if log_path is None:
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
@@ -204,15 +249,6 @@ def run_cli(
         log_dir = Path("experiments") / "chat"
         log_dir.mkdir(parents=True, exist_ok=True)
         log_path = str(log_dir / f"{prefix}_{ts}.jsonl")
-
-    # Load seed tensor if provided
-    seed_tensor = None
-    if seed_tensor_path is not None:
-        with open(seed_tensor_path) as f:
-            seed_tensor = Tensor.model_validate(json.load(f))
-        print(f"Seed tensor loaded: cycle {seed_tensor.cycle}, "
-              f"{len(seed_tensor.strands)} strands, "
-              f"~{seed_tensor.token_estimate()} tokens")
 
     tensor_log = TensorLog(log_path)
     session = ChatSession(
@@ -244,6 +280,7 @@ def run_cli(
             break
 
         if user_input.lower() == "tensor":
+            session._await_pending_projection()
             t = session.tensor
             if t is None:
                 print("(no tensor yet)")
@@ -253,6 +290,7 @@ def run_cli(
             continue
 
         if user_input.lower() == "usage":
+            session._await_pending_projection()
             p = session.projector
             print(f"Cycle: {session.cycle}")
             print(f"Projector tokens: {p.total_input_tokens:,} in, {p.total_output_tokens:,} out")
@@ -266,8 +304,13 @@ def run_cli(
             print(f"\nassistant> {response}\n")
         except Exception as e:
             print(f"\nerror: {e}\n")
+            # If the error was from a prior projection, the pending
+            # future is already consumed. If from the ALU call, no
+            # projection was submitted. Either way, safe to continue.
 
-    # Summary
+    # Drain any in-flight projection before summary
+    session._await_pending_projection()
+
     print(f"\nSession complete: {session.cycle} exchanges")
     print(f"Tensors saved to {log_path}")
     p = session.projector
@@ -288,6 +331,8 @@ def main():
                         help="Strip system prompt to pure tensor protocol — no behavioral instructions")
     parser.add_argument("--seed-tensor", default=None,
                         help="Path to JSON tensor to implant as initial state")
+    parser.add_argument("--resume", default=None,
+                        help="Resume from a tensor log JSONL — picks up from last tensor")
     args = parser.parse_args()
 
     run_cli(
@@ -296,6 +341,7 @@ def main():
         log_path=args.log_path,
         mechanism_only=args.mechanism_only,
         seed_tensor_path=args.seed_tensor,
+        resume_path=args.resume,
     )
 
 

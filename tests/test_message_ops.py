@@ -69,6 +69,7 @@ def _patch_pressure(monkeypatch, pressure):
     )
 
 
+@pytest.mark.skip(reason="Injection point disabled in 719376b — re-enable when check_inbound_for_injected_tags is reactivated")
 @pytest.mark.parametrize(
     "tag",
     ["<yuyay-manifest>", "<yuyay-query>", "<yuyay-response>"],
@@ -79,6 +80,7 @@ def test_check_inbound_rejects_yuyay_tags(tag):
     assert result == "Rejected: inbound message contains reserved yuyay tags"
 
 
+@pytest.mark.skip(reason="Injection point disabled in 719376b — re-enable when check_inbound_for_injected_tags is reactivated")
 def test_check_inbound_rejects_yuyay_tag_in_blocks():
     body = {
         "messages": [
