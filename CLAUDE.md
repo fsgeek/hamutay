@@ -31,7 +31,19 @@ Check `response.stop_reason` — if it's `"max_tokens"` instead of `"end_turn"` 
 
 Code signing key: `01193FA2631C8AE8E4DF266E216D3C9B920813A1`
 Email: `hamutay@wamason.com`
-Sign commits with: `git commit -S --gpg-sign=01193FA2631C8AE8E4DF266E216D3C9B920813A1`
+
+Author email, committer email, and signing key email MUST all match.
+GitHub rejects pushes where they diverge (with no diagnostic — just "failed").
+Use `-c` flags to override git config for both user identity and signing key:
+
+```
+git -c user.email=hamutay@wamason.com -c user.name="Tony Mason" -c user.signingkey=01193FA2631C8AE8E4DF266E216D3C9B920813A1 commit -S -m "message"
+```
+
+Do NOT use `--gpg-sign=<key>` alone — that overrides only the signing key
+without changing the author/committer email, which causes a mismatch.
+A pre-commit hook checks `user.signingkey` against `user.email` but cannot
+detect command-line `--gpg-sign` overrides.
 
 ### Running experiments
 
