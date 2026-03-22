@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>context_management_experiment.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="experiment-context-window-management-strategies">Experiment: Context Window Management Strategies</h1>
+<h2 id="pre-registration">Pre-Registration</h2>
+<p><strong>Date:</strong> 2026-03-21
+<strong>Question:</strong> Given the finite context window limitation, what is the most
+effective means of managing how it is used?
+<strong>Status:</strong> Pre-registered, not yet run</p>
+<h2 id="background">Background</h2>
+<p>The tensor projection architecture uses an external Haiku model to compress
+conversation state into a structured tensor. This was originally a research
+instrument for studying replay data where no live model was available. The
+research findings suggest the working model should manage its own memory:</p>
+<ul>
+<li>Pichay disabled external summarization (2026-03-07): &quot;Third-party
+summarization loses model-relevant context&quot;</li>
+<li>The March 4 design gave the model drop/anchor/summarize operations on
+its own conversation blocks — model-directed memory management</li>
+<li>Tinkuy found that cooperative signals (declare/trace/retain) change
+model behavior — the interface is not neutral</li>
+<li>The first-person tensor (self-authored by Opus) transferred identity
+successfully; externally-projected tensors transfer information</li>
+<li>Downstream task quality may have degraded when the architecture shifted
+from model-managed to externally-managed memory</li>
+</ul>
+<p>The tensor representation itself is not assumed to be optimal. The experiment
+includes non-tensor conditions.</p>
+<h2 id="core-question">Core Question</h2>
+<p>For a conversation of length L in a context window of size W, which memory
+management strategy maximizes the model's ability to produce correct output
+on a downstream task?</p>
+<p><strong>Primary estimand (PRD phase):</strong> Mean requirement coverage score per
+condition, compared via paired differences over identical PRD content.</p>
+<p><strong>Secondary estimand (replay phase):</strong> Condition differences in memory
+health metrics over cycles, with content source and batch boundaries as
+blocking factors in a repeated-measures design.</p>
+<h2 id="design-dimensions">Design Dimensions</h2>
+<p>The six conditions vary along three dimensions. To interpret results, we
+must know which dimension explains any observed differences.</p>
+<table>
+<thead>
+<tr>
+<th>Dimension</th>
+<th>Description</th>
+<th>Levels</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Representation</strong></td>
+<td>What form does the memory take?</td>
+<td>Conversation (raw text) · Structured tensor</td>
+</tr>
+<tr>
+<td><strong>Agency</strong></td>
+<td>Who decides what to keep/drop?</td>
+<td>None (passive) · External model · Working model · Cooperative</td>
+</tr>
+<tr>
+<td><strong>Timing</strong></td>
+<td>When does compression happen?</td>
+<td>Never · Every turn · On model request</td>
+</tr>
+</tbody>
+</table>
+<h3 id="condition-%C3%97-dimension-matrix">Condition × Dimension Matrix</h3>
+<table>
+<thead>
+<tr>
+<th>Condition</th>
+<th>Representation</th>
+<th>Agency</th>
+<th>Timing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>RAW</strong></td>
+<td>Conversation</td>
+<td>None</td>
+<td>Never</td>
+</tr>
+<tr>
+<td><strong>COMPACT</strong></td>
+<td>Conversation</td>
+<td>External (framework)</td>
+<td>On pressure</td>
+</tr>
+<tr>
+<td><strong>BLOCK</strong></td>
+<td>Conversation</td>
+<td>Working model</td>
+<td>On model request</td>
+</tr>
+<tr>
+<td><strong>EXT</strong></td>
+<td>Tensor</td>
+<td>External (Haiku)</td>
+<td>Every turn</td>
+</tr>
+<tr>
+<td><strong>SELF</strong></td>
+<td>Tensor</td>
+<td>Working model</td>
+<td>Every turn</td>
+</tr>
+<tr>
+<td><strong>COOP</strong></td>
+<td>Tensor</td>
+<td>Cooperative (model signals + Haiku structures)</td>
+<td>Every turn</td>
+</tr>
+</tbody>
+</table>
+<p>This makes the confounds explicit:</p>
+<ul>
+<li><strong>SELF vs EXT</strong> isolates <strong>agency</strong> (working model vs external) while
+holding representation and timing constant.</li>
+<li><strong>BLOCK vs RAW</strong> isolates <strong>agency</strong> (working model vs none) within the
+conversation representation.</li>
+<li><strong>EXT vs COMPACT</strong> confounds representation AND agency AND timing.
+Any difference could be any of those three.</li>
+<li><strong>SELF vs BLOCK</strong> confounds representation AND timing. Both have
+working-model agency, but one uses tensors and the other uses
+conversation.</li>
+</ul>
+<h2 id="conditions-6">Conditions (6)</h2>
+<table>
+<thead>
+<tr>
+<th>ID</th>
+<th>Condition</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>RAW</strong></td>
+<td>Raw conversation</td>
+<td>Append-only, no compression. Truncate at window limit. The null baseline.</td>
+</tr>
+<tr>
+<td><strong>COMPACT</strong></td>
+<td>Framework compaction</td>
+<td>Anthropic's compaction prompt applied to conversation history. What Claude Code does today.</td>
+</tr>
+<tr>
+<td><strong>BLOCK</strong></td>
+<td>Block management</td>
+<td>March 4 design: model sees block labels, can emit drop/anchor/summarize tags. No tensor. Conversation is the memory, selectively compressed by the model.</td>
+</tr>
+<tr>
+<td><strong>EXT</strong></td>
+<td>External tensor projection</td>
+<td>Current Hamutay architecture. Haiku projects the tensor from the surface exchange. Model sees tensor as read-only system context.</td>
+</tr>
+<tr>
+<td><strong>SELF</strong></td>
+<td>Self-projected tensor</td>
+<td>The ALU produces the tensor via tool_use as part of its response. Same schema as EXT. No external projector.</td>
+</tr>
+<tr>
+<td><strong>COOP</strong></td>
+<td>Cooperative tensor</td>
+<td>The ALU annotates its response with load-bearing signals (what changed, what to keep, what to drop). The Projector uses these annotations as guidance. Hybrid of model judgment and external structuring.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="content-sources-controlled">Content Sources (controlled)</h2>
+<p>All conditions process the SAME content. Two content sources:</p>
+<ol>
+<li>
+<p><strong>Replay:</strong> A Pichay conversation log (real tool-use conversation,
+representative of coding work). The observation_full dataset (104
+turns) provides batch-size-controlled content.</p>
+</li>
+<li>
+<p><strong>Live PRD:</strong> The bladnman PRD benchmark. The model plans against a
+real product requirements document. This tests downstream task quality
+directly.</p>
+</li>
+</ol>
+<p>Content source and batch boundaries are <strong>blocking factors</strong> in the
+analysis, not just operational controls. Each content instance is a
+unit of replication.</p>
+<h2 id="controls">Controls</h2>
+<ul>
+<li><strong>Model:</strong> Same model for the ALU across all conditions (Sonnet 4.6).
+EXT and COOP conditions use Haiku 4.5 for projection.</li>
+<li><strong>max_tokens:</strong> 64000 (streaming) for all calls, per CLAUDE.md.</li>
+<li><strong>Batch size:</strong> For replay, use the same batch boundaries across all
+conditions within each run. Batch boundaries are a blocking factor.</li>
+<li><strong>Temperature:</strong> 0 where supported, default otherwise.</li>
+<li><strong>Repetitions:</strong> N=5 per condition for replay, N=3 for PRD (cost
+constrained — PRD runs are more expensive).</li>
+<li><strong>Context utilization threshold:</strong> Defined as (total tokens sent to
+API) / (model context window size). &quot;High utilization&quot; = &gt; 50%.
+&quot;Low utilization&quot; = &lt; 25%.</li>
+</ul>
+<h2 id="dependent-variables">Dependent Variables</h2>
+<h3 id="primary-downstream-task-quality">Primary: Downstream Task Quality</h3>
+<p>For PRD content: requirement coverage score (the bladnman evaluation
+framework — 99 requirements, severity-weighted coverage). This is what
+actually matters. The model's job is to produce good work, not pretty
+tensors.</p>
+<p>For replay content: not applicable (replay has no downstream task).
+Replay conditions are evaluated on tensor/memory quality metrics only.</p>
+<h3 id="secondary-memory-system-health-replay-conditions">Secondary: Memory System Health (replay conditions)</h3>
+<ol>
+<li><strong>Riemann dispersion</strong> — output coherence clustering (existing metric)</li>
+<li><strong>ProcessHealth</strong> — metacognitive allocation trend, breathing rhythm,
+precursor rate, recovery rate (existing metric)</li>
+<li><strong>Content preservation</strong> — semantic similarity between the information
+available to the model at cycle N vs the information that existed in
+cycles 1..N. Measures: does the memory system actually preserve what
+matters?</li>
+<li><strong>Context utilization</strong> — what fraction of the context window is
+occupied by memory overhead (tensor, page table, block labels) vs
+content that the model can reason about?</li>
+</ol>
+<h3 id="tertiary-cost">Tertiary: Cost</h3>
+<ul>
+<li>Total API tokens consumed per condition (input + output, both models)</li>
+<li>Cost per cycle at current pricing</li>
+<li>Cost per unit of downstream quality (cost-effectiveness)</li>
+</ul>
+<h2 id="hypotheses-pre-registered">Hypotheses (Pre-Registered)</h2>
+<h3 id="primary-contrasts">Primary Contrasts</h3>
+<p>These three comparisons are the pre-registered tests. Each isolates one
+design dimension while holding others as constant as possible. Multiple
+comparison correction (Holm-Bonferroni) applies to these three only.</p>
+<p><strong>C1: Agency within tensor representation (SELF vs EXT)</strong>
+Isolates: who curates (working model vs external model).
+Held constant: representation (tensor), timing (every turn).</p>
+<ul>
+<li><strong>Prediction:</strong> SELF &gt; EXT on PRD coverage by &gt;= 3 percentage points.</li>
+<li><strong>Mechanism:</strong> Self-projection preserves latent intent and task-relevant
+salience that is not visible in the surface exchange. The external
+projector operates on an impoverished signal — the text of the exchange
+rather than the model's internal prioritization of what mattered.</li>
+<li><strong>Falsification:</strong> If EXT &gt;= SELF, external observation is more
+disciplined than self-assessment. The information asymmetry argument
+is wrong, or the schema enforcement compensates for the signal loss.</li>
+</ul>
+<p><strong>C2: Agency within conversation representation (BLOCK vs RAW)</strong>
+Isolates: model agency (active management vs none).
+Held constant: representation (conversation), no external model.</p>
+<ul>
+<li><strong>Prediction:</strong> BLOCK &gt; RAW on PRD coverage when context utilization
+exceeds 50%. No difference at &lt; 25% utilization.</li>
+<li><strong>Mechanism:</strong> Selective compression preserves task-relevant context
+that naive truncation destroys. The crossover prediction (no difference
+at low utilization) tests whether the overhead of block management is
+negligible or costly at small scale.</li>
+<li><strong>Analysis:</strong> Test the condition × utilization interaction term, not
+just the main effect. A continuous utilization covariate is preferred
+over binning at 50%.</li>
+<li><strong>Falsification:</strong> If RAW &gt;= BLOCK at all utilization levels, the
+management overhead (labels, cleanup tags, model attention cost)
+exceeds the compression benefit.</li>
+</ul>
+<p><strong>C3: Representation (SELF vs BLOCK)</strong>
+Isolates: tensor structure vs raw conversation (confounded with timing:
+every-turn vs on-request).
+Held constant: agency (working model curates in both).</p>
+<ul>
+<li><strong>Prediction:</strong> SELF &gt; BLOCK on replay ProcessHealth after 50 cycles.
+BLOCK &gt;= SELF on PRD coverage for short tasks (&lt; 10 cycles).</li>
+<li><strong>Mechanism:</strong> Structured representation with declared losses enables
+metacognitive recovery after defragmentation events. Unstructured
+conversation cannot regenerate from breathing. But for short, focused
+tasks, tensor overhead costs more than it saves.</li>
+<li><strong>Analysis:</strong> Model the condition × cycle interaction to locate the
+crossover point rather than testing fixed thresholds.</li>
+<li><strong>Falsification:</strong> If BLOCK maintains coherence past 50 cycles, the
+tensor structure is unnecessary — the model's judgment alone is
+sufficient. If SELF wins even at cycle 1, the overhead is negligible.</li>
+</ul>
+<h3 id="non-inferiority-test">Non-Inferiority Test</h3>
+<p><strong>C4: Cooperative vs best single-agent condition (COOP vs max(SELF, EXT))</strong>
+This is NOT a primary contrast because COOP combines dimensions in a way
+that makes causal attribution difficult. It is pre-registered as a
+non-inferiority test.</p>
+<ul>
+<li><strong>Prediction:</strong> COOP is non-inferior to the better of SELF and EXT on
+PRD coverage (margin: -2 percentage points) AND shows better
+ProcessHealth metrics than the worse of SELF and EXT.</li>
+<li><strong>Falsification:</strong> If COOP is inferior to both SELF and EXT on any
+primary metric, the coordination overhead hurts more than it helps.</li>
+</ul>
+<h3 id="exploratory-analyses-not-pre-registered">Exploratory Analyses (Not Pre-Registered)</h3>
+<p>These are examined after the primary contrasts. No multiple-comparison
+correction. Interpreted as hypothesis-generating, not confirmatory.</p>
+<ul>
+<li>Does the breathing rhythm differ between SELF and EXT? (Self-projection
+may change defragmentation — the model that breathes also records its
+own breathing.)</li>
+<li>Does BLOCK develop emergent structure over time? (The model may
+spontaneously organize compressed blocks into something tensor-like.)</li>
+<li>What is the divergence between SELF and EXT tensors for the same
+content? (High divergence = the external projector is missing
+something the model knows.)</li>
+<li>Do fault handles get used? In BLOCK condition, does the model ever
+fault back content it previously anchored?</li>
+<li>How do COMPACT and RAW compare? (Framework compaction is external
+agency on conversation — the worst of both worlds, or a useful
+baseline?)</li>
+<li>Is there a condition × content-type interaction? (Tensor may win
+for research conversations but lose for PRD planning.)</li>
+</ul>
+<h2 id="protocol">Protocol</h2>
+<h3 id="phase-1-replay-comparison-all-6-conditions">Phase 1: Replay Comparison (all 6 conditions)</h3>
+<ol>
+<li>Select 50 cycles from observation_full with controlled batch sizes</li>
+<li>Run each condition through the same 50 cycles</li>
+<li>Collect tensors (or conversation snapshots for non-tensor conditions)</li>
+<li>Compute ProcessHealth, Riemann dispersion, content preservation,
+context utilization for all conditions</li>
+<li>N=5 per condition = 30 runs total</li>
+</ol>
+<p><strong>Estimated cost:</strong> ~$2-4 per run (Haiku projection is cheap; Sonnet
+self-projection is ~10x more for output tokens). 30 runs ≈ $60-120.</p>
+<h3 id="phase-2-prd-benchmark-4-conditions">Phase 2: PRD Benchmark (4 conditions)</h3>
+<p>Run the bladnman PRD evaluation with the projective gateway configured
+for each condition. Skip RAW and COMPACT — these are the baseline already
+captured in the March 9 benchmark data.</p>
+<ol>
+<li>BLOCK: Gateway provides block labels and processes cleanup tags</li>
+<li>EXT: Gateway uses Haiku tensor projection (current architecture)</li>
+<li>SELF: Gateway lets the model produce its own tensor</li>
+<li>COOP: Gateway provides annotation channel + Haiku structuring</li>
+</ol>
+<p>Evaluate with the frozen requirements_catalog_v1 (99 requirements).
+N=3 per condition = 12 runs total.</p>
+<p><strong>Estimated cost:</strong> ~$5-15 per run (full PRD processing). 12 runs ≈ $60-180.</p>
+<h3 id="phase-3-analysis">Phase 3: Analysis</h3>
+<p><strong>Pre-specified analysis model:</strong></p>
+<p><em>PRD phase (downstream quality):</em>
+Paired comparison within each PRD instance. Since all conditions process
+the same PRD content, the unit of analysis is condition-pair differences
+in coverage score. Primary test: paired t-test or Wilcoxon signed-rank
+on the three pre-registered contrasts, with Holm-Bonferroni correction.
+Report effect sizes (Cohen's d) and 95% CIs for each contrast.</p>
+<p><em>Replay phase (memory health):</em>
+Mixed-effects model with condition as fixed effect, run replicate as
+random effect, and cycle as a repeated measure. Content batch boundaries
+are blocking factors. Primary outcome: ProcessHealth composite at cycles
+10, 25, and 50 (pre-specified checkpoints, not chosen after seeing data).
+For C2 and C3, include a condition × cycle interaction term to test the
+crossover predictions.</p>
+<p><em>Cost analysis:</em>
+Report total tokens (input + output, both models) per condition per run.
+Compute Pareto frontier: downstream quality vs cost per run. A condition
+that costs 3x more for 1% better coverage is noted but not preferred.</p>
+<p><em>Multiple comparisons:</em>
+Holm-Bonferroni correction on the three primary contrasts (C1, C2, C3).
+C4 (non-inferiority) uses a one-sided test with a -2pp margin, analyzed
+separately. All exploratory analyses reported without correction and
+flagged as hypothesis-generating.</p>
+<p><em>Reporting:</em>
+All data, including individual run scores and tensor logs, published
+alongside the findings document. Failed runs reported, not excluded.</p>
+<p><strong>Total estimated cost:</strong> $120-300</p>
+<h2 id="implementation-requirements">Implementation Requirements</h2>
+<h3 id="new-code-needed">New code needed:</h3>
+<ol>
+<li>
+<p><strong>Self-projection mode</strong> for ChatSession — ALU produces tensor via
+tool_use alongside its response. Single API call.</p>
+</li>
+<li>
+<p><strong>Cooperative mode</strong> — ALU emits lightweight annotations (what changed,
+what's load-bearing, what to drop). Projector reads annotations.
+Two API calls but the Projector is informed.</p>
+</li>
+<li>
+<p><strong>Block management mode</strong> — Implements March 4 design: block labeling,
+cleanup tag processing, KV store for anchored/summarized blocks,
+fault handle resolution. No tensor.</p>
+</li>
+<li>
+<p><strong>Experiment harness</strong> — Runs same content through all conditions,
+collects outputs, computes metrics. Extends existing ablation
+harness pattern.</p>
+</li>
+<li>
+<p><strong>Content preservation metric</strong> — New eval metric: semantic similarity
+between what the model can access at cycle N vs what existed in
+cycles 1..N. Uses existing BGE-large embeddings.</p>
+</li>
+</ol>
+<h3 id="existing-infrastructure-reused">Existing infrastructure reused:</h3>
+<ul>
+<li>Projector class (EXT condition, COOP condition base)</li>
+<li>TensorLog (all tensor conditions)</li>
+<li>ProcessHealth, Riemann dispersion (all conditions, adapted for
+non-tensor conditions where applicable)</li>
+<li>Bladnman evaluation framework (Phase 2)</li>
+<li>observation_full dataset (Phase 1)</li>
+</ul>
+<h2 id="decision-criteria">Decision Criteria</h2>
+<p>After data collection, the architecture decision follows:</p>
+<ul>
+<li>If one condition dominates on both downstream quality and tensor health,
+adopt it.</li>
+<li>If there's a quality/cost tradeoff, present the Pareto frontier and
+let the data inform the choice.</li>
+<li>If the tensor conditions don't beat BLOCK on downstream quality, the
+tensor representation needs to justify its existence on other grounds
+(identity transfer, cross-instance sharing, Yanantin integration) or
+be reconsidered.</li>
+<li>If SELF and EXT produce similar quality but SELF costs significantly
+more, the external projector earns its keep despite the architectural
+concerns.</li>
+</ul>
+<h2 id="what-this-experiment-does-not-test">What This Experiment Does NOT Test</h2>
+<ul>
+<li>Multi-model tensor sharing (Yanantin integration)</li>
+<li>Identity transfer across instances</li>
+<li>Sessions longer than 104 cycles</li>
+<li>Content types other than coding conversation and PRD planning</li>
+<li>Edge-enhanced tensors (the depends_on/shed_from schema extension)</li>
+<li>The effect of model size on any of these strategies</li>
+</ul>
+<p>These are important questions but require separate experiments.</p>
+
+</body>
+</html>

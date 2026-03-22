@@ -1,0 +1,173 @@
+% New sections for SOSP paper — pending integration into main.tex
+% These are drafts. Tony should review before insertion.
+
+% ================================================================
+% INSERT after Section 2.1 (Tensor Architecture), before Section 2.2 (Projector)
+% ================================================================
+
+\subsection{Self-Curating Tensor}
+\label{sec:self-curating}
+
+The external projector architecture (Section~\ref{sec:projector}) separates
+the memory controller from the reasoning model. This separation was originally
+a research instrument: the projector was built to study replay data where no
+live reasoning model was present, and it became the default architecture
+through inertia rather than deliberate design~\cite{pichay-disabled}.
+
+The research findings, however, point in the opposite direction. Branch
+prediction (\texttt{instructions\_for\_next}) is outcome-load-bearing because
+it is \emph{self-directed}---the model tells its future self what to attend to.
+Declared losses are process-load-bearing because they function as a
+\emph{mirror}---the model sees what it previously chose to drop. First-person
+tensor authorship preserves identity across capability boundaries (an
+Opus-authored tensor transferred to Sonnet maintained cognitive continuity
+where externally-projected tensors transferred only information). In a
+separate system (Pichay), external summarization was disabled after
+model-relevant context was found to be systematically lost by the third-party
+summarizer.
+
+These findings motivate a simpler architecture: the reasoning model produces
+both its response and its updated tensor in a single structured output. The
+tensor includes a \texttt{response} field (what the user sees) alongside
+the standard tensor components. The model declares which regions it is
+updating via an \texttt{updated\_regions} field; regions not listed are
+carried forward unchanged by the harness (default-stable semantics).
+
+This eliminates the second API call, reduces latency, and produces tensors
+that are self-authored rather than externally projected. The harness provides
+feedback on tensor health (open question accumulation, strand proliferation,
+sustained zero-curation growth) but does not manage the tensor directly.
+
+\subsection{Dependency Edges}
+\label{sec:edges}
+
+The tensor schema described in Section~\ref{sec:tensor} represents strands
+as an unordered collection. Dependencies between strands are implicit in
+their content but invisible to both the harness and to analysis. We extend
+the schema with two edge types:
+
+\begin{itemize}
+\item \textbf{\texttt{depends\_on}} (strand $\rightarrow$ strand): Each
+  strand declares which other strands it builds on. The tensor becomes a
+  directed acyclic graph rather than a bag.
+\item \textbf{\texttt{shed\_from}} (loss $\rightarrow$ strand): Each
+  declared loss identifies the strand it was shed from, creating a
+  provenance chain for information loss.
+\end{itemize}
+
+The model populates these edges without training or examples. In a
+philosophical debate scenario (determinism vs.\ compatibilism), the model
+spontaneously constructs a tree rooted at ``Determinism Core'' with
+``Moral Implications'' and ``Reductio Response'' as dependent strands.
+In an economics scenario (Keynesian vs.\ monetarist), the model builds
+a wide graph with independent roots for each empirical case study (UK
+austerity, Baltic states, bond yields), reflecting the epistemically
+independent nature of empirical evidence versus the axiom-dependent
+structure of philosophical argument.
+
+
+% ================================================================
+% INSERT in Section 4 (Growth Dynamics), after existing breathing discussion
+% ================================================================
+
+\subsection{Breathing Is Architecture-Independent}
+\label{sec:breathing-independence}
+
+The breathing phenomenon described above was discovered using the external
+Haiku projector on replay data. A natural objection is that breathing may
+be an artifact of the projector's architecture rather than a fundamental
+property of tensor dynamics under compression.
+
+To test this, we ran 11 self-curating tensor experiments (22 participants,
+10 cycles each) using the architecture described in
+Section~\ref{sec:self-curating}, where the reasoning model manages its own
+tensor with no external projector. Six tensor contraction events
+($>$10\% token reduction in a single cycle) occurred across four
+experiments, clustering at cycles 5--6 (3 events) and cycle 9 (3 events).
+This is consistent with the external projector's characteristic timescale
+of $\sim$8.5 cycles (Section~\ref{sec:growth}), observed here in a 10-cycle
+window.
+
+Two extended experiments (20 cycles each) produced additional contractions:
+the philosophical disagreement scenario showed contractions at cycles 5, 6,
+and 9 (participant A) and cycle 5 (participant B, 0.59$\times$---a 41\%
+reduction); the economics scenario showed contractions at cycles 5, 7,
+and 10.
+
+The breathing rhythm persists regardless of whether the tensor is managed
+by an external projector or by the reasoning model itself. This suggests
+that periodic restructuring is a property of the transformer's processing
+under compression---a consequence of the context window's finite capacity
+interacting with accumulating semantic state---rather than an artifact of
+any particular curation architecture.
+
+\subsection{Graph-Level Breathing}
+\label{sec:graph-breathing}
+
+With dependency edges, breathing events become visible at the graph level.
+During contraction cycles, the model does not merely shed strands---it
+restructures the dependency graph. In a 20-cycle philosophical debate,
+participant B's edge count followed the trajectory
+$1 \rightarrow 3 \rightarrow 6 \rightarrow 7 \rightarrow 4 \rightarrow
+2 \rightarrow 3 \rightarrow 3 \rightarrow 2 \rightarrow 1$, with edge
+peaks coinciding with token peaks and edge troughs coinciding with
+contractions.
+
+At cycle 5 of the same experiment, the participant abandoned a 7-strand
+dependency tree rooted at ``Decision vs.\ Inevitability'' and replaced it
+with a 4-strand tree rooted at ``Partner's Materialist Retreat.'' This is
+not incremental curation---it is a complete graph reorganization. The model
+shifted from defending its own axioms to exploiting its opponent's
+concessions. Without edges, this event is invisible: the token count
+dropped from 1,854 to 1,101, but the \emph{structural nature} of the
+reorganization (root replacement, not leaf pruning) can only be seen in
+the dependency graph.
+
+The \texttt{shed\_from} edges create a loss provenance chain. In the
+economics scenario, all 10 declared losses from one participant traced
+back to specific named strands. Loss events clustered around contraction
+cycles, confirming that declared losses and breathing events are coupled.
+
+
+% ================================================================
+% INSERT in Section 6 (Discussion), new subsection
+% ================================================================
+
+\subsection{Who Should Curate the Tensor?}
+
+The external projector was built as a research instrument and became the
+default architecture through availability rather than design. The self-curating
+architecture (Section~\ref{sec:self-curating}) produces tensors that are
+qualitatively different: strands reflect the model's own reasoning priorities
+rather than an external observer's summary.
+
+The evidence favors self-curation for production use. First-person tensor
+authorship preserves identity and cognitive continuity. The model uses
+self-directed branch prediction more effectively when it wrote the
+predictions itself. Default-stable semantics prevent unnecessary rewrites
+while allowing targeted updates.
+
+The external projector retains value as an \emph{auditor}---a separate
+model that can verify the self-curated tensor's structural health,
+detect mode collapse that the curating model cannot self-diagnose, and
+intervene on sustained pathology. The architecture is not ``external
+projector OR self-curation'' but ``self-curation with external audit.''
+
+\subsection{Edges as Instrumentation}
+
+The dependency edges added in Section~\ref{sec:edges} were designed to test
+whether explicit graph structure would change breathing dynamics. The
+preliminary evidence suggests a more fundamental finding: the graph topology
+encodes the epistemic structure of the conversation.
+
+Empirical arguments (economics, data-driven) produce wide, shallow graphs
+with many independent root strands---each case study stands on its own
+evidence. Philosophical arguments produce deep, narrow graphs with one or
+two roots---everything builds on shared axioms. This topological difference
+emerges without prompting; the model constructs it from the content itself.
+
+If this finding replicates, graph topology metrics (root count, maximum
+depth, branching factor) could serve as automated evaluation instruments,
+complementing the dispersion methodology. A tensor whose graph structure
+diverges from the expected topology for its content type may indicate
+curation pathology.
