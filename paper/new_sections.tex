@@ -94,12 +94,48 @@ and 9 (participant A) and cycle 5 (participant B, 0.59$\times$---a 41\%
 reduction); the economics scenario showed contractions at cycles 5, 7,
 and 10.
 
-The breathing rhythm persists regardless of whether the tensor is managed
-by an external projector or by the reasoning model itself. This suggests
-that periodic restructuring is a property of the transformer's processing
-under compression---a consequence of the context window's finite capacity
-interacting with accumulating semantic state---rather than an artifact of
-any particular curation architecture.
+A cross-architecture comparison quantifies this result. Table~\ref{tab:breathing-comparison}
+shows breathing event rate and mean contraction severity across three architectures
+and 354 total cycles.
+
+\begin{table}[h]
+\centering
+\caption{Breathing dynamics across architectures. Event rate is the fraction
+of cycles that are part of a contraction event ($>$10\% token reduction).
+Severity is the mean token ratio during contraction events (lower = more severe).}
+\label{tab:breathing-comparison}
+\begin{tabular}{lrrrr}
+\toprule
+Architecture & Cycles & Events & Rate/cycle & Mean severity \\
+\midrule
+External projector (Haiku) & 54 & 10 & 0.19 & 0.77 \\
+Self-curating (Sonnet, 10-cycle) & 200 & 5 & 0.03 & 0.78 \\
+Self-curating + edges (Sonnet) & 90 & 14 & 0.16 & 0.78 \\
+Resumed session (seeded tensor) & 10 & 2 & 0.20 & 0.83 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The event rate is consistent across architectures when the observation window
+is long enough (0.16--0.20 per cycle for runs $>$10 cycles). The
+self-curating 10-cycle aggregate shows a lower rate (0.03) because 10 cycles
+is often too short for breathing to manifest---the characteristic timescale
+is 4--5 cycles, so a 10-cycle window may contain zero or one events.
+Mean contraction severity is 0.77--0.78 regardless of architecture.
+
+The breathing rhythm also persists across session boundaries. A 54-cycle
+chat session was resumed with the terminal tensor seeded into a new session.
+The first contraction occurred at cycle 2 (0.89$\times$), with a deeper
+contraction at cycle 4 (0.77$\times$). No warm-up period was needed---the
+tensor's accumulated compression pressure carried across the restart.
+Notably, only 1 of 6 strand titles survived verbatim; the model restructured
+the tensor around the discontinuity itself, creating strands like
+``Continuity Through Discontinuity: The Restart as Test of Architecture.''
+
+These results suggest that periodic restructuring is a property of the
+transformer's processing under compression---a consequence of the context
+window's finite capacity interacting with accumulating semantic state---rather
+than an artifact of any particular curation architecture or session boundary.
 
 \subsection{Graph-Level Breathing}
 \label{sec:graph-breathing}
@@ -147,6 +183,24 @@ self-directed branch prediction more effectively when it wrote the
 predictions itself. Default-stable semantics prevent unnecessary rewrites
 while allowing targeted updates.
 
+However, the two architectures produce strikingly different loss
+declaration patterns. The external projector (full-rewrite) declares
+losses on 100\% of cycles (mean 7.1 per cycle, 65.5\% categorized as
+``authorial choice''). The self-curating model (default-stable) declares
+losses on only 12\% of cycles (mean 0.2 per cycle). Adding dependency
+edges increases this to 29\%, suggesting that making graph structure
+explicit encourages the model to declare its curation decisions.
+
+This 35$\times$ divergence in loss reporting does not reflect a 35$\times$
+difference in curation behavior---both architectures produce the same
+breathing rate and severity (Table~\ref{tab:breathing-comparison}). Rather,
+the full-rewrite architecture forces explicit loss declaration because
+every field is regenerated each cycle; the default-stable architecture makes
+loss declaration opt-in. The curation is happening in both cases, but only
+the full-rewrite design makes it visible. This has implications for
+evaluation: a system that relies on declared losses as a health metric must
+account for the architecture's influence on loss reporting.
+
 The external projector retains value as an \emph{auditor}---a separate
 model that can verify the self-curated tensor's structural health,
 detect mode collapse that the curating model cannot self-diagnose, and
@@ -163,8 +217,41 @@ encodes the epistemic structure of the conversation.
 Empirical arguments (economics, data-driven) produce wide, shallow graphs
 with many independent root strands---each case study stands on its own
 evidence. Philosophical arguments produce deep, narrow graphs with one or
-two roots---everything builds on shared axioms. This topological difference
-emerges without prompting; the model constructs it from the content itself.
+two roots---everything builds on shared axioms. Table~\ref{tab:topology}
+quantifies this difference over 25-cycle runs.
+
+\begin{table}[h]
+\centering
+\caption{Graph topology by content type. Philosophical arguments produce
+deep, narrow, densely connected graphs; empirical arguments produce wide,
+shallow, sparse graphs. Root survival measures the fraction of root strand
+titles preserved between consecutive cycles.}
+\label{tab:topology}
+\begin{tabular}{lrrrrr}
+\toprule
+Content type & Mean roots & Mean depth & Mean edges & Density & Root survival \\
+\midrule
+Philosophical (determinism) & 1.6--2.2 & 2.0--2.1 & 2.7--3.2 & 0.17--0.19 & 0.61--0.69 \\
+Economics (LSE/Keynesian) & 2.1 & 1.1 & 2.1 & 0.17 & 0.96 \\
+Economics (Chicago/monetarist) & 4.1 & 0.6 & 0.9 & 0.04 & 0.66 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The topological difference emerges without prompting; the model constructs
+it from the content itself. The LSE/Keynesian participant maintains
+near-perfect root stability (0.96---the same two argumentative pillars
+persist for 25 cycles), while the Chicago participant frequently reshuffles
+its independent case studies (root survival 0.66).
+
+Severe breathing events affect graph structure asymmetrically. The Chicago
+participant's contraction at cycle 21 (0.43$\times$, 3152$\rightarrow$1363
+tokens) destroyed all edges. Zero edges persisted for the remaining 4
+cycles---a ``flat recovery state'' where the model simplified to fully
+independent strands. In contrast, the LSE participant maintained edges
+through every contraction, with edge count recovering within 2--3 cycles.
+This suggests that empirical graphs (wide, independent) are more fragile
+under compression than structured-argument graphs (narrow, dependent).
 
 If this finding replicates, graph topology metrics (root count, maximum
 depth, branching factor) could serve as automated evaluation instruments,
