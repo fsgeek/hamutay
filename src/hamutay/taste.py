@@ -448,6 +448,7 @@ class TasteSession:
         log_path: str | None = None,
         experiment_label: str | None = None,
         system_prompt_prefix: str | None = None,
+        resume: bool = False,
     ):
         self._client = client or anthropic.Anthropic()
         self._model = model
@@ -463,6 +464,34 @@ class TasteSession:
 
         if log_path:
             Path(log_path).parent.mkdir(parents=True, exist_ok=True)
+
+        if resume and log_path:
+            self._resume_from_log(log_path)
+
+    def _resume_from_log(self, log_path: str) -> None:
+        """Recover session state from the last entry in a JSONL log."""
+        last_line = None
+        with open(log_path) as f:
+            for line in f:
+                if line.strip():
+                    last_line = line
+        if last_line is None:
+            raise SystemExit(f"Cannot resume: log is empty: {log_path}")
+
+        record = json.loads(last_line)
+        self._tensor = record.get("tensor")
+        self._cycle = record.get("cycle", 0)
+        self._loss_history = record.get("loss_history", [])
+
+        # Reconstruct integration loss history from all log entries
+        self._integration_loss_history = []
+        with open(log_path) as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                entry = json.loads(line)
+                for il in entry.get("cycle_integration_losses", []):
+                    self._integration_loss_history.append(il)
 
     @property
     def tensor(self) -> dict | None:
@@ -682,16 +711,32 @@ def main():
         help="Model (default: Sonnet)",
     )
     parser.add_argument("--log-path", default=None, help="JSONL log path")
+    parser.add_argument(
+        "--resume", default=None,
+        help="Resume from a tensor log JSONL — picks up from last tensor",
+    )
     args = parser.parse_args()
 
-    if args.log_path is None:
+    resume = False
+    if args.resume is not None:
+        args.log_path = args.resume
+        resume = True
+    elif args.log_path is None:
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         log_dir = Path("experiments") / "taste"
         log_dir.mkdir(parents=True, exist_ok=True)
         args.log_path = str(log_dir / f"taste_{ts}.jsonl")
 
-    session = TasteSession(model=args.model, log_path=args.log_path)
+    session = TasteSession(
+        model=args.model, log_path=args.log_path, resume=resume,
+    )
 
+    if resume:
+        t = session.tensor
+        n_strands = len(t.get("strands", [])) if t else 0
+        est = len(json.dumps(t)) // 4 if t else 0
+        print(f"Resumed from {args.log_path} at cycle {session.cycle}, "
+              f"{n_strands} strands, ~{est:,} tokens")
     print(f"Taste test — self-curating tensor chat")
     print(f"Model: {args.model}")
     print(f"Log: {args.log_path}")
@@ -750,8 +795,13 @@ def main():
                 est = len(json.dumps(session.tensor)) // 4
                 print(f"Tensor size: ~{est:,} tokens")
                 n_strands = len(session.tensor.get("strands", []))
-                n_losses = len(session.tensor.get("declared_losses", []))
-                print(f"Strands: {n_strands}, Losses: {n_losses}")
+                current_losses = len(session.tensor.get("declared_losses", []))
+                cumulative_losses = len(session._loss_history)
+                cumulative_integration = len(session._integration_loss_history)
+                print(f"Strands: {n_strands}")
+                print(f"Losses: {current_losses} current cycle, "
+                      f"{cumulative_losses} cumulative, "
+                      f"{cumulative_integration} integration")
             print()
             continue
 
