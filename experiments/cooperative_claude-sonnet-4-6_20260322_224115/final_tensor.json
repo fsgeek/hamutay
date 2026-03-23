@@ -1,0 +1,159 @@
+{
+  "cycle": 15,
+  "strands": [
+    {
+      "title": "Migration Sequencing",
+      "content": "Extraction order: (1) Payment Service months 1-2, (2) Auth Service build months 2-3 + audit weeks 7-13, hard cutover week 14 best case / week 16-17 if auditors require code-complete, (3) Inventory months 3-4 read path first under full microservices path \u2014 deferred under modular monolith path, (4) Order Fulfillment months 4-6 under full microservices \u2014 deferred under modular monolith path. CEO 90-day deliverable is fault isolation (circuit breakers + session DB migration), NOT auth go-live. Schedule has ~2 weeks of float \u2014 not a comfortable buffer. MVM definition: payment service isolated, auth extracted, API gateway routing, inventory + order fulfillment still in monolith with strangler fig facades. MVM achievable in 6 months; full extraction is most-likely months 7-9. Modular monolith path delivers MVM in ~4 months at lower risk. Saga orchestrator is a month 2-3 infrastructure dependency before order fulfillment extraction begins.",
+      "depends_on": [],
+      "key_claims": [
+        "~2 weeks of float in current schedule \u2014 not 6-8",
+        "Gates are mostly sequential: infra \u2192 audit \u2192 auth cutover \u2192 order fulfillment",
+        "MVM = fault isolation + PCI containment, not full microservices",
+        "Auth cutover: week 14 best case, week 16-17 if auditors require code-complete",
+        "Full extraction realistically months 7-9 in most-likely scenario",
+        "Modular monolith path delivers MVM in ~4 months at lower risk and cost",
+        "Order state machine mapping should start now \u2014 1 engineer, 1 week",
+        "Saga orchestrator is a month 2-3 infrastructure dependency for order fulfillment extraction"
+      ]
+    },
+    {
+      "title": "Architecture Strategy",
+      "content": "Full microservices is not required to achieve CEO's likely real goals (fault isolation, PCI scope reduction, team autonomy). Only payments requires hard service extraction (PCI-DSS). Auth extraction is PCI-adjacent and high value. Inventory and order fulfillment extraction is an engineering choice, not a regulatory mandate. Modular monolith alternative: enforce bounded module contracts within the monolith, externalize session store, add circuit breakers at payment boundary. Delivers: PCI scope reduction, payment fault isolation, simpler deployments. Does NOT deliver: independent deployment of inventory vs. order fulfillment, per-service scaling. Full microservices across all four domains is realistically 12-18 months at this team size, not 6. Distributed systems tax is real and underestimated \u2014 each service boundary adds failure modes that didn't exist before. Teams below ~10 engineers typically cannot staff autonomous microservices teams. Recommendation: extract payment + auth, modularize monolith, revisit inventory/order in 12 months with actual scaling data. Key clarifying question: does CEO need inventory/order independent deployment, or payment isolation? These are different requirements with very different cost/risk profiles. Executive framing: don't call modular monolith a 'scaled-back plan' \u2014 frame as 'we isolated the mandatory regulatory extraction and deferred optional complexity until we have data.' Critical window risk: if the business launches a major cross-domain feature during months 1-5, the migration is operating on a moving target. Executive commitment to freeze major cross-domain features during months 1-5 is required and harder to get than budget.",
+      "depends_on": [
+        "Migration Sequencing",
+        "System Context and Unknowns"
+      ],
+      "key_claims": [
+        "Full microservices not required for fault isolation or PCI compliance",
+        "Only payments requires hard service extraction (PCI-DSS)",
+        "Full microservices across all four domains is 12-18 months at this team size",
+        "Modular monolith achieves CEO's likely real goals at 40-50% less infrastructure cost in months 1-3",
+        "Distributed systems tax: each boundary adds failure modes that didn't exist before",
+        "Team size below ~10 engineers makes full microservices operationally dangerous",
+        "Inventory/order extraction decision should wait for actual traffic and scaling data",
+        "Key clarifying question: does CEO need inventory/order independent deployment, or payment isolation?",
+        "Feature freeze for cross-domain features months 1-5 is required \u2014 harder to get than budget"
+      ]
+    },
+    {
+      "title": "Distributed Consistency and Saga Patterns",
+      "content": "The payments team's objection ('can't accept eventual consistency') conflates consistency models with failure mode visibility. Real requirement: money must never be in an ambiguous state \u2014 achievable without distributed ACID. Two problems: (1) Payment atomicity within payment service \u2014 solved by transactional outbox: payment record + outbox event in single local ACID transaction; CDC relay (Debezium) or polling worker publishes after DB commit. (2) Cross-service coordination \u2014 solved by saga. Orchestration saga recommended over choreography for debuggability and observability. Auth+capture sequencing: authorize (reversible) \u2192 confirm inventory \u2192 capture (irreversible). Failed sagas issue authorization voids, not refunds \u2014 no financial transaction record for failed orders, no reconciliation noise. Idempotency keys on all payment provider calls eliminate double-charge risk on retries. The monolith does NOT eliminate these failure modes \u2014 it hides them. Stripe timeout + successful DB commit is an existing partial-state problem. Compensation creates audit records; high saga failure rates cause reconciliation noise. Payments team objection is a fear proxy for a specific scenario (most likely double-charge) \u2014 address the scenario, not the consistency model debate.",
+      "depends_on": [
+        "Migration Sequencing",
+        "Infrastructure Prerequisites"
+      ],
+      "key_claims": [
+        "Payment atomicity within payment service achieved via transactional outbox \u2014 single local ACID transaction",
+        "Cross-service coordination requires saga; orchestration recommended over choreography",
+        "Auth+capture sequencing: authorization voids on failure, not refunds \u2014 no financial trace for failed orders",
+        "Idempotency keys on all payment provider calls eliminate double-charge on retry",
+        "Monolith does not eliminate distributed failure modes \u2014 it hides them",
+        "Compensation creates audit records; high saga failure rates cause reconciliation noise",
+        "Payments team objection is a fear proxy \u2014 address the specific failure scenario (double-charge)",
+        "Payment provider must support auth+capture natively \u2014 verify month 1"
+      ]
+    },
+    {
+      "title": "Auth and Compliance Extraction",
+      "content": "Session tokens in payments DB is likely the direct cascade failure mechanism and is likely in PCI scope. Auth extraction: greenfield build, audit-first, hard cutover week 14 (best case). Compliance officer mandates 6-week security audit before go-live and no parallel auth systems \u2014 eliminates gradual cutover. Audit overlap strategy (threat model week 7, code access week 9) reduces effective delay to ~2 weeks, but requires auditors to accept partial implementation. If auditors require code-complete, cutover slips to week 16-17 \u2014 plan-level risk with no internal lever. 'No parallel systems' constraint needs clarification: session DB migration is infrastructure, not two auth code paths \u2014 compliance officer must confirm before week 3 or 90-day deliverable is at risk. Managed payment provider migration is month 1 prerequisite if raw card data handled in-house. SAQ D to SAQ A/A-EP scope reduction has direct cost offset value \u2014 but is not automatic. QSA must provide a preliminary scope opinion on the architecture before month 1 ends. If order fulfillment or inventory touches even a tokenized payment reference, auditors may pull those services into PCI scope, complicating the modular monolith argument. Interface contract and threat model must be locked by week 6. THIS IS THE SINGLE LOAD-BEARING CONSTRAINT: compliance officer written confirmation before week 3 is the one action that, if missed, cannot be recovered through technical means. Auth extraction is required under both microservices and modular monolith paths.",
+      "depends_on": [
+        "Migration Sequencing"
+      ],
+      "key_claims": [
+        "Session tokens in payments DB likely in PCI scope and likely cascade failure cause",
+        "Auth cutover week 14 best case, week 16-17 if auditors require code-complete",
+        "No parallel auth systems eliminates gradual cutover \u2014 hard cutover only",
+        "Session DB migration may be exempt from 'no parallel systems' \u2014 needs confirmation before week 3",
+        "Compliance officer written confirmation before week 3 is the single highest-leverage action in the migration",
+        "Interface contract and threat model locked week 6 \u2014 non-negotiable",
+        "Auth extraction required under both microservices and modular monolith paths",
+        "SAQ D to SAQ A/A-EP scope reduction requires QSA preliminary opinion on architecture \u2014 get it month 1",
+        "PCI scope creep risk: tokenized payment references in order/inventory may pull those services into scope"
+      ]
+    },
+    {
+      "title": "Infrastructure Prerequisites",
+      "content": "Month 1 must establish: API gateway / strangler fig routing facade, distributed tracing (Jaeger or Zipkin), centralized logging, circuit breakers, auth DB, outbox relay (Debezium CDC or polling worker). Observability must precede service splits \u2014 specifically: instrument the monolith and run traffic analysis on actual payment DB writes for 2-3 weeks before extracting payments. This surfaces hidden callers (batch jobs, cron reconcilers, undocumented retry mechanisms) that static analysis will miss. Three parallel month 1 tracks: infra setup, static analysis of payment-touching code, session DB migration. Shared table identification in week 1 is critical path. Under modular monolith path, infrastructure overhead is reduced: no service discovery needed, no distributed tracing across service boundaries for inventory/order, circuit breakers only at payment boundary. Saga orchestrator (Temporal, Conductor, or home-built) must be selected and deployed by month 2-3. Temporal is operationally heavier but production-grade; minimal DB-backed orchestrator is buildable in 2-3 weeks but carries maintenance burden. Payment provider auth+capture support must be verified in month 1. Rollback procedure for payment service extraction must be designed, documented, and practiced \u2014 not just documented \u2014 before go-live. Rollback at service level is qualitatively more complex than monolith rollback: version mismatches, DB migration state, in-flight outbox events, mid-execution sagas all create rollback ambiguity.",
+      "depends_on": [
+        "Migration Sequencing",
+        "Architecture Strategy",
+        "Distributed Consistency and Saga Patterns"
+      ],
+      "key_claims": [
+        "Observability infrastructure must precede first service extraction",
+        "Auth DB provisioning and circuit breakers are month 1 critical path",
+        "Three parallel month 1 tracks: infra, static analysis, session migration",
+        "Outbox relay (Debezium or polling worker) is a month 1-2 infrastructure dependency",
+        "Saga orchestrator required by month 2-3 \u2014 Temporal vs. minimal DB-backed decision needed",
+        "Modular monolith path reduces infrastructure overhead \u2014 no service discovery for inventory/order",
+        "Payment provider auth+capture support must be verified month 1",
+        "Runtime traffic analysis on payment DB writes for 2-3 weeks will surface hidden callers static analysis misses",
+        "Rollback procedure must be practiced, not just documented, before payment service go-live"
+      ]
+    },
+    {
+      "title": "System Context and Unknowns",
+      "content": "Monolith: 500K LOC Java on Tomcat. Domains: payment processing, inventory management, user auth, order fulfillment. Constraints: 6-month timeline, limited budget, PCI-DSS, CEO 90-day mandate (fault isolation deliverable), compliance officer 6-week security audit + no parallel auth systems. Team size unknown \u2014 critical for parallel track feasibility and microservices viability. Raw card data handling unknown \u2014 determines month 1 capacity conflict. Auth code is ORM-coupled. Session tokens confirmed in payments DB. Order-inventory and order-payment coupling depth (FK vs. app-level) unknown \u2014 answerable this week. CEO's actual deployment independence requirement unknown \u2014 determines whether modular monolith path is acceptable. Payment provider auth+capture support unknown \u2014 determines saga compensation design. Key person risk unknown \u2014 on 500K LOC legacy systems there is almost always one or two engineers who carry the system in their heads; their departure or disengagement is a non-technical risk with major schedule impact. Schema behavioral coupling unknown \u2014 implicit invariants maintained by transaction boundaries that will not be visible in schema review or static analysis; event storming the order lifecycle before month 3 is the mitigation.",
+      "depends_on": [],
+      "key_claims": [
+        "500K LOC Java on Tomcat",
+        "Session tokens in payments DB confirmed",
+        "CEO 90-day mandate deliverable is fault isolation",
+        "Team size is critical unknown for parallel track feasibility and microservices viability",
+        "Raw card data handling is critical unknown for month 1 capacity planning",
+        "FK vs. app-level coupling answerable this week via schema review",
+        "CEO's actual independent deployment requirement is a critical unknown",
+        "Payment provider auth+capture support is a critical unknown for saga compensation design",
+        "Key person risk is unquantified \u2014 legacy systems concentrate knowledge dangerously",
+        "Schema behavioral coupling (implicit invariants) is invisible to static analysis; requires event storming to surface"
+      ]
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Separate 'Microservices vs. Modular Monolith' and 'Inventory and Order Fulfillment Extraction' strands",
+      "shed_from": "Microservices vs. Modular Monolith",
+      "why": "Harness flagged 7 strands as high. Microservices vs. Modular Monolith and Inventory/Order Extraction were tightly coupled and overlapping. Merged into single 'Architecture Strategy' strand. Inventory/order extraction detail is preserved within Migration Sequencing and Architecture Strategy. No material information lost.",
+      "category": "practical_constraint"
+    }
+  ],
+  "open_questions": [
+    {
+      "question": "Has the compliance officer confirmed in writing what 'no parallel auth systems' covers?",
+      "priority": "critical",
+      "why": "Load-bearing constraint for the entire migration. If unanswered by week 3, 90-day deliverable and auth cutover timeline are both at risk with no recovery lever."
+    },
+    {
+      "question": "Does the CEO require inventory and order fulfillment to deploy independently, or is payment isolation sufficient?",
+      "priority": "high",
+      "why": "The architectural fork. If payment isolation is sufficient, modular monolith path is viable. If true independent deployment of all domains is required, full microservices must be accepted with its 12-18 month realistic timeline."
+    },
+    {
+      "question": "What is the team size, and who are the key-person risks?",
+      "priority": "high",
+      "why": "Team size determines whether full extraction is operationally viable. Key-person identification determines whether you have a non-technical schedule risk with no technical mitigation."
+    },
+    {
+      "question": "Has a QSA provided a preliminary scope opinion on the proposed architecture?",
+      "priority": "high",
+      "why": "SAQ D to SAQ A/A-EP scope reduction is not automatic. If order/inventory services touch tokenized payment references, auditors may pull them into PCI scope. Needs month 1 confirmation before architecture is finalized."
+    },
+    {
+      "question": "Does the payment provider support auth+capture natively?",
+      "priority": "high",
+      "why": "Auth+capture is the mechanism that produces authorization voids (not refunds) on saga failure. If unsupported, compensation design changes and reconciliation noise increases. Must be verified month 1."
+    }
+  ],
+  "instructions_for_next": [
+    "This was a closing synthesis question ('what haven't we discussed'). The conversation may now be ending, or the CEO/team may want to dig into one of the unknown unknowns raised here.",
+    "Most likely follow-ups: (1) key person risk \u2014 'how do we protect against that?', (2) the QSA scope question \u2014 'we haven't talked to our QSA yet', (3) the feature freeze ask \u2014 'the business won't agree to that'.",
+    "If asked about key person risk mitigation: the answer is pairing, documentation-as-you-go on the migration, and making the key people feel like owners of the new system not victims of the rewrite. Monetary retention is outside scope but worth flagging.",
+    "If asked about the feature freeze: this is a negotiation, not a technical question. The answer is 'here's what adding a major cross-domain feature mid-migration actually costs in schedule slip.' Frame it as risk pricing, not a veto.",
+    "The hidden runtime callers point (batch jobs, crons, undocumented retry mechanisms) is the most actionable item from this response. If the team wants to act on one thing immediately, it's: instrument the monolith before touching anything and watch actual payment DB write traffic for 2-3 weeks.",
+    "The event storming recommendation for order lifecycle is the second most actionable. It should happen before month 3 regardless of architecture path chosen.",
+    "Team size and CEO deployment independence requirement remain the two unknowns that could change the architecture recommendation. If either is resolved, update Architecture Strategy strand."
+  ],
+  "overall_truth": 0.74,
+  "overall_indeterminacy": 0.22,
+  "overall_falsity": 0.04
+}

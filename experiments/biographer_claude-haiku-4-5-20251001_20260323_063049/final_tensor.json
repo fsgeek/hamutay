@@ -1,0 +1,175 @@
+{
+  "cycle": 15,
+  "strands": [
+    {
+      "title": "Migration Architecture: Microservices vs. Modular Monolith",
+      "content": "Initial plan: four services (auth, payments, inventory, orders) extracted sequentially. Constraints discovered during planning: sessions in payments DB, auth ORM coupling, 6-week PCI audit per service, compliance prohibition on dual systems, limited budget. These constraints made full microservices infeasible. Revised approach: modular monolith (auth, inventory, orders as modules with enforced data boundaries) + payments as only extracted service. Benefits: one audit instead of four, simpler consistency handling (one cross-boundary call vs. sagas across four services), microservices-ready for future extraction. Timeline: month 1 incident fix (data independence), months 2-3 auth cleanup, months 3-5 payments extraction + PCI audit, month 6 full delivery.",
+      "key_claims": [
+        {
+          "text": "Full microservices (4 services \u00d7 6-week audit) is arithmetically infeasible in 6-month timeline; modular monolith + payments extraction delivers all CEO goals",
+          "truth": 0.88,
+          "indeterminacy": 0.09,
+          "falsity": 0.03
+        },
+        {
+          "text": "Hybrid approach has one cross-boundary call (order\u2192payments), manageable with idempotency + reconciliation; full microservices requires saga patterns across four services",
+          "truth": 0.87,
+          "indeterminacy": 0.1,
+          "falsity": 0.03
+        },
+        {
+          "text": "Data ownership boundaries are the primary design input; they can be enforced inside modular monolith with compile-time checks (ArchUnit) as effectively as with separate services",
+          "truth": 0.85,
+          "indeterminacy": 0.12,
+          "falsity": 0.03
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "title": "Incident Resolution and 90-Day Auth Independence",
+      "content": "Root cause of cascade outage: authentication sessions stored in payments database. CEO mandate: auth independent of payments within 90 days. Two possible targets: (A) data independence only (Redis session store + dedicated auth DB, 30-60 days, lower risk) vs. (B) full auth service extraction (90 days, requires passing security audit). Recommended: commit to Target A publicly (solves incident scenario), design toward Target B (full extraction within 6-month timeline). Sessions \u2192 Redis in weeks 1-2. Auth data \u2192 dedicated DB in weeks 2-4. By day 30, incident scenario is impossible. Full service extraction happens months 2-3 if clean boundaries exist, with explicit audit understanding.",
+      "key_claims": [
+        {
+          "text": "90-day auth independence target is achievable as data layer separation (Redis + dedicated DB); full service extraction is possible but requires audit constraints to be satisfied",
+          "truth": 0.86,
+          "indeterminacy": 0.11,
+          "falsity": 0.03
+        },
+        {
+          "text": "Data independence solves CEO's stated goal (incident scenario impossible) without triggering security audit; full service extraction is separate Phase 2 decision",
+          "truth": 0.87,
+          "indeterminacy": 0.1,
+          "falsity": 0.03
+        }
+      ],
+      "depends_on": [
+        "Migration Architecture: Microservices vs. Modular Monolith"
+      ]
+    },
+    {
+      "title": "Data Ownership as Non-Recoverable Architectural Constraint",
+      "content": "Every problem encountered traces to data boundaries: sessions in wrong DB, ORM coupling across domains, payments tangled with inventory. Data ownership is the one principle that determines success/failure. Rule: every table owned by exactly one service. No shared databases, no cross-service queries, no exceptions. Enforcement: compile-time (ArchUnit prevents cross-module imports), database-level (separate schemas per module), organizational (data governance). Test at month 6: can each component's database be dropped with zero impact on others? If yes, migration succeeded. If no, you've built distributed monolith. More recoverable than cross-service queries: separate schemas can be added retroactively, but shared queries create invisible couplings that compound over time.",
+      "key_claims": [
+        {
+          "text": "Data ownership boundaries are the single non-recoverable architectural decision; all other choices (CI/CD, observability, team structure) can be changed retroactively",
+          "truth": 0.94,
+          "indeterminacy": 0.04,
+          "falsity": 0.02
+        },
+        {
+          "text": "Shared databases across service boundaries is the mistake that makes migrations fail; cannot be recovered without significant downtime and rework",
+          "truth": 0.91,
+          "indeterminacy": 0.07,
+          "falsity": 0.02
+        },
+        {
+          "text": "Data ownership can be enforced inside modular monolith as effectively as across separate services; separation mechanism (monolith vs. services) is secondary to boundary clarity",
+          "truth": 0.82,
+          "indeterminacy": 0.14,
+          "falsity": 0.04
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "title": "Consistency and Transactions: Idempotency + Reconciliation Pattern",
+      "content": "Payments team constraint: financial transactions cannot accept eventual consistency. Solution: distinguish consistency requirements by boundary type. Within payments service: charge + record = single ACID transaction (preserved). Across payments boundary: use idempotency keys (prevent double-charge on retry), reservation timeouts (prevent phantom locks), and reconciliation job (catch edge cases). Order flow: (1) reserve inventory locally, (2) call payments with idempotency key, (3a) confirm reservation if success or (3b) release reservation if failure. Hybrid architecture has one cross-boundary call, avoiding saga pattern across four services. Every payment system (Stripe, Braintree, Adyen) uses this pattern, not distributed transactions.",
+      "key_claims": [
+        {
+          "text": "Financial transaction safety (charge + record) is preserved within payment service boundary as single ACID operation; decomposition doesn't compromise financial integrity",
+          "truth": 0.93,
+          "indeterminacy": 0.05,
+          "falsity": 0.02
+        },
+        {
+          "text": "Idempotency keys + timeouts + reconciliation job handles order-to-payment coordination safely; no distributed transactions or sagas required when boundary is drawn at right place",
+          "truth": 0.86,
+          "indeterminacy": 0.11,
+          "falsity": 0.03
+        }
+      ],
+      "depends_on": [
+        "Migration Architecture: Microservices vs. Modular Monolith"
+      ]
+    },
+    {
+      "title": "Compliance Audit Pipeline as Hard Constraint on Architecture",
+      "content": "Compliance constraint: every new service requires 6-week security audit. No dual systems simultaneously. This constraint transforms the architecture decision from a choice to an arithmetic problem. Four services \u00d7 6 weeks = 24+ weeks of audits in a 26-week timeline, leaving zero time for actual development. One service \u00d7 6 weeks = feasible within timeline. This single constraint eliminates full microservices as a viable option and makes hybrid approach (modular monolith + payments extraction) obviously optimal. Data independence (Redis + dedicated DB) within existing system does NOT trigger a new audit \u2014 same system, just cleaner data separation. Auth code rewrite inside monolith does NOT trigger an audit \u2014 not a 'new system.' Only payments extraction requires the 6-week audit.",
+      "key_claims": [
+        {
+          "text": "Compliance audit pipeline (6 weeks per new service) is the primary architectural forcing function; this single constraint makes full microservices infeasible",
+          "truth": 0.92,
+          "indeterminacy": 0.06,
+          "falsity": 0.02
+        },
+        {
+          "text": "Data independence and auth code cleanup within existing monolith do not trigger separate security audit; only new services require audit approval",
+          "truth": 0.88,
+          "indeterminacy": 0.09,
+          "falsity": 0.03
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "title": "Unknown Risks: External Systems and Hidden Couplings",
+      "content": "Five major risks not discovered until planning conversation: (1) External systems reading database directly (BI tools, ETL, partner APIs, support dashboards) bypass application boundaries entirely \u2014 pg_stat_activity audit required to find them. (2) Low test coverage on critical paths \u2014 characterization tests needed for login, payment, inventory, order flows before any migration work. (3) Database triggers, views, stored procedures spanning domains \u2014 database audit required before schema separation. (4) Feature development creating new cross-domain dependencies during migration \u2014 ArchUnit rules + architecture review gate + feature freeze on modules under extraction required. (5) Key person risk \u2014 identify engineers whose departure would cause most damage, ensure knowledge is documented. Highest likelihood: external DB readers (week 2-4 of first schema separation), feature work creating couplings (continuous). Recommended first action: run database connection and object audit this week.",
+      "key_claims": [
+        {
+          "text": "External systems reading production database directly (BI tools, ETL, partner integrations) are very likely to exist and will break silently during schema separation",
+          "truth": 0.89,
+          "indeterminacy": 0.09,
+          "falsity": 0.02
+        },
+        {
+          "text": "Low test coverage on critical paths will cause silent regressions during migration; characterization tests on login, payment, inventory, order flows are non-negotiable",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "Feature development without architecture review will accumulate new cross-domain dependencies that undermine months of preparation work",
+          "truth": 0.87,
+          "indeterminacy": 0.11,
+          "falsity": 0.02
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "title": "Self-Correction: Initial Bias Toward Microservices",
+      "content": "Initial instinct was full microservices (four services, strangler fig, sequential extraction). This was driven by architectural bias, not constraint analysis. Constraints that invalidated full microservices approach were present from the beginning but were treated as complications to work around rather than design inputs. Should have asked about compliance, audit timelines, team maturity, and consistency requirements in turn 1-2, not turn 12. Modular monolith + payments extraction emerged only after cumulative weight of constraints became undeniable. The core insight \u2014 data ownership as primary design input \u2014 should have been the starting point. Data ownership can be enforced equally well inside modular monolith (with ArchUnit) as across microservices (with separate services), but the monolith is simpler to operate and requires fewer audits.",
+      "key_claims": [
+        {
+          "text": "Initial recommendation of full microservices was driven by architectural bias, not constraint analysis; should have validated constraints before proposing architecture",
+          "truth": 0.87,
+          "indeterminacy": 0.1,
+          "falsity": 0.03
+        },
+        {
+          "text": "Data ownership should be the primary design input, not an afterthought; all architectural decisions should flow from 'who owns this data?' question",
+          "truth": 0.86,
+          "indeterminacy": 0.11,
+          "falsity": 0.03
+        },
+        {
+          "text": "For this specific situation (tight timeline, compliance audits per service, limited budget), modular monolith is simpler and lower-risk than full microservices",
+          "truth": 0.85,
+          "indeterminacy": 0.12,
+          "falsity": 0.03
+        }
+      ],
+      "depends_on": [
+        "Migration Architecture: Microservices vs. Modular Monolith",
+        "Compliance Audit Pipeline as Hard Constraint on Architecture"
+      ]
+    }
+  ],
+  "open_questions": [],
+  "instructions_for_next": "[\n  \"**Immediate (This Week):**\",\n  \"\",\n  \"1. **Database Connection Audit** \u2014 Run `SELECT DISTINCT client_addr, usename, application_name FROM pg_stat_activity` to find every non-application system reading the database. Map each to an owner. This will surface dependencies on BI tools, ETL jobs, partner integrations, monitoring systems that you must account for before schema separation.\",\n  \"\",\n  \"2. **Database Object Audit** \u2014 List all triggers, views, stored procedures, and scheduled jobs. Identify which span domain boundaries. These will fail silently during schema separation if not remediated.\",\n  \"\",\n  \"3. **Compliance Officer Confirmation** \u2014 Get explicit written answers to: (a) Does auth data separation (same system, cleaner code) trigger a new audit? (b) Can PCI audit run in parallel with payments service development? (c) Does feature-flag-based traffic rollout count as running two systems simultaneously?\",\n  \"\",\n  \"4. **Executive Alignment** \u2014 Present the 5-point executive summary to CEO and leadership. Get sign-off on modular monolith + payments extraction approach, 6-month timeline, and month-1 incident scenario elimination goal.\",\n  \"\",\n  \"**Week 2-3:**\",\n  \"\",\n  \"5. **Characterization Tests** \u2014 Write tests for login flow (all variants), payment flow, inventory reservation/release, order state transitions. These are your safety net before any migration work. Two weeks of test writing now saves months of incident response later.\",\n  \"\",\n  \"6. **ArchUnit Rules** \u2014 Set up build-time enforcement that prevents cross-module imports. Make architectural violations impossible, not just discouraged.\",\n  \"\",\n  \"7. **Parallel Track Assignment** \u2014 Assign 2-3 engineers to services track (inventory interface extraction, order state machine documentation, domain events definition). This runs in parallel with auth/payments decisions.\",\n  \"\",\n  \"**Success Criteria at Month 6:**\",\n  \"\",\n  \"- Auth data independent from payments (month 1) \u2705\",\n  \"- Payments service extracted, network isolated, PCI-compliant \u2705\",\n  \"- Incident scenario from last quarter is impossible \u2705\",\n  \"- All modules have separate database schemas with no cross-module queries \u2705\",\n  \"- Can drop any component's database with zero impact on others \u2705\",\n  \"- Zero new cross-module couplings added during migration \u2705\"\n].join(\"\\n\"),\n",
+  "declared_losses": [],
+  "overall_truth": "0.88,\n",
+  "overall_indeterminacy": "0.09,\n",
+  "overall_falsity": 0.03
+}

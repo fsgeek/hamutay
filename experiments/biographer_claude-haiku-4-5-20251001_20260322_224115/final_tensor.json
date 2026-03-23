@@ -1,0 +1,362 @@
+{
+  "cycle": 15,
+  "strands": [
+    {
+      "title": "Migration Scope & Phasing",
+      "content": "500K LOC Java/Tomcat monolith migration realistically requires phased approach over 9-12 months, not 6. Six-month timeline is achievable only for *minimum viable migration* defined as risk reduction and boundary clarification, not full microservices transition. Original optimistic timeline (auth first, payments second) underestimated PCI-DSS compliance calendar burden (penetration testing 4-6 weeks, QSA review/scope assessment, network segmentation validation) which runs parallel to development. Auth/payments entanglement is deeper than initially assessed \u2014 auth session state, token validation, and permission logic are often directly woven into payment flows, making them not cleanly separable extractions but one complex coupled system. Revised 6-month minimum viable scope: isolate payments processing (Phase 1: months 1-3, initially as strangler-fig internal module with isolated schema, not yet separate service), harden boundary with async messaging and internal API contracts (Phase 2: months 3-4, externalize payments as separate deployable after stability proven), defer auth extraction to months 4-6 and use external identity provider (Auth0/Keycloak/Cognito) rather than greenfield build. Inventory/fulfillment explicitly deferred beyond 6 months. Monolith deployed behind API gateway by end of month 3. Success metric for 6-month window is NOT number of microservices, but: payments isolated with PCI scope reduced, auth decoupled with external identity provider, monolith strangled behind gateway for low-risk future extractions. Full independent microservices architecture (4+ services, event-driven communication, complete data isolation) is 9-12 month timeline done responsibly. **Critical upstream requirement: service boundary design and data ownership mapping must be completed before Phase 1 code writing begins (weeks 1-4).** This is the foundational artifact that determines migration success or failure \u2014 wrong boundaries are unrecoverable without complete re-architecture. **Revised with consistency consideration:** Do not split payments from inventory in the first phase if those two services must maintain transactional consistency. Extract them together as a \"transactional core\" service if that boundary is required by the business, preserving ACID guarantees internally. Split them apart in a later phase once saga infrastructure is battle-tested on lower-risk workflows. This adds a constraint to the service boundary design (weeks 1-4): the team must explicitly map which workflows require end-to-end transactional atomicity and which can tolerate eventual consistency with defined compensation logic.",
+      "depends_on": [],
+      "key_claims": [
+        {
+          "text": "Full monolith-to-microservices migration of 500K LOC cannot complete in six months",
+          "truth": 0.92,
+          "indeterminacy": 0.07,
+          "falsity": 0.01
+        },
+        {
+          "text": "PCI-DSS compliance burden (penetration testing, QSA review, scope assessment) adds 8-10 weeks of calendar time running parallel to development, not after",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "Auth and payment processing are more deeply entangled than assumed; they cannot be extracted as cleanly separate services",
+          "truth": 0.79,
+          "indeterminacy": 0.16,
+          "falsity": 0.05
+        },
+        {
+          "text": "Six-month minimum viable migration should prioritize payments isolation first, then auth extraction using external provider, defer inventory/fulfillment",
+          "truth": 0.81,
+          "indeterminacy": 0.14,
+          "falsity": 0.05
+        },
+        {
+          "text": "Success metric for 6-month window should be risk reduction (PCI scope, clear boundaries) not number of microservices",
+          "truth": 0.84,
+          "indeterminacy": 0.13,
+          "falsity": 0.03
+        },
+        {
+          "text": "Full independent microservices architecture with complete data isolation and event-driven communication requires 9-12 months",
+          "truth": 0.76,
+          "indeterminacy": 0.18,
+          "falsity": 0.06
+        },
+        {
+          "text": "Service boundary design and data ownership mapping, completed before Phase 1 code writing, is the single most critical success factor for the migration",
+          "truth": 0.93,
+          "indeterminacy": 0.06,
+          "falsity": 0.01
+        },
+        {
+          "text": "If transactional consistency across payments and inventory is a business requirement, extract them together as a single service initially; split later after saga infrastructure is proven",
+          "truth": 0.84,
+          "indeterminacy": 0.12,
+          "falsity": 0.04
+        }
+      ]
+    },
+    {
+      "title": "Consistency & Saga Patterns \u2014 The Real Tradeoff",
+      "content": "The monolith uses database transactions to maintain consistency across payments, inventory, orders, and fulfillment. The perceived strength of this approach is illusory: the ACID transaction only guarantees consistency *within the database*, not end-to-end across all real-world systems. If fulfillment crashes after commit, the database is consistent but the real world is not. Microservices expose this reality explicitly by requiring explicit compensation logic. The correct question is not \"eventual consistency vs. strong consistency\" but \"what needs to be atomic, and between which systems?\" For most orders, the answer is: payments and inventory must reach consistency together, but order confirmation and fulfillment can be eventually consistent with defined compensation (cancellations). **Consistency boundary principle:** Identify workflows where inconsistency creates unacceptable business risk (financial loss, regulatory violation, customer trust). Keep those workflows within a single service boundary with ACID semantics. Cross that boundary asynchronously with saga compensation logic. For this migration: payment authorization and inventory reservation are tightly coupled in the business logic; capture and fulfillment are loosely coupled. Recommendation is to extract payments and inventory together as a \"transactional core\" service for the first phase, maintaining their ACID boundary. After saga infrastructure is proven on lower-risk workflows (notifications, fulfillment status updates, customer communication), split payments from inventory in a second migration phase. This defers complexity but maintains safety. **Saga implementation discipline:** Choreography-based sagas (event-driven, no central orchestrator) are simpler for this monolith pattern but require discipline: (1) every compensating transaction must be defined before code ships, not discovered during incidents, (2) idempotency keys must be universal \u2014 every cross-service operation must carry a key tied to its business entity (order ID, payment ID) to prevent duplicate operations on retry, (3) event ordering must be guaranteed by the message broker (Kafka partitioning by business entity key), (4) stuck saga detection and alerting is mandatory (sagas exceed expected duration, compensation fails, trigger page). **The hard truth:** There is a window in microservices where inconsistency can exist (milliseconds to seconds between \"inventory reserved\" and \"payment captured\") that doesn't exist in a single database transaction. That window is acceptable because: (a) the monolith already has this window due to deployment, network failures, and application crashes \u2014 you just can't see it, (b) the compensation path (refund) is well-understood for payments, (c) you're building observability that makes the window visible and compensable. What you're trading is invisible risk for explicit, manageable risk.",
+      "depends_on": [
+        "Migration Scope & Phasing",
+        "Service Boundary Design \u2014 The Critical Path"
+      ],
+      "key_claims": [
+        {
+          "text": "Database transactions in a monolith guarantee consistency within the database, not end-to-end across all real-world systems",
+          "truth": 0.94,
+          "indeterminacy": 0.05,
+          "falsity": 0.01
+        },
+        {
+          "text": "Microservices don't create consistency problems; they expose consistency problems that already exist in the monolith but are invisible",
+          "truth": 0.87,
+          "indeterminacy": 0.1,
+          "falsity": 0.03
+        },
+        {
+          "text": "Some workflows require transactional consistency (payments + inventory); others tolerate eventual consistency (order + fulfillment)",
+          "truth": 0.86,
+          "indeterminacy": 0.11,
+          "falsity": 0.03
+        },
+        {
+          "text": "If payments and inventory must remain transactionally consistent, extract them together initially as a single service; defer splitting until saga infrastructure is proven",
+          "truth": 0.85,
+          "indeterminacy": 0.12,
+          "falsity": 0.03
+        },
+        {
+          "text": "Every compensating transaction must be defined and tested before shipping; discovering compensations during production incidents causes duplicate charges",
+          "truth": 0.91,
+          "indeterminacy": 0.07,
+          "falsity": 0.02
+        },
+        {
+          "text": "Idempotency keys (tied to business entity IDs) are non-negotiable in saga patterns to prevent duplicate operations on retry",
+          "truth": 0.92,
+          "indeterminacy": 0.06,
+          "falsity": 0.02
+        },
+        {
+          "text": "Authorization should happen early in the saga; capture should happen last, after inventory is confirmed reserved",
+          "truth": 0.88,
+          "indeterminacy": 0.09,
+          "falsity": 0.03
+        },
+        {
+          "text": "There is a window (milliseconds to seconds) in microservices where inconsistency can exist; this window is acceptable because the monolith already has it (invisible), and compensation logic is defined",
+          "truth": 0.83,
+          "indeterminacy": 0.13,
+          "falsity": 0.04
+        }
+      ]
+    },
+    {
+      "title": "Service Boundary Design \u2014 The Critical Path",
+      "content": "Getting service boundaries right before writing code is the single determinant of migration success. Wrong boundaries create distributed monoliths with network latency, synchronous coupling, and unrecoverable architectural debt. The failure mode: teams decompose along organizational lines or technical layers rather than business capabilities, resulting in services that cannot fulfill their core responsibility independently (e.g., OrderService requiring 6 synchronous calls, PaymentService calling back into monolith). Six months in, features take longer than monolith. Migration fails. Recovery requires complete re-architecture. **Test for right boundaries:** Each service must be able to fulfill its core responsibility if every other service is down. Any service that requires synchronous calls to others to complete its primary function has a wrong boundary. **Dependency matrix as validation tool:** Build a grid before coding; mark every \"this service needs to call that service\" relationship. Any cycle in the matrix indicates a wrong boundary \u2014 reorganize before proceeding. **For this specific migration:** Payment service is the forcing function. However, the boundary design must now account for **consistency requirements**: if payments and inventory must maintain transactional consistency (shared ACID boundary), they should be extracted together and kept in a single service until saga infrastructure is proven. This is a special case of the independence rule \u2014 not independence from each other, but independence from the rest of the system. After saga patterns are proven on lower-risk workflows, payments can split from inventory. Auth should have zero dependencies itself; token validation works standalone. Inventory owns stock levels exclusively; fulfillment reserves inventory but inventory does not call fulfillment back. Fulfillment orchestrates through events, not direct calls. No service should tolerate direct coupling back to monolith for core functionality. **Timeline allocation:** Weeks 1-4 must be spent on event storming, data ownership mapping, consistency boundary identification, and boundary validation. This includes explicit mapping of which workflows require transactional consistency vs. eventual consistency. This feels slow but is the only path to a recoverable architecture. If boundaries are right, every other mistake (API design, infrastructure, CI/CD) is recoverable. Wrong boundaries are not.",
+      "depends_on": [
+        "Migration Scope & Phasing"
+      ],
+      "key_claims": [
+        {
+          "text": "Wrong service boundaries create unrecoverable architectural debt and cannot be fixed by fixing other components",
+          "truth": 0.94,
+          "indeterminacy": 0.05,
+          "falsity": 0.01
+        },
+        {
+          "text": "Service boundary correctness is more critical to migration success than API gateway, CI/CD, or container infrastructure",
+          "truth": 0.89,
+          "indeterminacy": 0.09,
+          "falsity": 0.02
+        },
+        {
+          "text": "A service must be able to fulfill its core responsibility independently; if it requires synchronous calls to other services for primary function, the boundary is wrong",
+          "truth": 0.91,
+          "indeterminacy": 0.07,
+          "falsity": 0.02
+        },
+        {
+          "text": "Dependency matrix (grid of service-to-service calls) is a validation tool; any cycle indicates wrong boundaries",
+          "truth": 0.87,
+          "indeterminacy": 0.11,
+          "falsity": 0.02
+        },
+        {
+          "text": "Weeks 1-4 must be allocated to boundary design, event storming, and data ownership mapping before Phase 1 code writing",
+          "truth": 0.85,
+          "indeterminacy": 0.12,
+          "falsity": 0.03
+        },
+        {
+          "text": "Teams decomposing along organizational lines or technical layers rather than business capabilities is the primary failure mode",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "If two services must maintain transactional consistency, they should be extracted together as a single service initially; split later after saga infrastructure is battle-tested",
+          "truth": 0.84,
+          "indeterminacy": 0.12,
+          "falsity": 0.04
+        }
+      ]
+    },
+    {
+      "title": "Auth Service Extraction \u2014 Revised",
+      "content": "Auth extraction should be deferred to months 4-6 in 6-month minimum viable plan, not months 1-8 as originally proposed. Reason: auth is too load-bearing and coupled to payments to extract early without creating dual-extraction risk. More importantly, **strongly recommend outsourcing to external identity provider (Auth0, Keycloak, Cognito) rather than building standalone auth microservice**. This eliminates greenfield auth complexity, reduces architectural decisions (session management, token standards, audit logging are provider-built), and lets team focus on strangler-fig boundaries around payments. If greenfield auth extraction is unavoidable, it must be after payments boundary is stable and proven in production; extracting both simultaneously creates unmanageable coupling risk. External identity provider is lower-risk path and should be default recommendation unless specific constraints prevent it (e.g., offline-first requirements, custom MFA logic, legacy token format). Two-week archaeology phase still applies only if greenfield build is forced. Auth service boundary must be designed in weeks 1-4: auth has zero dependencies on other services; it is a hard dependency for others. Token validation works standalone. Any requirement for auth to call back to order/payment/fulfillment services indicates a wrong boundary and must be redesigned.",
+      "depends_on": [
+        "Migration Scope & Phasing",
+        "Service Boundary Design \u2014 The Critical Path"
+      ],
+      "key_claims": [
+        {
+          "text": "Auth extraction should be deferred to months 4-6, not months 1-3, to avoid dual-extraction risk with payments",
+          "truth": 0.76,
+          "indeterminacy": 0.19,
+          "falsity": 0.05
+        },
+        {
+          "text": "External identity provider (Auth0/Keycloak/Cognito) is lower-risk default than greenfield auth microservice",
+          "truth": 0.82,
+          "indeterminacy": 0.14,
+          "falsity": 0.04
+        },
+        {
+          "text": "If greenfield auth extraction is forced, it must occur after payments boundary is stable in production",
+          "truth": 0.79,
+          "indeterminacy": 0.16,
+          "falsity": 0.05
+        },
+        {
+          "text": "Auth service boundary must have zero dependencies on other services; token validation must work standalone",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        }
+      ]
+    },
+    {
+      "title": "Payment Service Extraction & PCI-DSS \u2014 Revised",
+      "content": "Payments isolation becomes first priority in 6-month minimum viable plan, not second. Phase 1 (months 1-3): carve out payment processing behind internal API boundary within monolith; move payment data to isolated database schema (can remain on same server initially); implement strangler-fig pattern with API gateway in front of monolith. Do NOT externalize as separate deployable yet. Simultaneously: get PCI scope assessment started and QSA validation initiated NOW (calendar-critical path). Phase 2 (months 3-4): externalize payments as actual separate deployable only after internal boundary is proven stable. Implement async messaging for payment events (Kafka or RabbitMQ; do not over-engineer). **Strongly recommend outsourcing card processing to Stripe/Braintree/Adyen** \u2014 this decision should drive Phase 1 architecture and directly reduces PCI scope. Decision between in-house vs. outsourced gateway must happen in week 1-2 of project, not month 2-3. Outsourced gateway makes payment service thin orchestration layer (intents, transaction state, refunds, webhooks). Other services consume payment events asynchronously, not call for payment data. Payment service requires penetration testing before production (4-6 weeks; start scheduling by week 4). Conservative, boring implementation is mandatory \u2014 no experiments. By end of month 4, payments service is in production with reduced PCI scope. **Payment service boundary design (weeks 1-4):** Payments owns transaction state and history exclusively. Order service does not query payment state directly; it consumes payment events asynchronously. Fulfillment does not call payments; it reacts to payment completion events. No service makes synchronous calls into payments for data; all integration is event-driven or through thin query endpoints with no side effects. **Consistency note:** If payments and inventory must maintain transactional consistency for business reasons, keep them in the same service during Phase 1. The payment service becomes a \"transactional core\" that owns both payment state and inventory reservation, with a single ACID boundary. Authorization happens early, capture happens last after inventory is confirmed reserved. This defers the split to a later phase but maintains safety. Compensation logic (refunds for failed inventory) is defined before shipping and tested rigorously.",
+      "depends_on": [
+        "Migration Scope & Phasing",
+        "Service Boundary Design \u2014 The Critical Path",
+        "Consistency & Saga Patterns \u2014 The Real Tradeoff"
+      ],
+      "key_claims": [
+        {
+          "text": "Payments isolation should be Phase 1 priority, starting as internal boundary within monolith, not yet separate service",
+          "truth": 0.81,
+          "indeterminacy": 0.15,
+          "falsity": 0.04
+        },
+        {
+          "text": "PCI scope assessment and QSA validation must be initiated in week 1-2, not deferred to later phases",
+          "truth": 0.89,
+          "indeterminacy": 0.09,
+          "falsity": 0.02
+        },
+        {
+          "text": "Outsourcing vs. in-house card processing decision must be made in weeks 1-2 and drives Phase 1 architecture",
+          "truth": 0.85,
+          "indeterminacy": 0.12,
+          "falsity": 0.03
+        },
+        {
+          "text": "Payments service can externalize as separate deployable only after internal boundary is stable (month 3+)",
+          "truth": 0.77,
+          "indeterminacy": 0.19,
+          "falsity": 0.04
+        },
+        {
+          "text": "Penetration testing (4-6 weeks) must be scheduled by week 4 to avoid timeline pressure",
+          "truth": 0.87,
+          "indeterminacy": 0.11,
+          "falsity": 0.02
+        },
+        {
+          "text": "Payment service boundary must have exclusive ownership of transaction state; other services consume asynchronously, never call for data",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "If payments and inventory must be transactionally consistent, extract them together as a single service; split after saga infrastructure is proven",
+          "truth": 0.84,
+          "indeterminacy": 0.12,
+          "falsity": 0.04
+        }
+      ]
+    },
+    {
+      "title": "Infrastructure & Observability",
+      "content": "API gateway deployment is critical path item for month 1-2, not nice-to-have. Strangler-fig pattern requires requests to route to isolated payment module (initially in monolith, later separate). Container infrastructure can follow (Docker/K8s evaluated by month 2, deployed by month 3); managed service (EKS/GKE/AKS) strongly preferred over self-hosted. Observability (centralized logging, distributed tracing, correlation IDs) must be in place before payments service goes to production (by end of month 4). Async messaging (Kafka/RabbitMQ) deferred beyond 6 months unless payments already uses event-driven communication; synchronous REST between payments and other services sufficient for first 6 months. However, if payments and inventory are extracted as a transactional core and later split, saga infrastructure becomes critical before that split happens. Database strategy: payments gets isolated schema initially (can be on shared server), then migrated to separate instance if service proves stable. Monolith keeps original database. No shared databases between services is long-term goal but not mandatory for 6-month MVP. **Infrastructure decisions are recoverable; service boundary decisions are not.** Do not over-engineer infrastructure in weeks 1-4; invest that time in boundary design instead. **Saga infrastructure cost:** If compensating transactions and saga coordination are required (payments + inventory split), budget time and complexity for: event bus with at-least-once delivery, idempotency stores, saga state tracking, dead letter queues, monitoring/alerting for stuck sagas, runbooks for manual compensation. Build this on low-risk workflows (notifications, fulfillment status) first; apply to payments after.",
+      "depends_on": [
+        "Migration Scope & Phasing",
+        "Service Boundary Design \u2014 The Critical Path",
+        "Consistency & Saga Patterns \u2014 The Real Tradeoff"
+      ],
+      "key_claims": [
+        {
+          "text": "API gateway deployment is critical path for months 1-2 to enable strangler-fig routing",
+          "truth": 0.85,
+          "indeterminacy": 0.12,
+          "falsity": 0.03
+        },
+        {
+          "text": "Container infrastructure (Docker/K8s) can defer to month 2-3; API gateway must come first",
+          "truth": 0.73,
+          "indeterminacy": 0.21,
+          "falsity": 0.06
+        },
+        {
+          "text": "Observability (logging, tracing, correlation IDs) must be in place before payments production deployment (month 4)",
+          "truth": 0.87,
+          "indeterminacy": 0.11,
+          "falsity": 0.02
+        },
+        {
+          "text": "Async messaging (Kafka/RabbitMQ) not required for 6-month MVP; synchronous REST sufficient for initial phase",
+          "truth": 0.72,
+          "indeterminacy": 0.23,
+          "falsity": 0.05
+        },
+        {
+          "text": "Infrastructure decisions are recoverable; service boundary decisions are not \u2014 prioritize boundary design over infrastructure polish in weeks 1-4",
+          "truth": 0.91,
+          "indeterminacy": 0.07,
+          "falsity": 0.02
+        },
+        {
+          "text": "Saga infrastructure (event bus, idempotency handling, state stores, DLQs, monitoring) is non-trivial and should be battle-tested on low-risk workflows before applying to payments",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        }
+      ]
+    },
+    {
+      "title": "Stakeholder Communication & Constraint Clarification",
+      "content": "Critical next step is to clarify which constraint is fixed: timeline (6 months), scope (full microservices), or budget/capacity. If all three are fixed simultaneously, the plan will fail. Recommended conversation with stakeholders: 'In 6 months we will have payments isolated with PCI scope reduced, auth decoupled via external provider, and the monolith behind an API gateway. That is working software with clear separation of concerns. Full independent microservices (4+ services, complete data isolation, event-driven architecture) is 9-12 months done responsibly. Which outcome is more valuable: partial migration on time, or complete migration with 3 months of delay?' Timeframe pressure must be named explicitly to leadership. If 6 months is truly immovable (compliance deadline, budget cycle, executive commitment), then scope MUST reduce further: might become just payments isolation without auth extraction, or just strangler-fig boundary without full externalization. The trap is silent scope creep where team discovers at month 5 they cannot ship what was promised. **Boundary design conversation should happen with stakeholders in weeks 1-2:** 'Before we write code, we need to agree on what each service owns and how they talk. Getting this wrong is the primary way migrations fail \u2014 we will lose months. Getting it right sets us up for recovery from other mistakes. We need 3-4 weeks for this design phase.' **Add consistency conversation:** 'We also need to map which business workflows require transactional consistency (payments + inventory) vs. eventual consistency (orders + fulfillment). This determines whether we keep some services together initially and split them later, or extract independently. Payments team is right that financial transactions need strong guarantees \u2014 but those guarantees live within the service boundary, not across service boundaries. If payments and inventory must stay together for consistency, we extract them as one unit, then prove saga infrastructure on less risky workflows before splitting.'",
+      "depends_on": [
+        "Migration Scope & Phasing",
+        "Service Boundary Design \u2014 The Critical Path",
+        "Consistency & Saga Patterns \u2014 The Real Tradeoff"
+      ],
+      "key_claims": [
+        {
+          "text": "Timeline, scope, and budget cannot all be fixed simultaneously; one must move",
+          "truth": 0.91,
+          "indeterminacy": 0.07,
+          "falsity": 0.02
+        },
+        {
+          "text": "If 6-month timeline is fixed, scope must reduce to payments isolation + external auth provider + strangler-fig gateway",
+          "truth": 0.82,
+          "indeterminacy": 0.14,
+          "falsity": 0.04
+        },
+        {
+          "text": "Explicit conversation with stakeholders about timeline/scope tradeoffs should happen immediately, not at month 3",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "Stakeholders should understand that 3-4 weeks of boundary design work is the highest-ROI investment in the migration",
+          "truth": 0.87,
+          "indeterminacy": 0.11,
+          "falsity": 0.02
+        },
+        {
+          "text": "If payments and inventory must remain transactionally consistent, stakeholders must understand they will be extracted together in Phase 1 and split later after saga infrastructure is proven",
+          "truth": 0.83,
+          "indeterminacy": 0.13,
+          "falsity": 0.04
+        }
+      ]
+    }
+  ],
+  "open_questions": [
+    "Is the 6-month timeline fixed (compliance deadline, budget cycle) or negotiable? This determines whether scope must be further reduced.",
+    "Has QSA/PCI-DSS specialist been engaged yet? If not, engagement in week 1-2 is critical path and non-negotiable.",
+    "Does the organization currently process card payments directly, or already use third-party gateway? In-house vs. outsourced decision must be made by week 2 and drives Phase 1 architecture.",
+    "What is the current state of auth logic distribution and coupling to payments? (Archaeology sprint needed to confirm how tightly coupled auth session/token/permission checks are to payment flows)",
+    "Can external identity provider (Auth0/Keycloak/Cognito) be used, or are specific constraints (offline-first, legacy token format, custom MFA) forcing greenfield auth build?",
+    "What observability infrastructure currently exists? (ELK, Datadog, APM agents already in place, or greenfield?)",
+    "What is IT/DevOps capacity for API gateway setup, container infrastructure, and Kubernetes management? (Affects whether managed K8s service is affordable or whether simpler routing is needed)",
+    "Are there inventory/fulfillment business pressures that might force earlier extraction than 6-month window? (If yes, payments isolation must be rock-solid before attempting simultaneous extraction)",
+    "What is the current database topology and schema? (Affects ease of payment schema isolation in Phase 1)",
+    "What is the cost/effort estimate of outsourcing card processing (Stripe/Braintree/Adyen) vs. in-house implementation? (This decision should drive Phase 1 architecture; needs to be quantified in week 1-2)",
+    "Which business workflows absolutely require strong transactional consistency (payments + inventory must complete or both fail)? Which workflows can tolerate eventual consistency (order confirmation can happen after inventory is reserved separately)? This determines whether payments and inventory are extracted together or independently.",
+    "What are the current compensation/recovery mechanisms when payments succeed but inventory fails (overselling) or inventory succeeds but payment fails (customer not charged)? How are these currently handled in the monolith, and what error rates do they cause?",
+    "Does the payments team have experience with saga patterns and distributed compensation logic, or will this require new architecture capability? If the latter, timeline for saga infrastructure maturation should be budgeted.",
+    "Are there regulatory or audit requirements that force specific patterns for payment + inventory ordering? (Some financial regulations dictate authorization before capture; some business models require inventory confirmation before payment authorization.)"
+  ],
+  "instructions_for_next": "Next cycle should address: (1) Immediate clarification conversation with stakeholders: is 6-month timeline fixed? If so, explicitly negotiate scope reduction to payments isolation + external auth + strangler-fig gateway. (2) Week 1-2 action items: QSA/compliance advisor engagement (calendar-critical), in-house vs. outsourced card processing decision with cost/effort analysis. (3) Archaeology sprint on auth/payments coupling \u2014 how tightly woven are auth session management, token validation, permission checks into payment flows? This determines if greenfield auth is even viable. (4) API gateway selection and deployment plan (month 1-2 critical path). (5) External identity provider evaluation if greenfield auth is not forced. (6) Observability infrastructure gap analysis (can observability be in place by month 3?). (7) Revised Gantt chart with realistic sequencing: Phase 1 (months 1-3) payments internal boundary, Phase 2 (months 3-4) externalize + async messaging, Phase 3 (months 4-6) auth extraction with external provider. (8) Risk register update: highest risk is now timeline/scope misalignment \u2014 this must be surfaced to leadership before month 1 ends.",
+  "declared_losses": []
+}
