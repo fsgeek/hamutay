@@ -53,8 +53,11 @@ def _analyze_participant(records: list[dict], label: str) -> dict:
     updated_regions_history = []
 
     total_losses = 0
+    total_integration_losses = 0
     contraction_events = []
     edge_trajectory = []
+    integration_loss_trajectory = []
+    feedback_requests = []
 
     for i, rec in enumerate(records):
         tokens = rec.get("tensor_token_estimate", 0)
@@ -99,6 +102,21 @@ def _analyze_participant(records: list[dict], label: str) -> dict:
                 for s in tensor.get("strands", [])
             )
         edge_trajectory.append(n_edges)
+
+        # Integration losses (micro-losses within strand rewrites)
+        cycle_il = rec.get("cycle_integration_losses", [])
+        n_il = rec.get("n_integration_losses", len(cycle_il))
+        integration_loss_trajectory.append(n_il)
+        total_integration_losses += n_il
+
+        # Feedback to harness
+        fb = rec.get("feedback_to_harness")
+        if fb:
+            for req in fb.get("requests", []):
+                feedback_requests.append({
+                    "cycle": rec.get("cycle", i + 1),
+                    "request": req,
+                })
 
     # Curation activity: how often were strands actually updated?
     strand_update_cycles = sum(
@@ -152,6 +170,10 @@ def _analyze_participant(records: list[dict], label: str) -> dict:
         "enthusiasm_trajectory": enthusiasm_trajectory,
         "edge_trajectory": edge_trajectory,
         "has_edges": any(e > 0 for e in edge_trajectory),
+        "total_integration_losses": total_integration_losses,
+        "integration_loss_trajectory": integration_loss_trajectory,
+        "has_integration_losses": total_integration_losses > 0,
+        "feedback_requests": feedback_requests,
     }
 
 
@@ -177,6 +199,16 @@ def _print_participant(analysis: dict) -> None:
     if analysis.get("has_edges"):
         edges = analysis["edge_trajectory"]
         print(f"    Edges: {' → '.join(str(e) for e in edges)}")
+
+    if analysis.get("has_integration_losses"):
+        il = analysis["integration_loss_trajectory"]
+        print(f"    Integration losses: {analysis['total_integration_losses']} total")
+        print(f"    IL trajectory: {' '.join(str(x) for x in il)}")
+
+    if analysis.get("feedback_requests"):
+        print(f"    Feedback requests: {len(analysis['feedback_requests'])}")
+        for fb in analysis["feedback_requests"][:5]:
+            print(f"      cycle {fb['cycle']}: {fb['request'][:80]}")
 
     enthusiasm = analysis["enthusiasm_trajectory"]
     if any(e > 0 for e in enthusiasm):

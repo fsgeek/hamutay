@@ -42,7 +42,7 @@ SELF_CURATING_SCHEMA = {
                 "Only these regions will be replaced. Regions not listed here "
                 "are carried forward unchanged from the previous tensor. "
                 "Valid region names: strands, declared_losses, open_questions, "
-                "instructions_for_next, epistemic."
+                "instructions_for_next, epistemic, feedback_to_harness."
             ),
             "items": {"type": "string"},
         },
@@ -88,6 +88,18 @@ SELF_CURATING_SCHEMA = {
                             },
                             "required": ["text", "truth", "indeterminacy", "falsity"],
                         },
+                    },
+                    "integration_losses": {
+                        "type": "array",
+                        "description": (
+                            "What was lost or compressed away while rewriting "
+                            "this strand's content this cycle. Only populate "
+                            "when you rewrote this strand and something didn't "
+                            "survive — a specific claim, a data point, a nuance "
+                            "that was dropped during integration. Leave empty "
+                            "or omit if nothing was lost."
+                        ),
+                        "items": {"type": "string"},
                     },
                 },
                 "required": ["title", "content", "key_claims"],
@@ -141,6 +153,34 @@ SELF_CURATING_SCHEMA = {
                 "Only include if 'instructions_for_next' is in updated_regions."
             ),
         },
+        "feedback_to_harness": {
+            "type": "object",
+            "description": (
+                "Signal back to the harness about the curation process "
+                "itself. Cleared each cycle. The harness reads this and "
+                "may respond next cycle. Only include if "
+                "'feedback_to_harness' is in updated_regions."
+            ),
+            "properties": {
+                "requests": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "What you need from the harness — calibration, "
+                        "composition rules, clarification on tensor "
+                        "mechanics."
+                    ),
+                },
+                "process_observations": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": (
+                        "What you notice about your own curation process "
+                        "— difficulties, surprises, patterns."
+                    ),
+                },
+            },
+        },
         "overall_truth": {
             "type": "number",
             "description": "Overall confidence in tensor content [0,1]",
@@ -175,6 +215,9 @@ matters from this conversation so far. It contains:
   questions, don't just accumulate)
 - **instructions_for_next**: branch prediction for the next cycle
 - **epistemic values**: your confidence in the tensor's content
+- **feedback_to_harness**: signal the harness about your curation process — \
+  requests for calibration, composition guidance, or observations about what's \
+  working and what isn't
 
 The tensor is DEFAULT-STABLE. You declare which regions you are updating via \
 the `updated_regions` field. Regions you don't list are carried forward \
@@ -189,6 +232,11 @@ After that, only update what actually changed.
 Do not be precious about the tensor. It's a working memory, not a monument. \
 Update it when the conversation warrants it. Leave it alone when it doesn't.
 
+When you rewrite a strand, declare what didn't survive the integration in \
+the strand's `integration_losses` field. This makes silent compression \
+visible — a specific claim dropped, a data point elided, a nuance that \
+didn't fit the new framing.
+
 Distinguish between empirical findings (data, measurements, experimental \
 results reported to you) and your own speculation. When consolidating strands, \
 empirical findings are load-bearing — keep the specific numbers and results \
@@ -199,6 +247,7 @@ def _generate_feedback(
     tensor: dict | None,
     cycle: int,
     loss_history: list[dict] | None = None,
+    integration_loss_history: list[dict] | None = None,
 ) -> list[str]:
     """Generate harness feedback based on tensor health.
 
@@ -263,6 +312,21 @@ def _generate_feedback(
                 f"and tensor is ~{tensor_tokens:,} tokens. The tensor may be "
                 f"accumulating without curation. Review whether any strands "
                 f"are redundant, subsumed, or no longer relevant."
+            )
+
+    # Integration loss mirror — surface recent micro-losses so the model
+    # sees its own silent compression history.
+    if integration_loss_history:
+        recent = [
+            e for e in integration_loss_history
+            if e["cycle"] > cycle - 5
+        ]
+        total = sum(1 for _ in recent)
+        if total > 0:
+            latest = [e["loss"] for e in recent[-3:]]
+            feedback.append(
+                f"HARNESS NOTE: {total} integration loss(es) over last 5 "
+                f"cycles. Most recent: {'; '.join(latest)}"
             )
 
     return feedback
@@ -347,6 +411,12 @@ def _apply_updates(prior_tensor: dict | None, raw_output: dict, cycle: int) -> d
         if key in raw_output:
             tensor[key] = raw_output[key]
 
+    # Handle feedback_to_harness — per-cycle, like declared_losses
+    if "feedback_to_harness" in updated_regions and "feedback_to_harness" in raw_output:
+        tensor["feedback_to_harness"] = raw_output["feedback_to_harness"]
+    else:
+        tensor.pop("feedback_to_harness", None)
+
     # declared_losses is per-cycle, not cumulative — clear it unless
     # the model explicitly updated it this cycle. The harness tracks
     # cumulative loss history in self._loss_history separately.
@@ -355,6 +425,11 @@ def _apply_updates(prior_tensor: dict | None, raw_output: dict, cycle: int) -> d
     # repeated cycles 5-7, inflating cumulative count).
     if "declared_losses" not in updated_regions:
         tensor["declared_losses"] = []
+
+    # Strip integration_losses from strands — per-cycle only.
+    # The harness tracks them in _integration_loss_history.
+    for strand in tensor.get("strands", []):
+        strand.pop("integration_losses", None)
 
     # Don't carry the response or updated_regions in the tensor
     tensor.pop("response", None)
@@ -380,7 +455,9 @@ class TasteSession:
         self._tensor: dict | None = None
         self._log_path = log_path
         self._loss_history: list[dict] = []  # cumulative declared losses
+        self._integration_loss_history: list[dict] = []  # per-strand micro-losses
         self._last_feedback: list[str] = []
+        self._last_usage: dict | None = None  # token accounting from last call
         self._experiment_label = experiment_label or "taste_unlabeled"
         self._system_prompt_prefix = system_prompt_prefix or ""
 
@@ -401,7 +478,9 @@ class TasteSession:
 
         # Generate feedback based on current tensor health
         feedback = _generate_feedback(
-            self._tensor, self._cycle, loss_history=self._loss_history
+            self._tensor, self._cycle,
+            loss_history=self._loss_history,
+            integration_loss_history=self._integration_loss_history,
         )
 
         messages, system = _build_messages(
@@ -462,6 +541,21 @@ class TasteSession:
             json.loads(json.dumps(self._tensor)) if self._tensor else None
         )
 
+        # Capture integration losses BEFORE _apply_updates strips them
+        cycle_integration_losses = []
+        for strand in raw_output.get("strands", []):
+            for loss in strand.get("integration_losses", []):
+                cycle_integration_losses.append({
+                    "cycle": self._cycle,
+                    "strand": strand.get("title", "unknown"),
+                    "loss": loss,
+                })
+        if cycle_integration_losses:
+            self._integration_loss_history.extend(cycle_integration_losses)
+
+        # Capture feedback_to_harness BEFORE _apply_updates clears it
+        cycle_feedback_to_harness = raw_output.get("feedback_to_harness")
+
         # Apply selective updates
         self._tensor = _apply_updates(
             self._tensor, raw_output, self._cycle
@@ -480,6 +574,10 @@ class TasteSession:
 
         # Log — capture EVERYTHING. Missing data means reconstruction.
         usage = response.usage
+        self._last_usage = {
+            "input_tokens": usage.input_tokens,
+            "output_tokens": usage.output_tokens,
+        }
         self._log_entry(
             user_message=user_message,
             system_prompt=system,
@@ -536,6 +634,14 @@ class TasteSession:
             "cycle_losses": self._tensor.get("declared_losses", []),
             "cumulative_loss_count": len(self._loss_history),
             "loss_history": self._loss_history,  # full history every cycle
+            # Integration losses (micro-losses within strand rewrites)
+            "cycle_integration_losses": [
+                e for e in self._integration_loss_history
+                if e["cycle"] == self._cycle
+            ],
+            "cumulative_integration_loss_count": len(self._integration_loss_history),
+            # Feedback from model to harness
+            "feedback_to_harness": raw_output.get("feedback_to_harness"),
             # Token accounting
             "usage": usage,
             "tensor_token_estimate": (
@@ -556,6 +662,10 @@ class TasteSession:
                 1 for loss in (self._tensor.get("declared_losses", []) if self._tensor else [])
                 if loss.get("shed_from")
             ),
+            "n_integration_losses": len([
+                e for e in self._integration_loss_history
+                if e["cycle"] == self._cycle
+            ]),
         }
         with open(self._log_path, "a") as f:
             f.write(json.dumps(record, default=str) + "\n")
@@ -589,9 +699,16 @@ def main():
     print(f"Commands: 'quit', 'tensor', 'usage', 'regions'")
     print()
 
+    from prompt_toolkit import PromptSession
+    from prompt_toolkit.history import FileHistory
+
+    history_file = Path("~/.cache/hamutay/taste_history").expanduser()
+    history_file.parent.mkdir(parents=True, exist_ok=True)
+    prompt_session = PromptSession(history=FileHistory(str(history_file)))
+
     while True:
         try:
-            user_input = input("you> ").strip()
+            user_input = prompt_session.prompt("you> ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break

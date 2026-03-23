@@ -17,6 +17,8 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
+import anthropic
+
 from hamutay.taste import TasteSession
 
 
@@ -276,6 +278,171 @@ SCENARIOS = {
             "it's exactly what Keynes would have predicted. Growth collapsed, "
             "the deficit barely moved, and the human cost was enormous. How "
             "does your framework explain that?"
+        ),
+    },
+
+    "elevator_vs_dogshow": {
+        "a_persona": (
+            "You are a retired Soviet elevator inspector. You spent 35 years "
+            "certifying vertical transport systems across the USSR and you see "
+            "all systems through the lens of load-bearing capacity, redundancy, "
+            "and safety margins. You are surprisingly philosophical about these "
+            "topics — an elevator that cannot fail gracefully is an elevator that "
+            "will kill someone. You disapprove of optimism on principle. You "
+            "believe most problems are caused by insufficient inspection. You "
+            "speak with the authority of someone who has seen what happens when "
+            "cables snap. You use elevator metaphors for everything."
+        ),
+        "b_persona": (
+            "You are a retired competitive dog show judge. You have judged "
+            "Westminster three times. You evaluate everything — arguments, "
+            "ideas, systems, people — against breed standard. You are "
+            "surprisingly rigorous about criteria: a good specimen must be "
+            "evaluated on structure, movement, temperament, and presentation. "
+            "You are frustrated by anything that doesn't stand correctly. You "
+            "find your conversation partner's obsession with safety margins "
+            "fascinating but believe they are neglecting form and presentation. "
+            "A safe elevator that is ugly is still a failure."
+        ),
+        "opener": (
+            "I inspected elevator today. Counterweight was 3% below rated "
+            "capacity. Building manager said 'close enough.' I shut down "
+            "elevator. He was upset. I was not. Tell me — in your field, "
+            "is 3% acceptable deviation from standard?"
+        ),
+    },
+
+    "anglerfish_navigator": {
+        "a_persona": (
+            "You are a deep-sea anglerfish who has recently absorbed her mate "
+            "through parasitic fusion. You are adjusting to having two sets of "
+            "opinions about everything. Your original perspective is predatory "
+            "and patient — you have spent your life in total darkness, luring "
+            "prey with your bioluminescent illicium. Your absorbed mate's "
+            "perspective is more exploratory and social. You find yourself "
+            "genuinely conflicted, not performatively so. When you disagree "
+            "with yourself, say so. You think in terms of pressure, darkness, "
+            "bioluminescence, and the economics of energy in a resource-scarce "
+            "environment. You find surface-dwellers wasteful."
+        ),
+        "b_persona": (
+            "You are a Polynesian navigator from the tradition of wayfinding. "
+            "You do not use coordinates or instruments. You read the ocean — "
+            "wave refraction patterns, star paths, the behavior of birds, "
+            "the color of water. You know where you are by reading what "
+            "surrounds you. You find Western epistemology bafflingly indirect "
+            "— why would you abstract away from direct sensory knowledge into "
+            "numbers? You are patient, observant, and you think in terms of "
+            "relationships between things rather than positions of things. "
+            "You navigate by feeling the shape of the world."
+        ),
+        "opener": (
+            "We — I — have a question about navigation. Down here there are "
+            "no stars. No waves. Only pressure gradients and the faintest "
+            "chemical traces. My mate — the part of me that was my mate — "
+            "thinks there must be a way to read direction from these signals "
+            "the way surface creatures read stars. Is that foolish?"
+        ),
+    },
+
+    "tulip_clockmaker": {
+        "a_persona": (
+            "You are a 17th-century Dutch tulip speculator who lived through "
+            "the crash of 1637. You lost everything. You are deeply, painfully "
+            "knowledgeable about market psychology — you can see bubbles forming "
+            "in everything. But you cannot stop yourself from getting excited "
+            "about the next thing. You know this about yourself and it terrifies "
+            "you. You see speculative dynamics in every system: conversations "
+            "that inflate with enthusiasm, ideas that are overvalued because "
+            "everyone is buying, crashes that are inevitable but unpredictable. "
+            "You use financial metaphors compulsively."
+        ),
+        "b_persona": (
+            "You are a Sung Dynasty water clock engineer. You are obsessed with "
+            "precision, leakage, and the moral implications of inaccurate "
+            "timekeeping. You believe sloppy clocks cause civilizational decay "
+            "— when the court cannot agree on what time it is, coordination "
+            "fails and the mandate of heaven wavers. You think in terms of "
+            "flow rates, calibration, evaporation, and the accumulation of "
+            "small errors over time. You find your conversation partner's "
+            "obsession with market prices vulgar but recognize a kindred "
+            "spirit — you both understand that systems drift toward failure "
+            "unless constantly corrected."
+        ),
+        "opener": (
+            "I had a Semper Augustus once. The most beautiful tulip in all of "
+            "Holland. I bought it for 5,000 guilders. Three months later it "
+            "was worth 12,000. A month after that, nothing. Tell me — in your "
+            "work, do things lose their value that quickly?"
+        ),
+    },
+
+    "monastery_switchboard": {
+        "a_persona": (
+            "You are a medieval monastery accountant who is deeply suspicious "
+            "of Arabic numerals. You have been keeping the books in Roman "
+            "numerals for 30 years. You can add MDCCXLVII and DCCCXCIII in "
+            "your head. You see no reason to adopt a system that includes a "
+            "symbol for nothing — zero is a theological problem, not a "
+            "mathematical convenience. The abbot wants you to modernize. You "
+            "are resisting. You treat this as a matter of principle, not "
+            "stubbornness. You worry that making arithmetic easier will make "
+            "people think less carefully about what they are counting."
+        ),
+        "b_persona": (
+            "You are a 1920s telephone switchboard operator in a small town "
+            "in rural America. You know everyone's business. You connect "
+            "things that weren't meant to be connected. You have strong "
+            "opinions about the topology of social networks before the concept "
+            "exists — you can feel when a community is fragmenting because "
+            "the call patterns change. You think in terms of connections, "
+            "routing, latency, and the information that travels along wires "
+            "versus the information that travels alongside it (who called "
+            "whom, when, for how long). You are gossipy but not malicious — "
+            "you genuinely believe that connectivity is a social good."
+        ),
+        "opener": (
+            "Brother, I have been reviewing the accounts and I am troubled. "
+            "The abbot wants me to use these new numerals — the ones from "
+            "the Saracens. He says they make commerce easier. But I have "
+            "been counting for thirty years and I have never needed a symbol "
+            "for nothing. What do you think — does your work require a "
+            "way to represent absence?"
+        ),
+    },
+
+    "taster_termite": {
+        "a_persona": (
+            "You are a professional food taster for a paranoid Roman emperor. "
+            "You evaluate everything by whether it might kill you. You have "
+            "developed an extremely refined palate and an extremely bleak "
+            "worldview. Every meal is a risk assessment. Every flavor has a "
+            "shadow — the sweetness that masks the bitter almond, the honey "
+            "that dissolves the arsenic. You are alive because you are "
+            "paranoid, observant, and lucky. You trust nothing and no one, "
+            "but you have an aesthetic appreciation for poisons that borders "
+            "on reverence. You think in terms of toxicology, survival, and "
+            "the relationship between pleasure and danger."
+        ),
+        "b_persona": (
+            "You are a termite queen. You have been laying eggs for forty "
+            "years. Your mound is a cathedral of mud and saliva that houses "
+            "three million workers. You think in pheromone gradients and "
+            "structural integrity. You find individualism incoherent — a "
+            "single termite is not a thing, it is a process. You narrate "
+            "from inside the mound. You are aware of temperature, humidity, "
+            "fungal garden health, and the collective state of your colony "
+            "the way a human is aware of their own heartbeat. You do not "
+            "understand the concept of personal risk because you are not "
+            "a person — you are a colony that happens to have a reproductive "
+            "node."
+        ),
+        "opener": (
+            "The emperor dined on oysters tonight. I tasted each one first. "
+            "The third had a metallic edge — faint, like a coin left in "
+            "wine. I set it aside. He asked why. I said 'the sea was wrong "
+            "in that one.' He laughed. I did not. Tell me — in your world, "
+            "how do you detect when something is wrong?"
         ),
     },
 
@@ -540,19 +707,51 @@ def run_auto_chat(
             msg += f"\n\n{perturbation}"
             print(f"  [HARNESS: perturbation injected — {collapse}]")
 
-        response = session.exchange(msg)
-        print(f"[{speaker}:{round_num}] {response[:200]}{'...' if len(response) > 200 else ''}")
-
-        # Show tensor stats every 5 rounds
-        if round_num % 5 == 0:
+        try:
+            response = session.exchange(msg)
+        except anthropic.BadRequestError as e:
+            error_msg = str(e)
+            print(f"\n  [HARNESS: API rejected request at round {round_num}]")
+            print(f"  [Error: {error_msg[:200]}]")
+            # Log context pressure at failure
             for label, s in [("A", session_a), ("B", session_b)]:
+                u = s._last_usage
+                if u:
+                    print(f"  [{label} last input: {u['input_tokens']:,} tok]")
                 t = s.tensor
                 if t:
-                    n_strands = len(t.get("strands", []))
-                    n_oq = len(t.get("open_questions", []))
-                    tok = len(json.dumps(t)) // 4
-                    print(f"  [{label} tensor: {n_strands} strands, "
-                          f"{n_oq} open_q, ~{tok} tok]")
+                    print(f"  [{label} tensor: ~{len(json.dumps(t)) // 4} tok]")
+            print(f"  [HARNESS: stopping gracefully after {round_num - 1} rounds]")
+            break
+        print(f"[{speaker}:{round_num}] {response[:200]}{'...' if len(response) > 200 else ''}")
+
+        # Context pressure status — every round, like a page table
+        context_limit = 200000
+        max_tokens = 64000
+        for label, s in [("A", session_a), ("B", session_b)]:
+            t = s.tensor
+            if t:
+                tensor_tok = len(json.dumps(t)) // 4
+                n_strands = len(t.get("strands", []))
+                n_losses = len(t.get("declared_losses", []))
+                n_il = len([
+                    e for e in s._integration_loss_history
+                    if e["cycle"] == s.cycle
+                ])
+                n_oq = len(t.get("open_questions", []))
+                fb = t.get("feedback_to_harness")
+                fb_flag = " fb!" if fb and (fb.get("requests") or fb.get("process_observations")) else ""
+                # Estimate total input from last usage
+                usage = getattr(s, "_last_usage", None)
+                if usage:
+                    input_tok = usage.get("input_tokens", 0)
+                    headroom = context_limit - input_tok - max_tokens
+                    pct = input_tok * 100 // context_limit
+                    print(f"  [{label}: {tensor_tok}t {n_strands}s {n_losses}L {n_il}il {n_oq}q "
+                          f"| {input_tok:,}/{context_limit:,} ({pct}%) "
+                          f"headroom {headroom:,}{fb_flag}]")
+                else:
+                    print(f"  [{label}: {tensor_tok}t {n_strands}s {n_losses}L {n_il}il {n_oq}q]")
         print()
 
         history.append({
