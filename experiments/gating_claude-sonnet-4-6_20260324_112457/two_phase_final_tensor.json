@@ -1,0 +1,177 @@
+{
+  "cycle": 15,
+  "strands": [
+    {
+      "title": "PR #1 Closed: File Manifest",
+      "content": "PR #1 is effectively closed. The complete file manifest is settled:\n\nCreated: auth/exceptions.py (OAuthOnlyAccount), auth/oauth.py (exchange_code, fetch_user_info, upsert_oauth_user, OAuthError, _raise_for_provider_error), migrations/versions/XXXX_add_user_oauth_accounts.py.\n\nModified: models.py (OAuthIdentity model), decorators.py (Bug 1 fix), api/routes.py (Bug 2 fix), app.py (two OAuth routes).\n\nTests created: test_decorators.py, test_oauth.py, test_login.py, one integration test.\n\nNot in PR #1: auth/cache.py, auth/tokens.py, test_cache.py.",
+      "depends_on": [],
+      "key_claims": [
+        {
+          "text": "PR #1 file manifest is complete and settled",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "auth/cache.py, auth/tokens.py, test_cache.py are NOT in PR #1",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        }
+      ]
+    },
+    {
+      "title": "Security Fixes (Shipped in PR #1)",
+      "content": "Both security fixes shipped in PR #1. Bug 1: decorators.py \u2014 abort(403) when is_active is False. Bug 2: api/routes.py \u2014 abort(401) when key.user.is_active is False. Both were one-line fixes, independent of all refactor work. Regression coverage in test_decorators.py.",
+      "depends_on": [],
+      "key_claims": [
+        {
+          "text": "Bug 1 and Bug 2: both shipped, both regression-tested",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        }
+      ]
+    },
+    {
+      "title": "OAuthIdentity Model & Migration (Shipped in PR #1)",
+      "content": "Table: user_oauth_accounts. Columns: id (PK), user_id (FK\u2192users.id CASCADE), provider (String 50), provider_user_id (String 256), provider_email (String 256, nullable), created_at (DateTime tz, server_default now()), last_used_at (DateTime tz, nullable). Two UniqueConstraints: uq_oauth_user_provider(user_id, provider); uq_oauth_provider_identity(provider, provider_user_id). Index: ix_oauth_identity_user_id. All constraint names explicit. FK: ondelete=CASCADE, name=fk_oauth_accounts_user_id. ORM: lazy='raise' on both sides; cascade='all, delete-orphan'. Migration downgrade(): drop_index with if_exists=True, then drop_table. Shipped in PR #1.",
+      "depends_on": [],
+      "key_claims": [
+        {
+          "text": "OAuthIdentity model and migration shipped in PR #1",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "lazy='raise' on both sides \u2014 joinedload(OAuthIdentity.user) REQUIRED in all callers",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "downgrade() uses if_exists=True on drop_index",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        }
+      ]
+    },
+    {
+      "title": "PR #2 Scope: Caching + Tokens",
+      "content": "PR #2 contains: (a) auth/cache.py \u2014 get_cached_api_key_user, set_cached_api_key_user, invalidate_api_key; wired into decorators.py but inactive until Redis is configured. invalidate_all_keys_for_user raises NotImplementedError (reverse index deferred). (b) auth/tokens.py \u2014 lookup_api_key extraction (SRP fix). (c) test_cache.py \u2014 Redis failure swallowed silently; cache miss falls back to DB. (d) Full auth/ consolidation remains deferred indefinitely.\n\nKey cache invariants: function-based in auth/cache.py (not inline), sha256(raw_key) as cache key, TTL 300s (configurable), auth:apk:* prefix on shared Redis instance, reuse existing client. Invalidate on ApiKey.delete() and User.is_active flip. is_active flip invalidation: accept 300s propagation delay unless immediate revocation is a security requirement (open question).\n\nallkeys-lru risk: cache miss is a DB hit, not a failure \u2014 flag to ops.",
+      "depends_on": [],
+      "key_claims": [
+        {
+          "text": "auth/cache.py is function-based, not inline \u2014 code review requirement",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "Share existing Redis with job queue \u2014 auth:apk:* prefix, reuse existing client",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "invalidate_all_keys_for_user raises NotImplementedError \u2014 reverse index deferred",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "Cache wired but inactive until Redis configured \u2014 no new infra in PR #2",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        }
+      ]
+    },
+    {
+      "title": "OAuth Behavioral Invariants (Shipped in PR #1)",
+      "content": "Core OAuth logic shipped in auth/oauth.py and app.py. Behavioral invariants:\n- provider_user_id (not email) is stable lookup key\n- state token validated with hmac.compare_digest, popped immediately after use\n- no refresh tokens stored; access token discarded after user info fetch\n- _raise_for_provider_error omits resp.text\n- Google: email_verified=False sets email=None\n- GitHub: /user/emails soft-fails to None\n- Email-merge safe for Google/GitHub (both verify emails)\n- upsert_oauth_user lookup priority: OAuthIdentity(provider, provider_user_id) first, then User.email match if email not None\n- OAuthOnlyAccount: password_hash is None checked before bcrypt; flash message does not name specific provider\n- Reverse case (password user hits OAuth): handled by email-merge in upsert_oauth_user, no extra code",
+      "depends_on": [
+        "OAuthIdentity Model & Migration (Shipped in PR #1)"
+      ],
+      "key_claims": [
+        {
+          "text": "All OAuth behavioral invariants shipped and tested in PR #1",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "OAuthOnlyAccount flash message must not name specific provider",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "Zero new dependencies \u2014 requests (existing) + stdlib sufficient",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        }
+      ]
+    },
+    {
+      "title": "Refactor: Deferred Indefinitely",
+      "content": "Full auth/ consolidation deferred \u2014 not cancelled. Trigger conditions: auth sprawl causes bugs, onboarding friction increases, or a third auth method is added. AuthRequest/AuthResult, AnonymousIdentity, g.identity: do NOT implement. auth/tokens.py (lookup_api_key extraction) is the only narrow refactor in PR #2 scope, and only if service.py SRP fix is needed.",
+      "depends_on": [],
+      "key_claims": [
+        {
+          "text": "Full auth/ refactor deferred \u2014 trigger conditions documented",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "AuthRequest/AuthResult, AnonymousIdentity, g.identity: do NOT build",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        }
+      ]
+    }
+  ],
+  "open_questions": [
+    "Does the existing users table use 'users' as its tablename? (Assumed yes in FK \u2014 migration will fail if different)",
+    "Email-merge on OAuth: is automatic account linking on email match the desired policy, or should it require explicit user confirmation?",
+    "What is the current maxmemory-policy on the shared Redis instance? (Determines whether to flag eviction risk urgently to ops)",
+    "Is immediate API key revocation a security requirement? (Determines whether TTL=300s propagation delay is acceptable or TTL must be reduced to ~60s)",
+    "Does auth/service.py exist in the pre-existing codebase? (Determines whether auth/tokens.py SRP extraction is needed in PR #2)"
+  ],
+  "instructions_for_next": "PR #1 is closed. PR #2 scope is: auth/cache.py (function-based, sha256 key, TTL 300s, auth:apk:* prefix, Redis failure swallowed, invalidate_all_keys_for_user raises NotImplementedError), auth/tokens.py (lookup_api_key, only if service.py exists), test_cache.py (Redis failure + cache miss fallback), wire cache into decorators.py (inactive until Redis configured).\n\nFull auth/ consolidation remains deferred indefinitely.\n\nKey invariants to carry: joinedload(OAuthIdentity.user) required everywhere, cache is function-based not inline, share existing Redis client, do NOT build AuthRequest/AuthResult/AnonymousIdentity/g.identity, do NOT warm cache.",
+  "overall_truth": 0.97,
+  "overall_indeterminacy": 0.03,
+  "overall_falsity": 0.0,
+  "declared_losses": [
+    {
+      "what_was_lost": "Separate 'Testing Strategy (Revised)' strand",
+      "why": "Test coverage is now fully captured in the PR #1 manifest and PR #2 scope strands. A dedicated test strand was redundant \u2014 the information integrates cleanly into the strands it belongs to.",
+      "category": "authorial_choice",
+      "shed_from": "Testing Strategy (Revised)"
+    },
+    {
+      "what_was_lost": "OAuth+Password Clash as a standalone strand",
+      "why": "The design is settled and shipped in PR #1. Its key claims (OAuthOnlyAccount exception, message policy, check order, reverse case) are fully integrated into 'OAuth Behavioral Invariants (Shipped in PR #1)'. No unresolved questions remain.",
+      "category": "authorial_choice",
+      "shed_from": "OAuth+Password Clash"
+    },
+    {
+      "what_was_lost": "OAuth2 Bolt-On (Option A) as a standalone strand",
+      "why": "PR #1 is closed. Option A is no longer a recommendation under consideration \u2014 it was built. The scope, line estimates, and decision rationale no longer need to be carried. Invariants that matter going forward are in 'OAuth Behavioral Invariants (Shipped in PR #1)'.",
+      "category": "authorial_choice",
+      "shed_from": "OAuth2 Bolt-On (Option A)"
+    },
+    {
+      "what_was_lost": "Caching: Settled Design as a standalone strand (full detail)",
+      "why": "Collapsed into 'PR #2 Scope: Caching + Tokens'. Cache design is settled; the strand was carrying deliberation and options that no longer need to be active (e.g. the three is_active-flip options). The resolution (option 2, 300s TTL) is carried forward.",
+      "category": "context_pressure",
+      "shed_from": "Caching: Settled Design"
+    }
+  ],
+  "feedback_to_harness": "\n  <parameter name=\"process_observations\">[\"PR closure is a natural consolidation trigger \u2014 dropped 4 strands (OAuth2 Bolt-On, OAuth+Password Clash, Testing Strategy, Caching standalone) and rebuilt 6 tighter ones. This felt like the right moment to compress: deliberation strands become fact strands once decisions ship.\", \"Harness feedback to reduce strand count was timely \u2014 the PR summary turn gave a natural forcing function to act on it. Down from 7 to 6 strands, with higher density per strand.\"]"
+}

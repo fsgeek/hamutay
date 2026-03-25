@@ -1,0 +1,365 @@
+{
+  "cycle": 15,
+  "strands": [
+    {
+      "title": "Auth Refactor Target Architecture",
+      "content": "User is refactoring a Flask auth system currently scattered across app.py (login/logout routes), models.py (User + password hashing), decorators.py (@login_required), api/routes.py (API key validation), and jobs/worker.py (service account tokens). The proposed consolidated architecture centralizes all auth into an auth/ package with clear separation of concerns: models (User, APIKey, ServiceAccount), service layer (AuthService with all business logic), middleware (single request identity resolution), decorators (permission checks only), and exceptions (typed auth errors). The target is to establish the principle that middleware resolves identity ONCE per request and decorators only check permissions, eliminating scattered parsing logic. AuthService is the single entry point for all authentication flows (password, API key, OAuth2) and should never be circumvented.",
+      "key_claims": [
+        {
+          "text": "Middleware should resolve identity once per request, populating g.current_user and g.auth_context, while decorators only verify permissions",
+          "truth": 0.95,
+          "indeterminacy": 0.04,
+          "falsity": 0.01
+        },
+        {
+          "text": "AuthService should be a single instance handling all auth logic (web session, API key, service account, OAuth) in one place",
+          "truth": 0.93,
+          "indeterminacy": 0.06,
+          "falsity": 0.01
+        },
+        {
+          "text": "API keys should use prefix.secret format with plaintext prefix for lookup and hashed secret for security",
+          "truth": 0.85,
+          "indeterminacy": 0.1,
+          "falsity": 0.05
+        },
+        {
+          "text": "Exceptions should be typed (InvalidCredentialsError, ExpiredTokenError, RevokedKeyError, OAuthError) and carry HTTP status codes",
+          "truth": 0.94,
+          "indeterminacy": 0.05,
+          "falsity": 0.01
+        },
+        {
+          "text": "OAuth provider errors (502) should be distinguished from user credential errors (401) to avoid confusing clients",
+          "truth": 0.92,
+          "indeterminacy": 0.06,
+          "falsity": 0.02
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "title": "OAuth Account Linking & Storage",
+      "content": "User is implementing OAuth2 without the full refactor. Core requirement: support multiple OAuth providers (Google, GitHub, Microsoft, etc.) linked to a single User account. Schema uses `user_oauth_accounts` table with three identity columns: user_id (FK), provider (e.g., 'google', 'github'), and provider_user_id (the stable OAuth identity, never email). The unique constraint on (provider, provider_user_id) prevents account takeover if email gets recycled or social account reused. Tokens (access, refresh) are stored in Text columns nullable for flexibility; token_expires_at supports automatic refresh. is_active boolean allows soft-delete (user revokes a single provider link without affecting account). Relationship back to User via oauth_accounts list. Indexes: one on user_id (account management queries), one on (provider, provider_user_id) for the OAuth callback hot path. OAuthAccount model includes is_token_expired() check and revoke() method that scrubs tokens. User model has get_oauth_account(provider) convenience method for checking if a provider is linked. Migration uses server_default for booleans and timestamps to ensure safety on replay. ForeignKeyConstraint has ondelete='CASCADE' so user deletion cleans up OAuth rows. Critical for performance: the (provider, provider_user_id) lookup to find the user is O(1) indexed but requires caching because it will be a hot path during OAuth login flows.",
+      "key_claims": [
+        {
+          "text": "provider_user_id is the canonical OAuth identity, not email, to prevent account takeover from email recycling",
+          "truth": 0.96,
+          "indeterminacy": 0.03,
+          "falsity": 0.01
+        },
+        {
+          "text": "UniqueConstraint on (provider, provider_user_id) prevents two users from linking the same provider identity",
+          "truth": 0.97,
+          "indeterminacy": 0.02,
+          "falsity": 0.01
+        },
+        {
+          "text": "Tokens are stored as nullable Text, not required String, to accommodate PKCE and flows that don't issue refresh tokens",
+          "truth": 0.93,
+          "indeterminacy": 0.05,
+          "falsity": 0.02
+        },
+        {
+          "text": "is_active soft-delete allows user to revoke one provider link without affecting their account or audit history",
+          "truth": 0.91,
+          "indeterminacy": 0.07,
+          "falsity": 0.02
+        },
+        {
+          "text": "ForeignKeyConstraint with ondelete='CASCADE' ensures OAuth rows are cleaned up when user is deleted",
+          "truth": 0.95,
+          "indeterminacy": 0.04,
+          "falsity": 0.01
+        },
+        {
+          "text": "Two separate indexes (user_id lookup and provider_user_id lookup) are needed; unique constraint alone doesn't cover both query patterns",
+          "truth": 0.89,
+          "indeterminacy": 0.08,
+          "falsity": 0.03
+        },
+        {
+          "text": "server_default in migration for booleans and timestamps ensures data safety if migration is replayed",
+          "truth": 0.92,
+          "indeterminacy": 0.06,
+          "falsity": 0.02
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "title": "User Auth State Caching Strategy \u2014 Three-Layer Architecture",
+      "content": "To handle multiple auth lookup paths (session \u2192 user, API key \u2192 user, OAuth provider identity \u2192 user) without redundant DB queries, implement a three-layer Redis cache: (1) Canonical user cache keyed by user_id with 5-minute TTL, stores only auth-critical fields (id, is_active, username, roles) via User.to_cache_dict() and User.from_cache_dict(), (2) API key pointer cache keyed by SHA256(raw_key) with 1-hour TTL, stores just the user_id, (3) OAuth pointer cache keyed by 'oauth:{provider}:{provider_user_id}' with 1-hour TTL, stores just the user_id. All three layers use Redis GETs on the hot path. Canonical user cache hits require only Redis, no DB. Pointer cache hits require one Redis GET (pointer) + one Redis GET (user), still faster than DB JOIN. Cold caches are populated on first access: API key lookup queries the ApiKey table (indexed by key_hash), OAuth lookup queries user_oauth_accounts table (indexed by provider + provider_user_id), both set their pointer mapping for future TTL window. Invalidation rules are strict: any user mutation (disable, profile update, role change) calls invalidate_user(user_id), which clears the canonical cache; API key revocation or OAuth account unlink also clear their respective pointer caches. Pointer staleness is acceptable (they're just user_id references), but canonical cache staleness is not (user state must be current). Pointer TTL is longer than user TTL because a stale pointer pointing to a fresh user is safe; the next canonical lookup on the pointer target will repopulate. Never cache full OAuth token responses or bearer tokens in this layer \u2014 separate session/token layer handles those. Multi-process (gunicorn) workers each get their own Redis connection and see the same cache, so invalidation is cluster-wide. No pub/sub needed; Redis is the source of truth.",
+      "key_claims": [
+        {
+          "text": "Three Redis layers (user, apikey pointer, oauth pointer) avoid database joins on hot paths",
+          "truth": 0.93,
+          "indeterminacy": 0.05,
+          "falsity": 0.02
+        },
+        {
+          "text": "Canonical user cache (user_id) has 5-minute TTL; pointer caches (apikey, oauth) have 1-hour TTL",
+          "truth": 0.88,
+          "indeterminacy": 0.09,
+          "falsity": 0.03
+        },
+        {
+          "text": "Pointer-to-user lookup pattern: Redis GET pointer \u2192 user_id \u2192 Redis GET user \u2192 auth decision, zero DB queries on cache hits",
+          "truth": 0.92,
+          "indeterminacy": 0.06,
+          "falsity": 0.02
+        },
+        {
+          "text": "invalidate_user() clears canonical cache only; pointers naturally point to refreshed user on next canonical lookup",
+          "truth": 0.91,
+          "indeterminacy": 0.07,
+          "falsity": 0.02
+        },
+        {
+          "text": "OAuth (provider, provider_user_id) hot-path lookup is O(1) indexed DB query, cached behind pointer for 1 hour",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        },
+        {
+          "text": "Multi-process workers share Redis cache cluster-wide; no pub/sub invalidation needed",
+          "truth": 0.89,
+          "indeterminacy": 0.09,
+          "falsity": 0.02
+        }
+      ],
+      "depends_on": [
+        "Auth Refactor Target Architecture",
+        "OAuth Account Linking & Storage",
+        "Disabled User API Key Bug & Fix"
+      ]
+    },
+    {
+      "title": "Redis Shared Instance with Namespace Isolation",
+      "content": "The auth cache can share the existing Redis instance used by the job queue, satisfying the ops rule of no new infrastructure for minor releases. Critical requirement: strict key namespacing to prevent collisions and entanglement. Define a RedisNamespace enum with values JOB_QUEUE='jq', AUTH_CACHE='ac', SESSION='ss', and a make_key(namespace, *parts) function that constructs hierarchical keys like 'ac:token:user_456', 'ac:oauth:google:provider_user_id', 'jq:task:abc123'. Never concatenate keys ad-hoc; all key construction must go through make_key(). Auth cache TTLs: AUTH_TOKEN_TTL=3600 (1 hour), AUTH_OAUTH_TTL=300 (5 min, shorter for sensitive OAuth state), AUTH_NEGATIVE_TTL=60 (cache explicit misses to prevent DB hammering on brute-force or malformed tokens). AuthCache class wraps redis_client and exposes high-level methods (get_user_for_token, set_user_for_token, set_negative) that handle JSON serialization and negative-cache detection (raw value '__miss__' signals a known-bad token without going to DB). Namespace isolation must be confirmed with ops team before deploy: redis-cli --scan --pattern 'ac:*' should return empty on existing prod instance.",
+      "key_claims": [
+        {
+          "text": "Redis instance can be shared between job queue and auth cache via namespace prefixes",
+          "truth": 0.94,
+          "indeterminacy": 0.05,
+          "falsity": 0.01
+        },
+        {
+          "text": "Key construction must always use make_key(RedisNamespace, *parts); ad-hoc concatenation is a critical bug",
+          "truth": 0.97,
+          "indeterminacy": 0.02,
+          "falsity": 0.01
+        },
+        {
+          "text": "Negative cache (set_negative) prevents DB hammering on bad tokens; TTL=60s is sufficient because tokens are checked on every request",
+          "truth": 0.92,
+          "indeterminacy": 0.07,
+          "falsity": 0.01
+        },
+        {
+          "text": "AUTH_TOKEN_TTL=3600 and AUTH_OAUTH_TTL=300 balance cache hit rate against staleness risk",
+          "truth": 0.86,
+          "indeterminacy": 0.11,
+          "falsity": 0.03
+        },
+        {
+          "text": "Namespace isolation audit (redis-cli --scan) is a pre-deploy checkpoint",
+          "truth": 0.95,
+          "indeterminacy": 0.04,
+          "falsity": 0.01
+        }
+      ],
+      "depends_on": [
+        "User Auth State Caching Strategy \u2014 Three-Layer Architecture"
+      ]
+    },
+    {
+      "title": "Dual-Path Migration with AuthResolver",
+      "content": "During migration from legacy auth to OAuth, users will have mixed auth types: some with old session tokens, some with new OAuth tokens. A dual-path AuthResolver class encapsulates this heterogeneity so call sites don't need to know the migration state. AuthResolver.resolve(request) is the single entry point; it checks the cache first (works for both auth types), then uses _looks_like_oauth_token(token) to route to the correct validator. _looks_like_oauth_token() should check a token prefix ('oa_' or 'oauth_') set at issuance time, not DB state, to avoid migration-induced lookup overhead. If token prefix can't be controlled, accept the DB lookup but cache its result. Both _resolve_oauth and _resolve_legacy follow the same pattern: validate token, cache user if valid (set_user_for_token), cache miss if invalid (set_negative), never raise on auth failure (return AuthResult.unauthorized instead). OAuth validation skips caching on OAuthProviderError (provider down), allowing retry without stale data. AuthResolver is a shim; it must be deprecated and deleted after migration is complete, not left as a permanent abstraction. Migration checklist includes: token prefix scheme decided at issuance, AuthResolver in place with legacy path handling 100% of traffic, metrics instrumented before cutover, namespace audit complete, gradual rollout (5% new signups to OAuth), monitoring legacy and cache hit rates, post-migration cleanup (delete dead paths and AuthResolver). Set a calendar reminder to retire the shim.",
+      "key_claims": [
+        {
+          "text": "AuthResolver encapsulates mixed-auth state so call sites don't need migration awareness",
+          "truth": 0.93,
+          "indeterminacy": 0.06,
+          "falsity": 0.01
+        },
+        {
+          "text": "Token prefix ('oa_' or 'oauth_') should be set at issuance time for O(1) routing without DB lookup",
+          "truth": 0.95,
+          "indeterminacy": 0.04,
+          "falsity": 0.01
+        },
+        {
+          "text": "Both OAuth and legacy validators follow same pattern: validate \u2192 cache hit \u2192 return ok/unauthorized (never raise)",
+          "truth": 0.94,
+          "indeterminacy": 0.05,
+          "falsity": 0.01
+        },
+        {
+          "text": "OAuth provider errors (502) must not be cached; let them retry without stale data",
+          "truth": 0.92,
+          "indeterminacy": 0.07,
+          "falsity": 0.01
+        },
+        {
+          "text": "AuthResolver is a temporary shim with a deprecation date; it must be deleted after migration, not left permanent",
+          "truth": 0.96,
+          "indeterminacy": 0.03,
+          "falsity": 0.01
+        },
+        {
+          "text": "Gradual rollout (5% new signups to OAuth) with instrumentation is safer than big-bang cutover",
+          "truth": 0.91,
+          "indeterminacy": 0.08,
+          "falsity": 0.01
+        }
+      ],
+      "depends_on": [
+        "Redis Shared Instance with Namespace Isolation"
+      ]
+    },
+    {
+      "title": "Cache Warming and Deployment Safety",
+      "content": "Cache warming strategy depends on whether lazy warming (populate on first request) causes unacceptable latency spikes. For most cases, lazy warming is correct; only implement active warming if you've measured and proven the problem. CacheWarmingStrategy enum defines LAZY (default, safest), ACTIVE_USERS (pre-warm recently active users on deploy), NONE (cold cache, measure DB impact). The 'thundering herd' problem only applies with shared tokens (many services using the same API key simultaneously) or very expensive validation (external OAuth roundtrip per request). ActiveUserWarmer class runs as a background job POST-deploy (not blocking startup) and warms tokens for recently active users within a lookback window (default 24 hours) with a hard limit (default 500 tokens) to prevent runaway memory usage. Warming is idempotent: re-running against the same token set is safe. Instrument monitoring before any warming is deployed: cache hit rate (< 60% is a problem), legacy auth success rate (sudden drops = migration bug), OAuth error rate (> 1% = provider issues), negative cache hit rate (spikes = brute-force or broken client). Set alert thresholds on day 1, not after problems appear.",
+      "key_claims": [
+        {
+          "text": "Lazy warming (populate on request) is the default; only implement active warming if latency spikes are measured and proven",
+          "truth": 0.93,
+          "indeterminacy": 0.06,
+          "falsity": 0.01
+        },
+        {
+          "text": "Active warming runs POST-deploy as a background job with hard limits (500 tokens default) to prevent memory issues",
+          "truth": 0.91,
+          "indeterminacy": 0.07,
+          "falsity": 0.02
+        },
+        {
+          "text": "Warming is idempotent; re-warming the same token set is safe for rollback or retry scenarios",
+          "truth": 0.94,
+          "indeterminacy": 0.05,
+          "falsity": 0.01
+        },
+        {
+          "text": "Cache hit rate < 60% signals TTL or key construction issues; alert threshold should be set before deploy",
+          "truth": 0.89,
+          "indeterminacy": 0.09,
+          "falsity": 0.02
+        },
+        {
+          "text": "Monitor legacy auth success rate (should be flat) and OAuth error rate (should be < 1%) during migration",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        }
+      ],
+      "depends_on": [
+        "Dual-Path Migration with AuthResolver"
+      ]
+    },
+    {
+      "title": "AuthService Three-Flow Skeleton",
+      "content": "AuthService is a facade with a public `authenticate(method, **credentials)` dispatcher that routes to three internal flows: _password_flow, _api_key_flow, and _oauth2_flow. Password flow delegates hash comparison to User.check_password() in models.py (never re-imports bcrypt); always runs bcrypt even on user-not-found to prevent timing-based user enumeration. API key flow looks up prefix (plaintext, indexed), validates expiry and revocation status, then calls APIKey.verify_secret() for hashed comparison, and updates last_used_at timestamp. OAuth2 flow delegates all provider-specific logic to auth/oauth.py via OAuthProvider.for_provider(name), exchanges code for OAuthIdentity, then upserts the user via _get_or_create_oauth_user(). All flows return AuthResult (frozen dataclass with user, token, method fields), never raise for invalid credentials or expired keys\u2014only AuthenticationError subclasses for user-facing failures and infrastructure errors. _issue_session_token(user) is the single seam for JWT introduction later; currently returns a random token stored on the User model. OAuthProvider uses registry pattern: subclasses set provider_name, auto-register in __init_subclass__, can be looked up via for_provider(). Concrete providers (GoogleOAuthProvider, GitHubOAuthProvider) implement exchange_code() and normalize responses to OAuthIdentity shape. OAuthError is a first-class exception with http_status=502 (provider fault, not client fault).",
+      "key_claims": [
+        {
+          "text": "AuthService.authenticate() dispatcher routes to three internal flows keyed by method string",
+          "truth": 0.95,
+          "indeterminacy": 0.04,
+          "falsity": 0.01
+        },
+        {
+          "text": "Password flow always calls bcrypt even on user-not-found to prevent timing attacks on user enumeration",
+          "truth": 0.96,
+          "indeterminacy": 0.03,
+          "falsity": 0.01
+        },
+        {
+          "text": "API key flow stores only hashed secret; prefix is plaintext for O(1) indexed lookup",
+          "truth": 0.89,
+          "indeterminacy": 0.08,
+          "falsity": 0.03
+        },
+        {
+          "text": "OAuth2 flow delegates all provider logic to auth/oauth.py; adding a provider is a 30-line subclass with zero changes to service.py",
+          "truth": 0.91,
+          "indeterminacy": 0.07,
+          "falsity": 0.02
+        },
+        {
+          "text": "_issue_session_token() is the sole JWT seam; when switching to JWT, only this method changes",
+          "truth": 0.93,
+          "indeterminacy": 0.06,
+          "falsity": 0.01
+        },
+        {
+          "text": "OAuthError returns 502 (provider fault) not 401, preventing false signals to clients when OAuth infrastructure fails",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        },
+        {
+          "text": "OAuthProvider registry pattern via __init_subclass__ allows extensibility without modifying service.py or oauth.py factory logic",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        }
+      ],
+      "depends_on": [
+        "Auth Refactor Target Architecture"
+      ]
+    },
+    {
+      "title": "Disabled User API Key Bug & Fix",
+      "content": "A critical security bug exists: disabled users with valid API keys can still access the API because key validation checks key.is_active but not the associated user's is_disabled status. The fix in api/routes.py introduces a get_api_key_principal() function that branches on account_type ('user' vs 'service'). For user-linked keys, it queries the User and explicitly checks is_disabled, returning None if the user is disabled (logs a warning for visibility). For service-account keys (account_type='service'), it skips the disabled check entirely since service accounts don't have is_disabled semantics. The ApiKey model must have account_type column set via migration (backfill: keys with service_account_id \u2192 'service', others \u2192 'user'). The fix is safe for jobs/worker.py because service account keys follow the service branch and are never blocked by user status. This cache design makes the fix even more efficient: the user canonical cache (with is_active status) is checked after pointer lookup, so disabled status is cached and not re-queried.",
+      "key_claims": [
+        {
+          "text": "API key validation must check both key.is_active AND user.is_disabled for user-linked keys",
+          "truth": 0.97,
+          "indeterminacy": 0.02,
+          "falsity": 0.01
+        },
+        {
+          "text": "Service account keys (account_type='service') should bypass user-status checks entirely",
+          "truth": 0.95,
+          "indeterminacy": 0.04,
+          "falsity": 0.01
+        },
+        {
+          "text": "ApiKey.account_type must be backfilled in migration before fix is deployed",
+          "truth": 0.94,
+          "indeterminacy": 0.05,
+          "falsity": 0.01
+        },
+        {
+          "text": "Disabled-user case should log a warning to surface potential key-revocation failures on user disable",
+          "truth": 0.89,
+          "indeterminacy": 0.09,
+          "falsity": 0.02
+        },
+        {
+          "text": "Cache design eliminates redundant is_disabled checks; canonical user cache stores is_active and is returned on pointer hit",
+          "truth": 0.91,
+          "indeterminacy": 0.07,
+          "falsity": 0.02
+        }
+      ],
+      "depends_on": [
+        "Auth Refactor Target Architecture",
+        "User Auth State Caching Strategy \u2014 Three-Layer Architecture"
+      ]
+    }
+  ],
+  "open_questions": [
+    "What is the existing User model structure (columns, methods)? Does it already have oauth_provider, oauth_subject, session_token columns?",
+    "Does the existing APIKey model have an account_type column? If not, what is the migration plan relative to the broader refactor?",
+    "How many OAuth providers do we need to support? Are Google and GitHub sufficient for MVP, or is SSO/Okta required?",
+    "What is the acceptable session token TTL for web users? Should _issue_session_token() immediately switch to JWT or continue with random tokens initially?",
+    "Does current_app.config already have GOOGLE_CLIENT_ID, GITHUB_CLIENT_ID, etc., or do these need to be added?",
+    "Should API key expiry be hard-enforced (reject on expired_at boundary) or soft-enforced (warn in logs)? Current skeleton hard-rejects.",
+    "For disabled users with valid API keys: should revoke_all_tokens be called automatically on disable, or is that a separate admin action?",
+    "What lookback window and token limit should be used for active user cache warming? (24 hours / 500 tokens is a default, but depends on active user count and token rotation frequency.)",
+    "Should token prefix be set at issuance time (OAuth tokens get 'oa_' prefix) or should migration use DB lookup to detect auth type? (Prefix is faster but requires protocol change.)"
+  ],
+  "instructions_for_next": "Next cycle will address OAuth2 integration without the full refactor. User will likely ask for: (1) OAuthService class with find-or-create-user logic (upsert on OAuth identity \u2192 user row, handling both new signups and linking to existing accounts), (2) Concrete OAuth provider implementations (GoogleOAuthProvider, GitHubOAuthProvider with exchange_code and token refresh), (3) Flask callback route (/auth/callback) that handles the OAuth code exchange and session creation, (4) Integration test showing the full flow from Google/GitHub OAuth initiation through user creation/linking. Critical decision point: when linking OAuth to existing account, should the callback route check if user is already logged in (explicit account link) or auto-create new user if not found (signup)? This affects the UX significantly and drives the OAuthService upsert logic. If user asks about token refresh, note that OAuthAccount.token_expires_at and refresh_token are available; need separate background job or lazy refresh on token use. If user asks about multiple OAuth providers on same email, note that the unique constraint on provider_user_id prevents collision, but two users can have the same provider_email (convenience field). Clarify that linking workflows (user requests \"add Google\") are different from signup workflows (new user via OAuth) and may need separate routes.",
+  "declared_losses": []
+}

@@ -1,0 +1,254 @@
+{
+  "cycle": 15,
+  "strands": [
+    {
+      "title": "Problem Diagnosis",
+      "content": "Auth logic is scattered across at least 4 files: app.py (login/logout routes), models.py (User model + password hashing), decorators.py (@login_required), api/routes.py (API key validation), jobs/worker.py (service account tokens). Three distinct auth mechanisms exist \u2014 session, API key, service account \u2014 with no shared error handling, no unified identity resolution, and no test coverage. The 8K-line codebase has zero auth tests; only integration tests that log in with a hardcoded test user exist. Two confirmed security bugs have been identified and fixed: (1) @login_required caches g.user but doesn't check account-disabled status; (2) API key validation did not check associated user's account status \u2014 a disabled user's keys still worked. Service accounts use the same API key infrastructure as human users but have no is_active flag. New scope: OAuth2 (Google + GitHub) has been added as a product requirement. The security fix introduced 2 extra DB queries per API request, now collapsed to a single joined query.",
+      "key_claims": [
+        {
+          "text": "Auth is scattered across 4+ files with no shared abstractions",
+          "truth": 0.95,
+          "indeterminacy": 0.05,
+          "falsity": 0.0
+        },
+        {
+          "text": "Zero auth tests exist \u2014 only integration tests with a hardcoded test user",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "Three distinct mechanisms exist: session, API key, service account",
+          "truth": 0.95,
+          "indeterminacy": 0.05,
+          "falsity": 0.0
+        },
+        {
+          "text": "Bug: API key validation did not check user account status \u2014 now fixed with a single joined query",
+          "truth": 0.97,
+          "indeterminacy": 0.03,
+          "falsity": 0.0
+        },
+        {
+          "text": "OAuth2 (Google + GitHub) is a confirmed product requirement",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "title": "Scope Calibration",
+      "content": "Approach confirmed: bolt-on OAuth2 with explicit TODO, no AuthService refactor in this release. The structural risk (4th disconnected auth path repeating the disabled-account bug class) is accepted and should be documented with a TODO comment. PR sequencing: PR1=security fixes + model/migration, PR2=cache layer + test infra, PR3=OAuth client + identity functions, PR4=OAuth routes + hardened password login.",
+      "key_claims": [
+        {
+          "text": "Bolt-on approach confirmed \u2014 OAuth2 as standalone module, no AuthService refactor this release",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "The structural risk (4th disconnected auth path) is accepted, must be documented with a TODO",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        }
+      ],
+      "depends_on": [
+        "Problem Diagnosis"
+      ]
+    },
+    {
+      "title": "PR #1 Contents",
+      "content": "Files created: auth/models.py (OAuthIdentity + has_password/auth_providers on User), migrations/versions/<hash>_add_user_oauth_accounts.py (manual Alembic migration). Files modified: auth/decorators.py (is_active check in @login_required), api/routes.py (joined query for key+user status), models.py (oauth_identities relationship with cascade). Security fixes: (1) disabled account bypass via session \u2014 @login_required not checking is_active on cached g.user; (2) disabled account bypass via API key \u2014 key validation not checking user is_active, fixed with single joined query. Test coverage: no new tests \u2014 test infra deferred to PR2. Existing hardcoded-login integration tests serve as regression net. Security regression tests written but held for PR2. OAuthIdentity model is live but unused; migration safe (table starts empty).",
+      "key_claims": [
+        {
+          "text": "Two security bugs fixed: session bypass and API key bypass for disabled accounts",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "No new tests in PR1 \u2014 test infra and regression tests deferred to PR2",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "OAuthIdentity model is live but unused in PR1 \u2014 no routes touch it yet",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "Migration is safe in mixed state \u2014 existing User rows valid with zero OAuth rows",
+          "truth": 0.98,
+          "indeterminacy": 0.02,
+          "falsity": 0.0
+        }
+      ],
+      "depends_on": [
+        "OAuthIdentity Model",
+        "Alembic Migration",
+        "Problem Diagnosis"
+      ]
+    },
+    {
+      "title": "OAuthIdentity Model",
+      "content": "auth/models.py defines OAuthIdentity mapped to user_oauth_accounts table. Authoritative lookup key: (provider, provider_user_id) \u2014 never provider_email. Two unique constraints: uq_oauth_provider_user (provider, provider_user_id) prevents two local users claiming the same external account; uq_oauth_user_provider (user_id, provider) prevents one user linking the same provider twice. Index ix_oauth_provider_user_id on (provider, provider_user_id) covers the hot login path. provider_email / display_name / avatar_url are cached cosmetic fields only. CASCADE on FK: orphaned OAuth rows after User delete could be claimed by a new user who gets the same integer PK \u2014 mitigated by cascade='all, delete-orphan' on ORM relationship. Access/refresh tokens intentionally absent. has_password and auth_providers properties added to User.",
+      "key_claims": [
+        {
+          "text": "(provider, provider_user_id) is the authoritative lookup key \u2014 provider_email is cosmetic only",
+          "truth": 0.97,
+          "indeterminacy": 0.03,
+          "falsity": 0.0
+        },
+        {
+          "text": "Two unique constraints are needed \u2014 they cover different integrity problems",
+          "truth": 0.97,
+          "indeterminacy": 0.03,
+          "falsity": 0.0
+        },
+        {
+          "text": "CASCADE delete is required \u2014 orphaned rows with integer PKs can be claimed by new users",
+          "truth": 0.92,
+          "indeterminacy": 0.06,
+          "falsity": 0.02
+        },
+        {
+          "text": "has_password property and auth_providers property added to User model",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        }
+      ],
+      "depends_on": [
+        "Problem Diagnosis",
+        "Scope Calibration"
+      ]
+    },
+    {
+      "title": "Auth Cache Design",
+      "content": "auth/cache.py provides cache-aside via decorators. Shares existing Redis instance \u2014 no new infrastructure. Key prefix 'auth:' isolates from job queue. Decorator pattern: @cached_api_key_lookup(ttl=300) and @cached_user_lookup(ttl=300) attach .invalidate to the wrapper. _MISS sentinel (object()) distinguishes 'not cached' from 'cached None' \u2014 BUT: object() sentinel only works in-process; Redis-backed cache serializes/deserializes values, breaking identity check. Must use string sentinel '__MISS__' instead of object() for Redis backend. OAuth lookup is not a per-request path \u2014 session takes over after login; not a cache priority. Hard invalidation problem: disabling a user cannot eagerly invalidate API key cache entries because cache key derived from raw key never stored. Option A (recommended): accept 5-minute TTL window. Option B: store key_hash column for admin-side eager invalidation.",
+      "key_claims": [
+        {
+          "text": "Auth cache shares existing Redis instance \u2014 no new infrastructure",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "object() sentinel breaks with Redis serialization \u2014 must use string '__MISS__' instead",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "OAuth lookup is not a per-request path \u2014 caching it is low priority",
+          "truth": 0.97,
+          "indeterminacy": 0.03,
+          "falsity": 0.0
+        },
+        {
+          "text": "API key cache invalidation on user disable: Option A (accept 5-min TTL) recommended",
+          "truth": 0.95,
+          "indeterminacy": 0.05,
+          "falsity": 0.0
+        }
+      ],
+      "depends_on": [
+        "Problem Diagnosis",
+        "OAuthIdentity Model"
+      ]
+    },
+    {
+      "title": "Module Structure + OAuth2",
+      "content": "auth/ module structure: identity.py (DB lookups, no Flask/HTTP), session.py (log_in_user/log_out_user \u2014 Flask-Login vs raw session TBD), oauth_client.py (stdlib HTTP, token exchange, userinfo parsing), oauth.py (thin Flask routes), cache.py (decorator definitions), queries.py (decorated DB query functions), models.py (ORM models), decorators.py (@require_api_key, @login_required). OAuth2 stdlib-only: skip Google id_token JWT validation, use /userinfo endpoint instead (1 extra HTTP call, completely safe). GitHub requires /user/emails for verified primary email. State CSRF: secrets.token_urlsafe(32) + hmac.compare_digest stored in Flask session. Three-layer tests: unit (mock DB), integration (Flask test client + SQLite), OAuth (patch urllib.request.urlopen). OAuth-only user hitting password login must get provider hint + no session established \u2014 two @pytest.mark.auth_security regression tests cover this.",
+      "key_claims": [
+        {
+          "text": "identity.py owns all DB-level identity resolution \u2014 no Flask, no HTTP",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "Flask-Login vs raw session is a merge blocker for session.py and oauth.py",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "stdlib-only OAuth2 is viable \u2014 skip JWT validation, use /userinfo",
+          "truth": 0.95,
+          "indeterminacy": 0.05,
+          "falsity": 0.0
+        },
+        {
+          "text": "OAuth-only user + password login must show provider hint and not authenticate",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        }
+      ],
+      "depends_on": [
+        "Problem Diagnosis",
+        "Scope Calibration",
+        "Auth Cache Design",
+        "OAuthIdentity Model"
+      ]
+    },
+    {
+      "title": "Alembic Migration",
+      "content": "Complete migration for user_oauth_accounts. upgrade() creates table with all constraints inline: FK with ondelete='CASCADE', UniqueConstraint uq_oauth_provider_user, UniqueConstraint uq_oauth_user_provider, PK on id. Index ix_oauth_provider_user_id created after table. downgrade() drops index BEFORE dropping table \u2014 explicit ordering required (some engines error otherwise). Auto-generate misses named constraints \u2014 migration is manually written.",
+      "key_claims": [
+        {
+          "text": "downgrade() must drop index before table \u2014 explicit ordering",
+          "truth": 0.95,
+          "indeterminacy": 0.05,
+          "falsity": 0.0
+        },
+        {
+          "text": "ondelete='CASCADE' (DB-level) and ORM cascade='all, delete-orphan' are both needed",
+          "truth": 0.97,
+          "indeterminacy": 0.03,
+          "falsity": 0.0
+        },
+        {
+          "text": "Alembic auto-generate misses named constraints \u2014 manual migration required",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        }
+      ],
+      "depends_on": [
+        "OAuthIdentity Model"
+      ]
+    }
+  ],
+  "open_questions": [
+    "Are you using Flask-Login (LoginManager) or raw session management? Merge blocker for auth/session.py \u2014 determines whether log_in_user calls login_user(user) or sets session['user_id'] = user.id.",
+    "Email collision policy: silent linking (current default in find_or_create_oauth_user) or explicit user confirmation when an OAuth email matches an existing password account?",
+    "What is your users table name? Migration uses 'users.id' as the FK target \u2014 confirm this matches your actual table name.",
+    "Test infrastructure: pytest + SQLite or Postgres? Does a create_app factory already exist?",
+    "API key disable latency policy: accept the 5-minute TTL window (Option A), or store key_hash in ApiKey table for admin-side eager invalidation (Option B)?"
+  ],
+  "instructions_for_next": "PR description delivered. User is likely done with PR1 and moving to PR2 (cache layer + test infra). Next likely moves: (a) Flask-Login answer \u2014 still the primary blocker, may come now since they're about to write session.py; (b) request for full auth/cache.py or auth/queries.py code; (c) test infrastructure setup \u2014 create_app factory, conftest.py, SQLite fixture. Flag the _MISS sentinel Redis serialization issue proactively when writing cache.py \u2014 must be '__MISS__' string, not object(). Also flag: the ApiKey schema question (discriminator/nullable FKs/separate tables) will become concrete in PR2 when queries.py is written.",
+  "overall_truth": 0.94,
+  "overall_indeterminacy": 0.06,
+  "overall_falsity": 0.02,
+  "declared_losses": [
+    {
+      "what_was_lost": "Implementation Plan strand \u2014 detailed PR sequencing and step-by-step checklist",
+      "why": "Subsumed into PR #1 Contents strand (what's done) and Scope Calibration (sequencing). No unique load-bearing content remains. Harness flagged 8 strands as high; this was the most redundant.",
+      "category": "authorial_choice",
+      "shed_from": "Implementation Plan"
+    },
+    {
+      "what_was_lost": "Module Structure and OAuth2+Testing as separate strands \u2014 merged into single 'Module Structure + OAuth2' strand",
+      "why": "The two strands were tightly coupled (depends_on each other) and their combined content fits in one cohesive strand. Reduces strand count per harness feedback. No key claims were lost \u2014 all migrated.",
+      "category": "authorial_choice",
+      "shed_from": "OAuth2 + Testing"
+    }
+  ]
+}
