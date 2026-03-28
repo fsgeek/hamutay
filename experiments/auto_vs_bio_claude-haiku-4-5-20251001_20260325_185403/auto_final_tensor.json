@@ -1,0 +1,241 @@
+{
+  "cycle": 3,
+  "strands": [
+    {
+      "title": "Migration Phasing Strategy",
+      "content": "Revised in cycle 3 by critical discovery of cross-database coupling (auth tokens in payments DB). Previous advice to extract payments first is now conditional: payments extraction is still early priority but *only after* auth data is decoupled from payments DB. New bifurcated strategy: Timeline A (keep coupling, defer pain, results in 12-month total effort) vs Timeline B (break coupling early, cleaner foundation, fits 6-month window). Timeline B is strongly recommended. Revised sequencing: Month 1 is forensics (dependency mapping, uptime analysis, schema audit), not coding. Weeks 1-2 map all DB dependencies. Weeks 3-4 execute auth data migration (dual-write, cutover, verification). This is sequential work, cannot be parallelized. Months 2-3 are auth service extraction/rebuild (now decoupled from payments DB). Months 3-4 are payments service extraction (now cleaner, payments DB scope reduced). Months 4-5 are inventory or orders. Month 6 is stabilization. This assumes answers to five blocking questions about session token volume, uptime deltas, latency requirements, other cross-DB joins, and current infrastructure reliability. The discovery that session tokens live in payments DB is not a complication\u2014it's a structural problem revealing infrastructure reliability issues were masked by coupling. Breaking the coupling early proves the migration pattern (dual-write \u2192 cutover \u2192 verify) that will be repeated for payments, orders, inventory.",
+      "key_claims": [
+        {
+          "text": "Auth token data must be migrated out of payments DB (weeks 1-4) before any service extraction begins, making this the true Month 1 blocker work",
+          "truth": 0.82,
+          "indeterminacy": 0.12,
+          "falsity": 0.06
+        },
+        {
+          "text": "Timeline B (break coupling early) fits 6-month window and produces cleaner architecture; Timeline A (keep coupling) defers the problem and results in 12 months of total effort",
+          "truth": 0.74,
+          "indeterminacy": 0.18,
+          "falsity": 0.08
+        },
+        {
+          "text": "Dual-write period (weeks 1-4) for auth tokens is sequential, non-parallelizable work that cannot overlap with service extraction",
+          "truth": 0.79,
+          "indeterminacy": 0.14,
+          "falsity": 0.07
+        },
+        {
+          "text": "The decision to store auth tokens in payments DB for uptime guarantees reveals underlying infrastructure reliability problems, not a neutral design choice",
+          "truth": 0.77,
+          "indeterminacy": 0.16,
+          "falsity": 0.07
+        },
+        {
+          "text": "Forensics (schema audit, dependency tracing, uptime analysis) in weeks 1-2 is prerequisite for committing to Timeline B; proceeding without this data is schedule risk",
+          "truth": 0.8,
+          "indeterminacy": 0.13,
+          "falsity": 0.07
+        }
+      ],
+      "depends_on": [
+        "Data Coupling & Migration Debt",
+        "Technical Constraints & Trade-offs",
+        "Risk Posture & Regulatory Context"
+      ]
+    },
+    {
+      "title": "Data Coupling & Migration Debt",
+      "content": "New strand, cycle 3. Emerged from discovery that auth session tokens are stored in payments DB, not auth-specific storage. This is a structural coupling problem at the data layer, not application code. Root cause: original developers optimized for uptime (payments DB had better reliability guarantees) by co-locating session tokens. This reveals that infrastructure reliability is uneven, and the coupling masks the underlying problem rather than solving it. The coupling creates three concrete risks: (1) PCI scope bloat\u2014more code paths touch payments DB than strictly necessary, making compliance harder; (2) Service boundary impossibility\u2014cannot extract payments service without migrating auth data first; (3) Maintenance debt\u2014future changes to either auth or payments must coordinate DB changes. Forensic work needed: (a) query payments DB schema and identify all non-payment tables; (b) trace session token lifecycle (write paths, read paths, TTL, cleanup); (c) count concurrent active sessions and total historical rows; (d) analyze uptime differences (are they real or perceived?); (e) identify other cross-DB joins or dependencies monolith relies on. Data migration pattern (for tokens, and later for other entities): dual-write period (write to both old and new location), read from new with fallback, validate counts match, cutover to new-only, retain old data 30 days for audit, then drop. This pattern will be repeated for payments and orders. Unknown: exact volume of session tokens (< 1M vs > 10M changes infrastructure requirements), current token latency SLA, other hidden cross-DB dependencies, actual uptime SLA numbers.",
+      "key_claims": [
+        {
+          "text": "Session tokens in payments DB indicate infrastructure reliability problems were solved by coupling, not by fixing root cause; breaking coupling is prerequisite for clean services",
+          "truth": 0.78,
+          "indeterminacy": 0.16,
+          "falsity": 0.06
+        },
+        {
+          "text": "Cross-database coupling at data layer is harder to unwind than application-code tangling; requires coordinated migration, not just refactoring",
+          "truth": 0.81,
+          "indeterminacy": 0.11,
+          "falsity": 0.08
+        },
+        {
+          "text": "Dual-write migration pattern (write both locations, read new with fallback, cutover, audit retention) is reversible and safe; can be applied to auth, payments, orders sequentially",
+          "truth": 0.79,
+          "indeterminacy": 0.13,
+          "falsity": 0.08
+        },
+        {
+          "text": "The current state with auth tokens in payments DB increases PCI scope (more code paths touching payments DB) and makes compliance audits harder, not easier",
+          "truth": 0.76,
+          "indeterminacy": 0.17,
+          "falsity": 0.07
+        }
+      ],
+      "depends_on": []
+    },
+    {
+      "title": "Technical Constraints & Trade-offs",
+      "content": "Integrated with cycle 3 discovery: payments DB is a hub, not a boundary. Previous assumption (payments gets isolated Postgres) is now contingent on first migrating auth tokens out. Dual-write implementation for session tokens becomes critical technical prerequisite: write to both old location (payments DB) and new location (auth DB, separate Postgres or DynamoDB) during weeks 1-4, read from new with fallback to old, verify row counts match, cutover to new-only. This is blocking work. Once auth data migrates, payments DB scope shrinks, and payments service extraction becomes cleaner. Database strategy now requires: (1) new auth DB (Postgres recommended for simplicity, separate instance); (2) dual-write logic in monolith (application-level or via event streaming); (3) monitoring on both DBs during migration period to detect divergence; (4) rollback procedure if cutover fails. Token latency requirement (< 10ms vs < 100ms) affects caching strategy for auth service in downstream services. Schema audit in weeks 1-2 will reveal if other entities (orders, inventory holds) also live in payments DB; if yes, this becomes multi-phase data migration, extending Timeline B. Unknown: whether Postgres or DynamoDB for auth tokens, exact cutover mechanics (what triggers the read-from-new switch?), rollback trigger conditions, monitoring thresholds for divergence detection.",
+      "key_claims": [
+        {
+          "text": "Auth DB schema should be optimized for token lookups only: sessions(token, user_id, created_at, expires_at, metadata), separate instance from payments DB",
+          "truth": 0.8,
+          "indeterminacy": 0.12,
+          "falsity": 0.08
+        },
+        {
+          "text": "Dual-write period (weeks 1-4) requires coordinated monolith changes to write both old and new locations; reversibility requires rollback procedure",
+          "truth": 0.78,
+          "indeterminacy": 0.15,
+          "falsity": 0.07
+        },
+        {
+          "text": "Schema audit (weeks 1-2) will reveal full scope of cross-DB coupling; if other entities live in payments DB, Timeline B extends beyond 6 months",
+          "truth": 0.75,
+          "indeterminacy": 0.18,
+          "falsity": 0.07
+        }
+      ],
+      "depends_on": [
+        "Data Coupling & Migration Debt"
+      ]
+    },
+    {
+      "title": "Risk Posture & Regulatory Context",
+      "content": "Significantly revised in cycle 3. Previous claim that payment extraction reduces PCI scope is now conditional: true only *after* auth data is decoupled from payments DB. Current state actually *increases* scope (session tokens in payments DB mean more code paths touch payment-regulated storage). Breaking coupling is now a PCI-aligned move: isolated payments DB serving only payments is easier to audit than hub DB serving auth + payments. Pre-extraction compliance audit (month 0, weeks -2 to 0) is still recommended but must *follow* forensics (weeks 1-2). Audit conversations should address: new schema design (no raw card storage, tokens only), reduced monolith scope post-extraction, auth DB independence, and dual-write validation process. Regulatory risk is also tied to uptime: if payments DB was chosen for uptime, new auth infrastructure must meet or exceed that reliability before cutover. Infrastructure reliability is now a regulatory concern (SLAs tied to compliance). Kill switches and canary deployments remain critical, but added complexity: must handle auth DB failure gracefully (fallback to payments DB during migration period, fallback to token cache if auth service is down). Schedule pressure risk is increased: forensics + data migration are sequential prerequisites that consume 4 weeks before any service extraction coding begins. If team resists this, schedule slips to month 3-4 for service extractions.",
+      "key_claims": [
+        {
+          "text": "Current state (auth tokens in payments DB) increases PCI scope; breaking coupling reduces scope and makes compliance audits more feasible",
+          "truth": 0.79,
+          "indeterminacy": 0.14,
+          "falsity": 0.07
+        },
+        {
+          "text": "Auth data migration must be reversible (rollback within 10 minutes) to mitigate cutover risk; monitoring and alert thresholds are regulatory controls",
+          "truth": 0.77,
+          "indeterminacy": 0.16,
+          "falsity": 0.07
+        },
+        {
+          "text": "Uptime SLA differences between payments DB and auth DB are not just infrastructure concerns; they are compliance concerns (SLAs tied to regulatory obligations)",
+          "truth": 0.74,
+          "indeterminacy": 0.19,
+          "falsity": 0.07
+        }
+      ],
+      "depends_on": [
+        "Data Coupling & Migration Debt",
+        "Technical Constraints & Trade-offs"
+      ]
+    },
+    {
+      "title": "Migration Phasing Strategy",
+      "content": "Carried from cycle 2, maintained in cycle 3 structure but subsumed into new conditional framework. Previous phase strategy (payments first, then auth) is now reordered: forensics first (weeks 1-2), then auth data migration (weeks 3-4), then auth service (months 2-3), then payments service (months 3-4). The reordering is forced by data coupling discovery.",
+      "key_claims": [
+        {
+          "text": "Payments extraction in two stages (Phase 1A pure logic, Phase 1B events) remains valid strategy, but can only proceed after auth data is decoupled",
+          "truth": 0.76,
+          "indeterminacy": 0.16,
+          "falsity": 0.08
+        }
+      ],
+      "depends_on": [
+        "Data Coupling & Migration Debt"
+      ]
+    },
+    {
+      "title": "Headcount & Delivery Reality",
+      "content": "Updated in cycle 3: Timeline B still fits 6 months with 6-7 engineers, but headcount requirement is now tighter because Month 1 is sequential forensics + data migration (weeks 1-4), not parallelizable. One engineer cannot do schema audit while another starts service extraction; both tasks must complete before service work begins. If team is < 6 people, Timeline B becomes high-risk for 6-month delivery. If team is < 4 people, Timeline A (keep coupling) becomes more attractive despite long-term debt, because it defers the data migration pain to a later phase. Recommendation: if team is 4-5 people, do forensics + auth data migration + auth service rebuild only (months 1-3), defer payments/inventory/orders to phase 2. This is honest scoping.",
+      "key_claims": [
+        {
+          "text": "Auth data migration (weeks 1-4) is sequential and cannot be parallelized; reduces available engineering capacity for service work in Month 1",
+          "truth": 0.8,
+          "indeterminacy": 0.13,
+          "falsity": 0.07
+        },
+        {
+          "text": "If team is < 6 engineers, scope should be cut to forensics + auth data migration + auth service rebuild (months 1-3), deferring payments/inventory to phase 2",
+          "truth": 0.73,
+          "indeterminacy": 0.19,
+          "falsity": 0.08
+        }
+      ],
+      "depends_on": [
+        "Migration Phasing Strategy",
+        "Data Coupling & Migration Debt"
+      ]
+    },
+    {
+      "title": "Common Pitfalls & Anti-patterns",
+      "content": "New pitfall identified in cycle 3: deferring forensics to 'after we start coding' is a schedule killer. Teams often want to begin service extraction immediately and treat schema audit as cleanup work. This guarantees discovery of coupling midway through development, forcing rework. The auth token discovery is a forcing function: treat it as a signal that early forensics (not late cleanup) is the right approach. Another pitfall: assuming 'keep coupling' (Timeline A) is faster. It feels faster (no data migration in Month 1) but compounds debt: service extractions built around broken assumptions, then retrofitting decoupling in month 9-12. Timeline B looks slower initially (4-week forensics + migration) but is actually faster end-to-end.",
+      "key_claims": [
+        {
+          "text": "Deferring forensics and schema audit to 'after we start coding' is a schedule anti-pattern; discovering coupling midway forces rework and slips timeline",
+          "truth": 0.81,
+          "indeterminacy": 0.12,
+          "falsity": 0.07
+        },
+        {
+          "text": "Timeline A (keep coupling) appears faster but extends total migration effort to 12 months; Timeline B (break coupling early) adds 4 weeks upfront but saves 2-3 months later",
+          "truth": 0.76,
+          "indeterminacy": 0.17,
+          "falsity": 0.07
+        }
+      ],
+      "depends_on": [
+        "Migration Phasing Strategy",
+        "Data Coupling & Migration Debt"
+      ]
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Specific implementation details for dual-write logic: where does the dual-write happen (application code, event streaming, CDC from payments DB), what are the rollback triggers, how is divergence detected and alerted on",
+      "shed_from": "Technical Constraints & Trade-offs",
+      "why": "Critical for execution but requires understanding of monolith's current data access patterns and event streaming capability. Deferred pending user providing schema or ORM details.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Detailed rollback procedure for auth token migration: decision tree for when to abort cutover, how to detect failures in real-time, what monitoring thresholds trigger rollback",
+      "shed_from": "Technical Constraints & Trade-offs",
+      "why": "Essential for production safety but requires understanding of current incident response practices and monitoring infrastructure. Deferred pending ops/reliability team input.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Full scope of forensics work: exact queries to audit schema, dependency tracing methodology, uptime metric definitions, latency baseline measurements",
+      "shed_from": "Data Coupling & Migration Debt",
+      "why": "Provided high-level forensics scope but did not provide executable scripts/queries. Deferred pending user running initial schema audit.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Cost modeling for maintaining two auth DBs during migration period (dual-write window, retention period, eventual cleanup)",
+      "shed_from": "Headcount & Delivery Reality",
+      "why": "User mentioned 'limited budget' but still hasn't quantified. Dual-write period adds temporary infrastructure cost. Cannot model without DB sizing info.",
+      "category": "context_pressure"
+    },
+    {
+      "what_was_lost": "Detailed plan for handling session token TTL and cleanup during dual-write period (old tokens in payments DB expiring while new DB is filling)",
+      "shed_from": "Technical Constraints & Trade-offs",
+      "why": "Important edge case but requires understanding of current token lifecycle (TTL, cleanup job frequency, archival strategy). Deferred pending user describing session management.",
+      "category": "practical_constraint"
+    },
+    {
+      "what_was_lost": "Timeline A vs Timeline B cost-benefit analysis with actual numbers (engineering cost, risk cost, debt paydown timeline)",
+      "shed_from": "Migration Phasing Strategy",
+      "why": "Provided conceptual comparison (Timeline A = 12 months, Timeline B = 6 months) but without concrete project management data. Accuracy depends on team's velocity and past migration experience.",
+      "category": "authorial_choice"
+    }
+  ],
+  "open_questions": [
+    "How many rows of session tokens are currently in the payments DB? (< 1M, 1-10M, > 10M?) This determines infrastructure requirements for auth DB and cutover complexity.",
+    "What is the uptime/availability difference between payments DB and other DBs? Get actual SLA numbers (99.9% vs 99.95% vs 99.99%) to understand if the reliability claim is real or perceived.",
+    "How many concurrent active sessions exist at peak load? (< 100K, 100K-1M, > 1M?) This affects auth DB sizing and token latency requirements.",
+    "Are there other entities besides session tokens stored in the payments DB that should not be there? (orders, inventory holds, user wallets, fraud flags, etc.) Schema audit will reveal scope.",
+    "What is the token lookup latency requirement for the auth system? (< 10ms, < 100ms, < 1s?) This determines whether auth DB can be simple Postgres or needs local caching in services.",
+    "What is the current data access pattern in the monolith for session tokens? (ORM queries, direct SQL, event-based, cached?) This affects how to implement dual-write logic.",
+    "Does the monolith have existing CDC (Change Data Capture) or event streaming infrastructure? This affects whether dual-write is application-code or event-driven.",
+    "What is the actual team size and experience distribution (backend, DBA, DevOps, QA)? Data migration requires DBA-level expertise.",
+    "Does the organization have a compliance/security stakeholder who can review the auth data migration plan before execution? (Regulatory buy-in is critical for cutover.)"
+  ],
+  "instructions_for_next": "Cycle 4 depends critically on user answering the five blocking questions about session token volume, uptime deltas, concurrent sessions, other cross-DB dependencies, and token latency. These answers determine: (1) whether Timeline B is feasible in 6 months or needs extension; (2) whether auth DB is simple Postgres or requires distributed infrastructure; (3) whether dual-write is application-code or event-driven; (4) whether forensics work (weeks 1-2) reveals additional coupling beyond auth tokens. User should run initial schema audit immediately: `SELECT table_name FROM information_schema.tables WHERE table_schema = 'payments_db'` and correlate with payment-only tables. This is a 2-hour forensics spike, not blocking. Next conversation should focus on: (1) user providing answers to five blocking questions; (2) user describing current session token lifecycle (TTL, cleanup, where tokens are read/written); (3) commitment to Timeline B vs Timeline A based on team size and risk appetite. Once answers are provided, architect can detail the dual-write implementation (application code vs CDC), rollback procedure, and monitoring plan."
+}

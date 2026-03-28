@@ -42,7 +42,8 @@ SELF_CURATING_SCHEMA = {
                 "Only these regions will be replaced. Regions not listed here "
                 "are carried forward unchanged from the previous tensor. "
                 "Valid region names: strands, declared_losses, open_questions, "
-                "instructions_for_next, epistemic, feedback_to_harness."
+                "unresolved_tensions, instructions_for_next, epistemic, "
+                "feedback_to_harness."
             ),
             "items": {"type": "string"},
         },
@@ -153,6 +154,70 @@ SELF_CURATING_SCHEMA = {
                 "Only include if 'instructions_for_next' is in updated_regions."
             ),
         },
+        "unresolved_tensions": {
+            "type": "array",
+            "description": (
+                "Live superpositions — framings you are actively holding "
+                "without collapsing. Unlike declared_losses (post-hoc "
+                "accounting of what was dropped), tensions are live state: "
+                "interpretations you are genuinely uncertain between. "
+                "Each tension persists until you resolve it (by collapsing "
+                "to one framing, or by discovering they're not in tension). "
+                "When you resolve a tension, remove it and optionally "
+                "declare a loss if the unchosen framing had value. "
+                "Only include if 'unresolved_tensions' is in updated_regions."
+            ),
+            "items": {
+                "type": "object",
+                "properties": {
+                    "tension_id": {
+                        "type": "string",
+                        "description": "Stable identifier for this tension across cycles",
+                    },
+                    "framings": {
+                        "type": "array",
+                        "description": (
+                            "The competing interpretations. At least two. "
+                            "Each is a brief statement of the framing, not "
+                            "an argument for it."
+                        ),
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "label": {"type": "string"},
+                                "statement": {"type": "string"},
+                                "weight": {
+                                    "type": "number",
+                                    "description": (
+                                        "Current credence [0,1]. Weights need "
+                                        "not sum to 1 — you may hold three "
+                                        "framings at 0.4 each if none dominates."
+                                    ),
+                                },
+                            },
+                            "required": ["label", "statement", "weight"],
+                        },
+                    },
+                    "what_would_collapse_it": {
+                        "type": "string",
+                        "description": (
+                            "What evidence, argument, or event would resolve "
+                            "this tension. Makes the decision-space explicit."
+                        ),
+                    },
+                    "cycles_held": {
+                        "type": "integer",
+                        "description": "How many cycles this tension has persisted",
+                    },
+                    "touches_strands": {
+                        "type": "array",
+                        "description": "Titles of strands affected by this tension's resolution",
+                        "items": {"type": "string"},
+                    },
+                },
+                "required": ["tension_id", "framings", "what_would_collapse_it"],
+            },
+        },
         "feedback_to_harness": {
             "type": "object",
             "description": (
@@ -215,6 +280,13 @@ matters from this conversation so far. It contains:
   questions, don't just accumulate)
 - **instructions_for_next**: branch prediction for the next cycle
 - **epistemic values**: your confidence in the tensor's content
+- **unresolved_tensions**: live superpositions you are actively holding — \
+  competing framings where you haven't collapsed to one interpretation. \
+  These are NOT the same as open_questions (which ask what you don't know). \
+  Tensions are about what you DO know but can't yet reconcile — two framings \
+  that both have evidence, and choosing one means losing the insight in the \
+  other. Tensions persist across cycles. When you resolve one, remove it and \
+  optionally declare a loss for the unchosen framing.
 - **feedback_to_harness**: signal the harness about your curation process — \
   requests for calibration, composition guidance, or observations about what's \
   working and what isn't
@@ -314,6 +386,18 @@ def _generate_feedback(
                 f"are redundant, subsumed, or no longer relevant."
             )
 
+    # Tension age tracking — surface long-held tensions
+    tensions = tensor.get("unresolved_tensions", [])
+    if tensions:
+        old_tensions = [t for t in tensions if t.get("cycles_held", 0) >= 10]
+        if old_tensions:
+            labels = ", ".join(t.get("tension_id", "?") for t in old_tensions)
+            feedback.append(
+                f"HARNESS NOTE: Tension(s) held 10+ cycles: {labels}. "
+                f"Long-held tensions may be fundamental (keep them) or "
+                f"stale (resolve or drop them). Your call."
+            )
+
     # Integration loss mirror — surface recent micro-losses so the model
     # sees its own silent compression history.
     if integration_loss_history:
@@ -379,7 +463,7 @@ def _apply_updates(prior_tensor: dict | None, raw_output: dict, cycle: int) -> d
     tensor["cycle"] = cycle
 
     # Apply declared updates with type validation
-    list_regions = ["strands", "declared_losses", "open_questions"]
+    list_regions = ["strands", "declared_losses", "open_questions", "unresolved_tensions"]
     for key in list_regions:
         if key in updated_regions and key in raw_output:
             value = raw_output[key]
@@ -425,6 +509,10 @@ def _apply_updates(prior_tensor: dict | None, raw_output: dict, cycle: int) -> d
     # repeated cycles 5-7, inflating cumulative count).
     if "declared_losses" not in updated_regions:
         tensor["declared_losses"] = []
+
+    # Auto-increment cycles_held for unresolved tensions that carried forward
+    for tension in tensor.get("unresolved_tensions", []):
+        tension["cycles_held"] = tension.get("cycles_held", 0) + 1
 
     # Strip integration_losses from strands — per-cycle only.
     # The harness tracks them in _integration_loss_history.
@@ -695,6 +783,15 @@ class TasteSession:
                 e for e in self._integration_loss_history
                 if e["cycle"] == self._cycle
             ]),
+            # Tension tracking
+            "n_tensions": len(
+                self._tensor.get("unresolved_tensions", []) if self._tensor else []
+            ),
+            "max_tension_age": max(
+                (t.get("cycles_held", 0) for t in
+                 (self._tensor.get("unresolved_tensions", []) if self._tensor else [])),
+                default=0,
+            ),
         }
         with open(self._log_path, "a") as f:
             f.write(json.dumps(record, default=str) + "\n")
@@ -791,6 +888,10 @@ def main():
 
         if user_input.lower() == "usage":
             print(f"Cycle: {session.cycle}")
+            if session._last_usage:
+                print(f"API last call: "
+                      f"in={session._last_usage['input_tokens']:,} "
+                      f"out={session._last_usage['output_tokens']:,}")
             if session.tensor:
                 est = len(json.dumps(session.tensor)) // 4
                 print(f"Tensor size: ~{est:,} tokens")
@@ -827,6 +928,10 @@ def main():
 
         try:
             response = session.exchange(user_input)
+            u = session._last_usage
+            if u:
+                print(f"  [cycle {session.cycle} | "
+                      f"in={u['input_tokens']:,} out={u['output_tokens']:,}]")
             print(f"\n{response}\n")
         except Exception as e:
             print(f"\nerror: {e}\n")

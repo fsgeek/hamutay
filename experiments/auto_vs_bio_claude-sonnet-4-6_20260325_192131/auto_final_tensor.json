@@ -1,0 +1,320 @@
+{
+  "cycle": 5,
+  "strands": [
+    {
+      "title": "System Profile",
+      "content": "500K LOC Java monolith on Tomcat. Four domains: payments, inventory, user auth, order fulfillment. 6-month migration timeline, limited unquantified budget, PCI-DSS hard constraint. Coupling profile is materially worse than initial characterization: payments reaches into inventory, order state, and user profiles (cycle 2), payments DB is confirmed to store auth session tokens (cycle 3, empirical), and payments outage cascaded to auth and caused full application outage last quarter (cycle 4, empirical). That outage is the confirmed trigger for this migration. CEO has issued a hard 90-day constraint for auth independence from payments. Infrastructure details (cloud vs. on-prem, session token TTL) remain unconfirmed \u2014 explicitly solicited. Auth ORM coupling nature is now an open question with direct bearing on build-vs-extract decision.",
+      "depends_on": [],
+      "key_claims": [
+        {
+          "text": "500K LOC Java on Tomcat, four domains, 6-month migration timeline, PCI-DSS constraint",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "Payments outage cascaded to auth and took down the full application last quarter \u2014 empirical, user-stated",
+          "truth": 0.98,
+          "indeterminacy": 0.02,
+          "falsity": 0.0
+        },
+        {
+          "text": "CEO has mandated auth independence from payments within 90 days \u2014 hard external constraint",
+          "truth": 0.98,
+          "indeterminacy": 0.02,
+          "falsity": 0.0
+        },
+        {
+          "text": "Session tokens are stored in the payments DB due to its uptime guarantees \u2014 empirical, user-stated",
+          "truth": 0.97,
+          "indeterminacy": 0.03,
+          "falsity": 0.0
+        },
+        {
+          "text": "Auth code is coupled to the ORM layer and would need a rewrite anyway \u2014 team lead assertion, unverified",
+          "truth": 0.65,
+          "indeterminacy": 0.3,
+          "falsity": 0.05
+        },
+        {
+          "text": "Infrastructure (cloud vs. on-prem) and session token TTL are unconfirmed \u2014 explicitly solicited",
+          "truth": 0.95,
+          "indeterminacy": 0.05,
+          "falsity": 0.0
+        }
+      ]
+    },
+    {
+      "title": "Auth Service Design and Build Strategy",
+      "content": "New strand integrating cycle 5 greenfield-vs-extraction debate with prior auth design work. Team lead argues for greenfield auth service on grounds that auth code is ORM-coupled and needs a rewrite anyway. Counter-position accepted in part: if ORM coupling is in business logic (auth rules inside JPA entity methods, Hibernate event listeners), greenfield is justified. If coupling is in infrastructure only (shared EntityManager, connection pool), extraction-with-refactor is faster and safer. The diagnostic question is: where does the coupling live?\n\nRecommendation: greenfield is acceptable only under a hard strangler constraint \u2014 deletion date for old auth system must be set before new service is written. Two-week maximum parallel operation window. Without this commitment, greenfield becomes indefinite parallel operation, which doubles security surface and creates feature parity drift. Characterization tests against existing auth behavior are required regardless of path \u2014 they are the behavior specification for the new service and the test oracle during cutover.\n\nPrior design parameters preserved: Keycloak or Spring Authorization Server, JWT with 15-minute access tokens, longer refresh tokens, monolith delegates during transition. Session token migration (dual-write, shadow-read, TTL drain) applies to both paths \u2014 the migration mechanics are independent of whether the new service is extracted or greenfield. Resilience4j circuit breakers remain part of the 90-day delivery.\n\nDecision gate proposed for week 3: after characterization tests are written and ORM coupling is inspected in detail, choose path formally. This prevents premature commitment while maintaining momentum.",
+      "depends_on": [
+        "System Profile",
+        "90-Day Auth Independence Target",
+        "Auth-Payments DB Entanglement and Session Migration"
+      ],
+      "key_claims": [
+        {
+          "text": "Greenfield auth service is acceptable if ORM coupling is in business logic \u2014 but requires hard deletion date for old system before build begins",
+          "truth": 0.85,
+          "indeterminacy": 0.12,
+          "falsity": 0.03
+        },
+        {
+          "text": "Indefinite parallel operation of two auth systems doubles security surface and creates feature parity drift \u2014 primary failure mode of ungoverned greenfield",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        },
+        {
+          "text": "Characterization tests against existing auth behavior are required regardless of build path",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "ORM coupling location (business logic vs. infrastructure) is the deciding diagnostic \u2014 unconfirmed",
+          "truth": 0.82,
+          "indeterminacy": 0.15,
+          "falsity": 0.03
+        },
+        {
+          "text": "Extraction-with-rewrite is faster to cutover than greenfield because behavior is pre-specified by production system",
+          "truth": 0.78,
+          "indeterminacy": 0.18,
+          "falsity": 0.04
+        },
+        {
+          "text": "Use Keycloak or Spring Authorization Server \u2014 do not build custom token management",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "Two-week maximum parallel operation window must be enforced if greenfield path is chosen",
+          "truth": 0.83,
+          "indeterminacy": 0.14,
+          "falsity": 0.03
+        }
+      ]
+    },
+    {
+      "title": "Auth-Payments DB Entanglement and Session Migration",
+      "content": "Consolidation of prior Auth-Payments DB Entanglement strand with session migration mechanics. Session tokens in payments DB is empirically confirmed. Creates cyclic extraction dependency: auth extraction needs payments DB access resolved; payments extraction complicated by auth data in its DB. Payments DB is confirmed multi-tenant: carries CDE payment data and auth session state simultaneously \u2014 a live PCI scope problem.\n\nSession token migration is critical path regardless of whether auth service is extracted or greenfield. Dual-write strategy: write tokens to both payments DB and new auth DB simultaneously, validate reads from new store in shadow mode, drain old store passively via token TTL expiry, cut reads over only after validation. Short token TTLs (15-minute access tokens if JWT) are a migration lever \u2014 natural drain within one TTL window. Token TTL is unconfirmed and explicitly solicited.\n\nAuth DB replacement must match or exceed payments DB uptime SLA \u2014 the uptime rationale for original placement is a system requirement, not a historical accident. Managed HA required: RDS Multi-AZ, Cloud Spanner, or Redis Cluster depending on infrastructure (unconfirmed). Payments DB cannot be handed to payment service until session tokens are fully migrated out \u2014 hard sequencing constraint that is independent of build-vs-extract decision.\n\nScope of auth artifacts in payments DB is still unconfirmed \u2014 may extend beyond session tokens to credentials, API keys, CSRF tokens.",
+      "depends_on": [
+        "System Profile",
+        "Payment Service Design and PCI-DSS"
+      ],
+      "key_claims": [
+        {
+          "text": "Session tokens in payments DB is empirically confirmed \u2014 creates hard data-layer dependency between auth and payments extractions",
+          "truth": 0.97,
+          "indeterminacy": 0.03,
+          "falsity": 0.0
+        },
+        {
+          "text": "Auth DB must match payments DB uptime SLA \u2014 single-instance replacement is not acceptable",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        },
+        {
+          "text": "Dual-write session token migration is required to avoid mass user logout during cutover",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "Payments DB cannot be handed to payment service until session tokens are migrated out \u2014 hard sequencing constraint",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        },
+        {
+          "text": "Scope of auth artifacts in payments DB may extend beyond session tokens \u2014 unconfirmed",
+          "truth": 0.72,
+          "indeterminacy": 0.22,
+          "falsity": 0.06
+        }
+      ]
+    },
+    {
+      "title": "90-Day Auth Independence Target",
+      "content": "CEO-mandated hard constraint. 90-day target is achievable but requires precise scoping, dedicated resourcing, and no timeline slippage on dependency mapping. Correct interpretation: auth service extracted or greenfield-built, session tokens on dedicated HA store, payments outage cannot cascade to auth \u2014 testable and demoable. Wrong interpretation: full auth + payments separation with clean PCI boundaries \u2014 that is 6-month work.\n\nGreenfield debate (cycle 5) does not change the 90-day feasibility assessment materially, but it does affect risk profile: greenfield adds build time and parallel operation risk that extraction avoids. If greenfield path is chosen, the deletion date for old auth must be inside the 90-day window.\n\nProposed sequence (revised to reflect build-path decision gate): Weeks 1-2 dependency mapping + characterization tests + QSA engagement + auth DB provisioning; Week 3 decision gate on greenfield vs. extraction; Weeks 3-6 session token dual-write migration; Weeks 7-10 auth service build/extraction + Resilience4j circuit breakers; Weeks 11-12 cutover, chaos testing, old auth deletion, validation.\n\nCritical failure modes: (1) ORM coupling inspection skipped \u2014 wrong build path chosen without evidence; (2) parallel operation window left open-ended if greenfield chosen; (3) dependency mapping compressed to save time; (4) team splits focus \u2014 requires dedicated 2-3 engineer squad; (5) auth DB uptime SLA not resolved week 1; (6) CEO scope mismatch not corrected early.",
+      "depends_on": [
+        "System Profile",
+        "Auth Service Design and Build Strategy",
+        "Auth-Payments DB Entanglement and Session Migration",
+        "Risk and Constraint Management"
+      ],
+      "key_claims": [
+        {
+          "text": "90-day auth independence is achievable if scoped correctly and team is protected from context-switching",
+          "truth": 0.72,
+          "indeterminacy": 0.24,
+          "falsity": 0.04
+        },
+        {
+          "text": "Greenfield path is compatible with 90-day target only if old auth system deletion date is inside the window",
+          "truth": 0.84,
+          "indeterminacy": 0.13,
+          "falsity": 0.03
+        },
+        {
+          "text": "90-day scope must be defined in writing with CEO within first 2 weeks",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        },
+        {
+          "text": "Cascade failure was a bulkheading problem \u2014 Resilience4j circuit breakers are part of the 90-day deliverable",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "At day 90, payments extraction and full PCI boundary cleanup will not be complete",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        }
+      ]
+    },
+    {
+      "title": "Payment Service Design and PCI-DSS",
+      "content": "Third-party card vault (Stripe/Braintree/Adyen) for scope reduction remains primary architectural driver. QSA engagement is now a week 1-2 requirement \u2014 framed as emergency scoping confirmation, not full assessment. Session tokens in CDE is a live compliance question predating the migration. Migration framing for QSA: compliance improvement, not risk event.\n\nPayments DB cannot be handed to payment service until session tokens are migrated out \u2014 hard sequencing constraint. Network segmentation required from initial deployment. Payment Service API boundary: initiatePayment(OrderId, PaymentToken, Amount), refund(TransactionId, Amount), getStatus(TransactionId). Internal OrderStateUpdate endpoint on monolith remains interim pattern for order state write dependency. Payments extraction is post-90-day-auth-target work.",
+      "depends_on": [
+        "System Profile",
+        "Auth-Payments DB Entanglement and Session Migration",
+        "Coupling and Dependency Analysis"
+      ],
+      "key_claims": [
+        {
+          "text": "Third-party card vault dramatically reduces PCI-DSS scope \u2014 system should never handle raw PANs",
+          "truth": 0.95,
+          "indeterminacy": 0.05,
+          "falsity": 0.0
+        },
+        {
+          "text": "QSA must be engaged at week 1-2 as emergency scoping confirmation with 2-week turnaround expectation",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "Payments DB cannot be handed to payment service until session tokens are migrated out",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        }
+      ]
+    },
+    {
+      "title": "Coupling and Dependency Analysis",
+      "content": "Coupling profile has worsened each cycle through discovery. Confirmed tentacles: payments reaches into inventory (query), order state (write \u2014 hardest), user profiles (read), and auth session tokens live in payments DB (bidirectional operational dependency with confirmed blast radius). Auth code is additionally coupled to ORM layer \u2014 nature of that coupling (business logic vs. infrastructure) is the new open question from cycle 5.\n\nPattern of accidental discovery in a 500K LOC codebase means the team's mental model cannot be trusted as the dependency map. jdeps or Structure101 analysis remains a hard prerequisite. Characterization tests for auth (cycle 5 recommendation) serve double duty: behavior specification and dependency surface revelation.",
+      "depends_on": [
+        "System Profile"
+      ],
+      "key_claims": [
+        {
+          "text": "Payments outage cascade to full application outage is empirically confirmed \u2014 coupling has proven operational blast radius",
+          "truth": 0.98,
+          "indeterminacy": 0.02,
+          "falsity": 0.0
+        },
+        {
+          "text": "Auth code ORM coupling exists \u2014 whether it is in business logic or infrastructure layer is unconfirmed",
+          "truth": 0.75,
+          "indeterminacy": 0.22,
+          "falsity": 0.03
+        },
+        {
+          "text": "Pattern of accidental coupling discovery means team intuition cannot be trusted as the dependency map",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        },
+        {
+          "text": "Payments write dependency on order state is the hardest extraction tentacle",
+          "truth": 0.72,
+          "indeterminacy": 0.24,
+          "falsity": 0.04
+        }
+      ]
+    },
+    {
+      "title": "Risk and Constraint Management",
+      "content": "Risk profile now includes a new named risk from cycle 5: indefinite parallel auth system operation. Ranked risk vectors: (1) Hidden coupling \u2014 session token discovery was accidental; cascade failure confirms deeper entanglement than team's mental model. (2) Indefinite parallel auth operation \u2014 greenfield without deletion date is a migration failure mode disguised as a technical improvement. (3) ORM coupling location \u2014 wrong build path chosen without inspection is a recoverable but costly error. (4) PCI scope creep \u2014 session tokens in CDE is live. (5) Timeline compression \u2014 90-day target is tight; greenfield path has less schedule slack than extraction. (6) CEO expectation mismatch \u2014 must be corrected week 1. (7) Auth DB uptime regression.\n\nTechnical debt inventory (named, intentional): shared DB for inventory/orders (phase 1), OrderStateUpdate internal API seam, gap period where monolith reads from payments DB during dual-write phase, parallel auth operation window (2-week maximum if greenfield). Feature routing rule: new features touching payments or auth go into new services, not back into the monolith.",
+      "depends_on": [
+        "System Profile",
+        "Coupling and Dependency Analysis",
+        "90-Day Auth Independence Target",
+        "Auth Service Design and Build Strategy"
+      ],
+      "key_claims": [
+        {
+          "text": "Indefinite parallel auth system operation is a named project risk \u2014 requires deletion date commitment before greenfield build begins",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "Cascade failure is empirically confirmed \u2014 risk profile is evidenced, not speculative",
+          "truth": 0.98,
+          "indeterminacy": 0.02,
+          "falsity": 0.0
+        },
+        {
+          "text": "CEO expectation mismatch on 90-day scope is a top-3 project risk \u2014 must be resolved week 1",
+          "truth": 0.85,
+          "indeterminacy": 0.13,
+          "falsity": 0.02
+        },
+        {
+          "text": "Without explicit feature routing rules, new features will regress into the monolith under deadline pressure",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        }
+      ]
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Separate 'Auth Service Design and Session Migration' and 'Auth-Payments DB Entanglement' strands \u2014 merged into two consolidated strands",
+      "why": "Harness feedback flagged 7 strands as too many and tensor size as too large. The two auth strands had high overlap. Auth-Payments DB Entanglement now covers session migration mechanics; Auth Service Design and Build Strategy covers the greenfield debate and design decisions. Information preserved, surface area reduced.",
+      "category": "context_pressure",
+      "shed_from": "Auth Service Design and Session Migration"
+    },
+    {
+      "what_was_lost": "'Team Dynamics and Fear as a Planning Variable' strand \u2014 content absorbed into Risk and Constraint Management",
+      "why": "Harness consolidation pressure. The team dynamics content (fear-driven deferral as anti-pattern, using cascade failure for buy-in) is preserved as implicit context in Risk strand. The team lead's greenfield argument in cycle 5 supersedes the earlier 'fear' framing as the primary team dynamics signal.",
+      "category": "context_pressure",
+      "shed_from": "Team Dynamics and Fear as a Planning Variable"
+    },
+    {
+      "what_was_lost": "Specific signals for confirming ORM coupling location (auth logic inside JPA entity methods, imports >20% from non-auth packages) \u2014 present in cycle 5 response but not carried into tensor",
+      "why": "Context pressure \u2014 the diagnostic heuristics are actionable advice for the team but not load-bearing for the tensor's architectural reasoning. Will resurface if user asks how to inspect the coupling.",
+      "category": "context_pressure",
+      "shed_from": "Auth Service Design and Build Strategy"
+    },
+    {
+      "what_was_lost": "Explicit week-by-week timeline detail from 90-Day strand (Weeks 1-2, 3-6, 7-10, 11-12 breakdown)",
+      "why": "Revised to reflect decision gate at week 3 for greenfield vs. extraction. Old timeline assumed extraction path. Compressed to sequence summary rather than week-by-week to reduce token load while preserving structure.",
+      "category": "context_pressure",
+      "shed_from": "90-Day Auth Independence Target"
+    }
+  ],
+  "open_questions": [
+    "What is the session token TTL \u2014 directly affects dual-write drain window calculation. Explicitly solicited.",
+    "Is the infrastructure cloud-hosted or on-prem \u2014 determines auth DB HA options (RDS Multi-AZ vs. Redis Cluster vs. other). Explicitly solicited.",
+    "What uptime SLA does the payments DB currently provide \u2014 required to specify minimum acceptable SLA for auth DB replacement.",
+    "Where exactly is the auth ORM coupling \u2014 business logic (JPA entity methods, Hibernate event listeners) or infrastructure only (shared EntityManager)? Determines greenfield vs. extraction path at week 3 decision gate.",
+    "Does the existing auth system have any test coverage \u2014 affects cost of writing characterization tests and risk of behavior regression.",
+    "Are session tokens the only auth artifact in the payments DB, or are there other auth data (credentials, API keys, CSRF tokens)?"
+  ],
+  "instructions_for_next": "Cycle 5 introduced the greenfield-vs-extraction debate and a week-3 decision gate. Three highest-probability next moves: (1) User reveals ORM coupling location \u2014 if business logic, confirm greenfield path with deletion date commitment; if infrastructure only, argue for extraction-with-refactor; (2) User provides session token TTL and infrastructure details (explicitly solicited since cycle 4) \u2014 immediately update Auth-Payments DB Entanglement strand with specific HA DB recommendation and drain window calculation; (3) User asks how to structure the characterization test sprint \u2014 load specifics on approval testing patterns (Approval Tests library, Golden Master pattern for auth endpoints). Watch for: any indication that the team lead's greenfield preference is being adopted without a deletion date commitment \u2014 that is the indefinite parallel operation failure mode and should be flagged directly. Also watch for: user asking about the payments extraction plan now that auth sequencing is partly resolved \u2014 the ~3 months post-day-90 for payments extraction is tight given confirmed coupling complexity.",
+  "overall_truth": 0.75,
+  "overall_indeterminacy": 0.25,
+  "overall_falsity": 0.05,
+  "feedback_to_harness": "\n<parameter name=\"process_observations\">[\"Consolidating 7 strands to 7 (net: absorbed Team Dynamics into Risk, merged two Auth strands) was the right call \u2014 the auth strands had genuine overlap that was creating redundancy rather than precision.\", \"The greenfield debate warranted integration into a renamed strand (Auth Service Design and Build Strategy) rather than a new strand \u2014 it is the same topic with new evidence, not a new topic.\", \"Declared losses this cycle are heavier than previous cycles due to consolidation \u2014 this feels honest rather than concerning. The information was genuinely redundant across strands.\", \"The decision gate pattern (week 3, inspect ORM coupling, choose path) is a new structural element in the tensor \u2014 it represents a future branch point, not a settled claim. Indeterminacy values on related claims reflect this appropriately.\"]"
+}

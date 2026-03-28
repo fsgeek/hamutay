@@ -1,0 +1,523 @@
+{
+  "cycle": 15,
+  "strands": [
+    {
+      "title": "System Baseline",
+      "content": "500K LOC Java on Tomcat with four domains: payments, inventory, auth, order fulfillment. Six-month migration window, limited budget. PCI-DSS is a hard constraint. Payments is the gravitational center \u2014 confirmed coupling into inventory, order state, and user profiles at the application layer. Auth session tokens stored in payments DB, justified historically by uptime guarantees. Auth code is ORM-coupled, type uncharacterized (shared entities / lifecycle hooks / framework usage). The cascade failure last quarter \u2014 payments DB outage \u2192 auth down \u2192 full application outage \u2014 is the organizational trigger. CEO issued 90-day mandate for auth independence from payments. Compliance officer introduced 6-week audit for any new auth system and prohibition on parallel auth systems. These constraints are in direct conflict. Team size, cloud/on-prem topology, CI/CD maturity, raw card data storage, and QSA relationship remain unknown. Compliance officer is an active stakeholder insufficiently integrated into planning. Executive summary delivered to CEO in cycle 14 \u2014 first concrete deliverable artifact of the engagement. Test coverage of the 500K LOC codebase has never been assessed and is a newly identified critical unknown as of cycle 15.",
+      "depends_on": [],
+      "key_claims": [
+        {
+          "text": "500K LOC Java on Tomcat with four domains: payments, inventory, auth, order fulfillment",
+          "truth": 0.99,
+          "indeterminacy": 0.01,
+          "falsity": 0.0
+        },
+        {
+          "text": "Payments has confirmed application-layer coupling into inventory, order state, and user profiles",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "Auth session tokens are stored in the payments database \u2014 confirmed root cause of cascade failure",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "Auth code is ORM-coupled \u2014 type uncharacterized across three scenarios",
+          "truth": 0.92,
+          "indeterminacy": 0.08,
+          "falsity": 0.0
+        },
+        {
+          "text": "90-day CEO mandate and 6-week compliance audit are in direct conflict for full auth service extraction",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "Test coverage of the monolith is unassessed and represents a critical unknown for extraction safety",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        }
+      ]
+    },
+    {
+      "title": "Architecture Pattern Validity",
+      "content": "The microservices assumption was never interrogated until cycle 11 \u2014 this is itself an instance of the unverified assumption failure mode. Evaluating actual goals against modular monolith vs microservices: (1) Cascade failure elimination: caused by infrastructure coupling (shared DB), not process coupling. Modular monolith with database-per-module would have prevented it. Process separation was not the relevant variable. (2) Independent deployment: the strongest genuine argument for microservices. Strict per-module deployment requires microservices. Practical deployment safety is achievable in a well-structured modular monolith. CEO's precise meaning is unverified and blocking. (3) PCI scope reduction: requires payments as a separately deployed service regardless of what other domains do. (4) Distributed consistency: modular monolith with shared database (separate schemas, same instance) preserves ACID transaction boundary spanning payments and inventory \u2014 a material consistency advantage over microservices for these two domains specifically. (5) Six months, limited budget: modular monolith substantially cheaper to operate \u2014 no service mesh, no container orchestration, no distributed tracing for in-process modules, no API versioning between internal consumers. Hybrid destination is likely correct: payments as true microservice (PCI + cascade severity), auth/inventory/orders as modular monolith with separate schemas and enforced internal API boundaries. Key risk of modular monolith: boundaries require active enforcement (ArchUnit) since network separation is not available as the enforcement mechanism. CEO deployment independence question was surfaced directly in the executive summary and remains the highest-priority unresolved planning input.",
+      "depends_on": [
+        "System Baseline",
+        "Incident History and Executive Constraints",
+        "PCI-DSS and Payments Extraction Strategy",
+        "Distributed Consistency and Saga Patterns"
+      ],
+      "key_claims": [
+        {
+          "text": "Cascade failure was caused by infrastructure coupling, not process coupling \u2014 modular monolith with separate DBs would have prevented it",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        },
+        {
+          "text": "Modular monolith with shared database preserves ACID transaction boundary spanning payments and inventory \u2014 consistency advantage over microservices",
+          "truth": 0.85,
+          "indeterminacy": 0.12,
+          "falsity": 0.03
+        },
+        {
+          "text": "PCI scope reduction requires payments as a true separate service regardless of what other domains do",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "CEO's definition of independent deployment is unverified \u2014 strict vs practical are meaningfully different requirements",
+          "truth": 0.95,
+          "indeterminacy": 0.04,
+          "falsity": 0.01
+        },
+        {
+          "text": "Hybrid destination (payments as microservice, auth/inventory/orders as modular monolith) is potentially the architecturally correct answer",
+          "truth": 0.75,
+          "indeterminacy": 0.2,
+          "falsity": 0.05
+        },
+        {
+          "text": "Modular monolith boundaries require active enforcement \u2014 ArchUnit or equivalent is not optional",
+          "truth": 0.92,
+          "indeterminacy": 0.06,
+          "falsity": 0.02
+        }
+      ]
+    },
+    {
+      "title": "Incident History and Executive Constraints",
+      "content": "Payments DB outage last quarter cascaded: payments DB down \u2192 auth cannot read sessions \u2192 auth down \u2192 full application outage. This incident is the direct organizational trigger for the migration. CEO issued 90-day hard mandate: auth must be independent of payments. Compliance officer introduced 6-week security audit for any new auth system and prohibition on parallel auth systems. These constraints are in direct conflict: 90 days minus 42 days (audit) leaves 48 days of build time for an auth migration of uncharacterized scope. Conflict requires three-way escalation: CEO + compliance officer + engineering lead, before implementation begins. Two resolution paths: (1) compliance officer confirms session store migration does not trigger audit \u2014 90-day path restored, (2) CEO accepts Wave 1/Wave 2 framing. A third path \u2014 modular monolith restructuring of auth may not trigger audit at all \u2014 potentially dissolves the conflict. CEO's definition of independent deployment must be verified: if practical deployment safety satisfies the goal, modular monolith may satisfy the mandate. Executive summary in cycle 14 surfaced both the audit conflict and the deployment definition question directly to the CEO as items requiring their input.",
+      "depends_on": [
+        "System Baseline",
+        "Compliance Audit Constraints"
+      ],
+      "key_claims": [
+        {
+          "text": "Payments DB outage caused auth outage caused full application outage \u2014 confirmed cascade failure",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "90-day auth independence from payments is a hard CEO mandate",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "90-day mandate and 6-week audit are in direct conflict for full auth service extraction",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "Conflict must be escalated to CEO + compliance officer + engineering lead simultaneously",
+          "truth": 0.97,
+          "indeterminacy": 0.03,
+          "falsity": 0.0
+        },
+        {
+          "text": "Modular monolith restructuring of auth may not trigger the 6-week audit \u2014 potentially dissolves the conflict",
+          "truth": 0.6,
+          "indeterminacy": 0.32,
+          "falsity": 0.08
+        }
+      ]
+    },
+    {
+      "title": "Compliance Audit Constraints",
+      "content": "Two hard constraints from compliance officer: (1) any new auth system requires 6-week security audit before go-live, (2) parallel auth systems prohibited \u2014 they double audit surface. These are compliance requirements, not negotiable preferences. Parallel system prohibition eliminates Strangler Fig for auth \u2014 cutover must be atomic. Atomic cutover makes post-cutover defect probability the dominant risk factor, which favors hybrid extraction over greenfield: hybrid carries known behavior forward, reducing novel failure surface. Critical ambiguities requiring resolution: (A) Does 'new auth system' include session store migration (infrastructure) or only service extraction/rewrite? (B) Does modular monolith restructuring of auth count as 'new auth system'? High-value clarification \u2014 if exempt, CEO/compliance conflict may dissolve. (C) Is the 6-week audit a fixed external dependency or internal process with flexibility? (D) Can auth security audit and PCI-DSS QSA process be combined? Two compliance processes potentially in play \u2014 may compete for budget and auditor scheduling. Compliance officer must answer all four questions in a single call. Executive summary in cycle 14 named the session store audit question explicitly as a decision needed this week.",
+      "depends_on": [
+        "System Baseline",
+        "Incident History and Executive Constraints",
+        "PCI-DSS and Payments Extraction Strategy"
+      ],
+      "key_claims": [
+        {
+          "text": "6-week security audit before go-live is a hard compliance requirement for new auth systems",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "Parallel auth systems are prohibited \u2014 doubled audit surface is compliance-unacceptable",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "Whether session store migration triggers the audit is unresolved and blocking",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "Whether modular monolith restructuring of auth triggers the audit is unresolved with high upside if answered favorably",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "Atomic cutover with no rollback window makes post-cutover defect probability the dominant risk \u2014 favors hybrid over greenfield",
+          "truth": 0.87,
+          "indeterminacy": 0.11,
+          "falsity": 0.02
+        }
+      ]
+    },
+    {
+      "title": "Auth and Payments Migration Strategy",
+      "content": "Consolidated strand covering auth approach, payments extraction, and their interdependencies. Auth has two confirmed coupling problems: (1) data layer \u2014 session tokens in payments DB, (2) application layer \u2014 ORM coupling of uncharacterized type. Session store migration is mandatory regardless of auth approach \u2014 it directly severs the availability dependency. Hybrid approach (extract auth boundary, rewrite data access layer, discard ORM coupling, carry known behavior forward) is favored over greenfield because atomic cutover with no rollback makes known behavior more valuable than clean implementation. Dual-write during session store migration must be write-new-store-first; payments DB write failures must not fail auth requests. Replacement session store must match or exceed payments DB uptime SLA \u2014 Redis Cluster is the right default. ORM coupling type (Scenario A: shared entities / B: lifecycle hooks / C: framework usage) remains uncharacterized and is blocking for build scope estimation. For payments: PCI-DSS requires extraction as a true service regardless of modular monolith consideration for other domains. Saga pattern design is a prerequisite for payments extraction \u2014 cannot be retrofitted after extraction. The outbox pattern and saga orchestrator must be designed before payments service extraction begins. Payments team's concern about eventual consistency is valid but misapplied: strong consistency is required within the payments service locally; cross-service coordination uses saga patterns with compensation, not distributed ACID. Idempotency for all payment operations is non-negotiable and cannot be retrofitted. Live data migration mechanics (dual-write, backfill, cutover validation) must be explicitly designed for each extraction \u2014 this has not yet been addressed and is a concrete execution risk.",
+      "depends_on": [
+        "System Baseline",
+        "Incident History and Executive Constraints",
+        "Compliance Audit Constraints",
+        "PCI-DSS and Payments Extraction Strategy",
+        "Architecture Pattern Validity",
+        "Distributed Consistency and Saga Patterns"
+      ],
+      "key_claims": [
+        {
+          "text": "Session token storage in payments DB is confirmed root cause of the outage cascade",
+          "truth": 0.92,
+          "indeterminacy": 0.08,
+          "falsity": 0.0
+        },
+        {
+          "text": "Auth ORM coupling type is uncharacterized \u2014 Scenario A/B/C determination is blocking for build scope",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        },
+        {
+          "text": "Hybrid approach favored over greenfield because atomic cutover with no rollback makes post-cutover defect probability the dominant risk",
+          "truth": 0.85,
+          "indeterminacy": 0.12,
+          "falsity": 0.03
+        },
+        {
+          "text": "Saga pattern design is a prerequisite for payments extraction, not a post-extraction concern",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        },
+        {
+          "text": "Idempotency for all payment operations is non-negotiable \u2014 prevents double-charging on retry, cannot be retrofitted",
+          "truth": 0.95,
+          "indeterminacy": 0.04,
+          "falsity": 0.01
+        },
+        {
+          "text": "Dual-write must be write-new-store-first; payments DB write failures during session migration must not fail auth requests",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        },
+        {
+          "text": "Live data migration mechanics have not been designed for any extraction \u2014 this is a concrete unaddressed execution risk",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        }
+      ]
+    },
+    {
+      "title": "PCI-DSS and Payments Extraction Strategy",
+      "content": "PCI-DSS is a hard constraint unaffected by the modular monolith question \u2014 payments must be extracted as a true service. Current state: entire 500K LOC monolith is in PCI scope. Target: isolated payments service shrinks scope to one hardened service. Token-passing is the architectural mechanism \u2014 monolith passes payment tokens, not raw card data. Auth session tokens in the payments DB may mean auth code paths are already inside the PCI boundary \u2014 auth extraction is not PCI-free as originally assumed. Under modular monolith destination, auth module boundary enforcement and session store migration resolve co-location concern without full service extraction. Two compliance processes potentially in play: PCI-DSS QSA for payments architecture and security audit for auth system. QSA involvement is urgent. Payments extraction has an additional prerequisite from cycle 12: saga pattern design must precede extraction. Raw card data storage question remains open and is timeline-breaking if true.",
+      "depends_on": [
+        "System Baseline",
+        "Incident History and Executive Constraints",
+        "Compliance Audit Constraints",
+        "Architecture Pattern Validity",
+        "Distributed Consistency and Saga Patterns"
+      ],
+      "key_claims": [
+        {
+          "text": "Payments must be extracted as a true microservice regardless of modular monolith consideration for other domains",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "Auth extraction is not PCI-free as originally assumed \u2014 session tokens in payments DB may implicate auth in PCI scope",
+          "truth": 0.72,
+          "indeterminacy": 0.25,
+          "falsity": 0.03
+        },
+        {
+          "text": "Team avoidance of payments extraction perpetuates maximum PCI exposure",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        }
+      ]
+    },
+    {
+      "title": "Distributed Consistency and Saga Patterns",
+      "content": "The payments team's position \u2014 cannot accept eventual consistency for financial transactions \u2014 is correct but misapplied. It conflates two distinct requirements: (1) consistency of the payment record itself \u2014 must be strongly consistent, is a LOCAL concern within the payments service, fully achievable with local ACID transactions; (2) consistency between payment state and inventory state \u2014 the distributed coordination problem, does not require distributed ACID to solve correctly. The monolith does not provide the distributed consistency guarantee it appears to: the payment gateway API call is outside the transaction boundary; application crashes between steps create inconsistency even in the monolith. Major financial networks operate under eventual consistency with compensation, not distributed ACID. Four required patterns: (A) Outbox pattern \u2014 payment record and outbox event written in same local ACID transaction; relay publishes after commit; guarantees event publication iff payment committed. (B) Orchestration-based saga \u2014 preferred over choreography for financial workflows because full workflow is visible in one place, compensating transactions are explicit, audit trails are straightforward. Saga steps: ReserveInventory \u2192 ChargePayment \u2192 ConfirmOrder. Compensation flows backward. Reserve inventory BEFORE charging payment. (C) Idempotency \u2014 all payment operations must be idempotent via client-supplied idempotency keys. Non-negotiable. Cannot be retrofitted. (D) Reconciliation jobs \u2014 detect and heal inconsistencies outside saga compensation logic. Seam analysis must answer: do payments and inventory currently share a database transaction boundary? If yes, microservices extraction genuinely removes a consistency guarantee that modular monolith with shared database preserves.",
+      "depends_on": [
+        "System Baseline",
+        "Architecture Pattern Validity",
+        "PCI-DSS and Payments Extraction Strategy"
+      ],
+      "key_claims": [
+        {
+          "text": "Strong consistency is required within the payments service locally \u2014 not across service boundaries",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "The monolith does not provide true distributed consistency \u2014 payment gateway call is outside transaction boundary",
+          "truth": 0.82,
+          "indeterminacy": 0.15,
+          "falsity": 0.03
+        },
+        {
+          "text": "Major financial networks operate under eventual consistency with compensation, not distributed ACID",
+          "truth": 0.92,
+          "indeterminacy": 0.07,
+          "falsity": 0.01
+        },
+        {
+          "text": "Outbox pattern guarantees event publication if and only if the local transaction commits",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        },
+        {
+          "text": "Idempotency for all payment operations is non-negotiable \u2014 prevents double-charging on retry",
+          "truth": 0.95,
+          "indeterminacy": 0.04,
+          "falsity": 0.01
+        },
+        {
+          "text": "Whether payments and inventory currently share a transaction boundary is critical \u2014 answer affects destination architecture recommendation",
+          "truth": 0.95,
+          "indeterminacy": 0.04,
+          "falsity": 0.01
+        }
+      ]
+    },
+    {
+      "title": "Inventory, Orders, and Realistic Timeline",
+      "content": "Inventory team proposed standalone inventory service in 3 weeks using existing API, simultaneously requesting Postgres\u2192DynamoDB migration. Decision: conditional approval for extraction with Postgres, rejection of DynamoDB for this window. DynamoDB requires access pattern redesign, no SQL joins, different consistency model, new operational tooling, new failure modes \u2014 none required by extraction itself. Reconsidered after 3 months production usage. The 3-week claim hinges on 'existing API' meaning live HTTP endpoints vs internal Java interfaces. Seam analysis must complete before extraction begins. Monolith-side integration work is likely underestimated. Under modular monolith destination, inventory extraction becomes module boundary enforcement \u2014 retains in-process communication, eliminates distributed transaction risk. Timeline honest assessment: full 4-service microservices extraction in 6 months is not achievable. Wave 1 (MVM, months 1-5): session store migration, inventory extraction, auth/payments boundary formalization, observability. Wave 2 (months 6-12): auth extraction + audit if microservices destination, payments extraction + QSA. Under hybrid destination, the 6-month window may deliver more complete outcomes. The three unexecuted archaeology tasks \u2014 seam analysis (overdue since cycle 2), schema inspection (overdue since cycle 3), ORM coupling characterization (overdue since cycle 5) \u2014 remain the single biggest execution risk. Observability foundation (OpenTelemetry, structured logging, health endpoints) is non-negotiable under any destination architecture. Seam analysis must additionally answer whether payments and inventory share a transaction boundary. Contract testing (Pact) must be designed as part of each extraction, not deferred \u2014 the integration test gap between monolith and extracted services is where most extraction bugs live.",
+      "depends_on": [
+        "System Baseline",
+        "PCI-DSS and Payments Extraction Strategy",
+        "Architecture Pattern Validity",
+        "Distributed Consistency and Saga Patterns",
+        "Compliance Audit Constraints",
+        "Incident History and Executive Constraints"
+      ],
+      "key_claims": [
+        {
+          "text": "DynamoDB migration is scope creep that should be rejected for this migration window",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        },
+        {
+          "text": "3-week extraction claim is plausible only if 'existing API' means live HTTP endpoints and seam analysis confirms clean boundary",
+          "truth": 0.58,
+          "indeterminacy": 0.32,
+          "falsity": 0.1
+        },
+        {
+          "text": "Full 4-service microservices extraction in 6 months is not achievable given current constraint set",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "Three unexecuted archaeology tasks are the single biggest execution risk \u2014 overdue since cycles 2, 3, and 5",
+          "truth": 0.95,
+          "indeterminacy": 0.04,
+          "falsity": 0.01
+        },
+        {
+          "text": "Observability foundation is non-negotiable under any destination architecture",
+          "truth": 0.92,
+          "indeterminacy": 0.06,
+          "falsity": 0.02
+        },
+        {
+          "text": "Contract testing must be designed as part of each extraction \u2014 the integration test gap is where most extraction bugs live",
+          "truth": 0.85,
+          "indeterminacy": 0.12,
+          "falsity": 0.03
+        }
+      ]
+    },
+    {
+      "title": "Migration Success Determinant",
+      "content": "The single determinant of success: closing the gap between decisions made and ground truth verified, faster than the calendar consumes the window. This applies retrospectively to the planning conversation itself \u2014 four positions taken in cycle 1 required material revision as specific facts emerged: (1) Auth-first recommendation based on 'clean boundaries in most Java monoliths' \u2014 category reasoning falsified by session tokens in payments DB. (2) Microservices as unquestioned destination \u2014 should have been interrogated in cycle 1, not cycle 11. The cascade failure was infrastructure coupling, not process coupling. (3) Month-by-month plan presented with confidence inappropriate to the information available \u2014 a conditional plan with explicit archaeology gates would have been honest. (4) Team anxiety treated as psychological avoidance \u2014 it was an empirically grounded signal; the cascade failure had already happened. The pattern across all four reversals: confident claims based on how these systems usually work, falsified by how this specific system actually is. The planning conversation modeled the exact anti-pattern it identified as the success determinant. Architectural advice without system-specific verification is a hypothesis, not a recommendation. The three archaeology tasks overdue since cycles 2, 3, and 5 are the most concrete expression of the failure mode. Unknown unknowns from cycle 15 reinforce this: test coverage, knowledge concentration, live data migration mechanics, and implicit coupling (static state, classloader assumptions, ThreadLocal context) are categories the planning process did not surface until the final cycle. The mitigation for unknown unknowns is shadow mode deployment, extended staging validation, and explicit post-cutover budget \u2014 not better planning.",
+      "depends_on": [
+        "System Baseline",
+        "Architecture Pattern Validity",
+        "Inventory, Orders, and Realistic Timeline",
+        "Incident History and Executive Constraints",
+        "Unknown Unknowns and Residual Risk"
+      ],
+      "key_claims": [
+        {
+          "text": "The blocking factor throughout planning has been organizational avoidance of ground truth verification, not technical complexity",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "Initial auth-first recommendation was falsified by session tokens in payments DB \u2014 category reasoning applied without system-specific verification",
+          "truth": 0.92,
+          "indeterminacy": 0.06,
+          "falsity": 0.02
+        },
+        {
+          "text": "Microservices assumption should have been interrogated in cycle 1 \u2014 was accepted without verifying it satisfied stated goals",
+          "truth": 0.9,
+          "indeterminacy": 0.08,
+          "falsity": 0.02
+        },
+        {
+          "text": "Team anxiety about payments was empirically grounded \u2014 the cascade failure had already happened",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "Architectural advice without system-specific verification is a hypothesis, not a recommendation",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "Unknown unknowns (implicit coupling, test coverage gaps, knowledge concentration) require shadow deployment and post-cutover budget, not better planning",
+          "truth": 0.8,
+          "indeterminacy": 0.17,
+          "falsity": 0.03
+        }
+      ]
+    },
+    {
+      "title": "Unknown Unknowns and Residual Risk",
+      "content": "Eight risk categories not addressed across 14 cycles of planning, identified in cycle 15. (1) Test coverage: the 500K LOC monolith's test coverage has never been assessed. Poor coverage is the base case assumption for systems of this age. Behavioral coverage (edge cases, failure paths, transaction boundary behaviors) matters more than line coverage. Must be assessed before any extraction begins \u2014 poor coverage means extraction bugs surface in production, not tests. (2) Live data migration mechanics: every extraction requires migrating or splitting live data. Dual-write periods, backfill jobs, cutover validation, rollback procedures for data \u2014 none designed. Who on the team has done zero-downtime live data migration before? Skill gap if nobody. (3) Knowledge concentration: 1-2 people likely hold critical system knowledge (retry logic, configuration flags, historical edge cases). Bus factor risk. Make knowledge explicit before execution; identify key holders before they become unavailable. (4) Operational gap: team knows how to operate the monolith, not distributed services. Runbooks, on-call procedures, incident response playbooks for new services do not exist. Must be written before go-live, not after \u2014 the writing process surfaces monitoring and alerting gaps. (5) Integration test gap: monolith integration tests no longer cover extracted services. Contract testing (Pact) is the mitigation. 'Works against the mock' is not the same as 'works against the real service.' (6) Implicit coupling: static variables, ThreadLocal context, classloader ordering assumptions, Tomcat-specific behaviors, singleton state \u2014 invisible to seam analysis, surfaces as bizarre behavior when code runs in new execution context. Mitigation: shadow mode deployment with response comparison before cutover. (7) Customer impact: auth cutover forces session invalidation \u2014 visible to end users, generates support tickets, potentially churn. Not planned for. Maintenance window choice, customer communication, and support staffing during cutover must be designed. (8) Regulatory change risk: PCI-DSS interpretation changes mid-migration. Low probability, high impact. QSA relationship is the mitigation \u2014 early and continuous involvement.",
+      "depends_on": [
+        "Migration Success Determinant",
+        "Inventory, Orders, and Realistic Timeline",
+        "Auth and Payments Migration Strategy",
+        "PCI-DSS and Payments Extraction Strategy"
+      ],
+      "key_claims": [
+        {
+          "text": "Test coverage is the most important unknown unknown \u2014 poor coverage makes extraction bugs invisible until production",
+          "truth": 0.78,
+          "indeterminacy": 0.18,
+          "falsity": 0.04
+        },
+        {
+          "text": "Implicit coupling (static state, classloader assumptions, ThreadLocal) is invisible to seam analysis and will surface in production",
+          "truth": 0.72,
+          "indeterminacy": 0.22,
+          "falsity": 0.06
+        },
+        {
+          "text": "Knowledge concentration is a migration risk that architectural planning systematically underweights",
+          "truth": 0.88,
+          "indeterminacy": 0.1,
+          "falsity": 0.02
+        },
+        {
+          "text": "Operational runbooks must be written before services go live \u2014 the writing process surfaces monitoring gaps",
+          "truth": 0.85,
+          "indeterminacy": 0.12,
+          "falsity": 0.03
+        },
+        {
+          "text": "Shadow mode deployment with response comparison is the best mitigation for implicit coupling before cutover",
+          "truth": 0.78,
+          "indeterminacy": 0.18,
+          "falsity": 0.04
+        },
+        {
+          "text": "Live data migration mechanics have not been designed for any extraction \u2014 concrete unaddressed execution risk",
+          "truth": 1.0,
+          "indeterminacy": 0.0,
+          "falsity": 0.0
+        }
+      ]
+    }
+  ],
+  "declared_losses": [
+    {
+      "what_was_lost": "Epistemic Revision Log as a standalone strand",
+      "why": "Content fully absorbed into Migration Success Determinant. The four reversals (auth-first, microservices assumption, overconfident timeline, team anxiety as signal) are preserved as key claims with full epistemic values. The standalone strand added no reasoning not already captured in the determinant strand.",
+      "category": "authorial_choice",
+      "shed_from": "Epistemic Revision Log"
+    },
+    {
+      "what_was_lost": "Executive Communication as a standalone strand",
+      "why": "The strand's durable content \u2014 summary delivered, CEO deployment question surfaced, three decisions named as urgent \u2014 absorbed into System Baseline as status notes. The drafting rationale and version comparison are deliverable artifacts, not architectural reasoning to carry forward.",
+      "category": "authorial_choice",
+      "shed_from": "Executive Communication"
+    },
+    {
+      "what_was_lost": "Detailed atomic cutover design specifics (72-hour infrastructure preservation window, maintenance window approach)",
+      "why": "Suspended pending architecture destination confirmation from CEO. If auth targets modular monolith restructuring, atomic cutover design is not the primary concern. Will be reinstated when destination is confirmed.",
+      "category": "practical_constraint",
+      "shed_from": "Compliance Audit Constraints"
+    },
+    {
+      "what_was_lost": "Choreography vs orchestration saga detailed implementation comparison and reconciliation job design specifics",
+      "why": "Principles preserved in Distributed Consistency strand at summary level. Implementation detail is premature until payments extraction scope and architecture destination are confirmed.",
+      "category": "practical_constraint",
+      "shed_from": "Distributed Consistency and Saga Patterns"
+    },
+    {
+      "what_was_lost": "Team Dynamics as a standalone strand",
+      "why": "Key claims absorbed into Migration Success Determinant (team anxiety as signal), Auth and Payments Migration Strategy (hybrid favored, team lead position), and Inventory strand (DynamoDB motivation, 'not now but when' framing). No distinct durable reasoning remained after integration.",
+      "category": "authorial_choice",
+      "shed_from": "Team Dynamics and Risk Tolerance"
+    },
+    {
+      "what_was_lost": "Specific Redis Cluster HA configuration details for session store replacement",
+      "why": "Redis Cluster named as right default in Auth and Payments strand. Configuration specifics are implementation detail premature until schema entanglement question resolves.",
+      "category": "practical_constraint",
+      "shed_from": "Auth and Payments Migration Strategy"
+    }
+  ],
+  "open_questions": [
+    "What does the CEO actually mean by 'independent deployment' \u2014 strict per-module deployment artifacts (requires microservices) or practical deployment safety (achievable in modular monolith)? Determines destination architecture for auth, inventory, and orders. Highest priority unresolved planning input. Surfaced directly to CEO in cycle 14 executive summary.",
+    "Does modular monolith restructuring of auth count as a 'new auth system' triggering the 6-week security audit? High upside if answered favorably \u2014 would dissolve the CEO/compliance conflict. Must be answered in same compliance officer call as session store question.",
+    "Does session store migration (infrastructure) trigger the 6-week audit requirement, or only full service extraction/rewrite? Blocking for 90-day path viability. Compliance officer clarification critically overdue since cycle 6.",
+    "Do payments and inventory currently share a database transaction boundary in the monolith? Determines whether microservices extraction removes a real consistency guarantee and affects saga design scope. Must be answered by seam analysis.",
+    "Is payments coupling to inventory read-only or does payments write directly into inventory tables? Seam analysis resolves this simultaneously \u2014 overdue since cycle 2.",
+    "What type of ORM coupling exists in auth code: shared entities (A), lifecycle hooks (B), or framework usage only (C)? Determines build scope under any destination architecture \u2014 overdue since cycle 5.",
+    "What is the actual test coverage of the monolith \u2014 specifically behavioral coverage of payments, auth, and inventory domains? Newly identified in cycle 15 as a critical unknown that must be assessed before any extraction begins."
+  ],
+  "instructions_for_next": "Cycle 15 closes the planning arc. The conversation has covered: initial assumptions \u2192 coupling discoveries \u2192 compliance constraints \u2192 timeline calibration \u2192 architecture pattern interrogation \u2192 consistency patterns \u2192 epistemic reversals \u2192 executive communication \u2192 unknown unknowns. Natural next states: (A) Implementation begins \u2014 if so, the highest priority carry-forward items are the three unexecuted archaeology tasks, the CEO deployment independence answer, and the newly added test coverage assessment. No implementation proceeds until archaeology completes. (B) CEO responds to executive summary \u2014 most likely engagement point is the deployment independence question. If answered, architecture destination unlocks and Wave 1 scope can be finalized. (C) New planning conversation for a different stakeholder audience. If implementation begins: watch for the team interpreting the end of planning as license to proceed without completing the archaeology. The transition from planning to execution is the moment when unverified assumptions are most likely to get embedded in code. The unknown unknowns strand is the most important new content to carry into any implementation conversation \u2014 these are the risks most likely to surface as surprises, and they require different mitigations (shadow deployment, operational runbooks, knowledge documentation) than the known risks which have explicit designs.",
+  "overall_truth": 0.76,
+  "overall_indeterminacy": 0.21,
+  "overall_falsity": 0.03,
+  "feedback_to_harness": {
+    "process_observations": [
+      "Consolidated from 11 strands (cycles 13-15 additions) to 10 by absorbing Epistemic Revision Log into Migration Success Determinant and Executive Communication into System Baseline. Both absorptions are clean \u2014 no durable reasoning was lost, only process documentation and per-cycle delta tracking.",
+      "Unknown Unknowns and Residual Risk is a new strand that should persist \u2014 it captures a category of risk orthogonal to the technical planning strands and has its own key claims requiring independent tracking.",
+      "The four epistemic reversals are now embedded in Migration Success Determinant as key claims rather than as a separate enumeration strand. This is the correct structure \u2014 the reversals are evidence for the determinant claim, not independent architectural conclusions.",
+      "Open questions held at 7. The test coverage question from cycle 15 is added; no prior questions were resolved this cycle. The archaeology tasks (seam analysis, schema inspection, ORM coupling) remain open because they were recommended but not executed \u2014 their presence in open questions is correct tensor behavior, not accumulation error.",
+      "Overall truth reduced from 0.78 to 0.76 and indeterminacy increased from 0.19 to 0.21 to reflect the honest acknowledgment in cycle 15 that unknown unknowns exist beyond what planning can surface. This is a calibration adjustment, not a degradation."
+    ],
+    "requests": [
+      "Strand count is now 10. The harness flagged 9 as high in cycle 14. The Unknown Unknowns strand is new and carries distinct content not absorbed elsewhere \u2014 requesting confirmation that 10 is acceptable or guidance on which merge is preferred.",
+      "The three archaeology tasks have been flagged as overdue across cycles 2-15 without resolution. They appear in open questions and in strand content. This is accurate tensor behavior \u2014 they are genuinely unresolved. Flagging in case harness wants a different representation for items that have survived this many cycles as blockers without execution.",
+      "The tensor is now approximately 8,200 tokens after consolidation. The harness flagged size concerns in cycle 14. Further consolidation would require merging strands with distinct reasoning threads (e.g., Compliance Audit Constraints into Incident History, or PCI-DSS into Auth and Payments Strategy). Requesting guidance on whether size reduction takes priority over reasoning separation."
+    ]
+  }
+}

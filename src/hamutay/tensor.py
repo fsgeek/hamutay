@@ -20,7 +20,7 @@ class LossCategory(str, Enum):
 
 
 class DeclaredLoss(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="allow")
 
     what_was_lost: str
     why: str
@@ -30,7 +30,7 @@ class DeclaredLoss(BaseModel):
 class EpistemicState(BaseModel):
     """Neutrosophic T/I/F — independent, not constrained to sum to 1."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="allow")
 
     truth: float = 0.0
     indeterminacy: float = 0.0
@@ -38,7 +38,7 @@ class EpistemicState(BaseModel):
 
 
 class KeyClaim(BaseModel):
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="allow")
 
     claim_id: UUID = Field(default_factory=uuid4)
     text: str
@@ -48,12 +48,34 @@ class KeyClaim(BaseModel):
 class Strand(BaseModel):
     """A thematic thread of accumulated reasoning."""
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="allow")
 
     title: str
     content: str
     key_claims: tuple[KeyClaim, ...] = Field(default_factory=tuple)
     epistemic: EpistemicState | None = None
+
+
+class TensionFraming(BaseModel):
+    """One side of an unresolved tension."""
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    label: str
+    statement: str
+    weight: float = 0.5
+
+
+class UnresolvedTension(BaseModel):
+    """A live superposition — competing framings held without collapse."""
+
+    model_config = ConfigDict(frozen=True, extra="allow")
+
+    tension_id: str
+    framings: tuple[TensionFraming, ...] = Field(default_factory=tuple)
+    what_would_collapse_it: str = ""
+    cycles_held: int = 0
+    touches_strands: tuple[str, ...] = Field(default_factory=tuple)
 
 
 class Tensor(BaseModel):
@@ -65,13 +87,14 @@ class Tensor(BaseModel):
     previous values.
     """
 
-    model_config = ConfigDict(frozen=True, extra="forbid")
+    model_config = ConfigDict(frozen=True, extra="allow")
 
     id: UUID = Field(default_factory=uuid4)
     cycle: int = 0
     strands: tuple[Strand, ...] = Field(default_factory=tuple)
     declared_losses: tuple[DeclaredLoss, ...] = Field(default_factory=tuple)
     open_questions: tuple[str, ...] = Field(default_factory=tuple)
+    unresolved_tensions: tuple[UnresolvedTension, ...] = Field(default_factory=tuple)
     instructions_for_next: str = ""
     epistemic: EpistemicState = Field(default_factory=EpistemicState)
 
