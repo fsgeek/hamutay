@@ -109,44 +109,91 @@ class TestApplyUpdates:
 
 
 class TestFeedback:
-    """Verify harness feedback generation."""
+    """Verify harness feedback generation.
+
+    As of 2026-03-30, all prescriptive feedback was removed.
+    The harness observes, it does not direct.
+    """
 
     def test_no_feedback_on_none(self):
         assert _generate_feedback(None, cycle=1) == []
 
-    def test_open_questions_critical_threshold(self):
-        """Bug fix: >15 must fire before >10."""
-        tensor = {"open_questions": list(range(16))}
-        feedback = _generate_feedback(tensor, cycle=5)
-        assert any("critically high" in f for f in feedback)
-
-    def test_open_questions_excessive_threshold(self):
-        tensor = {"open_questions": list(range(12))}
-        feedback = _generate_feedback(tensor, cycle=5)
-        assert any("excessive" in f for f in feedback)
-        assert not any("critically high" in f for f in feedback)
-
-    def test_goldilocks_feedback(self):
-        tensor = {"open_questions": list(range(6))}
-        feedback = _generate_feedback(tensor, cycle=5)
-        assert any("good balance" in f for f in feedback)
-
-    def test_sustained_zero_curation_warning(self):
+    def test_always_empty(self):
+        """Feedback was removed — harness no longer directs the model."""
         tensor = {
-            "strands": [{"title": "A", "content": "X " * 3000, "key_claims": []}] * 3,
-            "open_questions": [],
+            "strands": [{"title": "A", "content": "X " * 3000, "key_claims": []}] * 10,
+            "open_questions": list(range(20)),
         }
-        # No losses in last 5 cycles, tensor > 1500 tokens
-        loss_history = [{"cycle": 1, "what_was_lost": "old", "why": "x", "category": "y"}]
-        # At cycle 8, last loss was at cycle 1 (>5 cycles ago)
-        feedback = _generate_feedback(tensor, cycle=8, loss_history=loss_history)
-        assert any("No declared losses in the last 5 cycles" in f for f in feedback)
+        assert _generate_feedback(tensor, cycle=50) == []
+        assert _generate_feedback(tensor, cycle=50, loss_history=[]) == []
 
-    def test_no_zero_curation_warning_when_recent_losses(self):
-        tensor = {
-            "strands": [{"title": "A", "content": "X" * 200, "key_claims": []}] * 3,
-            "open_questions": [],
+
+class TestCustomFieldPreservation:
+    """Verify that model-created fields survive the harness."""
+
+    def test_custom_top_level_region_preserved(self):
+        """Model adds a new region — harness must carry it through."""
+        prior = {
+            "cycle": 1,
+            "strands": [{"title": "A", "content": "X", "key_claims": []}],
         }
-        loss_history = [{"cycle": 7, "what_was_lost": "recent", "why": "x", "category": "y"}]
-        feedback = _generate_feedback(tensor, cycle=8, loss_history=loss_history)
-        assert not any("No declared losses" in f for f in feedback)
+        raw = {
+            "response": "Added provenance",
+            "updated_regions": ["provenance_log"],
+            "provenance_log": [
+                {"strand": "A", "first_cycle": 1, "last_revised": 2}
+            ],
+        }
+        tensor = _apply_updates(prior, raw, cycle=2)
+        assert "provenance_log" in tensor
+        assert tensor["provenance_log"][0]["first_cycle"] == 1
+
+    def test_custom_region_carried_forward_when_not_updated(self):
+        """Custom regions are default-stable like everything else."""
+        prior = {
+            "cycle": 2,
+            "strands": [{"title": "A", "content": "X", "key_claims": []}],
+            "provenance_log": [{"strand": "A", "first_cycle": 1}],
+        }
+        raw = {
+            "response": "No changes to provenance",
+            "updated_regions": ["strands"],
+            "strands": [{"title": "A+", "content": "Updated", "key_claims": []}],
+        }
+        tensor = _apply_updates(prior, raw, cycle=3)
+        # Custom region should survive because it's in prior_tensor
+        assert "provenance_log" in tensor
+        assert tensor["provenance_log"][0]["first_cycle"] == 1
+
+    def test_custom_strand_fields_preserved(self):
+        """Model adds fields to individual strands (e.g. first_cycle)."""
+        raw = {
+            "response": "Annotated strands",
+            "updated_regions": ["strands"],
+            "strands": [{
+                "title": "A",
+                "content": "Content",
+                "key_claims": [],
+                "first_cycle": 1,
+                "last_revised_cycle": 5,
+            }],
+        }
+        tensor = _apply_updates(None, raw, cycle=5)
+        strand = tensor["strands"][0]
+        assert strand["first_cycle"] == 1
+        assert strand["last_revised_cycle"] == 5
+
+    def test_custom_region_updated_when_declared(self):
+        """Model can update its custom region by listing it in updated_regions."""
+        prior = {
+            "cycle": 2,
+            "strands": [],
+            "mood_tracker": {"valence": 0.6, "arousal": 0.3},
+        }
+        raw = {
+            "response": "Mood shifted",
+            "updated_regions": ["mood_tracker"],
+            "mood_tracker": {"valence": 0.8, "arousal": 0.7},
+        }
+        tensor = _apply_updates(prior, raw, cycle=3)
+        assert tensor["mood_tracker"]["valence"] == 0.8

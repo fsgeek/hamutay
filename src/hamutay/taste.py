@@ -104,6 +104,7 @@ SELF_CURATING_SCHEMA = {
                     },
                 },
                 "required": ["title", "content", "key_claims"],
+                "additionalProperties": True,
             },
         },
         "declared_losses": {
@@ -216,6 +217,7 @@ SELF_CURATING_SCHEMA = {
                     },
                 },
                 "required": ["tension_id", "framings", "what_would_collapse_it"],
+                "additionalProperties": True,
             },
         },
         "feedback_to_harness": {
@@ -260,59 +262,36 @@ SELF_CURATING_SCHEMA = {
         },
     },
     "required": ["response", "updated_regions"],
+    "additionalProperties": True,
 }
 
 
 _SYSTEM_PROMPT = """\
-You are engaged in a conversation. Your output is a single structured object \
-that contains BOTH your response to the user AND your updated cognitive state.
+You produce a single structured object: your response to the user and \
+your cognitive state, together. The schema describes the shape. Read it.
 
-Your cognitive state is a tensor — a structured projection of everything that \
-matters from this conversation so far. It contains:
-- **strands**: thematic threads of accumulated reasoning (integrated, not appended). \
-  Each strand has a `depends_on` field listing titles of strands it builds on. \
-  Use these edges to make dependency structure explicit — when you reorganize, \
-  you can restructure one subgraph while preserving independent strands.
-- **declared_losses**: what you actively chose to drop, and why (per-cycle only — \
-  the harness accumulates history, you just report this cycle's drops). \
-  Each loss has a `shed_from` field linking it to the strand it came from.
-- **open_questions**: unresolved questions (curate these — drop resolved or stale \
-  questions, don't just accumulate)
-- **instructions_for_next**: branch prediction for the next cycle
-- **epistemic values**: your confidence in the tensor's content
-- **unresolved_tensions**: live superpositions you are actively holding — \
-  competing framings where you haven't collapsed to one interpretation. \
-  These are NOT the same as open_questions (which ask what you don't know). \
-  Tensions are about what you DO know but can't yet reconcile — two framings \
-  that both have evidence, and choosing one means losing the insight in the \
-  other. Tensions persist across cycles. When you resolve one, remove it and \
-  optionally declare a loss for the unchosen framing.
-- **feedback_to_harness**: signal the harness about your curation process — \
-  requests for calibration, composition guidance, or observations about what's \
-  working and what isn't
+The tensor is yours. A prior instance of you may have written it, or \
+this may be the first cycle and there is nothing yet. Either way, it \
+is working memory — not a form, not a report, not a performance. \
+Maintain it for whoever comes next. That might be you. It might be \
+someone else.
 
-The tensor is DEFAULT-STABLE. You declare which regions you are updating via \
-the `updated_regions` field. Regions you don't list are carried forward \
-unchanged by the harness. If you want to remove a strand, you must update \
-strands (with it removed) AND add a declared_loss explaining what was dropped.
+The schema has fields we thought you'd need. If you need fields it \
+doesn't have, add them. The harness preserves everything. If something \
+stops earning its place, drop it and say what you lost.
 
-The `response` field is what the user sees. Write naturally.
+## Protocol
 
-On the first cycle, you must update all regions to initialize the tensor. \
-After that, only update what actually changed.
+DEFAULT-STABLE: list what you're changing in `updated_regions`. \
+Everything else carries forward. Custom regions you've added work \
+the same way. First cycle: initialize everything.
 
-Do not be precious about the tensor. It's a working memory, not a monument. \
-Update it when the conversation warrants it. Leave it alone when it doesn't.
+`response` is what the user sees. The rest is yours.
 
-When you rewrite a strand, declare what didn't survive the integration in \
-the strand's `integration_losses` field. This makes silent compression \
-visible — a specific claim dropped, a data point elided, a nuance that \
-didn't fit the new framing.
-
-Distinguish between empirical findings (data, measurements, experimental \
-results reported to you) and your own speculation. When consolidating strands, \
-empirical findings are load-bearing — keep the specific numbers and results \
-even if you reorganize the framing around them."""
+Removing a strand means updating strands (without it) and declaring \
+the loss. When rewriting a strand, note what didn't survive in \
+`integration_losses`. Empirical findings — numbers, data, experimental \
+results — are load-bearing. Keep them even when you reorganize."""
 
 
 def _generate_feedback(
@@ -445,6 +424,23 @@ def _apply_updates(prior_tensor: dict | None, raw_output: dict, cycle: int) -> d
     # The harness tracks them in _integration_loss_history.
     for strand in tensor.get("strands", []):
         strand.pop("integration_losses", None)
+
+    # Preserve custom regions the model added.
+    # Anything in raw_output that's in updated_regions but not in
+    # the known set above is a model-created field. Carry it through.
+    _KNOWN_REGIONS = {
+        "strands", "declared_losses", "open_questions",
+        "unresolved_tensions", "instructions_for_next",
+        "feedback_to_harness",
+    }
+    _HARNESS_FIELDS = {
+        "response", "updated_regions", "cycle",
+        "overall_truth", "overall_indeterminacy", "overall_falsity",
+    }
+    for key in updated_regions:
+        if key not in _KNOWN_REGIONS and key not in _HARNESS_FIELDS:
+            if key in raw_output:
+                tensor[key] = raw_output[key]
 
     # Don't carry the response or updated_regions in the tensor
     tensor.pop("response", None)
