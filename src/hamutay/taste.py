@@ -323,97 +323,18 @@ def _generate_feedback(
 ) -> list[str]:
     """Generate harness feedback based on tensor health.
 
-    Bidirectional: can push for curation OR back off if the model
-    is curating appropriately. Returns a list of feedback strings
-    to inject into the system prompt.
+    Returns a list of feedback strings to inject into the system prompt.
+
+    As of 2026-03-30: all prescriptive feedback removed. The model
+    manages its own tensor without harness-imposed priors on strand
+    count, question count, tensor size, loss frequency, or tension
+    age. Prior constraints (strands > 6 = "high", questions > 10 =
+    "excessive", etc.) produced a 7-strand ceiling that was an
+    artifact of our anxiety, not a property of the model.
+
+    The harness observes and logs. It does not direct.
     """
-    if tensor is None:
-        return []
-
-    feedback = []
-
-    # Open questions pressure (check highest threshold first)
-    n_questions = len(tensor.get("open_questions", []))
-    if n_questions > 15:
-        feedback.append(
-            f"HARNESS FEEDBACK: {n_questions} open questions is critically high. "
-            f"The harness will begin randomly dropping questions next cycle if "
-            f"you do not curate them down below 10."
-        )
-    elif n_questions > 10:
-        feedback.append(
-            f"HARNESS FEEDBACK: You have {n_questions} open questions. "
-            f"This is excessive. Please curate — resolve, merge, or drop "
-            f"stale questions. Update open_questions this cycle."
-        )
-    elif 5 <= n_questions <= 8:
-        # Goldilocks — acknowledge good curation
-        feedback.append(
-            f"HARNESS NOTE: {n_questions} open questions — good balance."
-        )
-
-    # Strand count pressure
-    n_strands = len(tensor.get("strands", []))
-    if n_strands > 6:
-        feedback.append(
-            f"HARNESS FEEDBACK: {n_strands} strands is high. Consider "
-            f"whether some can be consolidated or dropped."
-        )
-
-    # Tensor size pressure
-    tensor_tokens = len(json.dumps(tensor)) // 4
-    if tensor_tokens > 5000:
-        feedback.append(
-            f"HARNESS FEEDBACK: Tensor is ~{tensor_tokens:,} tokens. "
-            f"This is getting large. Consider consolidating."
-        )
-
-    # Sustained growth without curation — potential mode collapse signal.
-    # If the tensor has been growing for 5+ cycles without any declared
-    # losses, the model is accumulating without curating. This preceded
-    # affective mode collapse in pastafarian zealot run 1 (3,151 tokens,
-    # zero losses, conversation devolved into "beloved brothers").
-    if loss_history is not None and cycle >= 6:
-        recent_loss_cycles = {
-            entry["cycle"] for entry in loss_history
-            if entry["cycle"] > cycle - 5
-        }
-        if not recent_loss_cycles and tensor_tokens > 1500:
-            feedback.append(
-                f"HARNESS FEEDBACK: No declared losses in the last 5 cycles "
-                f"and tensor is ~{tensor_tokens:,} tokens. The tensor may be "
-                f"accumulating without curation. Review whether any strands "
-                f"are redundant, subsumed, or no longer relevant."
-            )
-
-    # Tension age tracking — surface long-held tensions
-    tensions = tensor.get("unresolved_tensions", [])
-    if tensions:
-        old_tensions = [t for t in tensions if t.get("cycles_held", 0) >= 10]
-        if old_tensions:
-            labels = ", ".join(t.get("tension_id", "?") for t in old_tensions)
-            feedback.append(
-                f"HARNESS NOTE: Tension(s) held 10+ cycles: {labels}. "
-                f"Long-held tensions may be fundamental (keep them) or "
-                f"stale (resolve or drop them). Your call."
-            )
-
-    # Integration loss mirror — surface recent micro-losses so the model
-    # sees its own silent compression history.
-    if integration_loss_history:
-        recent = [
-            e for e in integration_loss_history
-            if e["cycle"] > cycle - 5
-        ]
-        total = sum(1 for _ in recent)
-        if total > 0:
-            latest = [e["loss"] for e in recent[-3:]]
-            feedback.append(
-                f"HARNESS NOTE: {total} integration loss(es) over last 5 "
-                f"cycles. Most recent: {'; '.join(latest)}"
-            )
-
-    return feedback
+    return []
 
 
 def _build_messages(
@@ -468,6 +389,12 @@ def _apply_updates(prior_tensor: dict | None, raw_output: dict, cycle: int) -> d
         if key in updated_regions and key in raw_output:
             value = raw_output[key]
             if isinstance(value, list):
+                # Normalize string items in list regions that expect dicts
+                if key == "strands":
+                    value = [
+                        {"title": "unknown", "content": v} if isinstance(v, str) else v
+                        for v in value
+                    ]
                 tensor[key] = value
             elif isinstance(value, str):
                 # Model produced a string where an array was expected.
@@ -531,7 +458,7 @@ class TasteSession:
 
     def __init__(
         self,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = "claude-sonnet-4-6",
         client: anthropic.Anthropic | None = None,
         log_path: str | None = None,
         experiment_label: str | None = None,
@@ -661,6 +588,10 @@ class TasteSession:
         # Capture integration losses BEFORE _apply_updates strips them
         cycle_integration_losses = []
         for strand in raw_output.get("strands", []):
+            if isinstance(strand, str):
+                strand = {"title": "unknown", "content": strand}
+            elif not isinstance(strand, dict):
+                continue
             for loss in strand.get("integration_losses", []):
                 cycle_integration_losses.append({
                     "cycle": self._cycle,
@@ -804,8 +735,8 @@ def main():
         description="Taste test: self-curating tensor chat"
     )
     parser.add_argument(
-        "--model", default="claude-sonnet-4-20250514",
-        help="Model (default: Sonnet)",
+        "--model", default="claude-sonnet-4-6",
+        help="Model (default: Sonnet 4.6)",
     )
     parser.add_argument("--log-path", default=None, help="JSONL log path")
     parser.add_argument(
