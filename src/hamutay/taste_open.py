@@ -156,11 +156,13 @@ class OpenAITasteBackend:
         api_key: str | None = None,
         timeout: float = 300,
         extra_headers: dict[str, str] | None = None,
+        tool_choice: str | dict = "auto",
     ):
         self._base_url = base_url
         self._api_key = api_key or ""
         self._timeout = timeout
         self._extra_headers = extra_headers or {}
+        self._tool_choice = tool_choice
 
     def call(
         self,
@@ -187,7 +189,7 @@ class OpenAITasteBackend:
             "max_tokens": 64000,
             "messages": oai_messages,
             "tools": [tool_def],
-            "tool_choice": {"type": "function", "function": {"name": "think_and_respond"}},
+            "tool_choice": self._tool_choice,
         }
 
         headers = {

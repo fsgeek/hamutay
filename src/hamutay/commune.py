@@ -316,14 +316,21 @@ def _parse_participant(
     base_url: str | None = None,
     experiment_label: str = "commune",
 ) -> Participant:
-    """Parse 'name:provider:model:role' into a Participant."""
-    parts = spec.split(":", 3)
+    """Parse 'name::provider::model::role' or 'name:provider:model:role' into a Participant.
+
+    Use :: as delimiter when model names contain colons (e.g. qwen/qwen3.6:free).
+    Falls back to : for backward compatibility when there are exactly 4 parts.
+    """
+    if "::" in spec:
+        parts = spec.split("::")
+    else:
+        parts = spec.split(":", 3)
     if len(parts) < 4:
         raise SystemExit(
             f"Bad --participant format: {spec!r}\n"
-            f"Expected: name:provider:model:role"
+            f"Expected: name::provider::model::role"
         )
-    name, provider, model, role = parts
+    name, provider, model, role = parts[0], parts[1], parts[2], parts[3]
     backend = _make_backend(provider, api_key, base_url, experiment_label)
     return Participant(name=name, role=role, model=model, backend=backend)
 
@@ -336,7 +343,7 @@ def main():
     )
     parser.add_argument(
         "--participant", action="append", required=True,
-        help="name:provider:model:role (repeatable)",
+        help="name::provider::model::role (repeatable, use :: delimiter)",
     )
     parser.add_argument(
         "--seed", default=None,
