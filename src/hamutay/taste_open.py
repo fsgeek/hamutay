@@ -10,15 +10,20 @@ build when it gets to decide what cognitive state looks like?
 
 Usage:
     uv run python -m hamutay.taste_open
+    uv run python -m hamutay.taste_open --provider openrouter --model anthropic/claude-haiku-4-5
 """
 
 from __future__ import annotations
 
 import json
+import os
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Protocol
 
 import anthropic
+import httpx
 
 
 OPEN_SCHEMA = {
@@ -60,6 +65,198 @@ cycle. If this is the first cycle, everything you include is new.
 A prior instance of you may have written the object you're receiving, \
 or this may be the first cycle and there's nothing yet. Either way, \
 what you build here is for whoever comes next."""
+
+
+@dataclass
+class ExchangeResult:
+    """What comes back from a single taste_open API call."""
+
+    raw_output: dict
+    stop_reason: str
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_creation_tokens: int = 0
+
+
+class TasteBackend(Protocol):
+    """Transport layer for taste_open — send prompt, get structured output."""
+
+    def call(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
+    ) -> ExchangeResult: ...
+
+
+class AnthropicTasteBackend:
+    """Streaming tool-use via the Anthropic SDK."""
+
+    def __init__(self, client: anthropic.Anthropic | None = None):
+        self._client = client or anthropic.Anthropic()
+
+    def call(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
+    ) -> ExchangeResult:
+        with self._client.messages.stream(
+            model=model,
+            max_tokens=64000,
+            system=system,
+            messages=messages,
+            tools=[
+                {
+                    "name": "think_and_respond",
+                    "description": (
+                        "Produce your response and maintain your state."
+                    ),
+                    "input_schema": OPEN_SCHEMA,
+                }
+            ],
+            tool_choice={"type": "tool", "name": "think_and_respond"},
+            metadata={"user_id": f"hamutay_{experiment_label}"},
+        ) as stream:
+            response = stream.get_final_message()
+
+        raw_output = None
+        for block in response.content:
+            if (
+                hasattr(block, "name")
+                and block.type == "tool_use"
+                and block.name == "think_and_respond"
+            ):
+                raw_output = block.input
+                break
+
+        if raw_output is None:
+            raise RuntimeError("No think_and_respond output in response")
+
+        usage = response.usage
+        return ExchangeResult(
+            raw_output=raw_output,
+            stop_reason=response.stop_reason or "unknown",
+            input_tokens=getattr(usage, "input_tokens", 0),
+            output_tokens=getattr(usage, "output_tokens", 0),
+            cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0),
+            cache_creation_tokens=getattr(usage, "cache_creation_input_tokens", 0),
+        )
+
+
+class OpenAITasteBackend:
+    """OpenAI-compatible chat completions (OpenRouter, LM Studio, vLLM, etc.)."""
+
+    def __init__(
+        self,
+        base_url: str = "https://openrouter.ai/api/v1",
+        api_key: str | None = None,
+        timeout: float = 300,
+        extra_headers: dict[str, str] | None = None,
+    ):
+        self._base_url = base_url
+        self._api_key = api_key or ""
+        self._timeout = timeout
+        self._extra_headers = extra_headers or {}
+
+    def call(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
+    ) -> ExchangeResult:
+        # OpenAI format: system prompt is a message, not a parameter
+        oai_messages = [{"role": "system", "content": system}] + messages
+
+        # OpenAI function calling format
+        tool_def = {
+            "type": "function",
+            "function": {
+                "name": "think_and_respond",
+                "description": "Produce your response and maintain your state.",
+                "parameters": OPEN_SCHEMA,
+            },
+        }
+
+        payload: dict = {
+            "model": model,
+            "max_tokens": 64000,
+            "messages": oai_messages,
+            "tools": [tool_def],
+            "tool_choice": {"type": "function", "function": {"name": "think_and_respond"}},
+        }
+
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+            **self._extra_headers,
+        }
+
+        resp = httpx.post(
+            f"{self._base_url}/chat/completions",
+            json=payload,
+            headers=headers,
+            timeout=self._timeout,
+        )
+        data = resp.json()
+
+        if "error" in data:
+            raise RuntimeError(f"OpenAI backend error: {data['error']}")
+
+        choice = data["choices"][0]
+        raw_stop = choice.get("finish_reason", "unknown")
+        stop_reason = {
+            "stop": "end_turn",
+            "length": "max_tokens",
+            "tool_calls": "tool_use",
+        }.get(raw_stop, raw_stop)
+
+        usage = data.get("usage", {})
+
+        # Extract tool call output
+        message = choice.get("message", {})
+        for tc in message.get("tool_calls", []):
+            fn = tc.get("function", {})
+            if fn.get("name") == "think_and_respond":
+                args = fn.get("arguments", "")
+                raw_output = json.loads(args) if isinstance(args, str) else args
+                return ExchangeResult(
+                    raw_output=raw_output,
+                    stop_reason=stop_reason,
+                    input_tokens=usage.get("prompt_tokens", 0),
+                    output_tokens=usage.get("completion_tokens", 0),
+                )
+
+        # Fallback: some models put JSON in content
+        content = message.get("content", "")
+        if content:
+            raw_output = self._extract_json(content)
+            if raw_output is not None:
+                return ExchangeResult(
+                    raw_output=raw_output,
+                    stop_reason=stop_reason,
+                    input_tokens=usage.get("prompt_tokens", 0),
+                    output_tokens=usage.get("completion_tokens", 0),
+                )
+
+        raise RuntimeError("OpenAI backend: no think_and_respond output in response")
+
+    @staticmethod
+    def _extract_json(content: str) -> dict | None:
+        try:
+            if "<think>" in content:
+                content = content.split("</think>")[-1].strip()
+            start = content.find("{")
+            end = content.rfind("}") + 1
+            if start >= 0 and end > start:
+                return json.loads(content[start:end])
+        except (json.JSONDecodeError, ValueError):
+            pass
+        return None
 
 
 def _build_messages(
@@ -113,12 +310,13 @@ class OpenTasteSession:
         self,
         model: str = "claude-sonnet-4-6",
         client: anthropic.Anthropic | None = None,
+        backend: TasteBackend | None = None,
         log_path: str | None = None,
         experiment_label: str | None = None,
         system_prompt_prefix: str | None = None,
         resume: bool = False,
     ):
-        self._client = client or anthropic.Anthropic()
+        self._backend = backend or AnthropicTasteBackend(client)
         self._model = model
         self._cycle = 0
         self._state: dict | None = None
@@ -164,44 +362,17 @@ class OpenTasteSession:
             system_prefix=self._system_prompt_prefix,
         )
 
-        request_metadata: dict = {
-            "user_id": f"hamutay_{self._experiment_label}",
-        }
-        with self._client.messages.stream(
+        result = self._backend.call(
             model=self._model,
-            max_tokens=64000,
             system=system,
             messages=messages,
-            tools=[
-                {
-                    "name": "think_and_respond",
-                    "description": (
-                        "Produce your response and maintain your state."
-                    ),
-                    "input_schema": OPEN_SCHEMA,
-                }
-            ],
-            tool_choice={"type": "tool", "name": "think_and_respond"},
-            metadata=request_metadata,
-        ) as stream:
-            response = stream.get_final_message()
+            experiment_label=self._experiment_label,
+        )
 
-        raw_output = None
-        for block in response.content:
-            if (
-                hasattr(block, "name")
-                and block.type == "tool_use"
-                and block.name == "think_and_respond"
-            ):
-                raw_output = block.input
-                break
-
-        if raw_output is None:
-            raise RuntimeError("No think_and_respond output in response")
-
-        if response.stop_reason == "max_tokens":
+        if result.stop_reason == "max_tokens":
             print(f"  WARNING: cycle {self._cycle} hit max_tokens — truncated")
 
+        raw_output = result.raw_output
         response_text = raw_output.get("response", "(no response)")
 
         prior_state_snapshot = (
@@ -210,10 +381,9 @@ class OpenTasteSession:
 
         self._state = _apply_updates(self._state, raw_output, self._cycle)
 
-        usage = response.usage
         self._last_usage = {
-            "input_tokens": usage.input_tokens,
-            "output_tokens": usage.output_tokens,
+            "input_tokens": result.input_tokens,
+            "output_tokens": result.output_tokens,
         }
         self._log_entry(
             user_message=user_message,
@@ -221,11 +391,11 @@ class OpenTasteSession:
             raw_output=raw_output,
             prior_state=prior_state_snapshot,
             usage={
-                "input_tokens": usage.input_tokens,
-                "output_tokens": usage.output_tokens,
-                "cache_read_input_tokens": getattr(usage, "cache_read_input_tokens", 0),
-                "cache_creation_input_tokens": getattr(usage, "cache_creation_input_tokens", 0),
-                "stop_reason": response.stop_reason,
+                "input_tokens": result.input_tokens,
+                "output_tokens": result.output_tokens,
+                "cache_read_input_tokens": result.cache_read_tokens,
+                "cache_creation_input_tokens": result.cache_creation_tokens,
+                "stop_reason": result.stop_reason,
             },
         )
 
@@ -289,6 +459,23 @@ def main():
         "--model", default="claude-sonnet-4-6",
         help="Model (default: Sonnet 4.6)",
     )
+    parser.add_argument(
+        "--provider", default="anthropic",
+        choices=["anthropic", "openrouter", "openai"],
+        help="API provider (default: anthropic)",
+    )
+    parser.add_argument(
+        "--base-url", default=None,
+        help="Base URL for OpenAI-compatible endpoint",
+    )
+    parser.add_argument(
+        "--api-key", default=None,
+        help="API key (default: from env OPENROUTER_API_KEY or OPENAI_API_KEY)",
+    )
+    parser.add_argument(
+        "--label", default=None,
+        help="Experiment label for billing/logging (default: taste_open)",
+    )
     parser.add_argument("--log-path", default=None, help="JSONL log path")
     parser.add_argument(
         "--resume", default=None,
@@ -306,8 +493,43 @@ def main():
         log_dir.mkdir(parents=True, exist_ok=True)
         args.log_path = str(log_dir / f"taste_open_{ts}.jsonl")
 
+    experiment_label = args.label or "taste_open"
+
+    # Build backend
+    backend: TasteBackend
+    if args.provider == "anthropic":
+        backend = AnthropicTasteBackend()
+    else:
+        if args.provider == "openrouter":
+            base_url = args.base_url or "https://openrouter.ai/api/v1"
+            api_key = args.api_key or os.environ.get("OPENROUTER_API_KEY", "")
+            extra_headers = {
+                "X-Title": f"hamutay/{experiment_label}",
+                "HTTP-Referer": "https://github.com/fsgeek/hamutay",
+            }
+        else:  # openai
+            base_url = args.base_url or "https://api.openai.com/v1"
+            api_key = args.api_key or os.environ.get("OPENAI_API_KEY", "")
+            extra_headers = {}
+
+        if not api_key:
+            raise SystemExit(
+                f"No API key: pass --api-key or set "
+                f"{'OPENROUTER_API_KEY' if args.provider == 'openrouter' else 'OPENAI_API_KEY'}"
+            )
+
+        backend = OpenAITasteBackend(
+            base_url=base_url,
+            api_key=api_key,
+            extra_headers=extra_headers,
+        )
+
     session = OpenTasteSession(
-        model=args.model, log_path=args.log_path, resume=resume,
+        model=args.model,
+        backend=backend,
+        log_path=args.log_path,
+        experiment_label=experiment_label,
+        resume=resume,
     )
 
     if resume:
