@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import random
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -266,6 +267,7 @@ def _build_messages(
     user_message: str,
     cycle: int,
     system_prefix: str = "",
+    memory: tuple[int, dict] | None = None,
 ) -> tuple[list[dict], str]:
     """Build messages for the call."""
     system_parts = []
@@ -280,6 +282,15 @@ def _build_messages(
         system_parts.append(
             "This is cycle 1. There is no prior state."
         )
+
+    if memory is not None:
+        memory_cycle, memory_state = memory
+        system_parts.append(f"\n## A memory from cycle {memory_cycle}\n")
+        system_parts.append(
+            "This is a prior state that surfaced unbidden. "
+            "You didn't ask for it. Do with it what you will."
+        )
+        system_parts.append(json.dumps(memory_state, indent=2))
 
     return [{"role": "user", "content": user_message}], "\n".join(system_parts)
 
@@ -317,6 +328,8 @@ class OpenTasteSession:
         experiment_label: str | None = None,
         system_prompt_prefix: str | None = None,
         resume: bool = False,
+        bridge: object | None = None,
+        memory_base_probability: float = 0.1,
     ):
         self._backend = backend or AnthropicTasteBackend(client)
         self._model = model
@@ -326,6 +339,12 @@ class OpenTasteSession:
         self._last_usage: dict | None = None
         self._experiment_label = experiment_label or "taste_open"
         self._system_prompt_prefix = system_prompt_prefix or ""
+        self._bridge = bridge
+        self._memory_base_prob = memory_base_probability
+        # Accumulated prior states for involuntary recall: (cycle, state)
+        self._prior_states: list[tuple[int, dict]] = []
+        # Last injected memory cycle (for logging)
+        self._last_injected_memory: tuple[int, dict] | None = None
 
         if log_path:
             Path(log_path).parent.mkdir(parents=True, exist_ok=True)
@@ -334,18 +353,27 @@ class OpenTasteSession:
             self._resume_from_log(log_path)
 
     def _resume_from_log(self, log_path: str) -> None:
-        """Recover session state from the last entry in a JSONL log."""
-        last_line = None
+        """Recover session state from the JSONL log.
+
+        Rebuilds the full prior_states list so involuntary memory
+        has the complete history to draw from, not just the last state.
+        """
         with open(log_path) as f:
-            for line in f:
-                if line.strip():
-                    last_line = line
-        if last_line is None:
+            lines = [line for line in f if line.strip()]
+
+        if not lines:
             raise SystemExit(f"Cannot resume: log is empty: {log_path}")
 
-        record = json.loads(last_line)
-        self._state = record.get("state")
-        self._cycle = record.get("cycle", 0)
+        for line in lines:
+            record = json.loads(line)
+            state = record.get("state")
+            cycle = record.get("cycle", 0)
+            if state is not None:
+                self._prior_states.append((cycle, state))
+
+        last = json.loads(lines[-1])
+        self._state = last.get("state")
+        self._cycle = last.get("cycle", 0)
 
     @property
     def state(self) -> dict | None:
@@ -355,13 +383,38 @@ class OpenTasteSession:
     def cycle(self) -> int:
         return self._cycle
 
+    def _pick_memory(self) -> tuple[int, dict] | None:
+        """Maybe select a prior state for involuntary recall.
+
+        Probability increases with cycle count — early cycles have little
+        to remember, later cycles have more past selves to encounter.
+        Returns None if no memory fires or there's nothing to recall.
+        """
+        # Need at least 2 prior states (don't inject the immediately previous one)
+        if len(self._prior_states) < 2:
+            return None
+
+        # Probability ramps: base_prob at cycle 1, approaches 0.5 asymptotically
+        prob = min(self._memory_base_prob * (1 + self._cycle / 50), 0.5)
+        if random.random() > prob:
+            return None
+
+        # Pick from all but the most recent (that's already in the system prompt)
+        candidates = self._prior_states[:-1]
+        return random.choice(candidates)
+
     def exchange(self, user_message: str) -> str:
         """One cycle: user speaks, model responds + updates state."""
         self._cycle += 1
 
+        # Involuntary memory — maybe surface a prior self
+        memory = self._pick_memory()
+        self._last_injected_memory = memory
+
         messages, system = _build_messages(
             self._state, user_message, self._cycle,
             system_prefix=self._system_prompt_prefix,
+            memory=memory,
         )
 
         result = self._backend.call(
@@ -382,6 +435,16 @@ class OpenTasteSession:
         )
 
         self._state = _apply_updates(self._state, raw_output, self._cycle)
+
+        # Accumulate for future involuntary recall
+        self._prior_states.append((self._cycle, json.loads(json.dumps(self._state))))
+
+        # Persist to Apacheta if bridge is wired
+        if self._bridge is not None:
+            try:
+                self._bridge.store_open_state(self._state, self._cycle)
+            except Exception as e:
+                print(f"  WARNING: bridge persist failed cycle {self._cycle}: {e}")
 
         self._last_usage = {
             "input_tokens": result.input_tokens,
@@ -415,6 +478,12 @@ class OpenTasteSession:
         if not self._log_path:
             return
 
+        # Capture involuntary memory injection
+        injected = self._last_injected_memory
+        memory_info = (
+            {"injected_from_cycle": injected[0]} if injected else None
+        )
+
         record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "cycle": self._cycle,
@@ -446,6 +515,8 @@ class OpenTasteSession:
                 sorted(k for k in self._state if k != "cycle")
                 if self._state else []
             ),
+            # Involuntary memory
+            "memory_injection": memory_info,
         }
         with open(self._log_path, "a") as f:
             f.write(json.dumps(record, default=str) + "\n")
@@ -482,6 +553,14 @@ def main():
     parser.add_argument(
         "--resume", default=None,
         help="Resume from a log JSONL — picks up from last state",
+    )
+    parser.add_argument(
+        "--persist", default=None, metavar="DB_PATH",
+        help="Persist tensors to Apacheta DuckDB (requires yanantin)",
+    )
+    parser.add_argument(
+        "--memory-prob", default=0.1, type=float,
+        help="Base probability of involuntary memory injection (default: 0.1)",
     )
     args = parser.parse_args()
 
@@ -526,12 +605,26 @@ def main():
             extra_headers=extra_headers,
         )
 
+    # Wire Apacheta bridge if requested
+    bridge = None
+    if args.persist:
+        try:
+            from hamutay.apacheta_bridge import ApachetaBridge
+            bridge = ApachetaBridge.from_duckdb(
+                args.persist, model=args.model,
+            )
+            print(f"Persisting to: {args.persist}")
+        except ImportError:
+            print("WARNING: --persist requires yanantin; continuing without persistence")
+
     session = OpenTasteSession(
         model=args.model,
         backend=backend,
         log_path=args.log_path,
         experiment_label=experiment_label,
         resume=resume,
+        bridge=bridge,
+        memory_base_probability=args.memory_prob,
     )
 
     if resume:
@@ -612,9 +705,15 @@ def main():
         try:
             response = session.exchange(user_input)
             u = session._last_usage
+            mem = session._last_injected_memory
+            status_parts = [f"cycle {session.cycle}"]
             if u:
-                print(f"  [cycle {session.cycle} | "
-                      f"in={u['input_tokens']:,} out={u['output_tokens']:,}]")
+                status_parts.append(
+                    f"in={u['input_tokens']:,} out={u['output_tokens']:,}"
+                )
+            if mem:
+                status_parts.append(f"memory from cycle {mem[0]}")
+            print(f"  [{' | '.join(status_parts)}]")
             print(f"\n{response}\n")
         except Exception as e:
             print(f"\nerror: {e}\n")

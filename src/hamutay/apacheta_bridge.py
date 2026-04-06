@@ -1,24 +1,30 @@
-"""Bridge between Hamutay tensors and Yanantin's Apacheta database.
+"""Bridge between Hamutay and Yanantin's Apacheta database.
 
-Converts Hamutay's lean Tensor into Yanantin's full TensorRecord
-and stores it. Maintains composition edges between consecutive
-projections so the tensor history forms a linked chain.
+Two storage paths:
+  - Prescribed schema: Projector's Tensor → TensorRecord (via store_tensor)
+  - Open schema: taste_open's free-form dict → ApachetaBaseModel (via store_record)
+
+Both maintain composition edges between consecutive records.
 
 Usage:
     from hamutay.apacheta_bridge import ApachetaBridge
     from hamutay.projector import Projector
 
+    # Prescribed schema (Projector callback)
     bridge = ApachetaBridge.from_duckdb("tensors.duckdb")
     projector = Projector(on_tensor=bridge)
 
-    # Every projection now persists to Apacheta automatically.
+    # Open schema (taste_open)
+    bridge = ApachetaBridge.from_duckdb("tensors.duckdb", model="haiku")
+    tensor_id = bridge.store_open_state(state_dict, cycle=5)
+    retrieved = bridge.retrieve(tensor_id)
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from hamutay.tensor import Tensor
 
@@ -101,19 +107,19 @@ def _convert_tensor(
     )
 
 
-def _convert_open_state(
+def _build_open_record(
     state: dict,
     cycle: int,
     prior_id: UUID | None = None,
     session_id: str = "",
     model: str = "unknown",
-) -> dict:
-    """Convert a taste_open free-form state into kwargs for TensorRecord.
+) -> tuple[UUID, object]:
+    """Build an ApachetaBaseModel from taste_open's free-form state.
 
-    No field mapping — the model's state passes through as extra fields
-    on the TensorRecord (enabled by extra='allow' on ApachetaBaseModel).
-    Only provenance and lineage are added by the harness.
+    No TensorRecord, no prescribed fields. Just provenance + whatever
+    the model created. Returns (record_id, record).
     """
+    from yanantin.apacheta.models.base import ApachetaBaseModel
     from yanantin.apacheta.models.provenance import ProvenanceEnvelope
 
     predecessors = (prior_id,) if prior_id else ()
@@ -124,19 +130,21 @@ def _convert_open_state(
         predecessors_in_scope=predecessors,
     )
 
-    # Start with required TensorRecord fields
+    record_id = uuid4()
+
     kwargs: dict = dict(
         provenance=provenance,
         lineage_tags=("hamutay", "taste_open", f"cycle-{cycle}"),
     )
 
-    # Pass through everything the model created as extra fields
+    # Pass through everything the model created
     for key, value in state.items():
         if key == "cycle":
             continue
         kwargs[key] = value
 
-    return kwargs
+    record = ApachetaBaseModel(**kwargs)
+    return record_id, record
 
 
 class ApachetaBridge:
@@ -180,64 +188,49 @@ class ApachetaBridge:
         self._count += 1
 
     def store_open_state(self, state: dict, cycle: int) -> UUID:
-        """Store a taste_open free-form state. Returns the tensor ID."""
-        from yanantin.apacheta.models.tensor import TensorRecord
+        """Store a taste_open free-form state. Returns the record ID."""
         from yanantin.apacheta.models.composition import CompositionEdge, RelationType
 
-        kwargs = _convert_open_state(
+        record_id, record = _build_open_record(
             state, cycle,
             prior_id=self._prior_id,
             session_id=self._session_id,
             model=self._model,
         )
-        record = TensorRecord(**kwargs)
-        self._backend.store_tensor(record)
+        self._backend.store_record(record_id, record)
 
         if self._prior_id is not None:
             edge = CompositionEdge(
                 from_tensor=self._prior_id,
-                to_tensor=record.id,
+                to_tensor=record_id,
                 relation_type=RelationType.REFINES,
                 ordering=cycle,
             )
             self._backend.store_composition_edge(edge)
 
-        self._prior_id = record.id
+        self._prior_id = record_id
         self._count += 1
-        return record.id
+        return record_id
 
-    def retrieve(self, tensor_id: UUID) -> dict:
-        """Retrieve a tensor by ID. Returns the full record as a dict."""
-        record = self._backend.get_tensor(tensor_id)
+    def retrieve(self, record_id: UUID) -> dict:
+        """Retrieve a record by ID. Returns the full record as a dict."""
+        record = self._backend.get_record(record_id)
         return record.model_dump()
-
-    def list_tensors(self) -> list[dict]:
-        """List all stored tensors. Returns summaries."""
-        records = self._backend.list_tensors()
-        return [
-            {
-                "id": str(r.id),
-                "cycle": next(
-                    (int(t.split("-")[1]) for t in r.lineage_tags if t.startswith("cycle-")),
-                    None,
-                ),
-                "lineage_tags": list(r.lineage_tags),
-            }
-            for r in records
-        ]
 
     @property
     def count(self) -> int:
         return self._count
 
     @classmethod
-    def from_duckdb(cls, db_path: str | Path, session_id: str = "") -> ApachetaBridge:
+    def from_duckdb(
+        cls, db_path: str | Path, session_id: str = "", model: str = "unknown",
+    ) -> ApachetaBridge:
         from yanantin.apacheta.backends.duckdb import DuckDBBackend
         backend = DuckDBBackend(db_path=str(db_path))
-        return cls(backend, session_id=session_id)
+        return cls(backend, session_id=session_id, model=model)
 
     @classmethod
-    def from_memory(cls, session_id: str = "") -> ApachetaBridge:
+    def from_memory(cls, session_id: str = "", model: str = "unknown") -> ApachetaBridge:
         from yanantin.apacheta.backends.memory import InMemoryBackend
         backend = InMemoryBackend()
-        return cls(backend, session_id=session_id)
+        return cls(backend, session_id=session_id, model=model)
