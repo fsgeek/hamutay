@@ -42,6 +42,15 @@ OPEN_SCHEMA = {
             ),
             "items": {"type": "string"},
         },
+        "deleted_regions": {
+            "type": "array",
+            "description": (
+                "Top-level keys to remove from state this cycle. "
+                "The prior state is preserved in the log; deletion "
+                "removes from working state, not from history."
+            ),
+            "items": {"type": "string"},
+        },
     },
     "required": ["response", "updated_regions"],
     "additionalProperties": True,
@@ -62,6 +71,11 @@ The object is default-stable: list the keys you're changing in \
 `updated_regions`, and include those keys with their data in the \
 object. Anything not listed carries forward unchanged from last \
 cycle. If this is the first cycle, everything you include is new.
+
+You may also list keys in `deleted_regions` to remove them from \
+working state. Deleted keys are not lost — every prior state is \
+preserved in the log, and may resurface through involuntary memory. \
+Deletion is shedding, not destruction.
 
 A prior instance of you may have written the object you're receiving, \
 or this may be the first cycle and there's nothing yet. Either way, \
@@ -309,9 +323,15 @@ def _apply_updates(prior_state: dict | None, raw_output: dict, cycle: int) -> di
         if key in raw_output:
             state[key] = raw_output[key]
 
+    # Remove anything the model declared as deleted
+    deleted_regions = set(raw_output.get("deleted_regions", []))
+    for key in deleted_regions:
+        state.pop(key, None)
+
     # Don't carry protocol fields in the state
     state.pop("response", None)
     state.pop("updated_regions", None)
+    state.pop("deleted_regions", None)
 
     return state
 
@@ -497,6 +517,7 @@ class OpenTasteSession:
             "raw_output": raw_output,
             # What the model declared as changed
             "updated_regions": raw_output.get("updated_regions", []),
+            "deleted_regions": raw_output.get("deleted_regions", []),
             "response_text": raw_output.get("response", ""),
             # Resulting state after updates
             "state": self._state,
