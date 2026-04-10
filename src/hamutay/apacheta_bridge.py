@@ -230,6 +230,28 @@ class ApachetaBridge:
         return cls(backend, session_id=session_id, model=model)
 
     @classmethod
+    def from_arango(
+        cls,
+        host: str = "",
+        db_name: str = "",
+        username: str = "",
+        password: str = "",
+        session_id: str = "",
+        model: str = "unknown",
+    ) -> ApachetaBridge:
+        import os
+
+        from yanantin.apacheta.backends.arango import ArangoDBBackend
+
+        backend = ArangoDBBackend(
+            host=host or os.environ.get("YANANTIN_ARANGO_HOST", "http://localhost:8529"),
+            db_name=db_name or os.environ.get("YANANTIN_ARANGO_DB", "apacheta"),
+            username=username or os.environ.get("YANANTIN_ARANGO_USER", ""),
+            password=password or os.environ.get("YANANTIN_ARANGO_PASSWORD", ""),
+        )
+        return cls(backend, session_id=session_id, model=model)
+
+    @classmethod
     def from_memory(cls, session_id: str = "", model: str = "unknown") -> ApachetaBridge:
         from yanantin.apacheta.backends.memory import InMemoryBackend
         backend = InMemoryBackend()

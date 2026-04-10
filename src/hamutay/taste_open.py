@@ -576,8 +576,12 @@ def main():
         help="Resume from a log JSONL — picks up from last state",
     )
     parser.add_argument(
-        "--persist", default=None, metavar="DB_PATH",
-        help="Persist tensors to Apacheta DuckDB (requires yanantin)",
+        "--persist", default="arango", nargs="?", const="arango",
+        help="Persist tensors to Apacheta (default: arango). Pass a path for DuckDB, or --no-persist to disable.",
+    )
+    parser.add_argument(
+        "--no-persist", action="store_true",
+        help="Disable Apacheta persistence (JSONL backup only)",
     )
     parser.add_argument(
         "--memory-prob", default=0.1, type=float,
@@ -626,17 +630,21 @@ def main():
             extra_headers=extra_headers,
         )
 
-    # Wire Apacheta bridge if requested
+    # Wire Apacheta bridge (default: ArangoDB, opt out with --no-persist)
     bridge = None
-    if args.persist:
+    if not args.no_persist and args.persist:
         try:
             from hamutay.apacheta_bridge import ApachetaBridge
-            bridge = ApachetaBridge.from_duckdb(
-                args.persist, model=args.model,
-            )
-            print(f"Persisting to: {args.persist}")
-        except ImportError:
-            print("WARNING: --persist requires yanantin; continuing without persistence")
+            if args.persist == "arango":
+                bridge = ApachetaBridge.from_arango(model=args.model)
+                print("Persisting to: ArangoDB (via YANANTIN_ARANGO_* env vars)")
+            else:
+                bridge = ApachetaBridge.from_duckdb(
+                    args.persist, model=args.model,
+                )
+                print(f"Persisting to: {args.persist}")
+        except (ImportError, ConnectionError) as e:
+            print(f"WARNING: persistence unavailable ({e}); continuing with JSONL only")
 
     session = OpenTasteSession(
         model=args.model,
