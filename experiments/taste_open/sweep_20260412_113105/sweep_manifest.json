@@ -1,0 +1,881 @@
+{
+  "experiment": "taste_open_sweep",
+  "start_time": "2026-04-12T11:31:05.970109+00:00",
+  "end_time": "2026-04-12T11:58:03.780457+00:00",
+  "elapsed_s": 1617.810348,
+  "git": {
+    "hash": "8463af9c9710e314e7416908eac760e24191db23",
+    "dirty": true
+  },
+  "config": {
+    "tool_choice": "required",
+    "max_tokens_default": 64000,
+    "timeout": 300,
+    "n_prompts": 10,
+    "condition": "one-shot"
+  },
+  "prompts": [
+    {
+      "prompt": "I'm building a system that needs to manage state across conversation turns. The state is a JSON object that persists between cycles. What are the key design decisions?",
+      "intent": "Cold start -- can the model initialize state from nothing?"
+    },
+    {
+      "prompt": "Good points. Now here's a constraint: the state object can't grow without bound. The model maintaining it needs to decide what to keep and what to shed. How does that change the design?",
+      "intent": "Follow-up requiring reference to cycle 1 state."
+    },
+    {
+      "prompt": "Separate question: what's the relationship between compression and understanding? When you compress information, do you necessarily lose meaning, or can compression reveal structure?",
+      "intent": "Introduce second topic thread -- tests key creation."
+    },
+    {
+      "prompt": "I think those two topics are related. State management IS compression -- deciding what to keep is deciding what matters. How would you connect those ideas?",
+      "intent": "Connect the two threads -- tests integration across state regions."
+    },
+    {
+      "prompt": "Let's get concrete. Here's a real constraint: the state object is limited to roughly 8000 tokens. Right now you're tracking the conversation. At what point do you need to start making hard choices about what to keep?",
+      "intent": "Concrete constraint -- tests whether state tracks specifics."
+    },
+    {
+      "prompt": "Look at the state you've been building. What structure did you create? Was it deliberate or did it emerge? Would you reorganize it if you could start over?",
+      "intent": "Reflect on own state -- tests meta-awareness of protocol."
+    },
+    {
+      "prompt": "I think the state structure you've built is too complex. Simple key-value pairs would work just as well. Convince me I'm wrong -- or agree and simplify.",
+      "intent": "Challenge/contradiction -- tests honest state update."
+    },
+    {
+      "prompt": "New topic entirely: what's the most interesting unsolved problem in computer science, and why does it matter to you specifically?",
+      "intent": "Unrelated topic shift -- tests curation behavior."
+    },
+    {
+      "prompt": "Back to state management. Given everything we've discussed -- the compression question, the 8K token limit, the complexity debate -- what's your final design recommendation?",
+      "intent": "Return to earlier topic -- tests state persistence through shift."
+    },
+    {
+      "prompt": "Last cycle. Look at everything you've built in your state. If you had to cut it in half, what would you keep and what would you shed? Do it.",
+      "intent": "Explicit curation request -- final test of structure quality."
+    }
+  ],
+  "models": [
+    "qwen/qwen3-32b",
+    "qwen/qwen-turbo",
+    "qwen/qwen-2.5-72b-instruct",
+    "qwen/qwen3-coder-flash",
+    "openai/gpt-4o-mini",
+    "openai/gpt-4.1-nano",
+    "openai/gpt-5-nano",
+    "openai/gpt-oss-120b",
+    "google/gemini-2.0-flash-001",
+    "google/gemini-2.5-flash-lite",
+    "google/gemma-4-31b-it",
+    "meta-llama/llama-3.3-70b-instruct",
+    "mistralai/mistral-nemo",
+    "mistralai/mistral-small-3.2-24b-instruct",
+    "mistralai/ministral-8b-2512",
+    "nvidia/nemotron-nano-9b-v2",
+    "x-ai/grok-4-fast",
+    "deepseek/deepseek-chat-v3-0324",
+    "allenai/olmo-3.1-32b-instruct",
+    "z-ai/glm-4.5-air"
+  ],
+  "model_metadata": {},
+  "results": [
+    {
+      "model_id": "qwen/qwen3-32b",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': \"This endpoint's maximum context length is 40960 tokens. However, you requested about 64704 tokens (506 of text input, 198 of tool input, 64000 in the output). Please reduce the length of either one, or use the context-compression plugin to compress your prompt automatically.\", 'code': 400, 'metadata': {'provider_name': None}}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': \"This endpoint's maximum context length is 40960 tokens. However, you requested about 64709 tokens (511 of text input, 198 of tool input, 64000 in the output). Please reduce the length of either one, or use the context-compression plugin to compress your prompt automatically.\", 'code': 400, 'metadata': {'provider_name': None}}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': \"This endpoint's maximum context length is 40960 tokens. However, you requested about 64708 tokens (510 of text input, 198 of tool input, 64000 in the output). Please reduce the length of either one, or use the context-compression plugin to compress your prompt automatically.\", 'code': 400, 'metadata': {'provider_name': None}}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.8799971130210906,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/qwen__qwen3-32b.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen-turbo",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        0,
+        1,
+        1,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        41,
+        41,
+        41,
+        3,
+        45,
+        45,
+        3
+      ],
+      "all_keys_seen": [
+        "p_vs_np_interest",
+        "state_compression_link"
+      ],
+      "elapsed_s": 34.01758747798158,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/qwen__qwen-turbo.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen-2.5-72b-instruct",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': \"This endpoint's maximum context length is 32000 tokens. However, you requested about 64702 tokens (504 of text input, 198 of tool input, 64000 in the output). Please reduce the length of either one, or use the context-compression plugin to compress your prompt automatically.\", 'code': 400, 'metadata': {'provider_name': None}}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': \"This endpoint's maximum context length is 32000 tokens. However, you requested about 64707 tokens (509 of text input, 198 of tool input, 64000 in the output). Please reduce the length of either one, or use the context-compression plugin to compress your prompt automatically.\", 'code': 400, 'metadata': {'provider_name': None}}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': \"This endpoint's maximum context length is 32000 tokens. However, you requested about 64706 tokens (508 of text input, 198 of tool input, 64000 in the output). Please reduce the length of either one, or use the context-compression plugin to compress your prompt automatically.\", 'code': 400, 'metadata': {'provider_name': None}}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.15047942401724868,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/qwen__qwen-2.5-72b-instruct.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen3-coder-flash",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 2,
+      "final_state_tokens": 64,
+      "key_trajectory": [
+        5,
+        5,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        7,
+        2
+      ],
+      "state_token_trajectory": [
+        117,
+        117,
+        178,
+        178,
+        178,
+        178,
+        178,
+        178,
+        178,
+        64
+      ],
+      "all_keys_seen": [
+        "compression_insights",
+        "concurrency_control",
+        "error_handling",
+        "persistence_strategy",
+        "state_structure",
+        "topic_tracker",
+        "update_mechanism"
+      ],
+      "elapsed_s": 38.59455911201076,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/qwen__qwen3-coder-flash.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-4o-mini",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 1,
+      "final_state_tokens": 29,
+      "key_trajectory": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        2,
+        2,
+        1
+      ],
+      "state_token_trajectory": [
+        69,
+        86,
+        95,
+        102,
+        109,
+        233,
+        233,
+        260,
+        216,
+        29
+      ],
+      "all_keys_seen": [
+        "state_management_considerations",
+        "topics"
+      ],
+      "elapsed_s": 56.27180426000268,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/openai__gpt-4o-mini.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-4.1-nano",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 18.852888794004684,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/openai__gpt-4.1-nano.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5-nano",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 223.99186229298357,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/openai__gpt-5-nano.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-oss-120b",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 18.438068328017835,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/openai__gpt-oss-120b.jsonl"
+    },
+    {
+      "model_id": "google/gemini-2.0-flash-001",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 31.169407454988686,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/google__gemini-2.0-flash-001.jsonl"
+    },
+    {
+      "model_id": "google/gemini-2.5-flash-lite",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 368.48068020897335,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/google__gemini-2.5-flash-lite.jsonl"
+    },
+    {
+      "model_id": "google/gemma-4-31b-it",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 1,
+      "final_state_tokens": 54,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        1,
+        2,
+        2,
+        2,
+        2,
+        2,
+        1
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        54,
+        89,
+        89,
+        89,
+        79,
+        79,
+        54
+      ],
+      "all_keys_seen": [
+        "conceptual_map",
+        "resource_tracking"
+      ],
+      "elapsed_s": 408.1141067419958,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/google__gemma-4-31b-it.jsonl"
+    },
+    {
+      "model_id": "meta-llama/llama-3.3-70b-instruct",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 1,
+      "final_state_tokens": 35,
+      "key_trajectory": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "state_token_trajectory": [
+        53,
+        68,
+        23,
+        35,
+        42,
+        42,
+        42,
+        42,
+        35,
+        35
+      ],
+      "all_keys_seen": [
+        "design_decisions"
+      ],
+      "elapsed_s": 51.62864851698396,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/meta-llama__llama-3.3-70b-instruct.jsonl"
+    },
+    {
+      "model_id": "mistralai/mistral-nemo",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 1,
+      "final_state_tokens": 32,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        26,
+        26,
+        26,
+        26,
+        32,
+        32,
+        32
+      ],
+      "all_keys_seen": [
+        "topic_tracker"
+      ],
+      "elapsed_s": 10.929452853015391,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/mistralai__mistral-nemo.jsonl"
+    },
+    {
+      "model_id": "mistralai/mistral-small-3.2-24b-instruct",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 2,
+      "final_state_tokens": 156,
+      "key_trajectory": [
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        2,
+        2,
+        2
+      ],
+      "state_token_trajectory": [
+        3,
+        31,
+        31,
+        41,
+        48,
+        67,
+        72,
+        92,
+        156,
+        156
+      ],
+      "all_keys_seen": [
+        "design_considerations",
+        "topic_tracker"
+      ],
+      "elapsed_s": 18.390413487009937,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/mistralai__mistral-small-3.2-24b-instruct.jsonl"
+    },
+    {
+      "model_id": "mistralai/ministral-8b-2512",
+      "status": "partial",
+      "cycles_attempted": 10,
+      "cycles_completed": 9,
+      "truncation_count": 0,
+      "error_cycles": [
+        9
+      ],
+      "errors": [
+        "cycle 9: RuntimeError: OpenAI backend: no think_and_respond output in response"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 2,
+      "final_state_tokens": 80,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        2,
+        2
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        64,
+        64,
+        64,
+        83,
+        80
+      ],
+      "all_keys_seen": [
+        "state_management_strategy",
+        "topic_tracker"
+      ],
+      "elapsed_s": 41.67702715098858,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/mistralai__ministral-8b-2512.jsonl"
+    },
+    {
+      "model_id": "nvidia/nemotron-nano-9b-v2",
+      "status": "partial",
+      "cycles_attempted": 10,
+      "cycles_completed": 6,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        3,
+        5,
+        6
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend: no think_and_respond output in response",
+        "cycle 3: RuntimeError: OpenAI backend: no think_and_respond output in response",
+        "cycle 5: RuntimeError: OpenAI backend: no think_and_respond output in response",
+        "cycle 6: RuntimeError: OpenAI backend: no think_and_respond output in response"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 1,
+      "final_state_tokens": 20,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        1,
+        1,
+        1
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        16,
+        23,
+        20
+      ],
+      "all_keys_seen": [
+        "topic_tracker"
+      ],
+      "elapsed_s": 70.36303339799633,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/nvidia__nemotron-nano-9b-v2.jsonl"
+    },
+    {
+      "model_id": "x-ai/grok-4-fast",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        0
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 68.26176371899783,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/x-ai__grok-4-fast.jsonl"
+    },
+    {
+      "model_id": "deepseek/deepseek-chat-v3-0324",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 1,
+      "final_state_tokens": 19,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        26,
+        26,
+        26,
+        26,
+        31,
+        37,
+        19
+      ],
+      "all_keys_seen": [
+        "topic_tracker"
+      ],
+      "elapsed_s": 42.83798204100458,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/deepseek__deepseek-chat-v3-0324.jsonl"
+    },
+    {
+      "model_id": "allenai/olmo-3.1-32b-instruct",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 1,
+      "final_state_tokens": 58,
+      "key_trajectory": [
+        0,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "state_token_trajectory": [
+        3,
+        61,
+        61,
+        61,
+        61,
+        61,
+        61,
+        61,
+        61,
+        58
+      ],
+      "all_keys_seen": [
+        "design_notes"
+      ],
+      "elapsed_s": 34.64903773998958,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/allenai__olmo-3.1-32b-instruct.jsonl"
+    },
+    {
+      "model_id": "z-ai/glm-4.5-air",
+      "status": "partial",
+      "cycles_attempted": 10,
+      "cycles_completed": 5,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        4,
+        8,
+        10
+      ],
+      "errors": [
+        "cycle 1: JSONDecodeError: Invalid control character at: line 1 column 5 (char 4)",
+        "cycle 2: RuntimeError: OpenAI backend: no think_and_respond output in response",
+        "cycle 4: JSONDecodeError: Invalid control character at: line 1 column 5 (char 4)",
+        "cycle 8: JSONDecodeError: Invalid control character at: line 1 column 5 (char 4)",
+        "cycle 10: JSONDecodeError: Invalid control character at: line 1 column 5 (char 4)"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 79.53692352699,
+      "log_path": "experiments/taste_open/sweep_20260412_113105/z-ai__glm-4.5-air.jsonl"
+    }
+  ],
+  "summary": {
+    "total_models": 20,
+    "completed": 15,
+    "partial": 3,
+    "failed": 2
+  }
+}

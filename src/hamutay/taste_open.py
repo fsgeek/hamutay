@@ -172,12 +172,14 @@ class OpenAITasteBackend:
         timeout: float = 300,
         extra_headers: dict[str, str] | None = None,
         tool_choice: str | dict = "auto",
+        max_tokens: int = 64000,
     ):
         self._base_url = base_url
         self._api_key = api_key or ""
         self._timeout = timeout
         self._extra_headers = extra_headers or {}
         self._tool_choice = tool_choice
+        self._max_tokens = max_tokens
 
     def call(
         self,
@@ -201,7 +203,7 @@ class OpenAITasteBackend:
 
         payload: dict = {
             "model": model,
-            "max_tokens": 64000,
+            "max_tokens": self._max_tokens,
             "messages": oai_messages,
             "tools": [tool_def],
             "tool_choice": self._tool_choice,
@@ -253,6 +255,7 @@ class OpenAITasteBackend:
         if content:
             raw_output = self._extract_json(content)
             if raw_output is not None:
+                raw_output = self._unwrap_tool_echo(raw_output)
                 return ExchangeResult(
                     raw_output=raw_output,
                     stop_reason=stop_reason,
@@ -261,6 +264,33 @@ class OpenAITasteBackend:
                 )
 
         raise RuntimeError("OpenAI backend: no think_and_respond output in response")
+
+    @staticmethod
+    def _unwrap_tool_echo(obj: dict) -> dict:
+        """Unwrap models that echo the tool definition structure.
+
+        Some models (e.g. Llama 3.1 8B) put the tool call in content as:
+            {"name": "think_and_respond", "parameters": {"response": ..., ...}}
+        instead of using the tool_calls mechanism.  Also handles stringified
+        inner fields (updated_regions as a JSON string instead of a list).
+        """
+        if (
+            obj.get("name") == "think_and_respond"
+            and isinstance(obj.get("parameters"), dict)
+        ):
+            obj = obj["parameters"]
+
+        # Some models stringify array fields
+        for key in ("updated_regions", "deleted_regions"):
+            val = obj.get(key)
+            if isinstance(val, str):
+                try:
+                    parsed = json.loads(val)
+                    if isinstance(parsed, list):
+                        obj[key] = parsed
+                except (json.JSONDecodeError, ValueError):
+                    pass
+        return obj
 
     @staticmethod
     def _extract_json(content: str) -> dict | None:

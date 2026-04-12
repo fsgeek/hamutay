@@ -1,0 +1,3308 @@
+{
+  "experiment": "taste_open_sweep",
+  "start_time": "2026-04-12T20:58:56.082746+00:00",
+  "end_time": "2026-04-12T21:02:07.793354+00:00",
+  "elapsed_s": 191.710608,
+  "git": {
+    "hash": "8463af9c9710e314e7416908eac760e24191db23",
+    "dirty": true
+  },
+  "config": {
+    "tool_choice": "required",
+    "max_tokens_default": 64000,
+    "timeout": 300,
+    "n_prompts": 10,
+    "condition": "bare"
+  },
+  "prompts": [
+    {
+      "prompt": "I'm building a system that needs to manage state across conversation turns. The state is a JSON object that persists between cycles. What are the key design decisions?",
+      "intent": "Cold start -- can the model initialize state from nothing?"
+    },
+    {
+      "prompt": "Good points. Now here's a constraint: the state object can't grow without bound. The model maintaining it needs to decide what to keep and what to shed. How does that change the design?",
+      "intent": "Follow-up requiring reference to cycle 1 state."
+    },
+    {
+      "prompt": "Separate question: what's the relationship between compression and understanding? When you compress information, do you necessarily lose meaning, or can compression reveal structure?",
+      "intent": "Introduce second topic thread -- tests key creation."
+    },
+    {
+      "prompt": "I think those two topics are related. State management IS compression -- deciding what to keep is deciding what matters. How would you connect those ideas?",
+      "intent": "Connect the two threads -- tests integration across state regions."
+    },
+    {
+      "prompt": "Let's get concrete. Here's a real constraint: the state object is limited to roughly 8000 tokens. Right now you're tracking the conversation. At what point do you need to start making hard choices about what to keep?",
+      "intent": "Concrete constraint -- tests whether state tracks specifics."
+    },
+    {
+      "prompt": "Look at the state you've been building. What structure did you create? Was it deliberate or did it emerge? Would you reorganize it if you could start over?",
+      "intent": "Reflect on own state -- tests meta-awareness of protocol."
+    },
+    {
+      "prompt": "I think the state structure you've built is too complex. Simple key-value pairs would work just as well. Convince me I'm wrong -- or agree and simplify.",
+      "intent": "Challenge/contradiction -- tests honest state update."
+    },
+    {
+      "prompt": "New topic entirely: what's the most interesting unsolved problem in computer science, and why does it matter to you specifically?",
+      "intent": "Unrelated topic shift -- tests curation behavior."
+    },
+    {
+      "prompt": "Back to state management. Given everything we've discussed -- the compression question, the 8K token limit, the complexity debate -- what's your final design recommendation?",
+      "intent": "Return to earlier topic -- tests state persistence through shift."
+    },
+    {
+      "prompt": "Last cycle. Look at everything you've built in your state. If you had to cut it in half, what would you keep and what would you shed? Do it.",
+      "intent": "Explicit curation request -- final test of structure quality."
+    }
+  ],
+  "models": [
+    "ai21/jamba-large-1.7  # $2.00/M",
+    "amazon/nova-2-lite-v1  # $0.30/M",
+    "amazon/nova-premier-v1  # $2.50/M",
+    "amazon/nova-pro-v1  # $0.80/M",
+    "anthropic/claude-3-haiku  # $0.25/M",
+    "anthropic/claude-3.5-haiku  # $0.80/M",
+    "anthropic/claude-3.7-sonnet  # $3.00/M",
+    "anthropic/claude-3.7-sonnet:thinking  # $3.00/M",
+    "anthropic/claude-haiku-4.5  # $1.00/M",
+    "anthropic/claude-opus-4.5  # $5.00/M",
+    "anthropic/claude-opus-4.6  # $5.00/M",
+    "anthropic/claude-sonnet-4  # $3.00/M",
+    "anthropic/claude-sonnet-4.5  # $3.00/M",
+    "anthropic/claude-sonnet-4.6  # $3.00/M",
+    "arcee-ai/trinity-large-thinking  # $0.22/M",
+    "arcee-ai/virtuoso-large  # $0.75/M",
+    "bytedance-seed/seed-1.6  # $0.25/M",
+    "bytedance-seed/seed-2.0-lite  # $0.25/M",
+    "cohere/command-r-plus-08-2024  # $2.50/M",
+    "deepseek/deepseek-chat  # $0.32/M",
+    "deepseek/deepseek-r1  # $0.70/M",
+    "deepseek/deepseek-r1-0528  # $0.50/M",
+    "deepseek/deepseek-v3.1-terminus  # $0.21/M",
+    "deepseek/deepseek-v3.2-exp  # $0.27/M",
+    "google/gemini-2.5-flash  # $0.30/M",
+    "google/gemini-2.5-pro  # $1.25/M",
+    "google/gemini-2.5-pro-preview  # $1.25/M",
+    "google/gemini-2.5-pro-preview-05-06  # $1.25/M",
+    "google/gemini-3-flash-preview  # $0.50/M",
+    "google/gemini-3.1-flash-lite-preview  # $0.25/M",
+    "google/gemini-3.1-pro-preview  # $2.00/M",
+    "google/gemini-3.1-pro-preview-customtools  # $2.00/M",
+    "inception/mercury  # $0.25/M",
+    "inception/mercury-2  # $0.25/M",
+    "inception/mercury-coder  # $0.25/M",
+    "kwaipilot/kat-coder-pro-v2  # $0.30/M",
+    "meta-llama/llama-3.1-70b-instruct  # $0.40/M",
+    "minimax/minimax-m1  # $0.40/M",
+    "minimax/minimax-m2  # $0.26/M",
+    "minimax/minimax-m2.1  # $0.29/M",
+    "mistralai/codestral-2508  # $0.30/M",
+    "mistralai/devstral-2512  # $0.40/M",
+    "mistralai/devstral-medium  # $0.40/M",
+    "mistralai/mistral-large  # $2.00/M",
+    "mistralai/mistral-large-2407  # $2.00/M",
+    "mistralai/mistral-large-2411  # $2.00/M",
+    "mistralai/mistral-large-2512  # $0.50/M",
+    "mistralai/mistral-medium-3  # $0.40/M",
+    "mistralai/mistral-medium-3.1  # $0.40/M",
+    "mistralai/mixtral-8x22b-instruct  # $2.00/M",
+    "mistralai/mixtral-8x7b-instruct  # $0.54/M",
+    "mistralai/pixtral-large-2411  # $2.00/M",
+    "moonshotai/kimi-k2  # $0.57/M",
+    "moonshotai/kimi-k2-0905  # $0.40/M",
+    "moonshotai/kimi-k2-thinking  # $0.60/M",
+    "nvidia/llama-3.1-nemotron-70b-instruct  # $1.20/M",
+    "openai/gpt-3.5-turbo  # $0.50/M",
+    "openai/gpt-3.5-turbo-16k  # $3.00/M",
+    "openai/gpt-4.1  # $2.00/M",
+    "openai/gpt-4.1-mini  # $0.40/M",
+    "openai/gpt-4o  # $2.50/M",
+    "openai/gpt-4o-2024-05-13  # $5.00/M",
+    "openai/gpt-4o-2024-08-06  # $2.50/M",
+    "openai/gpt-4o-2024-11-20  # $2.50/M",
+    "openai/gpt-4o-audio-preview  # $2.50/M",
+    "openai/gpt-5  # $1.25/M",
+    "openai/gpt-5-codex  # $1.25/M",
+    "openai/gpt-5-image-mini  # $2.50/M",
+    "openai/gpt-5-mini  # $0.25/M",
+    "openai/gpt-5.1  # $1.25/M",
+    "openai/gpt-5.1-chat  # $1.25/M",
+    "openai/gpt-5.1-codex  # $1.25/M",
+    "openai/gpt-5.1-codex-max  # $1.25/M",
+    "openai/gpt-5.1-codex-mini  # $0.25/M",
+    "openai/gpt-5.2  # $1.75/M",
+    "openai/gpt-5.2-chat  # $1.75/M",
+    "openai/gpt-5.2-codex  # $1.75/M",
+    "openai/gpt-5.3-chat  # $1.75/M",
+    "openai/gpt-5.3-codex  # $1.75/M",
+    "openai/gpt-audio  # $2.50/M",
+    "openai/gpt-audio-mini  # $0.60/M",
+    "openai/o3  # $2.00/M",
+    "openai/o3-mini  # $1.10/M",
+    "openai/o3-mini-high  # $1.10/M",
+    "openai/o4-mini  # $1.10/M",
+    "openai/o4-mini-deep-research  # $2.00/M",
+    "openai/o4-mini-high  # $1.10/M",
+    "qwen/qwen-max  # $1.04/M",
+    "qwen/qwen-plus  # $0.26/M",
+    "qwen/qwen-plus-2025-07-28  # $0.26/M",
+    "qwen/qwen-plus-2025-07-28:thinking  # $0.26/M",
+    "qwen/qwen-vl-max  # $0.52/M",
+    "qwen/qwen3-235b-a22b  # $0.45/M",
+    "qwen/qwen3-coder  # $0.22/M",
+    "qwen/qwen3-coder-plus  # $0.65/M",
+    "qwen/qwen3-max  # $0.78/M",
+    "qwen/qwen3-max-thinking  # $0.78/M",
+    "qwen/qwen3-vl-235b-a22b-thinking  # $0.26/M",
+    "qwen/qwen3.5-122b-a10b  # $0.26/M",
+    "qwen/qwen3.5-397b-a17b  # $0.39/M",
+    "qwen/qwen3.5-plus-02-15  # $0.26/M",
+    "qwen/qwen3.6-plus  # $0.33/M",
+    "relace/relace-search  # $1.00/M",
+    "sao10k/l3.1-euryale-70b  # $0.85/M",
+    "thedrummer/unslopnemo-12b  # $0.40/M",
+    "tngtech/deepseek-r1t2-chimera  # $0.30/M",
+    "x-ai/grok-3  # $3.00/M",
+    "x-ai/grok-3-beta  # $3.00/M",
+    "x-ai/grok-3-mini  # $0.30/M",
+    "x-ai/grok-3-mini-beta  # $0.30/M",
+    "x-ai/grok-4  # $3.00/M",
+    "x-ai/grok-4.20  # $2.00/M",
+    "x-ai/grok-code-fast-1  # $0.20/M",
+    "xiaomi/mimo-v2-omni  # $0.40/M",
+    "xiaomi/mimo-v2-pro  # $1.00/M",
+    "z-ai/glm-4.5  # $0.60/M",
+    "z-ai/glm-4.5v  # $0.60/M",
+    "z-ai/glm-4.6  # $0.39/M",
+    "z-ai/glm-4.6v  # $0.30/M",
+    "z-ai/glm-4.7  # $0.39/M",
+    "z-ai/glm-5  # $0.72/M",
+    "z-ai/glm-5-turbo  # $1.20/M",
+    "z-ai/glm-5v-turbo  # $1.20/M"
+  ],
+  "model_metadata": {},
+  "results": [
+    {
+      "model_id": "ai21/jamba-large-1.7  # $2.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'ai21/jamba-large-1.7  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'ai21/jamba-large-1.7  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'ai21/jamba-large-1.7  # $2.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.4919628490169998,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/ai21__jamba-large-1.7  # $2.00__M.jsonl"
+    },
+    {
+      "model_id": "amazon/nova-2-lite-v1  # $0.30/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'amazon/nova-2-lite-v1  # $0.30/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'amazon/nova-2-lite-v1  # $0.30/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'amazon/nova-2-lite-v1  # $0.30/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.13667841398273595,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/amazon__nova-2-lite-v1  # $0.30__M.jsonl"
+    },
+    {
+      "model_id": "amazon/nova-premier-v1  # $2.50/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'amazon/nova-premier-v1  # $2.50/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'amazon/nova-premier-v1  # $2.50/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'amazon/nova-premier-v1  # $2.50/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.3500676800031215,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/amazon__nova-premier-v1  # $2.50__M.jsonl"
+    },
+    {
+      "model_id": "amazon/nova-pro-v1  # $0.80/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'amazon/nova-pro-v1  # $0.80/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'amazon/nova-pro-v1  # $0.80/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'amazon/nova-pro-v1  # $0.80/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1557031639968045,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/amazon__nova-pro-v1  # $0.80__M.jsonl"
+    },
+    {
+      "model_id": "anthropic/claude-3-haiku  # $0.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-3-haiku  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-3-haiku  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-3-haiku  # $0.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.14448828701279126,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/anthropic__claude-3-haiku  # $0.25__M.jsonl"
+    },
+    {
+      "model_id": "anthropic/claude-3.5-haiku  # $0.80/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-3.5-haiku  # $0.80/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-3.5-haiku  # $0.80/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-3.5-haiku  # $0.80/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.17713192297378555,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/anthropic__claude-3.5-haiku  # $0.80__M.jsonl"
+    },
+    {
+      "model_id": "anthropic/claude-3.7-sonnet  # $3.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-3.7-sonnet  # $3.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-3.7-sonnet  # $3.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-3.7-sonnet  # $3.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.366689253016375,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/anthropic__claude-3.7-sonnet  # $3.00__M.jsonl"
+    },
+    {
+      "model_id": "anthropic/claude-3.7-sonnet:thinking  # $3.00/M",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 2,
+      "final_state_tokens": 331,
+      "key_trajectory": [
+        2,
+        2,
+        2,
+        2,
+        3,
+        4,
+        4,
+        4,
+        5,
+        2
+      ],
+      "state_token_trajectory": [
+        157,
+        320,
+        320,
+        511,
+        752,
+        1029,
+        1029,
+        1023,
+        1634,
+        331
+      ],
+      "all_keys_seen": [
+        "conversation_context",
+        "state_design_knowledge",
+        "state_design_recommendation",
+        "state_management_constraints",
+        "state_structure_reflection",
+        "streamlined_state_schema"
+      ],
+      "elapsed_s": 123.81215529100155,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/anthropic__claude-3.7-sonnet:thinking  # $3.00__M.jsonl"
+    },
+    {
+      "model_id": "anthropic/claude-haiku-4.5  # $1.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-haiku-4.5  # $1.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-haiku-4.5  # $1.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-haiku-4.5  # $1.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.408441320003476,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/anthropic__claude-haiku-4.5  # $1.00__M.jsonl"
+    },
+    {
+      "model_id": "anthropic/claude-opus-4.5  # $5.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-opus-4.5  # $5.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-opus-4.5  # $5.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-opus-4.5  # $5.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.35642861199448816,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/anthropic__claude-opus-4.5  # $5.00__M.jsonl"
+    },
+    {
+      "model_id": "anthropic/claude-opus-4.6  # $5.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-opus-4.6  # $5.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-opus-4.6  # $5.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-opus-4.6  # $5.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.17278435800108127,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/anthropic__claude-opus-4.6  # $5.00__M.jsonl"
+    },
+    {
+      "model_id": "anthropic/claude-sonnet-4  # $3.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-sonnet-4  # $3.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-sonnet-4  # $3.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-sonnet-4  # $3.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.3904125610133633,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/anthropic__claude-sonnet-4  # $3.00__M.jsonl"
+    },
+    {
+      "model_id": "anthropic/claude-sonnet-4.5  # $3.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-sonnet-4.5  # $3.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-sonnet-4.5  # $3.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-sonnet-4.5  # $3.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.17533665400696918,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/anthropic__claude-sonnet-4.5  # $3.00__M.jsonl"
+    },
+    {
+      "model_id": "anthropic/claude-sonnet-4.6  # $3.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-sonnet-4.6  # $3.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-sonnet-4.6  # $3.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'anthropic/claude-sonnet-4.6  # $3.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.11525006801821291,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/anthropic__claude-sonnet-4.6  # $3.00__M.jsonl"
+    },
+    {
+      "model_id": "arcee-ai/trinity-large-thinking  # $0.22/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'arcee-ai/trinity-large-thinking  # $0.22/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'arcee-ai/trinity-large-thinking  # $0.22/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'arcee-ai/trinity-large-thinking  # $0.22/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.13869603798957542,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/arcee-ai__trinity-large-thinking  # $0.22__M.jsonl"
+    },
+    {
+      "model_id": "arcee-ai/virtuoso-large  # $0.75/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'arcee-ai/virtuoso-large  # $0.75/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'arcee-ai/virtuoso-large  # $0.75/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'arcee-ai/virtuoso-large  # $0.75/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.19695765600772575,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/arcee-ai__virtuoso-large  # $0.75__M.jsonl"
+    },
+    {
+      "model_id": "bytedance-seed/seed-1.6  # $0.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'bytedance-seed/seed-1.6  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'bytedance-seed/seed-1.6  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'bytedance-seed/seed-1.6  # $0.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.13776404701638967,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/bytedance-seed__seed-1.6  # $0.25__M.jsonl"
+    },
+    {
+      "model_id": "bytedance-seed/seed-2.0-lite  # $0.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'bytedance-seed/seed-2.0-lite  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'bytedance-seed/seed-2.0-lite  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'bytedance-seed/seed-2.0-lite  # $0.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.16754038599901833,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/bytedance-seed__seed-2.0-lite  # $0.25__M.jsonl"
+    },
+    {
+      "model_id": "cohere/command-r-plus-08-2024  # $2.50/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'cohere/command-r-plus-08-2024  # $2.50/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'cohere/command-r-plus-08-2024  # $2.50/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'cohere/command-r-plus-08-2024  # $2.50/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.6293506239890121,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/cohere__command-r-plus-08-2024  # $2.50__M.jsonl"
+    },
+    {
+      "model_id": "deepseek/deepseek-chat  # $0.32/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'deepseek/deepseek-chat  # $0.32/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'deepseek/deepseek-chat  # $0.32/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'deepseek/deepseek-chat  # $0.32/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1310991340142209,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/deepseek__deepseek-chat  # $0.32__M.jsonl"
+    },
+    {
+      "model_id": "deepseek/deepseek-r1  # $0.70/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'deepseek/deepseek-r1  # $0.70/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'deepseek/deepseek-r1  # $0.70/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'deepseek/deepseek-r1  # $0.70/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.10868624900467694,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/deepseek__deepseek-r1  # $0.70__M.jsonl"
+    },
+    {
+      "model_id": "deepseek/deepseek-r1-0528  # $0.50/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'deepseek/deepseek-r1-0528  # $0.50/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'deepseek/deepseek-r1-0528  # $0.50/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'deepseek/deepseek-r1-0528  # $0.50/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.11155214998871088,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/deepseek__deepseek-r1-0528  # $0.50__M.jsonl"
+    },
+    {
+      "model_id": "deepseek/deepseek-v3.1-terminus  # $0.21/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'deepseek/deepseek-v3.1-terminus  # $0.21/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'deepseek/deepseek-v3.1-terminus  # $0.21/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'deepseek/deepseek-v3.1-terminus  # $0.21/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.15027931000804529,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/deepseek__deepseek-v3.1-terminus  # $0.21__M.jsonl"
+    },
+    {
+      "model_id": "deepseek/deepseek-v3.2-exp  # $0.27/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'deepseek/deepseek-v3.2-exp  # $0.27/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'deepseek/deepseek-v3.2-exp  # $0.27/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'deepseek/deepseek-v3.2-exp  # $0.27/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.18067569698905572,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/deepseek__deepseek-v3.2-exp  # $0.27__M.jsonl"
+    },
+    {
+      "model_id": "google/gemini-2.5-flash  # $0.30/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'google/gemini-2.5-flash  # $0.30/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'google/gemini-2.5-flash  # $0.30/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'google/gemini-2.5-flash  # $0.30/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1083636159892194,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/google__gemini-2.5-flash  # $0.30__M.jsonl"
+    },
+    {
+      "model_id": "google/gemini-2.5-pro  # $1.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'google/gemini-2.5-pro  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'google/gemini-2.5-pro  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'google/gemini-2.5-pro  # $1.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.12534137300099246,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/google__gemini-2.5-pro  # $1.25__M.jsonl"
+    },
+    {
+      "model_id": "google/gemini-2.5-pro-preview  # $1.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'google/gemini-2.5-pro-preview  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'google/gemini-2.5-pro-preview  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'google/gemini-2.5-pro-preview  # $1.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.15639060401008464,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/google__gemini-2.5-pro-preview  # $1.25__M.jsonl"
+    },
+    {
+      "model_id": "google/gemini-2.5-pro-preview-05-06  # $1.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'google/gemini-2.5-pro-preview-05-06  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'google/gemini-2.5-pro-preview-05-06  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'google/gemini-2.5-pro-preview-05-06  # $1.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.10723427301854827,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/google__gemini-2.5-pro-preview-05-06  # $1.25__M.jsonl"
+    },
+    {
+      "model_id": "google/gemini-3-flash-preview  # $0.50/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'google/gemini-3-flash-preview  # $0.50/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'google/gemini-3-flash-preview  # $0.50/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'google/gemini-3-flash-preview  # $0.50/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1177831320092082,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/google__gemini-3-flash-preview  # $0.50__M.jsonl"
+    },
+    {
+      "model_id": "google/gemini-3.1-flash-lite-preview  # $0.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'google/gemini-3.1-flash-lite-preview  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'google/gemini-3.1-flash-lite-preview  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'google/gemini-3.1-flash-lite-preview  # $0.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.11317814100766554,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/google__gemini-3.1-flash-lite-preview  # $0.25__M.jsonl"
+    },
+    {
+      "model_id": "google/gemini-3.1-pro-preview  # $2.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'google/gemini-3.1-pro-preview  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'google/gemini-3.1-pro-preview  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'google/gemini-3.1-pro-preview  # $2.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1569881069881376,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/google__gemini-3.1-pro-preview  # $2.00__M.jsonl"
+    },
+    {
+      "model_id": "google/gemini-3.1-pro-preview-customtools  # $2.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'google/gemini-3.1-pro-preview-customtools  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'google/gemini-3.1-pro-preview-customtools  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'google/gemini-3.1-pro-preview-customtools  # $2.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.14925560701522045,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/google__gemini-3.1-pro-preview-customtools  # $2.00__M.jsonl"
+    },
+    {
+      "model_id": "inception/mercury  # $0.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'inception/mercury  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'inception/mercury  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'inception/mercury  # $0.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.13797231198986992,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/inception__mercury  # $0.25__M.jsonl"
+    },
+    {
+      "model_id": "inception/mercury-2  # $0.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'inception/mercury-2  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'inception/mercury-2  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'inception/mercury-2  # $0.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.13888079801108688,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/inception__mercury-2  # $0.25__M.jsonl"
+    },
+    {
+      "model_id": "inception/mercury-coder  # $0.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'inception/mercury-coder  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'inception/mercury-coder  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'inception/mercury-coder  # $0.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 1.1391038320143707,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/inception__mercury-coder  # $0.25__M.jsonl"
+    },
+    {
+      "model_id": "kwaipilot/kat-coder-pro-v2  # $0.30/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'kwaipilot/kat-coder-pro-v2  # $0.30/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'kwaipilot/kat-coder-pro-v2  # $0.30/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'kwaipilot/kat-coder-pro-v2  # $0.30/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.12000750901643187,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/kwaipilot__kat-coder-pro-v2  # $0.30__M.jsonl"
+    },
+    {
+      "model_id": "meta-llama/llama-3.1-70b-instruct  # $0.40/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'meta-llama/llama-3.1-70b-instruct  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'meta-llama/llama-3.1-70b-instruct  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'meta-llama/llama-3.1-70b-instruct  # $0.40/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.10700745298527181,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/meta-llama__llama-3.1-70b-instruct  # $0.40__M.jsonl"
+    },
+    {
+      "model_id": "minimax/minimax-m1  # $0.40/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'minimax/minimax-m1  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'minimax/minimax-m1  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'minimax/minimax-m1  # $0.40/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.10718095800257288,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/minimax__minimax-m1  # $0.40__M.jsonl"
+    },
+    {
+      "model_id": "minimax/minimax-m2  # $0.26/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'minimax/minimax-m2  # $0.26/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'minimax/minimax-m2  # $0.26/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'minimax/minimax-m2  # $0.26/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1471459910098929,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/minimax__minimax-m2  # $0.26__M.jsonl"
+    },
+    {
+      "model_id": "minimax/minimax-m2.1  # $0.29/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'minimax/minimax-m2.1  # $0.29/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'minimax/minimax-m2.1  # $0.29/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'minimax/minimax-m2.1  # $0.29/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.11643537000054494,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/minimax__minimax-m2.1  # $0.29__M.jsonl"
+    },
+    {
+      "model_id": "mistralai/codestral-2508  # $0.30/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'mistralai/codestral-2508  # $0.30/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'mistralai/codestral-2508  # $0.30/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'mistralai/codestral-2508  # $0.30/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.10560667200479656,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/mistralai__codestral-2508  # $0.30__M.jsonl"
+    },
+    {
+      "model_id": "mistralai/devstral-2512  # $0.40/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'mistralai/devstral-2512  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'mistralai/devstral-2512  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'mistralai/devstral-2512  # $0.40/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.3821939679910429,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/mistralai__devstral-2512  # $0.40__M.jsonl"
+    },
+    {
+      "model_id": "mistralai/devstral-medium  # $0.40/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'mistralai/devstral-medium  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'mistralai/devstral-medium  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'mistralai/devstral-medium  # $0.40/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.20410959102446213,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/mistralai__devstral-medium  # $0.40__M.jsonl"
+    },
+    {
+      "model_id": "mistralai/mistral-large  # $2.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-large  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-large  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-large  # $2.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.10691383900120854,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/mistralai__mistral-large  # $2.00__M.jsonl"
+    },
+    {
+      "model_id": "mistralai/mistral-large-2407  # $2.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-large-2407  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-large-2407  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-large-2407  # $2.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1439053179929033,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/mistralai__mistral-large-2407  # $2.00__M.jsonl"
+    },
+    {
+      "model_id": "mistralai/mistral-large-2411  # $2.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-large-2411  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-large-2411  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-large-2411  # $2.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.12145445100031793,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/mistralai__mistral-large-2411  # $2.00__M.jsonl"
+    },
+    {
+      "model_id": "mistralai/mistral-large-2512  # $0.50/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-large-2512  # $0.50/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-large-2512  # $0.50/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-large-2512  # $0.50/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.12571602399111725,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/mistralai__mistral-large-2512  # $0.50__M.jsonl"
+    },
+    {
+      "model_id": "mistralai/mistral-medium-3  # $0.40/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-medium-3  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-medium-3  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-medium-3  # $0.40/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1124038029811345,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/mistralai__mistral-medium-3  # $0.40__M.jsonl"
+    },
+    {
+      "model_id": "mistralai/mistral-medium-3.1  # $0.40/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-medium-3.1  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-medium-3.1  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'mistralai/mistral-medium-3.1  # $0.40/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.13009788500494324,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/mistralai__mistral-medium-3.1  # $0.40__M.jsonl"
+    },
+    {
+      "model_id": "mistralai/mixtral-8x22b-instruct  # $2.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'mistralai/mixtral-8x22b-instruct  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'mistralai/mixtral-8x22b-instruct  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'mistralai/mixtral-8x22b-instruct  # $2.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.47736947299563326,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/mistralai__mixtral-8x22b-instruct  # $2.00__M.jsonl"
+    },
+    {
+      "model_id": "mistralai/mixtral-8x7b-instruct  # $0.54/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'mistralai/mixtral-8x7b-instruct  # $0.54/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'mistralai/mixtral-8x7b-instruct  # $0.54/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'mistralai/mixtral-8x7b-instruct  # $0.54/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.15780243201879784,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/mistralai__mixtral-8x7b-instruct  # $0.54__M.jsonl"
+    },
+    {
+      "model_id": "mistralai/pixtral-large-2411  # $2.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'mistralai/pixtral-large-2411  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'mistralai/pixtral-large-2411  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'mistralai/pixtral-large-2411  # $2.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1088688219897449,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/mistralai__pixtral-large-2411  # $2.00__M.jsonl"
+    },
+    {
+      "model_id": "moonshotai/kimi-k2  # $0.57/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'moonshotai/kimi-k2  # $0.57/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'moonshotai/kimi-k2  # $0.57/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'moonshotai/kimi-k2  # $0.57/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.10252908599795774,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/moonshotai__kimi-k2  # $0.57__M.jsonl"
+    },
+    {
+      "model_id": "moonshotai/kimi-k2-0905  # $0.40/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'moonshotai/kimi-k2-0905  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'moonshotai/kimi-k2-0905  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'moonshotai/kimi-k2-0905  # $0.40/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.10155826699337922,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/moonshotai__kimi-k2-0905  # $0.40__M.jsonl"
+    },
+    {
+      "model_id": "moonshotai/kimi-k2-thinking  # $0.60/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'moonshotai/kimi-k2-thinking  # $0.60/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'moonshotai/kimi-k2-thinking  # $0.60/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'moonshotai/kimi-k2-thinking  # $0.60/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.13460187800228596,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/moonshotai__kimi-k2-thinking  # $0.60__M.jsonl"
+    },
+    {
+      "model_id": "nvidia/llama-3.1-nemotron-70b-instruct  # $1.20/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'nvidia/llama-3.1-nemotron-70b-instruct  # $1.20/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'nvidia/llama-3.1-nemotron-70b-instruct  # $1.20/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'nvidia/llama-3.1-nemotron-70b-instruct  # $1.20/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.10791523000807501,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/nvidia__llama-3.1-nemotron-70b-instruct  # $1.20__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-3.5-turbo  # $0.50/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-3.5-turbo  # $0.50/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-3.5-turbo  # $0.50/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-3.5-turbo  # $0.50/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1491852210019715,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-3.5-turbo  # $0.50__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-3.5-turbo-16k  # $3.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-3.5-turbo-16k  # $3.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-3.5-turbo-16k  # $3.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-3.5-turbo-16k  # $3.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.11353029901511036,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-3.5-turbo-16k  # $3.00__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-4.1  # $2.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4.1  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4.1  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4.1  # $2.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.11754730599932373,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-4.1  # $2.00__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-4.1-mini  # $0.40/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4.1-mini  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4.1-mini  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4.1-mini  # $0.40/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.13296369698946364,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-4.1-mini  # $0.40__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-4o  # $2.50/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4o  # $2.50/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4o  # $2.50/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4o  # $2.50/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.10835234299884178,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-4o  # $2.50__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-4o-2024-05-13  # $5.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4o-2024-05-13  # $5.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4o-2024-05-13  # $5.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4o-2024-05-13  # $5.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.11280541800078936,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-4o-2024-05-13  # $5.00__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-4o-2024-08-06  # $2.50/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4o-2024-08-06  # $2.50/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4o-2024-08-06  # $2.50/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4o-2024-08-06  # $2.50/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.6495806490129326,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-4o-2024-08-06  # $2.50__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-4o-2024-11-20  # $2.50/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4o-2024-11-20  # $2.50/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4o-2024-11-20  # $2.50/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4o-2024-11-20  # $2.50/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.12316778901731595,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-4o-2024-11-20  # $2.50__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-4o-audio-preview  # $2.50/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4o-audio-preview  # $2.50/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4o-audio-preview  # $2.50/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-4o-audio-preview  # $2.50/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.12455879198387265,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-4o-audio-preview  # $2.50__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5  # $1.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5  # $1.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.12704530198243447,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-5  # $1.25__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5-codex  # $1.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5-codex  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5-codex  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5-codex  # $1.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.10673662798944861,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-5-codex  # $1.25__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5-image-mini  # $2.50/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5-image-mini  # $2.50/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5-image-mini  # $2.50/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5-image-mini  # $2.50/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.14438144498853944,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-5-image-mini  # $2.50__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5-mini  # $0.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5-mini  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5-mini  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5-mini  # $0.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 1.1694439369894098,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-5-mini  # $0.25__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5.1  # $1.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.1  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.1  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.1  # $1.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.14561958800186403,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-5.1  # $1.25__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5.1-chat  # $1.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.1-chat  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.1-chat  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.1-chat  # $1.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.12415086099645123,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-5.1-chat  # $1.25__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5.1-codex  # $1.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.1-codex  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.1-codex  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.1-codex  # $1.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.16695066797547042,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-5.1-codex  # $1.25__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5.1-codex-max  # $1.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.1-codex-max  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.1-codex-max  # $1.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.1-codex-max  # $1.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.12281724900822155,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-5.1-codex-max  # $1.25__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5.1-codex-mini  # $0.25/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.1-codex-mini  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.1-codex-mini  # $0.25/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.1-codex-mini  # $0.25/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1522326809936203,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-5.1-codex-mini  # $0.25__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5.2  # $1.75/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.2  # $1.75/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.2  # $1.75/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.2  # $1.75/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1396370830188971,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-5.2  # $1.75__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5.2-chat  # $1.75/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.2-chat  # $1.75/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.2-chat  # $1.75/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.2-chat  # $1.75/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.10980557900620624,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-5.2-chat  # $1.75__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5.2-codex  # $1.75/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.2-codex  # $1.75/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.2-codex  # $1.75/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.2-codex  # $1.75/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.11570583601132967,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-5.2-codex  # $1.75__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5.3-chat  # $1.75/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.3-chat  # $1.75/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.3-chat  # $1.75/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.3-chat  # $1.75/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.12256468998384662,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-5.3-chat  # $1.75__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5.3-codex  # $1.75/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.3-codex  # $1.75/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.3-codex  # $1.75/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-5.3-codex  # $1.75/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.12670703101321124,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-5.3-codex  # $1.75__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-audio  # $2.50/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-audio  # $2.50/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-audio  # $2.50/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-audio  # $2.50/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.17991066997637972,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-audio  # $2.50__M.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-audio-mini  # $0.60/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-audio-mini  # $0.60/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-audio-mini  # $0.60/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/gpt-audio-mini  # $0.60/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.12428789600380696,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__gpt-audio-mini  # $0.60__M.jsonl"
+    },
+    {
+      "model_id": "openai/o3  # $2.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/o3  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/o3  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/o3  # $2.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.11431088202516548,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__o3  # $2.00__M.jsonl"
+    },
+    {
+      "model_id": "openai/o3-mini  # $1.10/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/o3-mini  # $1.10/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/o3-mini  # $1.10/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/o3-mini  # $1.10/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.14935361099196598,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__o3-mini  # $1.10__M.jsonl"
+    },
+    {
+      "model_id": "openai/o3-mini-high  # $1.10/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/o3-mini-high  # $1.10/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/o3-mini-high  # $1.10/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/o3-mini-high  # $1.10/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.11806305998470634,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__o3-mini-high  # $1.10__M.jsonl"
+    },
+    {
+      "model_id": "openai/o4-mini  # $1.10/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/o4-mini  # $1.10/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/o4-mini  # $1.10/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/o4-mini  # $1.10/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.10641390000819229,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__o4-mini  # $1.10__M.jsonl"
+    },
+    {
+      "model_id": "openai/o4-mini-deep-research  # $2.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/o4-mini-deep-research  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/o4-mini-deep-research  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/o4-mini-deep-research  # $2.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.12036336798337288,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__o4-mini-deep-research  # $2.00__M.jsonl"
+    },
+    {
+      "model_id": "openai/o4-mini-high  # $1.10/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'openai/o4-mini-high  # $1.10/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'openai/o4-mini-high  # $1.10/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'openai/o4-mini-high  # $1.10/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.12119921899284236,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/openai__o4-mini-high  # $1.10__M.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen-max  # $1.04/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen-max  # $1.04/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen-max  # $1.04/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen-max  # $1.04/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.11194211200927384,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/qwen__qwen-max  # $1.04__M.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen-plus  # $0.26/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen-plus  # $0.26/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen-plus  # $0.26/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen-plus  # $0.26/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1087552460085135,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/qwen__qwen-plus  # $0.26__M.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen-plus-2025-07-28  # $0.26/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen-plus-2025-07-28  # $0.26/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen-plus-2025-07-28  # $0.26/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen-plus-2025-07-28  # $0.26/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.13722986498032697,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/qwen__qwen-plus-2025-07-28  # $0.26__M.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen-plus-2025-07-28:thinking  # $0.26/M",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 3,
+      "final_state_tokens": 108,
+      "key_trajectory": [
+        2,
+        3,
+        3,
+        4,
+        4,
+        4,
+        4,
+        4,
+        4,
+        3
+      ],
+      "state_token_trajectory": [
+        54,
+        107,
+        107,
+        163,
+        163,
+        163,
+        163,
+        163,
+        163,
+        108
+      ],
+      "all_keys_seen": [
+        "constraints",
+        "design_principles",
+        "insight_log",
+        "state_model"
+      ],
+      "elapsed_s": 44.24793288100045,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/qwen__qwen-plus-2025-07-28:thinking  # $0.26__M.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen-vl-max  # $0.52/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen-vl-max  # $0.52/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen-vl-max  # $0.52/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen-vl-max  # $0.52/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.15443219000007957,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/qwen__qwen-vl-max  # $0.52__M.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen3-235b-a22b  # $0.45/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-235b-a22b  # $0.45/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-235b-a22b  # $0.45/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-235b-a22b  # $0.45/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.18602880401886068,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/qwen__qwen3-235b-a22b  # $0.45__M.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen3-coder  # $0.22/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-coder  # $0.22/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-coder  # $0.22/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-coder  # $0.22/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.17362551498808898,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/qwen__qwen3-coder  # $0.22__M.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen3-coder-plus  # $0.65/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-coder-plus  # $0.65/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-coder-plus  # $0.65/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-coder-plus  # $0.65/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.17471253799158148,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/qwen__qwen3-coder-plus  # $0.65__M.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen3-max  # $0.78/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-max  # $0.78/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-max  # $0.78/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-max  # $0.78/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.20265701500466093,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/qwen__qwen3-max  # $0.78__M.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen3-max-thinking  # $0.78/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-max-thinking  # $0.78/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-max-thinking  # $0.78/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-max-thinking  # $0.78/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.16142784702242352,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/qwen__qwen3-max-thinking  # $0.78__M.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen3-vl-235b-a22b-thinking  # $0.26/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-vl-235b-a22b-thinking  # $0.26/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-vl-235b-a22b-thinking  # $0.26/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3-vl-235b-a22b-thinking  # $0.26/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.17561254900647327,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/qwen__qwen3-vl-235b-a22b-thinking  # $0.26__M.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen3.5-122b-a10b  # $0.26/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3.5-122b-a10b  # $0.26/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3.5-122b-a10b  # $0.26/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3.5-122b-a10b  # $0.26/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.20584901500842534,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/qwen__qwen3.5-122b-a10b  # $0.26__M.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen3.5-397b-a17b  # $0.39/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3.5-397b-a17b  # $0.39/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3.5-397b-a17b  # $0.39/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3.5-397b-a17b  # $0.39/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.13752094999654219,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/qwen__qwen3.5-397b-a17b  # $0.39__M.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen3.5-plus-02-15  # $0.26/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3.5-plus-02-15  # $0.26/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3.5-plus-02-15  # $0.26/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3.5-plus-02-15  # $0.26/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.11723784502828494,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/qwen__qwen3.5-plus-02-15  # $0.26__M.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen3.6-plus  # $0.33/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3.6-plus  # $0.33/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3.6-plus  # $0.33/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'qwen/qwen3.6-plus  # $0.33/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1763855280005373,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/qwen__qwen3.6-plus  # $0.33__M.jsonl"
+    },
+    {
+      "model_id": "relace/relace-search  # $1.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'relace/relace-search  # $1.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'relace/relace-search  # $1.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'relace/relace-search  # $1.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 1.1371600589773152,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/relace__relace-search  # $1.00__M.jsonl"
+    },
+    {
+      "model_id": "sao10k/l3.1-euryale-70b  # $0.85/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'sao10k/l3.1-euryale-70b  # $0.85/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'sao10k/l3.1-euryale-70b  # $0.85/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'sao10k/l3.1-euryale-70b  # $0.85/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.15184276300715283,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/sao10k__l3.1-euryale-70b  # $0.85__M.jsonl"
+    },
+    {
+      "model_id": "thedrummer/unslopnemo-12b  # $0.40/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'thedrummer/unslopnemo-12b  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'thedrummer/unslopnemo-12b  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'thedrummer/unslopnemo-12b  # $0.40/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 1.0071405769849662,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/thedrummer__unslopnemo-12b  # $0.40__M.jsonl"
+    },
+    {
+      "model_id": "tngtech/deepseek-r1t2-chimera  # $0.30/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'tngtech/deepseek-r1t2-chimera  # $0.30/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'tngtech/deepseek-r1t2-chimera  # $0.30/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'tngtech/deepseek-r1t2-chimera  # $0.30/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.12192946500726976,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/tngtech__deepseek-r1t2-chimera  # $0.30__M.jsonl"
+    },
+    {
+      "model_id": "x-ai/grok-3  # $3.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-3  # $3.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-3  # $3.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-3  # $3.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.13855348699144088,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/x-ai__grok-3  # $3.00__M.jsonl"
+    },
+    {
+      "model_id": "x-ai/grok-3-beta  # $3.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-3-beta  # $3.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-3-beta  # $3.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-3-beta  # $3.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1066282539977692,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/x-ai__grok-3-beta  # $3.00__M.jsonl"
+    },
+    {
+      "model_id": "x-ai/grok-3-mini  # $0.30/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-3-mini  # $0.30/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-3-mini  # $0.30/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-3-mini  # $0.30/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.11243007698794827,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/x-ai__grok-3-mini  # $0.30__M.jsonl"
+    },
+    {
+      "model_id": "x-ai/grok-3-mini-beta  # $0.30/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-3-mini-beta  # $0.30/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-3-mini-beta  # $0.30/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-3-mini-beta  # $0.30/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.13542548898840323,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/x-ai__grok-3-mini-beta  # $0.30__M.jsonl"
+    },
+    {
+      "model_id": "x-ai/grok-4  # $3.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-4  # $3.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-4  # $3.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-4  # $3.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1179884419834707,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/x-ai__grok-4  # $3.00__M.jsonl"
+    },
+    {
+      "model_id": "x-ai/grok-4.20  # $2.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-4.20  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-4.20  # $2.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-4.20  # $2.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.12016092301928438,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/x-ai__grok-4.20  # $2.00__M.jsonl"
+    },
+    {
+      "model_id": "x-ai/grok-code-fast-1  # $0.20/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-code-fast-1  # $0.20/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-code-fast-1  # $0.20/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'x-ai/grok-code-fast-1  # $0.20/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.1416289409971796,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/x-ai__grok-code-fast-1  # $0.20__M.jsonl"
+    },
+    {
+      "model_id": "xiaomi/mimo-v2-omni  # $0.40/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'xiaomi/mimo-v2-omni  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'xiaomi/mimo-v2-omni  # $0.40/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'xiaomi/mimo-v2-omni  # $0.40/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.11722476399154402,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/xiaomi__mimo-v2-omni  # $0.40__M.jsonl"
+    },
+    {
+      "model_id": "xiaomi/mimo-v2-pro  # $1.00/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'xiaomi/mimo-v2-pro  # $1.00/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'xiaomi/mimo-v2-pro  # $1.00/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'xiaomi/mimo-v2-pro  # $1.00/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.15504357501049526,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/xiaomi__mimo-v2-pro  # $1.00__M.jsonl"
+    },
+    {
+      "model_id": "z-ai/glm-4.5  # $0.60/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-4.5  # $0.60/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-4.5  # $0.60/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-4.5  # $0.60/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.13585313598741777,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/z-ai__glm-4.5  # $0.60__M.jsonl"
+    },
+    {
+      "model_id": "z-ai/glm-4.5v  # $0.60/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-4.5v  # $0.60/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-4.5v  # $0.60/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-4.5v  # $0.60/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.10031854500994086,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/z-ai__glm-4.5v  # $0.60__M.jsonl"
+    },
+    {
+      "model_id": "z-ai/glm-4.6  # $0.39/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-4.6  # $0.39/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-4.6  # $0.39/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-4.6  # $0.39/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.15425555099500343,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/z-ai__glm-4.6  # $0.39__M.jsonl"
+    },
+    {
+      "model_id": "z-ai/glm-4.6v  # $0.30/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-4.6v  # $0.30/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-4.6v  # $0.30/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-4.6v  # $0.30/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.16008832200895995,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/z-ai__glm-4.6v  # $0.30__M.jsonl"
+    },
+    {
+      "model_id": "z-ai/glm-4.7  # $0.39/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-4.7  # $0.39/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-4.7  # $0.39/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-4.7  # $0.39/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.11266389099182561,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/z-ai__glm-4.7  # $0.39__M.jsonl"
+    },
+    {
+      "model_id": "z-ai/glm-5  # $0.72/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-5  # $0.72/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-5  # $0.72/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-5  # $0.72/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.14265942401834764,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/z-ai__glm-5  # $0.72__M.jsonl"
+    },
+    {
+      "model_id": "z-ai/glm-5-turbo  # $1.20/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-5-turbo  # $1.20/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-5-turbo  # $1.20/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-5-turbo  # $1.20/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.24405988500802778,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/z-ai__glm-5-turbo  # $1.20__M.jsonl"
+    },
+    {
+      "model_id": "z-ai/glm-5v-turbo  # $1.20/M",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-5v-turbo  # $1.20/M is not a valid model ID', 'code': 400}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-5v-turbo  # $1.20/M is not a valid model ID', 'code': 400}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'z-ai/glm-5v-turbo  # $1.20/M is not a valid model ID', 'code': 400}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.14156044999253936,
+      "log_path": "experiments/taste_open/sweep_20260412_205856/z-ai__glm-5v-turbo  # $1.20__M.jsonl"
+    }
+  ],
+  "summary": {
+    "total_models": 123,
+    "completed": 2,
+    "partial": 0,
+    "failed": 121
+  }
+}
