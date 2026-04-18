@@ -572,6 +572,8 @@ class OpenTasteSession:
         resume: bool = False,
         bridge: TasteBridge | None = None,
         memory_base_probability: float = 0.1,
+        enable_tools: bool = False,
+        project_root: Path | None = None,
     ):
         self._backend = backend or AnthropicTasteBackend(client)
         self._model = model
@@ -583,6 +585,10 @@ class OpenTasteSession:
         self._system_prompt_prefix = system_prompt_prefix or ""
         self._bridge: TasteBridge | None = bridge
         self._memory_base_prob = memory_base_probability
+        self._enable_tools = enable_tools
+        self._project_root = project_root or Path.cwd()
+        self._session_start = datetime.now(timezone.utc)
+        self._last_cycle_time: datetime | None = None
         # Accumulated prior states for involuntary recall: (cycle, state)
         self._prior_states: list[tuple[int, dict]] = []
         # Last injected memory cycle (for logging)
@@ -665,11 +671,26 @@ class OpenTasteSession:
             memory=memory,
         )
 
+        # Tool wiring — only when enabled. Executor is scoped to this cycle.
+        tool_executor = None
+        extra_tools: list[dict] | None = None
+        if self._enable_tools:
+            from hamutay.tools import TOOL_SCHEMAS, ToolExecutor
+            tool_executor = ToolExecutor(
+                project_root=self._project_root,
+                cycle=self._cycle,
+                session_start=self._session_start,
+                last_cycle_time=self._last_cycle_time,
+            )
+            extra_tools = list(TOOL_SCHEMAS.values())
+
         result = self._backend.call(
             model=self._model,
             system=system,
             messages=messages,
             experiment_label=self._experiment_label,
+            extra_tools=extra_tools,
+            tool_executor=tool_executor,
         )
 
         if result.stop_reason == "max_tokens":
@@ -683,6 +704,13 @@ class OpenTasteSession:
         )
 
         self._state = _apply_updates(self._state, raw_output, self._cycle)
+
+        # Activity log is per-cycle — overwrites prior cycle's log rather
+        # than accumulating. JSONL holds the full history for analysis.
+        if result.tool_activity is not None:
+            self._state["_activity_log"] = result.tool_activity
+
+        self._last_cycle_time = datetime.now(timezone.utc)
 
         # Accumulate for future involuntary recall
         self._prior_states.append((self._cycle, json.loads(json.dumps(self._state))))
@@ -815,6 +843,10 @@ def main():
         "--memory-prob", default=0.1, type=float,
         help="Base probability of involuntary memory injection (default: 0.1)",
     )
+    parser.add_argument(
+        "--tools", action="store_true",
+        help="Enable perception tools (read, search_project, clock)",
+    )
     args = parser.parse_args()
 
     resume = False
@@ -882,6 +914,8 @@ def main():
         resume=resume,
         bridge=bridge,
         memory_base_probability=args.memory_prob,
+        enable_tools=args.tools,
+        project_root=Path.cwd(),
     )
 
     if resume:

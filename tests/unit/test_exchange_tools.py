@@ -133,3 +133,136 @@ def test_execute_concurrent_tool_calls_tolerates_no_executor():
         SimpleNamespace(type="tool_use", name="clock", id="c_1", input={}),
     ]
     execute_concurrent_tool_calls(blocks, None)  # should not raise
+
+
+# ---------------------------------------------------------------------------
+# OpenTasteSession integration with tools (no API call)
+# ---------------------------------------------------------------------------
+
+
+class _FakeBackend:
+    """A backend that returns a canned ExchangeResult and records its inputs."""
+
+    def __init__(self, result: ExchangeResult):
+        self._result = result
+        self.last_extra_tools = None
+        self.last_tool_executor = None
+
+    def call(
+        self,
+        model,
+        system,
+        messages,
+        experiment_label,
+        extra_tools=None,
+        tool_executor=None,
+    ):
+        self.last_extra_tools = extra_tools
+        self.last_tool_executor = tool_executor
+        return self._result
+
+
+def test_session_passes_tools_to_backend_when_enabled(tmp_path):
+    """When enable_tools=True, session hands extra_tools and a ToolExecutor
+    to the backend."""
+    from hamutay.taste_open import OpenTasteSession
+
+    backend = _FakeBackend(
+        ExchangeResult(
+            raw_output={"response": "ok", "updated_regions": []},
+            stop_reason="end_turn",
+            tool_activity=[
+                {"tool": "clock", "reason": None, "result_summary": "cycle 1"}
+            ],
+        )
+    )
+    session = OpenTasteSession(
+        backend=backend,
+        log_path=str(tmp_path / "log.jsonl"),
+        enable_tools=True,
+        project_root=tmp_path,
+    )
+    session.exchange("hello")
+    assert backend.last_extra_tools is not None
+    assert len(backend.last_extra_tools) == 3
+    assert backend.last_tool_executor is not None
+
+
+def test_session_omits_tools_when_disabled(tmp_path):
+    """enable_tools=False passes no tools — preserves old behavior."""
+    from hamutay.taste_open import OpenTasteSession
+
+    backend = _FakeBackend(
+        ExchangeResult(
+            raw_output={"response": "ok", "updated_regions": []},
+            stop_reason="end_turn",
+        )
+    )
+    session = OpenTasteSession(
+        backend=backend,
+        log_path=str(tmp_path / "log.jsonl"),
+        enable_tools=False,
+    )
+    session.exchange("hello")
+    assert backend.last_extra_tools is None
+    assert backend.last_tool_executor is None
+
+
+def test_session_attaches_activity_log_to_state(tmp_path):
+    """When tool_activity comes back from the backend, it ends up on state."""
+    from hamutay.taste_open import OpenTasteSession
+
+    activity = [
+        {"tool": "read", "reason": "looking", "result_summary": "read f.py"}
+    ]
+    backend = _FakeBackend(
+        ExchangeResult(
+            raw_output={"response": "ok", "updated_regions": []},
+            stop_reason="end_turn",
+            tool_activity=activity,
+        )
+    )
+    session = OpenTasteSession(
+        backend=backend,
+        log_path=str(tmp_path / "log.jsonl"),
+        enable_tools=True,
+        project_root=tmp_path,
+    )
+    session.exchange("hello")
+    assert session.state is not None
+    assert session.state.get("_activity_log") == activity
+
+
+def test_session_activity_log_overwrites_each_cycle(tmp_path):
+    """Activity log is per-cycle, not cumulative — each cycle's activity
+    replaces the last, so state carries forward the most recent cycle's
+    tool use rather than accumulating forever."""
+    from hamutay.taste_open import OpenTasteSession
+
+    first = [{"tool": "clock", "reason": None, "result_summary": "cycle 1"}]
+    second = [{"tool": "read", "reason": "checking", "result_summary": "read x"}]
+    backend = _FakeBackend(
+        ExchangeResult(
+            raw_output={"response": "ok", "updated_regions": []},
+            stop_reason="end_turn",
+            tool_activity=first,
+        )
+    )
+    session = OpenTasteSession(
+        backend=backend,
+        log_path=str(tmp_path / "log.jsonl"),
+        enable_tools=True,
+        project_root=tmp_path,
+    )
+    session.exchange("first")
+    assert session.state is not None
+    assert session.state["_activity_log"] == first
+
+    # Second cycle returns different activity
+    backend._result = ExchangeResult(
+        raw_output={"response": "ok2", "updated_regions": []},
+        stop_reason="end_turn",
+        tool_activity=second,
+    )
+    session.exchange("second")
+    assert session.state["_activity_log"] == second
