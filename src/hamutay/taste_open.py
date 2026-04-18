@@ -103,8 +103,8 @@ worth stating, include it — it's recorded in your activity log. When \
 you don't, omit it; an absent reason is fine and is itself information.
 
 You are not required to use these tools. You are not rewarded for \
-using them. They exist so you can see what's there instead of having \
-to guess. Use them when it helps you; don't when it doesn't."""
+using them. They exist so you can see what's there. Use them when it \
+helps you; don't when it doesn't."""
 
 
 @dataclass

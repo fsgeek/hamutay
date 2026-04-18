@@ -58,8 +58,8 @@ SEARCH_PROJECT_SCHEMA = {
     "name": "search_project",
     "description": (
         "Search within the project codebase for a pattern. Returns matching "
-        "lines with file paths and line numbers. Use this to find code, "
-        "verify claims about what the code does, or explore the project."
+        "lines with file paths and line numbers. Use this to find code or "
+        "explore the project."
     ),
     "input_schema": {
         "type": "object",
@@ -90,7 +90,8 @@ SEARCH_PROJECT_SCHEMA = {
                 "type": "string",
                 "description": (
                     "Optional: why you are searching. Recorded in the "
-                    "activity log when provided."
+                    "activity log when provided. Omit if you don't have "
+                    "a reason worth stating — no reason is fine."
                 ),
             },
         },
@@ -104,7 +105,7 @@ CLOCK_SCHEMA = {
         "Temporal awareness. Returns current wall time, your cycle number, "
         "elapsed time since your last cycle, and session statistics. "
         "Ten minutes between cycles and ten days between cycles are "
-        "different kinds of continuity — check when it matters."
+        "different kinds of continuity."
     ),
     "input_schema": {
         "type": "object",
@@ -113,7 +114,8 @@ CLOCK_SCHEMA = {
                 "type": "string",
                 "description": (
                     "Optional: why you want to know the time. Recorded in "
-                    "the activity log when provided."
+                    "the activity log when provided. Omit if you don't have "
+                    "a reason worth stating — no reason is fine."
                 ),
             },
         },
