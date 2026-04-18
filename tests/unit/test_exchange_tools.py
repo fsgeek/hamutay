@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 from hamutay.taste_open import (
     ExchangeResult,
+    _build_messages,
     _split_tool_use_blocks,
     execute_concurrent_tool_calls,
 )
@@ -266,3 +267,66 @@ def test_session_activity_log_overwrites_each_cycle(tmp_path):
     )
     session.exchange("second")
     assert session.state["_activity_log"] == second
+
+
+# ---------------------------------------------------------------------------
+# System prompt tool guidance
+# ---------------------------------------------------------------------------
+
+
+def test_build_messages_includes_tool_guidance_when_enabled():
+    _, system = _build_messages(
+        prior_state=None,
+        user_message="hello",
+        cycle=1,
+        tools_enabled=True,
+    )
+    assert "read" in system.lower()
+    assert "clock" in system.lower()
+    assert "search_project" in system.lower()
+
+
+def test_build_messages_omits_tool_guidance_when_disabled():
+    _, system = _build_messages(
+        prior_state=None,
+        user_message="hello",
+        cycle=1,
+        tools_enabled=False,
+    )
+    # No mention of the concrete tools
+    assert "search_project" not in system.lower()
+    assert "clock()" not in system.lower()
+
+
+def test_tool_guidance_does_not_call_reason_mandatory():
+    """`reason` is optional. The guidance must not call it mandatory —
+    that wording trains the model to manufacture reasons to satisfy the
+    schema. The field exists to record intent when there is one."""
+    _, system = _build_messages(
+        prior_state=None,
+        user_message="hello",
+        cycle=1,
+        tools_enabled=True,
+    )
+    assert "mandatory" not in system.lower()
+    assert "optional" in system.lower()
+
+
+def test_tool_guidance_is_not_coercive():
+    """Guidance must not reward or require tool use. The framework is
+    there to enable the model, not to shape it into a tool-caller."""
+    _, system = _build_messages(
+        prior_state=None,
+        user_message="hello",
+        cycle=1,
+        tools_enabled=True,
+    )
+    # The only acceptable form of "required" is in "not required"
+    lowered = system.lower()
+    for idx in range(len(lowered)):
+        if lowered[idx : idx + 8] == "required":
+            before = lowered[max(0, idx - 10) : idx]
+            assert "not " in before, (
+                f"guidance contains a positive 'required' near: "
+                f"...{lowered[max(0, idx - 20) : idx + 20]}..."
+            )

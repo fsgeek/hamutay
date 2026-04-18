@@ -86,6 +86,27 @@ or this may be the first cycle and there's nothing yet. Either way, \
 what you build here is for whoever comes next."""
 
 
+_TOOL_GUIDANCE = """\
+## Tools
+
+Alongside think_and_respond you may call these tools before producing \
+your state update:
+
+- read(path): Read a file from the project you live in.
+- search_project(pattern): Search the codebase for a pattern.
+- clock(): Current wall time, your cycle rate, and elapsed time since \
+your last cycle. Ten minutes and ten days between cycles are different \
+kinds of continuity.
+
+Each tool accepts an optional `reason` field. When you have a reason \
+worth stating, include it — it's recorded in your activity log. When \
+you don't, omit it; an absent reason is fine and is itself information.
+
+You are not required to use these tools. You are not rewarded for \
+using them. They exist so you can see what's there instead of having \
+to guess. Use them when it helps you; don't when it doesn't."""
+
+
 @dataclass
 class ExchangeResult:
     """What comes back from a single taste_open API call."""
@@ -504,12 +525,17 @@ def _build_messages(
     cycle: int,
     system_prefix: str = "",
     memory: tuple[int, dict] | None = None,
+    tools_enabled: bool = False,
 ) -> tuple[list[dict], str]:
     """Build messages for the call."""
     system_parts = []
     if system_prefix:
         system_parts.append(system_prefix)
     system_parts.extend([_SYSTEM_PROMPT, ""])
+
+    if tools_enabled:
+        system_parts.append(_TOOL_GUIDANCE)
+        system_parts.append("")
 
     if prior_state is not None:
         system_parts.append(f"## Your state from cycle {cycle - 1}\n")
@@ -669,6 +695,7 @@ class OpenTasteSession:
             self._state, user_message, self._cycle,
             system_prefix=self._system_prompt_prefix,
             memory=memory,
+            tools_enabled=self._enable_tools,
         )
 
         # Tool wiring — only when enabled. Executor is scoped to this cycle.
