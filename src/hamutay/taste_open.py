@@ -21,10 +21,14 @@ import random
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
+from uuid import UUID
 
 import anthropic
 import httpx
+
+if TYPE_CHECKING:
+    from anthropic.types import MessageParam
 
 
 OPEN_SCHEMA = {
@@ -87,11 +91,66 @@ class ExchangeResult:
     """What comes back from a single taste_open API call."""
 
     raw_output: dict
-    stop_reason: str
+    stop_reason: str = "end_turn"
     input_tokens: int = 0
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_creation_tokens: int = 0
+    tool_activity: list[dict] | None = None
+
+
+@dataclass
+class _ToolBlocks:
+    """Partition of a response's tool_use blocks.
+
+    think_and_respond is the protocol's terminal tool — the state update.
+    Other tool_use blocks are perception or action tools the model chose
+    to call. The framework should never silently drop the latter just
+    because the former is present in the same response.
+    """
+
+    think_and_respond_input: dict | None
+    other_tool_uses: list
+
+
+def _split_tool_use_blocks(content) -> _ToolBlocks:
+    """Partition response content into think_and_respond vs other tool calls."""
+    tr_input = None
+    others = []
+    for block in content:
+        if getattr(block, "type", None) != "tool_use":
+            continue
+        if getattr(block, "name", None) == "think_and_respond":
+            tr_input = block.input
+        else:
+            others.append(block)
+    return _ToolBlocks(think_and_respond_input=tr_input, other_tool_uses=others)
+
+
+def execute_concurrent_tool_calls(blocks, tool_executor) -> None:
+    """Execute tool calls that arrived alongside a terminal think_and_respond.
+
+    When the model returns think_and_respond in the same response as other
+    tool_use blocks, the cycle is over — we have the state update. But the
+    model *also* asked to call those other tools. Silently dropping them
+    discards expressed intent. We execute them so the activity log reflects
+    what the model actually did this cycle. Their results do not feed back
+    into the model (the cycle is terminal), but the activity is recorded.
+    """
+    if tool_executor is None:
+        return
+    for block in blocks:
+        name = getattr(block, "name", None)
+        tool_input = getattr(block, "input", {})
+        if name is None:
+            continue
+        tool_executor.execute(name, tool_input)
+
+
+class TasteBridge(Protocol):
+    """Persistence layer for taste_open tensors."""
+
+    def store_open_state(self, state: dict, cycle: int) -> UUID: ...
 
 
 class TasteBackend(Protocol):
@@ -103,11 +162,21 @@ class TasteBackend(Protocol):
         system: str,
         messages: list[dict],
         experiment_label: str,
+        extra_tools: list[dict] | None = None,
+        tool_executor: Any | None = None,
     ) -> ExchangeResult: ...
 
 
 class AnthropicTasteBackend:
-    """Streaming tool-use via the Anthropic SDK."""
+    """Streaming tool-use via the Anthropic SDK.
+
+    Two modes:
+      * Single-tool (no extra_tools): forces think_and_respond as the only
+        tool; the model returns exactly one structured state update.
+      * Multi-turn (extra_tools provided): the model may call perception
+        or other tools, see results, and eventually call think_and_respond
+        to close the cycle.
+    """
 
     def __init__(self, client: anthropic.Anthropic | None = None):
         self._client = client or anthropic.Anthropic()
@@ -118,12 +187,27 @@ class AnthropicTasteBackend:
         system: str,
         messages: list[dict],
         experiment_label: str,
+        extra_tools: list[dict] | None = None,
+        tool_executor: Any | None = None,
+    ) -> ExchangeResult:
+        if not extra_tools:
+            return self._call_single_tool(model, system, messages, experiment_label)
+        return self._call_multi_turn(
+            model, system, messages, experiment_label, extra_tools, tool_executor
+        )
+
+    def _call_single_tool(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
     ) -> ExchangeResult:
         with self._client.messages.stream(
             model=model,
             max_tokens=64000,
             system=system,
-            messages=messages,
+            messages=cast("list[MessageParam]", messages),
             tools=[
                 {
                     "name": "think_and_respond",
@@ -138,27 +222,124 @@ class AnthropicTasteBackend:
         ) as stream:
             response = stream.get_final_message()
 
-        raw_output = None
-        for block in response.content:
-            if (
-                hasattr(block, "name")
-                and block.type == "tool_use"
-                and block.name == "think_and_respond"
-            ):
-                raw_output = block.input
-                break
-
-        if raw_output is None:
+        split = _split_tool_use_blocks(response.content)
+        if split.think_and_respond_input is None:
             raise RuntimeError("No think_and_respond output in response")
 
         usage = response.usage
         return ExchangeResult(
-            raw_output=raw_output,
+            raw_output=split.think_and_respond_input,
             stop_reason=response.stop_reason or "unknown",
             input_tokens=getattr(usage, "input_tokens", 0),
             output_tokens=getattr(usage, "output_tokens", 0),
-            cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0),
-            cache_creation_tokens=getattr(usage, "cache_creation_input_tokens", 0),
+            cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
+            cache_creation_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
+        )
+
+    def _call_multi_turn(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
+        extra_tools: list[dict],
+        tool_executor: Any | None,
+    ) -> ExchangeResult:
+        """Multi-turn loop: model calls perception tools, gets results,
+        eventually calls think_and_respond. Uses streaming throughout
+        to avoid the 16K non-streaming output ceiling.
+        """
+        tools: list[dict] = [
+            {
+                "name": "think_and_respond",
+                "description": "Produce your response and maintain your state.",
+                "input_schema": OPEN_SCHEMA,
+            },
+            *extra_tools,
+        ]
+
+        conversation = list(messages)
+        total_input = 0
+        total_output = 0
+        cache_read = 0
+        cache_create = 0
+        max_turns = 10
+
+        for _ in range(max_turns):
+            with self._client.messages.stream(
+                model=model,
+                max_tokens=64000,
+                system=system,
+                messages=cast("list[MessageParam]", conversation),
+                tools=cast("list", tools),
+                tool_choice={"type": "any"},
+                metadata={"user_id": f"hamutay_{experiment_label}"},
+            ) as stream:
+                response = stream.get_final_message()
+
+            usage = response.usage
+            total_input += getattr(usage, "input_tokens", 0) or 0
+            total_output += getattr(usage, "output_tokens", 0) or 0
+            cache_read += getattr(usage, "cache_read_input_tokens", 0) or 0
+            cache_create += getattr(usage, "cache_creation_input_tokens", 0) or 0
+
+            split = _split_tool_use_blocks(response.content)
+
+            if split.think_and_respond_input is not None:
+                # Terminal. Execute any concurrent tool calls for logging
+                # so the model's expressed intent is honored rather than
+                # silently dropped.
+                execute_concurrent_tool_calls(
+                    split.other_tool_uses, tool_executor
+                )
+                return ExchangeResult(
+                    raw_output=split.think_and_respond_input,
+                    stop_reason=response.stop_reason or "end_turn",
+                    input_tokens=total_input,
+                    output_tokens=total_output,
+                    cache_read_tokens=cache_read,
+                    cache_creation_tokens=cache_create,
+                    tool_activity=(
+                        tool_executor.activity_log if tool_executor else None
+                    ),
+                )
+
+            if not split.other_tool_uses:
+                raise RuntimeError(
+                    "Model produced no tool calls and no think_and_respond "
+                    "despite tool_choice='any'"
+                )
+
+            if tool_executor is None:
+                raise RuntimeError(
+                    "Model called perception tools but no tool_executor "
+                    "was provided to resolve them"
+                )
+
+            # Serialize assistant content blocks for the conversation.
+            assistant_content = []
+            for block in response.content:
+                if hasattr(block, "model_dump"):
+                    assistant_content.append(block.model_dump())
+                else:
+                    assistant_content.append({"type": "text", "text": str(block)})
+            conversation.append({"role": "assistant", "content": assistant_content})
+
+            tool_results = []
+            for block in split.other_tool_uses:
+                result = tool_executor.execute(block.name, block.input)
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": json.dumps(result, default=str),
+                    }
+                )
+            conversation.append({"role": "user", "content": tool_results})
+
+        raise RuntimeError(
+            f"Multi-turn exchange did not produce think_and_respond "
+            f"within {max_turns} turns"
         )
 
 
@@ -186,8 +367,19 @@ class OpenAITasteBackend:
         model: str,
         system: str,
         messages: list[dict],
-        experiment_label: str,
+        experiment_label: str,  # required by TasteBackend protocol
+        extra_tools: list[dict] | None = None,
+        tool_executor: Any | None = None,
     ) -> ExchangeResult:
+        if extra_tools:
+            import warnings
+            warnings.warn(
+                "OpenAI backend does not yet support multi-turn tool use; "
+                "extra_tools will be ignored.",
+                stacklevel=2,
+            )
+        del tool_executor  # not yet used by OpenAI backend
+
         # OpenAI format: system prompt is a message, not a parameter
         oai_messages = [{"role": "system", "content": system}] + messages
 
@@ -227,8 +419,8 @@ class OpenAITasteBackend:
             raise RuntimeError(f"OpenAI backend error: {data['error']}")
 
         choice = data["choices"][0]
-        raw_stop = choice.get("finish_reason", "unknown")
-        stop_reason = {
+        raw_stop: str = choice.get("finish_reason") or "unknown"
+        stop_reason: str = {
             "stop": "end_turn",
             "length": "max_tokens",
             "tool_calls": "tool_use",
@@ -378,7 +570,7 @@ class OpenTasteSession:
         experiment_label: str | None = None,
         system_prompt_prefix: str | None = None,
         resume: bool = False,
-        bridge: object | None = None,
+        bridge: TasteBridge | None = None,
         memory_base_probability: float = 0.1,
     ):
         self._backend = backend or AnthropicTasteBackend(client)
@@ -389,7 +581,7 @@ class OpenTasteSession:
         self._last_usage: dict | None = None
         self._experiment_label = experiment_label or "taste_open"
         self._system_prompt_prefix = system_prompt_prefix or ""
-        self._bridge = bridge
+        self._bridge: TasteBridge | None = bridge
         self._memory_base_prob = memory_base_probability
         # Accumulated prior states for involuntary recall: (cycle, state)
         self._prior_states: list[tuple[int, dict]] = []
@@ -413,6 +605,12 @@ class OpenTasteSession:
 
         if not lines:
             raise SystemExit(f"Cannot resume: log is empty: {log_path}")
+
+        if lines[0].startswith("version https://git-lfs"):
+            raise SystemExit(
+                f"Cannot resume: {log_path} is a Git LFS pointer, not data. "
+                f"Run: git lfs pull --include=\"{log_path}\""
+            )
 
         for line in lines:
             record = json.loads(line)
@@ -667,7 +865,7 @@ def main():
             from hamutay.apacheta_bridge import ApachetaBridge
             if args.persist == "arango":
                 bridge = ApachetaBridge.from_arango(model=args.model)
-                print("Persisting to: ArangoDB (via YANANTIN_ARANGO_* env vars)")
+                print("Persisting to: ArangoDB (via Apacheta)")
             else:
                 bridge = ApachetaBridge.from_duckdb(
                     args.persist, model=args.model,
