@@ -129,7 +129,7 @@ Dict iteration over the backend's internal record store. Insertion order gives a
 
 ### Arango backend (`backends/arango.py`) — full implementation
 
-**AQL-native filters with indexes on the filtered fields.** The obfuscator's collection-name translation (`self._map.collection_name(...)`) already has precedent; the same mechanism should extend to field paths (`provenance.author_instance_id` → obfuscated dotted path). If `self._map` doesn't yet expose `field_name(...)` or equivalent, adding that capability is part of this hand-off — it is strictly more valuable than a query implementation we will rewrite.
+**AQL-native filters with indexes on the filtered fields.** The obfuscator's collection-name translation (`self._map.collection_name(...)`) already has precedent; the same mechanism extends to field paths (`provenance.author_instance_id` → obfuscated dotted path). A `self._map.field_path(...)` (or equivalent) helper is part of the work.
 
 Create indexes on:
 - `provenance.author_instance_id` (for `query_open_by_author_instance` and `list_author_instances`)
@@ -137,9 +137,17 @@ Create indexes on:
 
 `query_open_has_field` queries `model_extra`-level keys, which land as top-level fields on the Arango document due to `extra='allow'`. AQL can filter with `HAS(doc, @field)` (translated through the obfuscator for stored field names). Indexing here is a judgment call — if typical callers probe a small stable set of extra fields, index those; otherwise leave unindexed and accept the collection scan for this one query.
 
-**Why not load-all-and-filter:** proposed and rejected previously. The open collection grows monotonically (immutable, no delete), so every query pulling the whole collection degrades as the system is used. Taste_open instances call these methods during live cycles where latency is experience-facing. Consistency with `list_tensors()` is not a rationale — if anything, `list_tensors()` is a candidate for the same treatment, separately.
+**Scope framing** (per yanantin): the existing `_load_all` pattern across the arango backend is technical debt — it drifted in under "keep backends uniform" pressure the stated design explicitly rejects. The open-records methods are the **inflection point for the conversion**, not a one-off. This hand-off commits to the inflection; broader sweep of existing `_load_all` query methods is scoped into follow-up PRs.
 
-Uses `self._map.collection_name("records")` for the obfuscated collection name and `self._from_generic_doc` for hydration. Ordering: sort by insertion-time proxy (document `_rev` or, preferably, a `created_at` field if one can be added to `ApachetaBaseModel` — out of scope here, flag if it blocks).
+**Why not load-all-and-filter** (for the record): proposed and rejected repeatedly. The open collection grows monotonically (immutable, no delete), so every query pulling the whole collection degrades as the system is used. Taste_open instances call these methods during live cycles where latency is experience-facing.
+
+Uses `self._map.collection_name("records")` for the obfuscated collection name and `self._from_generic_doc` for hydration.
+
+### Ordering
+
+Implementation-defined. Callers needing strict "newest first" ordering across the collection should sort on a timestamp field.
+
+**Model change (requested):** add `created_at: datetime` to `ApachetaBaseModel`, set at construction time. Hamutay populates it from the same clock that fills taste_open's JSONL `timestamp` (`self._last_cycle_time`). With `created_at` present and indexed, AQL can `SORT doc.created_at DESC LIMIT @limit` and the "newest first" docstrings become enforceable. Without it, ordering remains best-effort.
 
 ### DuckDB backend (`backends/duckdb.py`) — explicit `NotImplementedError`
 
@@ -147,9 +155,11 @@ All five methods raise `NotImplementedError("DuckDB open-record queries deferred
 
 ---
 
-## Acceptance tests (contract)
+## Acceptance criteria (contract, not code)
 
-These are the assertions any implementation must pass. Memory backend runs them as unit tests; arango runs them as integration tests with a live Arango container.
+These are the properties the implementation must satisfy, expressed as tests so the shape is concrete. This section is a contract to be handed to the test author (Codex), not code for the implementation commits. Yanantin's implementation commits land without tests; Codex follows with signed commits containing the tests that enforce this contract.
+
+Test organization (file paths, fixture naming, arango skip guards, cleanup strategy) is the test author's call. The contract below fixes behavior, not packaging.
 
 ```python
 def _make_record(session_id, tags, **extras):
@@ -232,8 +242,6 @@ def test_duckdb_raises_not_implemented():
         backend.list_open_records()
 ```
 
-For arango, wrap each test in a fixture that cleans up records by `_key` after the run. Use a `pytest.mark.skipif(os.environ.get("APACHETA_SKIP_ARANGO") == "1", ...)` guard so CI without a container can skip.
-
 ---
 
 ## Non-goals (explicit)
@@ -241,8 +249,14 @@ For arango, wrap each test in a fixture that cleans up records by `_key` after t
 - **No DuckDB open-record queries.** Deferred via explicit `NotImplementedError`.
 - **No new write methods.** `store_record` is sufficient; `store_composition_edge` already exists.
 - **No new edge queries.** Phase 3a's edge-authoring needs can be served by `query_composition_graph` (filtered in the bridge) for v1.
-- **No obfuscation-layer changes.** Query methods respect existing obfuscation by going through `self._map.collection_name(...)`.
-- **No ordering guarantees beyond "newest first, best-effort."** Strict ordering requires a timestamp field not yet in the model.
+- **No broad `_load_all` sweep in this PR.** The arango open-records methods are the inflection point of the conversion; existing `_load_all` query methods convert in follow-up PRs.
+
+## Governance follow-up (separate PR, per yanantin)
+
+- Blueprint note + red-bar test forbidding new load-all-and-filter query paths on arango (protects the heterogeneity the interface comment claims).
+- Red-bar test asserting DuckDB raises `NotImplementedError` on graph-shaped queries rather than simulating them in Python.
+
+Out of scope for this hand-off, flagged here so the test author and reviewer share the same picture.
 
 ---
 
