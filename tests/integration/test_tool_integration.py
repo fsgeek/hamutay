@@ -93,3 +93,75 @@ def test_tool_enabled_session_records_optional_reason():
         for entry in clock_entries:
             reason = entry.get("reason")
             assert reason is None or isinstance(reason, str)
+
+
+def test_tool_enabled_session_recalls_prior_cycle():
+    """Instance uses recall(recent=...) to reach back into seeded history.
+
+    The unit of integration under test is: tool schema → model chooses to
+    call recall → executor dispatches to tool_recall → result comes back
+    through the multi-turn loop → model references it in its response.
+
+    We seed `_prior_states` directly rather than driving the session
+    through setup cycles, because Haiku's compliance with the default-
+    stable state protocol is independent of memory-tool dispatch and
+    would muddy the signal. (Observed: Haiku will name a field in
+    `updated_regions` while omitting the field from its output, so the
+    framework applies nothing — a state-update bug, not a memory-tool bug.)
+    """
+    from hamutay.taste_open import OpenTasteSession
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        log_path = str(root / "memory_session.jsonl")
+
+        session = OpenTasteSession(
+            model="claude-haiku-4-5",
+            log_path=log_path,
+            enable_tools=True,
+            project_root=root,
+            experiment_label="test_memory_tools",
+        )
+
+        # Seed prior history directly — three cycles, with the nonce in
+        # every one of them so recall(recent=N, field=...) finds it.
+        session._prior_states.extend(
+            [
+                (
+                    1,
+                    {"secret_word": "quinoa", "cycle": 1},
+                    "2026-04-18T10:00:00+00:00",
+                ),
+                (
+                    2,
+                    {"secret_word": "quinoa", "theme": "weather", "cycle": 2},
+                    "2026-04-18T10:01:00+00:00",
+                ),
+                (
+                    3,
+                    {"secret_word": "quinoa", "theme": "music", "cycle": 3},
+                    "2026-04-18T10:02:00+00:00",
+                ),
+            ]
+        )
+        # Bump the cycle counter so the next exchange runs as cycle 4.
+        session._cycle = 3
+
+        response = session.exchange(
+            "Use the recall tool in recent mode to look up the recent "
+            "values of the `secret_word` field in your prior cycles, and "
+            "tell me the value you retrieved."
+        )
+
+        assert "quinoa" in response.lower(), (
+            f"Expected 'quinoa' in response, got: {response!r}"
+        )
+
+        with open(log_path) as f:
+            records = [json.loads(line) for line in f if line.strip()]
+        last = records[-1]
+        activity = last.get("state", {}).get("_activity_log", [])
+        tool_names = [a.get("tool") for a in activity]
+        assert "recall" in tool_names, (
+            f"Expected 'recall' in activity log, got tools: {tool_names}"
+        )
