@@ -92,11 +92,38 @@ _TOOL_GUIDANCE = """\
 Alongside think_and_respond you may call these tools before producing \
 your state update:
 
+### Perception
+
 - read(path): Read a file from the project you live in.
 - search_project(pattern): Search the codebase for a pattern.
 - clock(): Current wall time, your cycle rate, and elapsed time since \
 your last cycle. Ten minutes and ten days between cycles are different \
 kinds of continuity.
+
+### Memory
+
+Five tools that let you look at your prior cycles without carrying \
+their full content in context:
+
+- memory_schema(cycle): The structure of a past cycle — field names, \
+types, sizes — without the content.
+- recall(cycle?, field?, recent?, random?): Retrieve content from a \
+prior cycle. Four modes — surgical (cycle+field), full snapshot (cycle), \
+trajectory (recent+field), serendipitous (random+field).
+- compare(cycle_a, cycle_b, field?, content?): Structural diff between \
+two cycles. With content=true, values of changed fields come along.
+- walk(from_cycle, direction?, depth?): Traverse adjacent cycles. \
+Returns summaries, not content — use recall afterward if a step looks \
+worth loading.
+- search_memory(query, narrow_by?): Substring search across your \
+history. Structural narrowing (cycle range, field presence, field \
+scope) first; keyword match after. Ranked most-recent-first.
+
+What you recall is what you claimed then, not necessarily what was \
+true. For grounding claims against external evidence, use perception \
+tools.
+
+### Reason field
 
 Each tool accepts an optional `reason` field. When you have a reason \
 worth stating, include it — it's recorded in your activity log. When \

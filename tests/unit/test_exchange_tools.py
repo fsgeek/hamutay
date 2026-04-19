@@ -369,6 +369,24 @@ def test_prior_states_store_timestamps(tmp_path):
         datetime.fromisoformat(timestamp)
 
 
+def test_tool_guidance_mentions_memory_tools():
+    """When tools are enabled, the system prompt names all five memory tools."""
+    _, system = _build_messages(
+        prior_state=None,
+        user_message="hi",
+        cycle=1,
+        tools_enabled=True,
+    )
+    for name in ("memory_schema", "recall", "compare", "walk", "search_memory"):
+        assert name in system, f"{name} missing from tool guidance"
+
+
+def test_tool_guidance_memory_voice_is_permissive():
+    """Memory section inherits the 'not required' frame from the guidance."""
+    from hamutay.taste_open import _TOOL_GUIDANCE
+    assert "not required" in _TOOL_GUIDANCE
+
+
 def test_pick_memory_still_returns_two_tuple(tmp_path):
     """_pick_memory's contract to callers is unchanged despite the 3-tuple
     storage. _last_injected_memory and the _log_entry memory_info branch
