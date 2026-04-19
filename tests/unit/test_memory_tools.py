@@ -4,7 +4,12 @@ These tools are pure functions that read from a list of
 (cycle, state, timestamp) triples. No API calls, no I/O.
 """
 
-from hamutay.tools.memory import tool_compare, tool_memory_schema, tool_recall
+from hamutay.tools.memory import (
+    tool_compare,
+    tool_memory_schema,
+    tool_recall,
+    tool_walk,
+)
 
 
 def _make_prior_states():
@@ -173,3 +178,78 @@ def test_compare_missing_cycle_errors():
         prior_states=_make_prior_states(),
     )
     assert "error" in result
+
+
+# ---------------------------------------------------------------------------
+# walk — cycle-adjacent traversal
+# ---------------------------------------------------------------------------
+
+
+def _wide_prior_states():
+    """Five cycles with varied field presence."""
+    return [
+        (1, {"theme": "opening", "cycle": 1}, "2026-04-18T10:00:00+00:00"),
+        (2, {"theme": "exploring", "cycle": 2}, "2026-04-18T10:01:00+00:00"),
+        (3, {"theme": "focus", "pivot": True, "cycle": 3},
+         "2026-04-18T10:02:00+00:00"),
+        (4, {"theme": "deepening", "cycle": 4}, "2026-04-18T10:03:00+00:00"),
+        (5, {"theme": "closing", "cycle": 5}, "2026-04-18T10:04:00+00:00"),
+    ]
+
+
+def test_walk_forward():
+    result = tool_walk(
+        {"from_cycle": 2, "direction": "forward", "depth": 2},
+        prior_states=_wide_prior_states(),
+    )
+    cycles_in_path = [step["cycle"] for step in result["path"]]
+    assert cycles_in_path == [3, 4]
+
+
+def test_walk_backward():
+    result = tool_walk(
+        {"from_cycle": 4, "direction": "backward", "depth": 2},
+        prior_states=_wide_prior_states(),
+    )
+    cycles_in_path = [step["cycle"] for step in result["path"]]
+    assert cycles_in_path == [3, 2]
+
+
+def test_walk_both():
+    result = tool_walk(
+        {"from_cycle": 3, "direction": "both", "depth": 1},
+        prior_states=_wide_prior_states(),
+    )
+    cycles_in_path = [step["cycle"] for step in result["path"]]
+    assert set(cycles_in_path) == {2, 4}
+
+
+def test_walk_path_steps_have_summary():
+    result = tool_walk(
+        {"from_cycle": 1, "direction": "forward", "depth": 2},
+        prior_states=_wide_prior_states(),
+    )
+    step = result["path"][0]
+    assert "cycle" in step
+    assert "timestamp" in step
+    assert "field_names" in step
+    assert "edge_type" in step
+    assert step["edge_type"] == "refines"
+    assert isinstance(step["summary"], str)
+
+
+def test_walk_from_missing_cycle():
+    result = tool_walk(
+        {"from_cycle": 99, "direction": "forward"},
+        prior_states=_wide_prior_states(),
+    )
+    assert "error" in result
+
+
+def test_walk_boundaries_are_not_errors():
+    """Walking past the ends returns what's available, not an error."""
+    result = tool_walk(
+        {"from_cycle": 5, "direction": "forward", "depth": 3},
+        prior_states=_wide_prior_states(),
+    )
+    assert result["path"] == []

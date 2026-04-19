@@ -231,3 +231,64 @@ def tool_compare(
             "field_count_b": len(state_b),
         },
     }
+
+
+def _step_summary(state: dict) -> str:
+    """One-line summary of a cycle's state for walk path steps."""
+    keys = sorted(k for k in state.keys() if k != "cycle")
+    if not keys:
+        return "(empty state)"
+    shown = ", ".join(keys[:5])
+    suffix = "..." if len(keys) > 5 else ""
+    return f"{len(keys)} field(s): {shown}{suffix}"
+
+
+def _walk_step(entry: tuple[int, dict, str]) -> dict:
+    cycle, state, timestamp = entry
+    return {
+        "cycle": cycle,
+        "timestamp": timestamp,
+        "edge_type": "refines",
+        "edge_source": "harness",
+        "field_names": sorted(state.keys()),
+        "summary": _step_summary(state),
+    }
+
+
+def tool_walk(
+    params: dict,
+    *,
+    prior_states: list[tuple[int, dict, str]],
+) -> dict:
+    """Traverse cycles adjacent to a starting cycle.
+
+    Only REFINES edges exist in the current graph, so traversal is cycle-
+    adjacent. direction ∈ {forward, backward, both}; depth bounds the walk.
+    """
+    from_cycle = params.get("from_cycle")
+    direction = params.get("direction", "both")
+    depth = params.get("depth", 1)
+
+    if from_cycle is None:
+        return {"error": "from_cycle is required"}
+    if _find_by_cycle(prior_states, from_cycle) is None:
+        return {"error": f"No state found for cycle {from_cycle}"}
+
+    # Index by cycle for O(1) lookup
+    by_cycle = {c: (c, s, t) for (c, s, t) in prior_states}
+
+    path: list[dict] = []
+    if direction in ("backward", "both"):
+        for offset in range(1, depth + 1):
+            entry = by_cycle.get(from_cycle - offset)
+            if entry is None:
+                break
+            path.append(_walk_step(entry))
+    if direction in ("forward", "both"):
+        for offset in range(1, depth + 1):
+            entry = by_cycle.get(from_cycle + offset)
+            if entry is None:
+                break
+            path.append(_walk_step(entry))
+
+    return {"path": path}
