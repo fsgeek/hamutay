@@ -38,14 +38,6 @@ OPEN_SCHEMA = {
             "type": "string",
             "description": "Your response to the user.",
         },
-        "updated_regions": {
-            "type": "array",
-            "description": (
-                "Which top-level keys you changed this cycle. "
-                "Keys not listed here carry forward from last cycle."
-            ),
-            "items": {"type": "string"},
-        },
         "deleted_regions": {
             "type": "array",
             "description": (
@@ -56,7 +48,7 @@ OPEN_SCHEMA = {
             "items": {"type": "string"},
         },
     },
-    "required": ["response", "updated_regions"],
+    "required": ["response"],
     "additionalProperties": True,
 }
 
@@ -71,10 +63,10 @@ what matters. These are real fields in the JSON object you're \
 producing — include the key and its value, just like `response`. \
 The harness will preserve everything you produce.
 
-The object is default-stable: list the keys you're changing in \
-`updated_regions`, and include those keys with their data in the \
-object. Anything not listed carries forward unchanged from last \
-cycle. If this is the first cycle, everything you include is new.
+The object is default-stable: whatever top-level keys you include \
+this cycle are your updates, and any key you don't include carries \
+forward unchanged from last cycle. If this is the first cycle, \
+everything you include is new.
 
 You may also list keys in `deleted_regions` to remove them from \
 working state. Deleted keys are not lost — every prior state is \
@@ -427,6 +419,7 @@ class OpenAITasteBackend:
                 stacklevel=2,
             )
         del tool_executor  # not yet used by OpenAI backend
+        del experiment_label  # not consumed by OpenAI backend (protocol requirement)
 
         # OpenAI format: system prompt is a message, not a parameter
         oai_messages = [{"role": "system", "content": system}] + messages
@@ -584,29 +577,32 @@ def _build_messages(
     return [{"role": "user", "content": user_message}], "\n".join(system_parts)
 
 
+# `updated_regions` is reserved so historical logs (which still carry it) don't smuggle it into state on resume.
+_PROTOCOL_FIELDS = frozenset({"response", "updated_regions", "deleted_regions"})
+
+
 def _apply_updates(prior_state: dict | None, raw_output: dict, cycle: int) -> dict:
-    """Apply selective updates. Entirely generic — no hardcoded field names."""
-    updated_regions = set(raw_output.get("updated_regions", []))
+    """Default-stable via key-presence: non-protocol keys in raw_output are
+    updates, unlisted keys carry forward. Overlap between updates and deletions
+    raises — the ambiguity is exactly the silent-drop failure we're removing."""
+    deleted = set(raw_output.get("deleted_regions", []))
+    updated = set(raw_output.keys()) - _PROTOCOL_FIELDS
 
-    # Start from prior state or empty
+    overlap = deleted & updated
+    if overlap:
+        raise ValueError(
+            f"cycle {cycle}: deleted_regions overlaps updates: {sorted(overlap)}. "
+            "A key cannot be simultaneously deleted and updated in the same cycle."
+        )
+
     state = dict(prior_state) if prior_state is not None else {}
-
     state["cycle"] = cycle
 
-    # Apply everything the model declared as updated
-    for key in updated_regions:
-        if key in raw_output:
-            state[key] = raw_output[key]
+    for key in updated:
+        state[key] = raw_output[key]
 
-    # Remove anything the model declared as deleted
-    deleted_regions = set(raw_output.get("deleted_regions", []))
-    for key in deleted_regions:
+    for key in deleted:
         state.pop(key, None)
-
-    # Don't carry protocol fields in the state
-    state.pop("response", None)
-    state.pop("updated_regions", None)
-    state.pop("deleted_regions", None)
 
     return state
 
@@ -711,7 +707,7 @@ class OpenTasteSession:
         # Pick from all but the most recent (that's already in the system prompt).
         # Strip the timestamp — callers consume (cycle, state).
         candidates = self._prior_states[:-1]
-        cycle, state, _timestamp = random.choice(candidates)
+        cycle, state, _ = random.choice(candidates)
         return (cycle, state)
 
     def exchange(self, user_message: str) -> str:
@@ -836,8 +832,6 @@ class OpenTasteSession:
             "prior_state": prior_state,
             # Raw model output (complete, unmodified)
             "raw_output": raw_output,
-            # What the model declared as changed
-            "updated_regions": raw_output.get("updated_regions", []),
             "deleted_regions": raw_output.get("deleted_regions", []),
             "response_text": raw_output.get("response", ""),
             # Resulting state after updates

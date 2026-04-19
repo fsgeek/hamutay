@@ -16,12 +16,11 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 
 from hamutay.taste_open import (
-    OPEN_SCHEMA,
     TasteBackend,
     AnthropicTasteBackend,
     OpenAITasteBackend,
@@ -61,12 +60,12 @@ def _build_commune_system(
     parts.extend([
         "",
         "Produce a single structured object: your response and whatever "
-        "state you need to carry forward. The object has `response` and "
-        "`updated_regions`, but you can add any other keys you want — "
-        "they are real fields in the JSON object. For example, if you "
-        "want to track your position, include a `position` key with its "
-        "value. List changed keys in `updated_regions`. Anything not "
-        "listed carries forward unchanged.",
+        "state you need to carry forward. The object has `response`, and "
+        "you can add any other keys you want — they are real fields in "
+        "the JSON object. For example, if you want to track your "
+        "position, include a `position` key with its value. Whatever "
+        "keys you include this cycle are your updates; anything not "
+        "included carries forward unchanged.",
         "",
     ])
 
@@ -257,7 +256,6 @@ class Commune:
             "content": content,
             "raw_output": raw_output,
             "response_text": response_text,
-            "updated_regions": raw_output.get("updated_regions", []),
             "prior_identity": prior_identity,
             "identity": identity,
             "prior_conversation": prior_conversation,
