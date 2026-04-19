@@ -22,7 +22,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Protocol, cast
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import anthropic
 import httpx
@@ -639,8 +639,12 @@ class OpenTasteSession:
         self._session_start = datetime.now(timezone.utc)
         self._last_cycle_time: datetime | None = None
         # Accumulated prior states for involuntary recall and memory tools:
-        # (cycle, state, timestamp_iso).
-        self._prior_states: list[tuple[int, dict, str]] = []
+        # (cycle, record_id, state, timestamp_iso). record_id is the UUID
+        # assigned when the record was created (by the bridge if one is
+        # wired, otherwise locally). Conversations are DAGs; UUID is the
+        # canonical address that survives branch/merge and cross-session
+        # reference. Cycle remains a frame-local coordinate.
+        self._prior_states: list[tuple[int, UUID, dict, str]] = []
         # Last injected memory cycle (for logging)
         self._last_injected_memory: tuple[int, dict] | None = None
 
@@ -674,7 +678,10 @@ class OpenTasteSession:
             cycle = record.get("cycle", 0)
             timestamp = record.get("timestamp", "")
             if state is not None:
-                self._prior_states.append((cycle, state, timestamp))
+                # JSONL logs don't yet carry record_id. Generate a local
+                # UUID so _prior_states stays uniform; resumed cycles
+                # won't match Arango-stored UUIDs from the original run.
+                self._prior_states.append((cycle, uuid4(), state, timestamp))
 
         last = json.loads(lines[-1])
         self._state = last.get("state")
@@ -705,9 +712,9 @@ class OpenTasteSession:
             return None
 
         # Pick from all but the most recent (that's already in the system prompt).
-        # Strip the timestamp — callers consume (cycle, state).
+        # Strip record_id and timestamp — callers consume (cycle, state).
         candidates = self._prior_states[:-1]
-        cycle, state, _ = random.choice(candidates)
+        cycle, _record_id, state, _timestamp = random.choice(candidates)
         return (cycle, state)
 
     def exchange(self, user_message: str) -> str:
@@ -767,21 +774,28 @@ class OpenTasteSession:
 
         self._last_cycle_time = datetime.now(timezone.utc)
 
+        # Persist to Apacheta first, so the record_id generated at creation
+        # time flows into _prior_states. When no bridge is wired, generate
+        # locally — _prior_states carries a UUID for every cycle, uniformly.
+        record_id: UUID
+        if self._bridge is not None:
+            try:
+                record_id = self._bridge.store_open_state(self._state, self._cycle)
+            except Exception as e:
+                print(f"  WARNING: bridge persist failed cycle {self._cycle}: {e}")
+                record_id = uuid4()
+        else:
+            record_id = uuid4()
+
         # Accumulate for future involuntary recall and memory tools
         self._prior_states.append(
             (
                 self._cycle,
+                record_id,
                 json.loads(json.dumps(self._state)),
                 self._last_cycle_time.isoformat(),
             )
         )
-
-        # Persist to Apacheta if bridge is wired
-        if self._bridge is not None:
-            try:
-                self._bridge.store_open_state(self._state, self._cycle)
-            except Exception as e:
-                print(f"  WARNING: bridge persist failed cycle {self._cycle}: {e}")
 
         self._last_usage = {
             "input_tokens": result.input_tokens,

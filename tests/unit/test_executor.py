@@ -64,8 +64,14 @@ def test_executor_preserves_session_state_for_clock(tmp_path):
 
 
 def _prior_states_fixture():
+    from uuid import UUID
     return [
-        (1, {"theme": "opening", "cycle": 1}, "2026-04-18T10:00:00+00:00"),
+        (
+            1,
+            UUID("00000000-0000-0000-0000-000000000001"),
+            {"theme": "opening", "cycle": 1},
+            "2026-04-18T10:00:00+00:00",
+        ),
     ]
 
 

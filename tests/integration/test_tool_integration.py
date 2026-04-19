@@ -125,20 +125,24 @@ def test_tool_enabled_session_recalls_prior_cycle():
 
         # Seed prior history directly — three cycles, with the nonce in
         # every one of them so recall(recent=N, field=...) finds it.
+        from uuid import UUID
         session._prior_states.extend(
             [
                 (
                     1,
+                    UUID("00000000-0000-0000-0000-000000000001"),
                     {"secret_word": "quinoa", "cycle": 1},
                     "2026-04-18T10:00:00+00:00",
                 ),
                 (
                     2,
+                    UUID("00000000-0000-0000-0000-000000000002"),
                     {"secret_word": "quinoa", "theme": "weather", "cycle": 2},
                     "2026-04-18T10:01:00+00:00",
                 ),
                 (
                     3,
+                    UUID("00000000-0000-0000-0000-000000000003"),
                     {"secret_word": "quinoa", "theme": "music", "cycle": 3},
                     "2026-04-18T10:02:00+00:00",
                 ),

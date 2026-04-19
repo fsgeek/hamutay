@@ -19,6 +19,7 @@ import json
 import time
 from datetime import datetime, timezone
 from pathlib import Path
+from uuid import UUID
 
 from hamutay.tools.memory import (
     tool_compare,
@@ -39,7 +40,7 @@ class ToolExecutor:
         cycle: int,
         session_start: datetime | None = None,
         last_cycle_time: datetime | None = None,
-        prior_states: list[tuple[int, dict, str]] | None = None,
+        prior_states: list[tuple[int, UUID, dict, str]] | None = None,
     ):
         self._project_root = project_root
         self._cycle = cycle

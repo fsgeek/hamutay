@@ -1,12 +1,17 @@
 """Memory tools — introspection over the instance's own prior cycles.
 
 Each tool is a pure function:
-    tool_name(params: dict, *, prior_states: list[tuple[int, dict, str]]) -> dict
+    tool_name(params: dict, *, prior_states: list[tuple[int, UUID, dict, str]]) -> dict
 
-prior_states is the session's accumulated history, one triple per cycle:
-(cycle, state_dict, timestamp_iso). The session's OpenTasteSession maintains
-this list and passes a live reference to the ToolExecutor, which passes it
-through to each memory tool.
+prior_states is the session's accumulated history, one 4-tuple per cycle:
+(cycle, record_id, state_dict, timestamp_iso). The session's OpenTasteSession
+maintains this list and passes a live reference to the ToolExecutor, which
+passes it through to each memory tool.
+
+record_id is the UUID assigned when the record was created — stable across
+branches/merges and the canonical address for cross-session reference.
+In-session tool responses surface record_id alongside cycle so the instance
+can author edges (annotate_edge) that bridge in-session and cross-session.
 
 Tools return dicts with either content or error — never both.
 """
@@ -15,12 +20,13 @@ from __future__ import annotations
 
 import json
 import random as _random
+from uuid import UUID
 
 
 def _find_by_cycle(
-    prior_states: list[tuple[int, dict, str]], cycle: int
-) -> tuple[int, dict, str] | None:
-    """Return the first (cycle, state, timestamp) triple matching cycle, or None."""
+    prior_states: list[tuple[int, UUID, dict, str]], cycle: int
+) -> tuple[int, UUID, dict, str] | None:
+    """Return the first (cycle, record_id, state, timestamp) tuple matching cycle, or None."""
     for entry in prior_states:
         if entry[0] == cycle:
             return entry
@@ -47,7 +53,7 @@ def _token_estimate(state: dict) -> int:
 def tool_memory_schema(
     params: dict,
     *,
-    prior_states: list[tuple[int, dict, str]],
+    prior_states: list[tuple[int, UUID, dict, str]],
 ) -> dict:
     """Return structure of a prior cycle's state without retrieving content."""
     cycle = params.get("cycle")
@@ -58,9 +64,10 @@ def tool_memory_schema(
     if found is None:
         return {"error": f"No state found for cycle {cycle}"}
 
-    _cycle, state, timestamp = found
+    _cycle, record_id, state, timestamp = found
     return {
         "cycle": _cycle,
+        "record_id": str(record_id),
         "timestamp": timestamp,
         "field_names": sorted(state.keys()),
         "field_types": {k: _type_name(v) for k, v in state.items()},
@@ -72,7 +79,7 @@ def tool_memory_schema(
 def tool_recall(
     params: dict,
     *,
-    prior_states: list[tuple[int, dict, str]],
+    prior_states: list[tuple[int, UUID, dict, str]],
 ) -> dict:
     """Retrieve content from prior cycles. Four mutually exclusive modes.
 
@@ -90,7 +97,7 @@ def tool_recall(
         found = _find_by_cycle(prior_states, cycle)
         if found is None:
             return {"error": f"No state found for cycle {cycle}"}
-        _cycle, state, timestamp = found
+        _cycle, record_id, state, timestamp = found
         if field is not None:
             if field not in state:
                 return {
@@ -98,11 +105,13 @@ def tool_recall(
                 }
             return {
                 "cycle": _cycle,
+                "record_id": str(record_id),
                 "timestamp": timestamp,
                 "content": state[field],
             }
         return {
             "cycle": _cycle,
+            "record_id": str(record_id),
             "timestamp": timestamp,
             "content": dict(state),
         }
@@ -111,11 +120,12 @@ def tool_recall(
         if field is None:
             return {"error": "recent mode requires field"}
         collected = []
-        for _cycle, state, timestamp in reversed(prior_states):
+        for _cycle, record_id, state, timestamp in reversed(prior_states):
             if field in state:
                 collected.append(
                     {
                         "cycle": _cycle,
+                        "record_id": str(record_id),
                         "timestamp": timestamp,
                         "value": state[field],
                     }
@@ -128,13 +138,14 @@ def tool_recall(
         if field is None:
             return {"error": "random mode requires field"}
         candidates = [
-            (c, s, t) for (c, s, t) in prior_states if field in s
+            (c, rid, s, t) for (c, rid, s, t) in prior_states if field in s
         ]
         if not candidates:
             return {"error": f"No prior cycles contain field {field!r}"}
-        _cycle, state, timestamp = _random.choice(candidates)
+        _cycle, record_id, state, timestamp = _random.choice(candidates)
         return {
             "cycle": _cycle,
+            "record_id": str(record_id),
             "timestamp": timestamp,
             "content": state[field],
         }
@@ -148,7 +159,7 @@ _MISSING = object()
 def tool_compare(
     params: dict,
     *,
-    prior_states: list[tuple[int, dict, str]],
+    prior_states: list[tuple[int, UUID, dict, str]],
 ) -> dict:
     """Structural diff between two prior cycles.
 
@@ -171,8 +182,8 @@ def tool_compare(
     if entry_b is None:
         return {"error": f"No state found for cycle {cycle_b}"}
 
-    _, state_a, _ = entry_a
-    _, state_b, _ = entry_b
+    _, record_id_a, state_a, _ = entry_a
+    _, record_id_b, state_b, _ = entry_b
 
     added: list[str] = []
     removed: list[str] = []
@@ -220,6 +231,8 @@ def tool_compare(
     return {
         "cycle_a": cycle_a,
         "cycle_b": cycle_b,
+        "record_id_a": str(record_id_a),
+        "record_id_b": str(record_id_b),
         "added_fields": added,
         "removed_fields": removed,
         "changed_fields": changed,
@@ -243,10 +256,11 @@ def _step_summary(state: dict) -> str:
     return f"{len(keys)} field(s): {shown}{suffix}"
 
 
-def _walk_step(entry: tuple[int, dict, str]) -> dict:
-    cycle, state, timestamp = entry
+def _walk_step(entry: tuple[int, UUID, dict, str]) -> dict:
+    cycle, record_id, state, timestamp = entry
     return {
         "cycle": cycle,
+        "record_id": str(record_id),
         "timestamp": timestamp,
         "edge_type": "refines",
         "edge_source": "harness",
@@ -258,7 +272,7 @@ def _walk_step(entry: tuple[int, dict, str]) -> dict:
 def tool_walk(
     params: dict,
     *,
-    prior_states: list[tuple[int, dict, str]],
+    prior_states: list[tuple[int, UUID, dict, str]],
 ) -> dict:
     """Traverse cycles adjacent to a starting cycle.
 
@@ -275,7 +289,7 @@ def tool_walk(
         return {"error": f"No state found for cycle {from_cycle}"}
 
     # Index by cycle for O(1) lookup
-    by_cycle = {c: (c, s, t) for (c, s, t) in prior_states}
+    by_cycle = {c: (c, rid, s, t) for (c, rid, s, t) in prior_states}
 
     path: list[dict] = []
     if direction in ("backward", "both"):
@@ -321,7 +335,7 @@ def _snippet(value, query_lower: str, max_len: int = 120) -> str:
 def tool_search_memory(
     params: dict,
     *,
-    prior_states: list[tuple[int, dict, str]],
+    prior_states: list[tuple[int, UUID, dict, str]],
 ) -> dict:
     """Keyword/substring search over prior states with structural narrowing.
 
@@ -344,16 +358,20 @@ def tool_search_memory(
     cycle_range = narrow_by.get("cycle_range")
     if cycle_range:
         lo, hi = cycle_range
-        candidates = [(c, s, t) for (c, s, t) in candidates if lo <= c <= hi]
+        candidates = [
+            (c, rid, s, t) for (c, rid, s, t) in candidates if lo <= c <= hi
+        ]
 
     has_field = narrow_by.get("has_field")
     if has_field:
-        candidates = [(c, s, t) for (c, s, t) in candidates if has_field in s]
+        candidates = [
+            (c, rid, s, t) for (c, rid, s, t) in candidates if has_field in s
+        ]
 
     field_filter = narrow_by.get("fields")
 
     matches: list[dict] = []
-    for cycle, state, timestamp in candidates:
+    for cycle, record_id, state, timestamp in candidates:
         matched_fields: list[str] = []
         snippets: dict[str, str] = {}
         search_fields = field_filter if field_filter else list(state.keys())
@@ -367,6 +385,7 @@ def tool_search_memory(
             matches.append(
                 {
                     "cycle": cycle,
+                    "record_id": str(record_id),
                     "timestamp": timestamp,
                     "relevance": 1.0,
                     "matched_fields": matched_fields,

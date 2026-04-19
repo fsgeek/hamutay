@@ -341,8 +341,9 @@ def test_tool_guidance_is_not_coercive():
 
 
 def test_prior_states_store_timestamps(tmp_path):
-    """_prior_states accumulates (cycle, state, timestamp) triples."""
+    """_prior_states accumulates (cycle, record_id, state, timestamp) 4-tuples."""
     from datetime import datetime
+    from uuid import UUID
     from hamutay.taste_open import OpenTasteSession
 
     backend = _FakeBackend(
@@ -362,11 +363,15 @@ def test_prior_states_store_timestamps(tmp_path):
     session.exchange("again")
 
     assert len(session._prior_states) == 2
-    for cycle, state, timestamp in session._prior_states:
+    for cycle, record_id, state, timestamp in session._prior_states:
         assert isinstance(cycle, int)
+        assert isinstance(record_id, UUID)
         assert isinstance(state, dict)
         assert isinstance(timestamp, str)
         datetime.fromisoformat(timestamp)
+    # Record IDs are distinct per cycle.
+    rids = [rid for (_, rid, _, _) in session._prior_states]
+    assert len(set(rids)) == len(rids)
 
 
 def test_tool_guidance_mentions_memory_tools():

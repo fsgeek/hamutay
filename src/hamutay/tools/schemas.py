@@ -228,9 +228,9 @@ WALK_SCHEMA = {
     "description": (
         "Traverse cycles adjacent to a starting cycle. direction chooses "
         "forward, backward, or both. depth controls how many steps. Each "
-        "step returns cycle, timestamp, field names, and a short summary "
-        "— not full content. Use recall afterward if a step looks worth "
-        "loading."
+        "step returns cycle, record_id, timestamp, field names, and a "
+        "short summary — not full content. Use recall afterward if a "
+        "step looks worth loading."
     ),
     "input_schema": {
         "type": "object",
