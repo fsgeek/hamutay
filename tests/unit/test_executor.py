@@ -56,3 +56,50 @@ def test_executor_preserves_session_state_for_clock(tmp_path):
     result = executor.execute("clock", {})
     assert result["session_start"] == start.isoformat()
     assert result["last_cycle_time"] == last.isoformat()
+
+
+# ---------------------------------------------------------------------------
+# Memory tool dispatch
+# ---------------------------------------------------------------------------
+
+
+def _prior_states_fixture():
+    return [
+        (1, {"theme": "opening", "cycle": 1}, "2026-04-18T10:00:00+00:00"),
+    ]
+
+
+def test_executor_resolves_memory_schema(tmp_path):
+    executor = ToolExecutor(
+        project_root=tmp_path, cycle=2, prior_states=_prior_states_fixture(),
+    )
+    result = executor.execute("memory_schema", {"cycle": 1})
+    assert result["cycle"] == 1
+    assert "theme" in result["field_names"]
+
+
+def test_executor_resolves_recall(tmp_path):
+    executor = ToolExecutor(
+        project_root=tmp_path, cycle=2, prior_states=_prior_states_fixture(),
+    )
+    result = executor.execute("recall", {"cycle": 1, "field": "theme"})
+    assert result["content"] == "opening"
+
+
+def test_executor_memory_tool_without_prior_states_returns_empty(tmp_path):
+    """Without prior_states, memory tools see an empty history — no crash."""
+    executor = ToolExecutor(project_root=tmp_path, cycle=2)
+    result = executor.execute("memory_schema", {"cycle": 1})
+    assert "error" in result
+
+
+def test_executor_records_memory_tool_activity(tmp_path):
+    executor = ToolExecutor(
+        project_root=tmp_path, cycle=2, prior_states=_prior_states_fixture(),
+    )
+    executor.execute(
+        "recall", {"cycle": 1, "field": "theme", "reason": "curious"}
+    )
+    log = executor.activity_log
+    assert log[-1]["tool"] == "recall"
+    assert log[-1]["reason"] == "curious"
