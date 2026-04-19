@@ -190,7 +190,9 @@ def execute_concurrent_tool_calls(blocks, tool_executor) -> None:
 class TasteBridge(Protocol):
     """Persistence layer for taste_open tensors."""
 
-    def store_open_state(self, state: dict, cycle: int) -> UUID: ...
+    def store_open_state(
+        self, state: dict, cycle: int, record_id: UUID
+    ) -> None: ...
 
 
 class TasteBackend(Protocol):
@@ -678,10 +680,13 @@ class OpenTasteSession:
             cycle = record.get("cycle", 0)
             timestamp = record.get("timestamp", "")
             if state is not None:
-                # JSONL logs don't yet carry record_id. Generate a local
-                # UUID so _prior_states stays uniform; resumed cycles
-                # won't match Arango-stored UUIDs from the original run.
-                self._prior_states.append((cycle, uuid4(), state, timestamp))
+                # Logs written after the pre-3a.5 refactor carry record_id;
+                # older logs don't. Fall back to a fresh UUID for legacy
+                # entries — those cycles won't match Arango UUIDs, but
+                # post-refactor resumes will.
+                rid_str = record.get("record_id")
+                record_id = UUID(rid_str) if rid_str else uuid4()
+                self._prior_states.append((cycle, record_id, state, timestamp))
 
         last = json.loads(lines[-1])
         self._state = last.get("state")
@@ -774,18 +779,18 @@ class OpenTasteSession:
 
         self._last_cycle_time = datetime.now(timezone.utc)
 
-        # Persist to Apacheta first, so the record_id generated at creation
-        # time flows into _prior_states. When no bridge is wired, generate
-        # locally — _prior_states carries a UUID for every cycle, uniformly.
-        record_id: UUID
+        # Identity at creation: the framework mints the record_id and hands
+        # it to every downstream consumer (bridge, JSONL, _prior_states).
+        # Bridge failure no longer orphans the UUID — it's already in hand
+        # and in the JSONL log, which is the durable substrate.
+        record_id = uuid4()
         if self._bridge is not None:
             try:
-                record_id = self._bridge.store_open_state(self._state, self._cycle)
+                self._bridge.store_open_state(
+                    self._state, self._cycle, record_id
+                )
             except Exception as e:
                 print(f"  WARNING: bridge persist failed cycle {self._cycle}: {e}")
-                record_id = uuid4()
-        else:
-            record_id = uuid4()
 
         # Accumulate for future involuntary recall and memory tools
         self._prior_states.append(
@@ -806,6 +811,7 @@ class OpenTasteSession:
             system_prompt=system,
             raw_output=raw_output,
             prior_state=prior_state_snapshot,
+            record_id=record_id,
             usage={
                 "input_tokens": result.input_tokens,
                 "output_tokens": result.output_tokens,
@@ -823,6 +829,7 @@ class OpenTasteSession:
         system_prompt: str,
         raw_output: dict,
         prior_state: dict | None,
+        record_id: UUID,
         usage: dict,
     ) -> None:
         """Append full record to JSONL log. Captures everything."""
@@ -838,6 +845,7 @@ class OpenTasteSession:
         record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "cycle": self._cycle,
+            "record_id": str(record_id),
             "experiment_label": self._experiment_label,
             "model": self._model,
             # Inputs

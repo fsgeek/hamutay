@@ -14,17 +14,19 @@ Usage:
     bridge = ApachetaBridge.from_duckdb("tensors.duckdb")
     projector = Projector(on_tensor=bridge)
 
-    # Open schema (taste_open)
+    # Open schema (taste_open) — caller generates the UUID and passes it in
+    from uuid import uuid4
     bridge = ApachetaBridge.from_duckdb("tensors.duckdb", model="haiku")
-    tensor_id = bridge.store_open_state(state_dict, cycle=5)
-    retrieved = bridge.retrieve(tensor_id)
+    record_id = uuid4()
+    bridge.store_open_state(state_dict, cycle=5, record_id=record_id)
+    retrieved = bridge.retrieve(record_id)
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from pathlib import Path
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from hamutay.tensor import Tensor
 
@@ -113,11 +115,13 @@ def _build_open_record(
     prior_id: UUID | None = None,
     session_id: str = "",
     model: str = "unknown",
-) -> tuple[UUID, object]:
+) -> object:
     """Build an ApachetaBaseModel from taste_open's free-form state.
 
     No TensorRecord, no prescribed fields. Just provenance + whatever
-    the model created. Returns (record_id, record).
+    the model created. The record_id is assigned by the caller (the
+    Projector/session layer that created the tensor) — storage is a
+    sink, not an identity authority.
     """
     from yanantin.apacheta.models.base import ApachetaBaseModel
     from yanantin.apacheta.models.provenance import ProvenanceEnvelope
@@ -130,8 +134,6 @@ def _build_open_record(
         predecessors_in_scope=predecessors,
     )
 
-    record_id = uuid4()
-
     kwargs: dict = dict(
         provenance=provenance,
         lineage_tags=("hamutay", "taste_open", f"cycle-{cycle}"),
@@ -143,8 +145,7 @@ def _build_open_record(
             continue
         kwargs[key] = value
 
-    record = ApachetaBaseModel(**kwargs)
-    return record_id, record
+    return ApachetaBaseModel(**kwargs)
 
 
 class ApachetaBridge:
@@ -187,11 +188,15 @@ class ApachetaBridge:
         self._prior_id = tensor.id
         self._count += 1
 
-    def store_open_state(self, state: dict, cycle: int) -> UUID:
-        """Store a taste_open free-form state. Returns the record ID."""
+    def store_open_state(self, state: dict, cycle: int, record_id: UUID) -> None:
+        """Store a taste_open free-form state under the caller-provided UUID.
+
+        Identity originates at the session layer (see graph-model decision:
+        UUID at creation, not at storage). The bridge is a sink.
+        """
         from yanantin.apacheta.models.composition import CompositionEdge, RelationType
 
-        record_id, record = _build_open_record(
+        record = _build_open_record(
             state, cycle,
             prior_id=self._prior_id,
             session_id=self._session_id,
@@ -210,7 +215,6 @@ class ApachetaBridge:
 
         self._prior_id = record_id
         self._count += 1
-        return record_id
 
     def retrieve(self, record_id: UUID) -> dict:
         """Retrieve a record by ID. Returns the full record as a dict."""
