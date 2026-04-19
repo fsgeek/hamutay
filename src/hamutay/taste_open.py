@@ -191,7 +191,11 @@ class TasteBridge(Protocol):
     """Persistence layer for taste_open tensors."""
 
     def store_open_state(
-        self, state: dict, cycle: int, record_id: UUID
+        self,
+        state: dict,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
     ) -> None: ...
 
 
@@ -787,7 +791,10 @@ class OpenTasteSession:
         if self._bridge is not None:
             try:
                 self._bridge.store_open_state(
-                    self._state, self._cycle, record_id
+                    self._state,
+                    self._cycle,
+                    record_id,
+                    self._last_cycle_time,
                 )
             except Exception as e:
                 print(f"  WARNING: bridge persist failed cycle {self._cycle}: {e}")

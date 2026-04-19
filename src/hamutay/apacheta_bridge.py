@@ -112,6 +112,7 @@ def _convert_tensor(
 def _build_open_record(
     state: dict,
     cycle: int,
+    timestamp: datetime,
     prior_id: UUID | None = None,
     session_id: str = "",
     model: str = "unknown",
@@ -121,7 +122,9 @@ def _build_open_record(
     No TensorRecord, no prescribed fields. Just provenance + whatever
     the model created. The record_id is assigned by the caller (the
     Projector/session layer that created the tensor) — storage is a
-    sink, not an identity authority.
+    sink, not an identity authority. The caller-provided timestamp
+    flows into ProvenanceEnvelope.timestamp so JSONL, _prior_states,
+    and the stored provenance envelope all carry the same instant.
     """
     from yanantin.apacheta.models.base import ApachetaBaseModel
     from yanantin.apacheta.models.provenance import ProvenanceEnvelope
@@ -132,6 +135,7 @@ def _build_open_record(
         author_model_family=model,
         author_instance_id=session_id,
         predecessors_in_scope=predecessors,
+        timestamp=timestamp,
     )
 
     kwargs: dict = dict(
@@ -188,16 +192,23 @@ class ApachetaBridge:
         self._prior_id = tensor.id
         self._count += 1
 
-    def store_open_state(self, state: dict, cycle: int, record_id: UUID) -> None:
+    def store_open_state(
+        self,
+        state: dict,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+    ) -> None:
         """Store a taste_open free-form state under the caller-provided UUID.
 
-        Identity originates at the session layer (see graph-model decision:
-        UUID at creation, not at storage). The bridge is a sink.
+        Identity and creation-time both originate at the session layer
+        (see graph-model decision: UUID at creation, not at storage).
+        The bridge is a sink. Timestamp flows into ProvenanceEnvelope.
         """
         from yanantin.apacheta.models.composition import CompositionEdge, RelationType
 
         record = _build_open_record(
-            state, cycle,
+            state, cycle, timestamp,
             prior_id=self._prior_id,
             session_id=self._session_id,
             model=self._model,
