@@ -4,7 +4,7 @@ These tools are pure functions that read from a list of
 (cycle, state, timestamp) triples. No API calls, no I/O.
 """
 
-from hamutay.tools.memory import tool_memory_schema, tool_recall
+from hamutay.tools.memory import tool_compare, tool_memory_schema, tool_recall
 
 
 def _make_prior_states():
@@ -116,4 +116,60 @@ def test_recall_missing_field_surgical():
 def test_recall_no_mode_is_error():
     """Calling recall with no mode selector is an error."""
     result = tool_recall({}, prior_states=_make_prior_states())
+    assert "error" in result
+
+
+# ---------------------------------------------------------------------------
+# compare — structural diff between two cycles
+# ---------------------------------------------------------------------------
+
+
+def test_compare_added_and_changed():
+    result = tool_compare(
+        {"cycle_a": 1, "cycle_b": 2},
+        prior_states=_make_prior_states(),
+    )
+    assert result["cycle_a"] == 1
+    assert result["cycle_b"] == 2
+    assert "theme" in result["added_fields"]
+    changed_field_names = [c["field"] for c in result["changed_fields"]]
+    assert "greeting" in changed_field_names
+    # Without content=true, no values in the delta
+    greeting_change = next(
+        c for c in result["changed_fields"] if c["field"] == "greeting"
+    )
+    assert "value_a" not in greeting_change
+    assert "value_b" not in greeting_change
+
+
+def test_compare_with_content_shows_values():
+    result = tool_compare(
+        {"cycle_a": 1, "cycle_b": 2, "content": True},
+        prior_states=_make_prior_states(),
+    )
+    greeting_change = next(
+        c for c in result["changed_fields"] if c["field"] == "greeting"
+    )
+    assert greeting_change["value_a"] == "hello"
+    assert greeting_change["value_b"] == "hi"
+
+
+def test_compare_field_scopes_delta():
+    """When field=X, only that field is compared."""
+    result = tool_compare(
+        {"cycle_a": 1, "cycle_b": 3, "field": "greeting"},
+        prior_states=_make_prior_states(),
+    )
+    assert result["changed_fields"] == [
+        {"field": "greeting", "size_a": 5, "size_b": 3}
+    ]
+    assert result["added_fields"] == []
+    assert result["removed_fields"] == []
+
+
+def test_compare_missing_cycle_errors():
+    result = tool_compare(
+        {"cycle_a": 99, "cycle_b": 1},
+        prior_states=_make_prior_states(),
+    )
     assert "error" in result

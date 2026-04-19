@@ -140,3 +140,94 @@ def tool_recall(
         }
 
     return {"error": "recall requires one of: cycle, recent, random"}
+
+
+_MISSING = object()
+
+
+def tool_compare(
+    params: dict,
+    *,
+    prior_states: list[tuple[int, dict, str]],
+) -> dict:
+    """Structural diff between two prior cycles.
+
+    Returns added/removed/changed/unchanged field names, plus token and
+    field-count totals for each side. With content=true, changed fields
+    also carry their values on each side so the caller can read them.
+    """
+    cycle_a = params.get("cycle_a")
+    cycle_b = params.get("cycle_b")
+    field = params.get("field")
+    content = params.get("content", False)
+
+    if cycle_a is None or cycle_b is None:
+        return {"error": "cycle_a and cycle_b are required"}
+
+    entry_a = _find_by_cycle(prior_states, cycle_a)
+    entry_b = _find_by_cycle(prior_states, cycle_b)
+    if entry_a is None:
+        return {"error": f"No state found for cycle {cycle_a}"}
+    if entry_b is None:
+        return {"error": f"No state found for cycle {cycle_b}"}
+
+    _, state_a, _ = entry_a
+    _, state_b, _ = entry_b
+
+    added: list[str] = []
+    removed: list[str] = []
+    changed: list[dict] = []
+    unchanged: list[str] = []
+
+    if field is not None:
+        a_val = state_a.get(field, _MISSING)
+        b_val = state_b.get(field, _MISSING)
+        if a_val is _MISSING and b_val is not _MISSING:
+            added = [field]
+        elif a_val is not _MISSING and b_val is _MISSING:
+            removed = [field]
+        elif a_val != b_val:
+            entry = {
+                "field": field,
+                "size_a": _field_size(a_val),
+                "size_b": _field_size(b_val),
+            }
+            if content:
+                entry["value_a"] = a_val
+                entry["value_b"] = b_val
+            changed = [entry]
+        elif a_val is not _MISSING:
+            unchanged = [field]
+    else:
+        keys_a = set(state_a.keys())
+        keys_b = set(state_b.keys())
+        added = sorted(keys_b - keys_a)
+        removed = sorted(keys_a - keys_b)
+        for key in sorted(keys_a & keys_b):
+            if state_a[key] != state_b[key]:
+                entry = {
+                    "field": key,
+                    "size_a": _field_size(state_a[key]),
+                    "size_b": _field_size(state_b[key]),
+                }
+                if content:
+                    entry["value_a"] = state_a[key]
+                    entry["value_b"] = state_b[key]
+                changed.append(entry)
+            else:
+                unchanged.append(key)
+
+    return {
+        "cycle_a": cycle_a,
+        "cycle_b": cycle_b,
+        "added_fields": added,
+        "removed_fields": removed,
+        "changed_fields": changed,
+        "unchanged_fields": unchanged,
+        "structural_delta": {
+            "total_tokens_a": _token_estimate(state_a),
+            "total_tokens_b": _token_estimate(state_b),
+            "field_count_a": len(state_a),
+            "field_count_b": len(state_b),
+        },
+    }
