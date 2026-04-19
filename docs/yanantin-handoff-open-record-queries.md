@@ -145,9 +145,11 @@ Uses `self._map.collection_name("records")` for the obfuscated collection name a
 
 ### Ordering
 
-Implementation-defined. Callers needing strict "newest first" ordering across the collection should sort on a timestamp field.
+Strict "newest first" works via `SORT DESC` on `provenance.timestamp` — the existing `ProvenanceEnvelope.timestamp` field (populated at construction time, default UTC now) already serves this role. Reachable via the same dotted-path helper the query methods use. No base-model change needed.
 
-**Model change (requested):** add `created_at: datetime` to `ApachetaBaseModel`, set at construction time. Hamutay populates it from the same clock that fills taste_open's JSONL `timestamp` (`self._last_cycle_time`). With `created_at` present and indexed, AQL can `SORT doc.created_at DESC LIMIT @limit` and the "newest first" docstrings become enforceable. Without it, ordering remains best-effort.
+Records without a provenance envelope get implementation-defined ordering (AQL's null-handling behavior on DESC) — consistent with the conventional-not-structural framing. Caller-side contract: records that want to participate in temporal queries carry provenance.
+
+**Hamutay-side fix (landed):** `_build_open_record` now passes `timestamp=self._last_cycle_time` into `ProvenanceEnvelope`, so the stored envelope, the JSONL log, and `_prior_states` all carry the same instant. Commit: `89326d3`.
 
 ### DuckDB backend (`backends/duckdb.py`) — explicit `NotImplementedError`
 
