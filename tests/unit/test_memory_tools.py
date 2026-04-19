@@ -4,7 +4,7 @@ These tools are pure functions that read from a list of
 (cycle, state, timestamp) triples. No API calls, no I/O.
 """
 
-from hamutay.tools.memory import tool_memory_schema
+from hamutay.tools.memory import tool_memory_schema, tool_recall
 
 
 def _make_prior_states():
@@ -38,4 +38,82 @@ def test_memory_schema_missing_cycle():
 
 def test_memory_schema_no_prior_states():
     result = tool_memory_schema({"cycle": 1}, prior_states=[])
+    assert "error" in result
+
+
+# ---------------------------------------------------------------------------
+# recall — four modes
+# ---------------------------------------------------------------------------
+
+
+def test_recall_surgical():
+    """cycle + field returns just that field."""
+    result = tool_recall(
+        {"cycle": 2, "field": "theme"},
+        prior_states=_make_prior_states(),
+    )
+    assert result["cycle"] == 2
+    assert result["content"] == "curiosity"
+
+
+def test_recall_full_snapshot():
+    """cycle alone returns the full state dict."""
+    result = tool_recall({"cycle": 3}, prior_states=_make_prior_states())
+    assert result["cycle"] == 3
+    assert result["content"]["theme"] == "care"
+    assert result["content"]["notes"] == ["a", "b"]
+
+
+def test_recall_recent_trajectory():
+    """recent=N, field=X returns last N values of X across cycles, most recent first."""
+    result = tool_recall(
+        {"recent": 3, "field": "greeting"},
+        prior_states=_make_prior_states(),
+    )
+    assert len(result["content"]) == 3
+    assert result["content"][0]["cycle"] == 3
+    assert result["content"][0]["value"] == "hey"
+    assert result["content"][2]["value"] == "hello"
+
+
+def test_recall_recent_skips_missing_field():
+    """recent mode skips cycles where the field doesn't exist."""
+    result = tool_recall(
+        {"recent": 5, "field": "theme"},
+        prior_states=_make_prior_states(),
+    )
+    # Only cycles 2 and 3 have "theme"
+    assert len(result["content"]) == 2
+    cycles_returned = {e["cycle"] for e in result["content"]}
+    assert cycles_returned == {2, 3}
+
+
+def test_recall_random_picks_from_history():
+    """random=true, field=X picks any prior state that has field X."""
+    import random
+    random.seed(42)
+    result = tool_recall(
+        {"random": True, "field": "greeting"},
+        prior_states=_make_prior_states(),
+    )
+    assert result["cycle"] in {1, 2, 3}
+    assert "content" in result
+
+
+def test_recall_missing_cycle():
+    result = tool_recall({"cycle": 99}, prior_states=_make_prior_states())
+    assert "error" in result
+
+
+def test_recall_missing_field_surgical():
+    result = tool_recall(
+        {"cycle": 1, "field": "theme"},  # cycle 1 has no "theme"
+        prior_states=_make_prior_states(),
+    )
+    assert "error" in result
+
+
+def test_recall_no_mode_is_error():
+    """Calling recall with no mode selector is an error."""
+    result = tool_recall({}, prior_states=_make_prior_states())
     assert "error" in result

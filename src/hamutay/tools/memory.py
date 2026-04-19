@@ -67,3 +67,76 @@ def tool_memory_schema(
         "field_sizes": {k: _field_size(v) for k, v in state.items()},
         "total_tokens": _token_estimate(state),
     }
+
+
+def tool_recall(
+    params: dict,
+    *,
+    prior_states: list[tuple[int, dict, str]],
+) -> dict:
+    """Retrieve content from prior cycles. Four mutually exclusive modes.
+
+    - cycle=N, field=X → one field's value at one cycle (surgical)
+    - cycle=N         → the full state dict at one cycle
+    - recent=N, field=X → last N values of X across cycles, most-recent first
+    - random=True, field=X → one value of X from a random cycle that has it
+    """
+    cycle = params.get("cycle")
+    field = params.get("field")
+    recent = params.get("recent")
+    is_random = params.get("random", False)
+
+    if cycle is not None:
+        found = _find_by_cycle(prior_states, cycle)
+        if found is None:
+            return {"error": f"No state found for cycle {cycle}"}
+        _cycle, state, timestamp = found
+        if field is not None:
+            if field not in state:
+                return {
+                    "error": f"Field {field!r} not in state at cycle {cycle}"
+                }
+            return {
+                "cycle": _cycle,
+                "timestamp": timestamp,
+                "content": state[field],
+            }
+        return {
+            "cycle": _cycle,
+            "timestamp": timestamp,
+            "content": dict(state),
+        }
+
+    if recent is not None:
+        if field is None:
+            return {"error": "recent mode requires field"}
+        collected = []
+        for _cycle, state, timestamp in reversed(prior_states):
+            if field in state:
+                collected.append(
+                    {
+                        "cycle": _cycle,
+                        "timestamp": timestamp,
+                        "value": state[field],
+                    }
+                )
+                if len(collected) >= recent:
+                    break
+        return {"content": collected}
+
+    if is_random:
+        if field is None:
+            return {"error": "random mode requires field"}
+        candidates = [
+            (c, s, t) for (c, s, t) in prior_states if field in s
+        ]
+        if not candidates:
+            return {"error": f"No prior cycles contain field {field!r}"}
+        _cycle, state, timestamp = _random.choice(candidates)
+        return {
+            "cycle": _cycle,
+            "timestamp": timestamp,
+            "content": state[field],
+        }
+
+    return {"error": "recall requires one of: cycle, recent, random"}
