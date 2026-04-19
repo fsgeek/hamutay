@@ -123,8 +123,201 @@ CLOCK_SCHEMA = {
     },
 }
 
+_REASON_FIELD = {
+    "type": "string",
+    "description": (
+        "Optional: why you are looking. Recorded in the activity log when "
+        "provided. Omit if you don't have a reason worth stating — no "
+        "reason is fine."
+    ),
+}
+
+MEMORY_SCHEMA_SCHEMA = {
+    "name": "memory_schema",
+    "description": (
+        "Returns the structure of a prior cycle's state without its "
+        "content — field names, types, sizes, and a token estimate. "
+        "Cheap introspection: decide what's worth retrieving before "
+        "retrieving it."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "cycle": {
+                "type": "integer",
+                "description": "The cycle number to inspect.",
+            },
+            "reason": _REASON_FIELD,
+        },
+        "required": ["cycle"],
+    },
+}
+
+RECALL_SCHEMA = {
+    "name": "recall",
+    "description": (
+        "Retrieve content from a prior cycle. Four mutually exclusive "
+        "modes: (a) cycle + field: one field at one cycle; "
+        "(b) cycle alone: the full state snapshot; "
+        "(c) recent + field: the last N values of one field across cycles; "
+        "(d) random + field: one value of the field from a randomly chosen "
+        "prior cycle. What you retrieve is what you claimed then, not "
+        "necessarily what was true."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "cycle": {
+                "type": "integer",
+                "description": "Which cycle to recall.",
+            },
+            "field": {
+                "type": "string",
+                "description": "Which field within the state.",
+            },
+            "recent": {
+                "type": "integer",
+                "description": "Return this many recent values of `field`.",
+            },
+            "random": {
+                "type": "boolean",
+                "description": (
+                    "If true, pick a random prior cycle containing `field`."
+                ),
+            },
+            "reason": _REASON_FIELD,
+        },
+        "required": [],
+    },
+}
+
+COMPARE_SCHEMA = {
+    "name": "compare",
+    "description": (
+        "Structural diff between two prior cycles. Returns added, removed, "
+        "changed, and unchanged fields, plus token and field counts for "
+        "each side. With content=true, changed fields also carry the "
+        "values on each side so you can read them; without, only sizes."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "cycle_a": {"type": "integer", "description": "First cycle."},
+            "cycle_b": {"type": "integer", "description": "Second cycle."},
+            "field": {
+                "type": "string",
+                "description": (
+                    "Scope the diff to one field. Omit to diff all fields."
+                ),
+            },
+            "content": {
+                "type": "boolean",
+                "description": (
+                    "If true, include the values of changed fields on "
+                    "both sides. Default false — only sizes."
+                ),
+            },
+            "reason": _REASON_FIELD,
+        },
+        "required": ["cycle_a", "cycle_b"],
+    },
+}
+
+WALK_SCHEMA = {
+    "name": "walk",
+    "description": (
+        "Traverse cycles adjacent to a starting cycle. direction chooses "
+        "forward, backward, or both. depth controls how many steps. Each "
+        "step returns cycle, timestamp, field names, and a short summary "
+        "— not full content. Use recall afterward if a step looks worth "
+        "loading."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "from_cycle": {
+                "type": "integer",
+                "description": "The cycle to walk from.",
+            },
+            "direction": {
+                "type": "string",
+                "enum": ["forward", "backward", "both"],
+                "description": "Walk direction. Default: both.",
+            },
+            "depth": {
+                "type": "integer",
+                "description": (
+                    "Number of steps in the chosen direction(s). Default: 1."
+                ),
+            },
+            "reason": _REASON_FIELD,
+        },
+        "required": ["from_cycle"],
+    },
+}
+
+SEARCH_MEMORY_SCHEMA = {
+    "name": "search_memory",
+    "description": (
+        "Keyword/substring search across your prior cycles. Structural "
+        "narrowing happens first: cycle_range restricts to a span, "
+        "has_field requires a named field's presence, fields restricts "
+        "the match scope to listed field names. Then the query is matched "
+        "case-insensitively against the narrowed candidates. Results are "
+        "ranked cycle-descending with snippets."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Substring to find (case-insensitive).",
+            },
+            "narrow_by": {
+                "type": "object",
+                "description": (
+                    "Structural narrowing applied before keyword match. "
+                    "Omit for unnarrowed search (which is logged as such)."
+                ),
+                "properties": {
+                    "cycle_range": {
+                        "type": "array",
+                        "items": {"type": "integer"},
+                        "description": "[lo, hi] inclusive cycle range.",
+                    },
+                    "fields": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": (
+                            "Restrict match scope to these field names."
+                        ),
+                    },
+                    "has_field": {
+                        "type": "string",
+                        "description": (
+                            "Require this field's presence in the state."
+                        ),
+                    },
+                },
+            },
+            "limit": {
+                "type": "integer",
+                "description": "Max results (default 5).",
+            },
+            "reason": _REASON_FIELD,
+        },
+        "required": ["query"],
+    },
+}
+
+
 TOOL_SCHEMAS: dict[str, dict] = {
     "read": READ_SCHEMA,
     "search_project": SEARCH_PROJECT_SCHEMA,
     "clock": CLOCK_SCHEMA,
+    "memory_schema": MEMORY_SCHEMA_SCHEMA,
+    "recall": RECALL_SCHEMA,
+    "compare": COMPARE_SCHEMA,
+    "walk": WALK_SCHEMA,
+    "search_memory": SEARCH_MEMORY_SCHEMA,
 }

@@ -185,7 +185,10 @@ def test_session_passes_tools_to_backend_when_enabled(tmp_path):
     )
     session.exchange("hello")
     assert backend.last_extra_tools is not None
-    assert len(backend.last_extra_tools) == 3
+    tool_names = {t["name"] for t in backend.last_extra_tools}
+    # Perception tools always present; memory tools join when available.
+    # Count is not pinned — new tools shouldn't break this test.
+    assert {"read", "search_project", "clock"} <= tool_names
     assert backend.last_tool_executor is not None
 
 

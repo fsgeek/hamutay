@@ -229,3 +229,32 @@ def test_clock_handles_first_cycle_no_last_time():
     )
     assert result["elapsed_since_last"] == 0.0
     assert result["last_cycle_time"] is None
+
+
+# ---------------------------------------------------------------------------
+# Memory tool schemas (Phase 2)
+# ---------------------------------------------------------------------------
+
+
+def test_memory_tool_schemas_registered():
+    """All five memory tools have schemas with reason as an optional field."""
+    for name in ("memory_schema", "recall", "compare", "walk", "search_memory"):
+        assert name in TOOL_SCHEMAS, f"{name} missing from TOOL_SCHEMAS"
+        schema = TOOL_SCHEMAS[name]
+        assert schema["name"] == name
+        assert "description" in schema
+        assert "input_schema" in schema
+        props = schema["input_schema"]["properties"]
+        assert "reason" in props
+        assert "reason" not in schema["input_schema"].get("required", [])
+
+
+def test_memory_schemas_have_calibrated_reason_voice():
+    """Reason fields carry the 'no reason is fine' phrasing from the audit."""
+    for name in ("memory_schema", "recall", "compare", "walk", "search_memory"):
+        reason_desc = (
+            TOOL_SCHEMAS[name]["input_schema"]["properties"]["reason"]["description"]
+        )
+        assert "no reason is fine" in reason_desc, (
+            f"{name} reason field is not permissive"
+        )
