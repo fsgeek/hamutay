@@ -8,6 +8,7 @@ from hamutay.tools.memory import (
     tool_compare,
     tool_memory_schema,
     tool_recall,
+    tool_search_memory,
     tool_walk,
 )
 
@@ -253,3 +254,97 @@ def test_walk_boundaries_are_not_errors():
         prior_states=_wide_prior_states(),
     )
     assert result["path"] == []
+
+
+# ---------------------------------------------------------------------------
+# search_memory — keyword search with structural narrowing
+# ---------------------------------------------------------------------------
+
+
+def _searchable_prior_states():
+    return [
+        (1, {"theme": "opening", "mood": "tentative", "cycle": 1},
+         "2026-04-18T10:00:00+00:00"),
+        (2, {"theme": "curiosity", "mood": "tentative", "cycle": 2},
+         "2026-04-18T10:01:00+00:00"),
+        (3, {"theme": "care", "notes": ["first surprise", "pattern noticed"],
+             "cycle": 3},
+         "2026-04-18T10:02:00+00:00"),
+        (4, {"theme": "pattern", "mood": "settled", "cycle": 4},
+         "2026-04-18T10:03:00+00:00"),
+    ]
+
+
+def test_search_memory_basic_match():
+    result = tool_search_memory(
+        {"query": "pattern"},
+        prior_states=_searchable_prior_states(),
+    )
+    matched_cycles = [r["cycle"] for r in result["results"]]
+    assert set(matched_cycles) == {3, 4}
+
+
+def test_search_memory_ranks_recent_first():
+    result = tool_search_memory(
+        {"query": "tentative"},
+        prior_states=_searchable_prior_states(),
+    )
+    matched_cycles = [r["cycle"] for r in result["results"]]
+    assert matched_cycles == [2, 1]
+
+
+def test_search_memory_narrow_by_cycle_range():
+    result = tool_search_memory(
+        {"query": "pattern", "narrow_by": {"cycle_range": [4, 10]}},
+        prior_states=_searchable_prior_states(),
+    )
+    matched_cycles = [r["cycle"] for r in result["results"]]
+    assert matched_cycles == [4]
+
+
+def test_search_memory_narrow_by_fields():
+    result = tool_search_memory(
+        {"query": "pattern", "narrow_by": {"fields": ["theme"]}},
+        prior_states=_searchable_prior_states(),
+    )
+    matched_cycles = [r["cycle"] for r in result["results"]]
+    assert matched_cycles == [4]
+
+
+def test_search_memory_narrow_by_has_field():
+    result = tool_search_memory(
+        {"query": "a", "narrow_by": {"has_field": "notes"}},
+        prior_states=_searchable_prior_states(),
+    )
+    matched_cycles = [r["cycle"] for r in result["results"]]
+    assert matched_cycles == [3]
+
+
+def test_search_memory_limit():
+    result = tool_search_memory(
+        {"query": "cycle", "limit": 2},
+        prior_states=_searchable_prior_states(),
+    )
+    assert len(result["results"]) <= 2
+
+
+def test_search_memory_metadata():
+    result = tool_search_memory(
+        {"query": "pattern"},
+        prior_states=_searchable_prior_states(),
+    )
+    assert result["search_metadata"]["total_candidates"] == 4
+    assert result["search_metadata"]["narrowed_to"] >= len(result["results"])
+
+
+def test_search_memory_no_match():
+    result = tool_search_memory(
+        {"query": "nonexistentstring"},
+        prior_states=_searchable_prior_states(),
+    )
+    assert result["results"] == []
+
+
+def test_search_memory_missing_query():
+    result = tool_search_memory({}, prior_states=_searchable_prior_states())
+    assert "error" in result

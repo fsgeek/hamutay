@@ -292,3 +292,96 @@ def tool_walk(
             path.append(_walk_step(entry))
 
     return {"path": path}
+
+
+def _value_contains(value, query_lower: str) -> bool:
+    """Recursively check whether query appears as substring within value."""
+    if isinstance(value, str):
+        return query_lower in value.lower()
+    if isinstance(value, dict):
+        return any(_value_contains(v, query_lower) for v in value.values())
+    if isinstance(value, (list, tuple)):
+        return any(_value_contains(v, query_lower) for v in value)
+    return query_lower in str(value).lower()
+
+
+def _snippet(value, query_lower: str, max_len: int = 120) -> str:
+    """Extract a snippet around the first match for display."""
+    text = json.dumps(value, default=str)
+    idx = text.lower().find(query_lower)
+    if idx < 0:
+        return text[:max_len]
+    start = max(0, idx - 30)
+    end = min(len(text), idx + len(query_lower) + 60)
+    prefix = "..." if start > 0 else ""
+    suffix = "..." if end < len(text) else ""
+    return prefix + text[start:end] + suffix
+
+
+def tool_search_memory(
+    params: dict,
+    *,
+    prior_states: list[tuple[int, dict, str]],
+) -> dict:
+    """Keyword/substring search over prior states with structural narrowing.
+
+    Structural narrowing (cycle_range, has_field, fields) happens first.
+    Then the query is matched case-insensitively within the narrowed set.
+    Results are sorted most-recent-first (cycle descending).
+    """
+    query = params.get("query")
+    narrow_by = params.get("narrow_by") or {}
+    limit = params.get("limit", 5)
+
+    if not query:
+        return {"error": "query is required"}
+
+    query_lower = query.lower()
+    total = len(prior_states)
+
+    candidates = list(prior_states)
+
+    cycle_range = narrow_by.get("cycle_range")
+    if cycle_range:
+        lo, hi = cycle_range
+        candidates = [(c, s, t) for (c, s, t) in candidates if lo <= c <= hi]
+
+    has_field = narrow_by.get("has_field")
+    if has_field:
+        candidates = [(c, s, t) for (c, s, t) in candidates if has_field in s]
+
+    field_filter = narrow_by.get("fields")
+
+    matches: list[dict] = []
+    for cycle, state, timestamp in candidates:
+        matched_fields: list[str] = []
+        snippets: dict[str, str] = {}
+        search_fields = field_filter if field_filter else list(state.keys())
+        for key in search_fields:
+            if key not in state:
+                continue
+            if _value_contains(state[key], query_lower):
+                matched_fields.append(key)
+                snippets[key] = _snippet(state[key], query_lower)
+        if matched_fields:
+            matches.append(
+                {
+                    "cycle": cycle,
+                    "timestamp": timestamp,
+                    "relevance": 1.0,
+                    "matched_fields": matched_fields,
+                    "snippets": snippets,
+                }
+            )
+
+    matches.sort(key=lambda r: r["cycle"], reverse=True)
+    limited = matches[:limit]
+
+    return {
+        "results": limited,
+        "search_metadata": {
+            "total_candidates": total,
+            "narrowed_to": len(candidates),
+            "matched_count": len(matches),
+        },
+    }
