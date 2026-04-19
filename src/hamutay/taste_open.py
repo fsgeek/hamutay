@@ -615,8 +615,9 @@ class OpenTasteSession:
         self._project_root = project_root or Path.cwd()
         self._session_start = datetime.now(timezone.utc)
         self._last_cycle_time: datetime | None = None
-        # Accumulated prior states for involuntary recall: (cycle, state)
-        self._prior_states: list[tuple[int, dict]] = []
+        # Accumulated prior states for involuntary recall and memory tools:
+        # (cycle, state, timestamp_iso).
+        self._prior_states: list[tuple[int, dict, str]] = []
         # Last injected memory cycle (for logging)
         self._last_injected_memory: tuple[int, dict] | None = None
 
@@ -648,8 +649,9 @@ class OpenTasteSession:
             record = json.loads(line)
             state = record.get("state")
             cycle = record.get("cycle", 0)
+            timestamp = record.get("timestamp", "")
             if state is not None:
-                self._prior_states.append((cycle, state))
+                self._prior_states.append((cycle, state, timestamp))
 
         last = json.loads(lines[-1])
         self._state = last.get("state")
@@ -679,9 +681,11 @@ class OpenTasteSession:
         if random.random() > prob:
             return None
 
-        # Pick from all but the most recent (that's already in the system prompt)
+        # Pick from all but the most recent (that's already in the system prompt).
+        # Strip the timestamp — callers consume (cycle, state).
         candidates = self._prior_states[:-1]
-        return random.choice(candidates)
+        cycle, state, _timestamp = random.choice(candidates)
+        return (cycle, state)
 
     def exchange(self, user_message: str) -> str:
         """One cycle: user speaks, model responds + updates state."""
@@ -739,8 +743,14 @@ class OpenTasteSession:
 
         self._last_cycle_time = datetime.now(timezone.utc)
 
-        # Accumulate for future involuntary recall
-        self._prior_states.append((self._cycle, json.loads(json.dumps(self._state))))
+        # Accumulate for future involuntary recall and memory tools
+        self._prior_states.append(
+            (
+                self._cycle,
+                json.loads(json.dumps(self._state)),
+                self._last_cycle_time.isoformat(),
+            )
+        )
 
         # Persist to Apacheta if bridge is wired
         if self._bridge is not None:

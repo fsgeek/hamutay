@@ -330,3 +330,74 @@ def test_tool_guidance_is_not_coercive():
                 f"guidance contains a positive 'required' near: "
                 f"...{lowered[max(0, idx - 20) : idx + 20]}..."
             )
+
+
+# ---------------------------------------------------------------------------
+# _prior_states shape (Phase 2 memory tools depend on this)
+# ---------------------------------------------------------------------------
+
+
+def test_prior_states_store_timestamps(tmp_path):
+    """_prior_states accumulates (cycle, state, timestamp) triples."""
+    from datetime import datetime
+    from hamutay.taste_open import OpenTasteSession
+
+    backend = _FakeBackend(
+        ExchangeResult(
+            raw_output={
+                "response": "hi",
+                "updated_regions": ["greeting"],
+                "greeting": "hello",
+            },
+            stop_reason="end_turn",
+        )
+    )
+    session = OpenTasteSession(
+        backend=backend, log_path=str(tmp_path / "log.jsonl")
+    )
+    session.exchange("hey")
+    session.exchange("again")
+
+    assert len(session._prior_states) == 2
+    for cycle, state, timestamp in session._prior_states:
+        assert isinstance(cycle, int)
+        assert isinstance(state, dict)
+        assert isinstance(timestamp, str)
+        datetime.fromisoformat(timestamp)
+
+
+def test_pick_memory_still_returns_two_tuple(tmp_path):
+    """_pick_memory's contract to callers is unchanged despite the 3-tuple
+    storage. _last_injected_memory and the _log_entry memory_info branch
+    both read the result as (cycle, state) — this test guards against
+    accidentally leaking the timestamp element back to callers."""
+    import random
+    from hamutay.taste_open import OpenTasteSession
+
+    backend = _FakeBackend(
+        ExchangeResult(
+            raw_output={
+                "response": "ok",
+                "updated_regions": ["theme"],
+                "theme": "x",
+            },
+            stop_reason="end_turn",
+        )
+    )
+    session = OpenTasteSession(
+        backend=backend,
+        log_path=str(tmp_path / "log.jsonl"),
+        memory_base_probability=1.0,
+    )
+    for _ in range(4):
+        session.exchange("hi")
+
+    random.seed(0)
+    picked = session._pick_memory()
+    if picked is not None:
+        assert len(picked) == 2, (
+            f"_pick_memory should return (cycle, state), got {picked!r}"
+        )
+        cycle, state = picked
+        assert isinstance(cycle, int)
+        assert isinstance(state, dict)
