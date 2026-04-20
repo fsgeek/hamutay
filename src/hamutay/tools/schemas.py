@@ -357,6 +357,78 @@ SEARCH_MEMORY_SCHEMA = {
 }
 
 
+from hamutay.tools.graph import RELATION_TYPE_NAMES
+
+
+STORE_SCHEMA = {
+    "name": "store",
+    "description": (
+        "Write a typed record into the open-records collection. The "
+        "record carries the current session's provenance (you can't forge "
+        "authorship) and the 'instance_authored' lineage tag so it's "
+        "distinguishable from cycle-state records. Returns the record_id "
+        "— hold it if you want to reference the record later (annotate_edge, "
+        "recall, memory_schema)."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "content": {
+                "type": "object",
+                "description": (
+                    "The payload to store. Fields are free-form; shape "
+                    "is yours to choose."
+                ),
+            },
+            "tags": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Additional lineage tags. Appended to the framework "
+                    "defaults ('hamutay', 'instance_authored', 'cycle-N')."
+                ),
+            },
+            "reason": _REASON_FIELD,
+        },
+        "required": ["content"],
+    },
+}
+
+ANNOTATE_EDGE_SCHEMA = {
+    "name": "annotate_edge",
+    "description": (
+        "Author a composition edge between two records. Lets you assert a "
+        "structural relationship the framework didn't — a hypothesis "
+        "CONFIRMS a prior observation, a revision CORRECTS an earlier "
+        "claim, a tangent BRANCHES_FROM a main thread. Edges become "
+        "traversable by walk(from_record_id)."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "from_record_id": {
+                "type": "string",
+                "description": "UUID of the edge's origin record.",
+            },
+            "to_record_id": {
+                "type": "string",
+                "description": "UUID of the edge's target record.",
+            },
+            "relation": {
+                "type": "string",
+                "enum": list(RELATION_TYPE_NAMES),
+                "description": (
+                    "Relation type. One of the existing RelationType "
+                    "enum values."
+                ),
+            },
+            "reason": _REASON_FIELD,
+        },
+        "required": ["from_record_id", "to_record_id", "relation"],
+    },
+}
+
+
 TOOL_SCHEMAS: dict[str, dict] = {
     "read": READ_SCHEMA,
     "search_project": SEARCH_PROJECT_SCHEMA,
@@ -366,4 +438,6 @@ TOOL_SCHEMAS: dict[str, dict] = {
     "compare": COMPARE_SCHEMA,
     "walk": WALK_SCHEMA,
     "search_memory": SEARCH_MEMORY_SCHEMA,
+    "store": STORE_SCHEMA,
+    "annotate_edge": ANNOTATE_EDGE_SCHEMA,
 }

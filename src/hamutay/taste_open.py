@@ -124,6 +124,27 @@ What you recall is what you claimed then, not necessarily what was \
 true. For grounding claims against external evidence, use perception \
 tools.
 
+### Graph writes
+
+Two tools let you write into the memory graph directly, not just via \
+auto-persisted cycle states:
+
+- store(content, tags?): Author a typed record. Provenance is inherited \
+from your session (you can't forge it). The record is tagged \
+'instance_authored' so it's distinguishable from cycle-state records. \
+Returns a record_id — hold it if you want to reference the record \
+later.
+- annotate_edge(from_record_id, to_record_id, relation): Assert a \
+structural relationship between two records the framework didn't — \
+CONFIRMS, CORRECTS, REFINES, BRANCHES_FROM, DEPENDS_ON, and others. \
+Edges become traversable by walk(from_record_id).
+
+These let you build structure over time that the framework wouldn't \
+otherwise know about: a hypothesis CONFIRMS a prior observation; a \
+revision CORRECTS an earlier claim; a tangent BRANCHES_FROM a main \
+thread. Like the memory tools, they require a persistence backend — \
+if it's unavailable, you'll see an error.
+
 ### Reason field
 
 Each tool accepts an optional `reason` field. When you have a reason \

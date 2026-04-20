@@ -171,3 +171,49 @@ def test_executor_without_bridge_returns_error_on_record_id(tmp_path):
         {"record_id": "11111111-1111-1111-1111-111111111111"},
     )
     assert "error" in result
+
+
+# ---------------------------------------------------------------------------
+# Graph write tool dispatch
+# ---------------------------------------------------------------------------
+
+
+def test_executor_dispatches_store(tmp_path):
+    from unittest.mock import MagicMock
+    from uuid import UUID
+
+    bridge = MagicMock()
+    bridge.session_id = "s"
+    bridge.store_instance_record.return_value = UUID(
+        "00000000-0000-0000-0000-000000000099"
+    )
+    executor = ToolExecutor(project_root=tmp_path, cycle=4, bridge=bridge)
+    result = executor.execute("store", {"content": {"note": "x"}})
+    assert result["record_id"] == "00000000-0000-0000-0000-000000000099"
+    assert result["cycle"] == 4
+
+
+def test_executor_dispatches_annotate_edge(tmp_path):
+    from unittest.mock import MagicMock
+    from uuid import UUID
+
+    bridge = MagicMock()
+    bridge.store_edge.return_value = UUID(
+        "00000000-0000-0000-0000-0000000000ee"
+    )
+    executor = ToolExecutor(project_root=tmp_path, cycle=4, bridge=bridge)
+    result = executor.execute(
+        "annotate_edge",
+        {
+            "from_record_id": "00000000-0000-0000-0000-000000000001",
+            "to_record_id": "00000000-0000-0000-0000-000000000002",
+            "relation": "REFINES",
+        },
+    )
+    assert result["edge_id"] == "00000000-0000-0000-0000-0000000000ee"
+
+
+def test_executor_store_without_bridge_errors(tmp_path):
+    executor = ToolExecutor(project_root=tmp_path, cycle=4)
+    result = executor.execute("store", {"content": {"x": 1}})
+    assert "error" in result

@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
 
+from hamutay.tools.graph import tool_annotate_edge, tool_store
 from hamutay.tools.memory import (
     tool_compare,
     tool_memory_schema,
@@ -104,6 +105,14 @@ class ToolExecutor:
                 prior_states=self._prior_states,
                 bridge=self._bridge,
             )
+        elif tool_name == "store":
+            result = tool_store(
+                tool_input, cycle=self._cycle, bridge=self._bridge,
+            )
+        elif tool_name == "annotate_edge":
+            result = tool_annotate_edge(
+                tool_input, cycle=self._cycle, bridge=self._bridge,
+            )
         else:
             result = {"error": f"Unknown tool: {tool_name}"}
 
@@ -159,4 +168,11 @@ def _summarize(tool_name: str, result: dict) -> str:
         return f"walk: {len(result.get('path', []))} steps"
     if tool_name == "search_memory":
         return f"search_memory: {len(result.get('results', []))} results"
+    if tool_name == "store":
+        return f"store: record_id {result.get('record_id', '?')[:8]}"
+    if tool_name == "annotate_edge":
+        return (
+            f"annotate_edge: {result.get('relation', '?')} "
+            f"edge {result.get('edge_id', '?')[:8]}"
+        )
     return json.dumps(result, default=str)[:100]

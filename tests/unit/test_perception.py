@@ -251,7 +251,11 @@ def test_memory_tool_schemas_registered():
 
 def test_memory_schemas_have_calibrated_reason_voice():
     """Reason fields carry the 'no reason is fine' phrasing from the audit."""
-    for name in ("memory_schema", "recall", "compare", "walk", "search_memory"):
+    tools_with_permissive_reason = (
+        "memory_schema", "recall", "compare", "walk", "search_memory",
+        "store", "annotate_edge",
+    )
+    for name in tools_with_permissive_reason:
         reason_desc = (
             TOOL_SCHEMAS[name]["input_schema"]["properties"]["reason"]["description"]
         )
