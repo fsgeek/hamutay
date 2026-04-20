@@ -232,6 +232,41 @@ class ApachetaBridge:
         record = self._backend.get_record(record_id)
         return record.model_dump()
 
+    # ── Cross-session queries ────────────────────────────────────
+    # Pass-through to yanantin's open-record query surface. Hamutay
+    # callers see session_id / list_sessions; yanantin's vocabulary is
+    # author_instance_id / list_author_instances — translated here.
+
+    def list_open_records(self, limit: int | None = None):
+        """All open records in the backend, newest first. Pairs of (UUID, record)."""
+        return self._backend.list_open_records(limit=limit)
+
+    def query_open_by_session(self, session_id: str, limit: int | None = None):
+        """Records authored by a given session_id (yanantin: author_instance_id)."""
+        return self._backend.query_open_by_author_instance(
+            session_id, limit=limit
+        )
+
+    def query_open_by_lineage_tag(self, tag: str, limit: int | None = None):
+        """Records whose lineage_tags contains the given tag."""
+        return self._backend.query_open_by_lineage_tag(tag, limit=limit)
+
+    def query_open_has_field(self, field: str, limit: int | None = None):
+        """Records carrying a given free-form field key."""
+        return self._backend.query_open_has_field(field, limit=limit)
+
+    def list_sessions(self) -> list[str]:
+        """All distinct session_ids in the open records collection.
+
+        Yanantin calls these author_instance_ids; hamutay calls them session_ids.
+        """
+        return self._backend.list_author_instances()
+
+    @property
+    def session_id(self) -> str:
+        """The session_id this bridge tags its writes with."""
+        return self._session_id
+
     @property
     def count(self) -> int:
         return self._count
