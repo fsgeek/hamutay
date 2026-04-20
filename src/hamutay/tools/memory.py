@@ -54,11 +54,48 @@ def tool_memory_schema(
     params: dict,
     *,
     prior_states: list[tuple[int, UUID, dict, str]],
+    bridge=None,
 ) -> dict:
-    """Return structure of a prior cycle's state without retrieving content."""
+    """Return structure of a prior state without retrieving content.
+
+    Two addressing modes:
+    - cycle=N → in-session state from prior_states
+    - record_id=<UUID> → cross-session record via bridge
+    """
     cycle = params.get("cycle")
+    record_id_str = params.get("record_id")
+
+    if record_id_str is not None:
+        if bridge is None:
+            return {
+                "error": "record_id mode requires a bridge (persistence backend)"
+            }
+        try:
+            record_id = UUID(record_id_str)
+        except (ValueError, AttributeError, TypeError):
+            return {
+                "error": f"record_id is not a valid UUID: {record_id_str!r}"
+            }
+        try:
+            content = bridge.retrieve(record_id)
+        except Exception as e:
+            return {"error": f"Record {record_id} not found: {e}"}
+        # Strip framework-authored envelope fields for the schema view — the
+        # instance asked about *its* data, not the provenance envelope.
+        view = {
+            k: v for k, v in content.items()
+            if k not in ("provenance", "lineage_tags")
+        }
+        return {
+            "record_id": str(record_id),
+            "field_names": sorted(view.keys()),
+            "field_types": {k: _type_name(v) for k, v in view.items()},
+            "field_sizes": {k: _field_size(v) for k, v in view.items()},
+            "total_tokens": _token_estimate(view),
+        }
+
     if cycle is None:
-        return {"error": "cycle is required"}
+        return {"error": "memory_schema requires one of: cycle, record_id"}
 
     found = _find_by_cycle(prior_states, cycle)
     if found is None:
@@ -397,18 +434,37 @@ def tool_walk(
     params: dict,
     *,
     prior_states: list[tuple[int, UUID, dict, str]],
+    bridge=None,
 ) -> dict:
-    """Traverse cycles adjacent to a starting cycle.
+    """Traverse the composition graph adjacent to a starting point.
 
-    Only REFINES edges exist in the current graph, so traversal is cycle-
-    adjacent. direction ∈ {forward, backward, both}; depth bounds the walk.
+    Two addressing modes:
+    - from_cycle=N → in-session cycle-adjacency traversal
+    - from_record_id=<UUID> → cross-session edge-driven traversal via
+      composition graph (requires bridge)
+
+    direction ∈ {forward, backward, both}; depth bounds the walk.
     """
     from_cycle = params.get("from_cycle")
+    from_record_id_str = params.get("from_record_id")
     direction = params.get("direction", "both")
     depth = params.get("depth", 1)
 
+    if from_record_id_str is not None:
+        if bridge is None:
+            return {
+                "error": "from_record_id mode requires a bridge (persistence backend)"
+            }
+        try:
+            from_record_id = UUID(from_record_id_str)
+        except (ValueError, AttributeError, TypeError):
+            return {
+                "error": f"from_record_id is not a valid UUID: {from_record_id_str!r}"
+            }
+        return _walk_by_record_id(from_record_id, direction, depth, bridge)
+
     if from_cycle is None:
-        return {"error": "from_cycle is required"}
+        return {"error": "walk requires one of: from_cycle, from_record_id"}
     if _find_by_cycle(prior_states, from_cycle) is None:
         return {"error": f"No state found for cycle {from_cycle}"}
 
@@ -428,6 +484,75 @@ def tool_walk(
             if entry is None:
                 break
             path.append(_walk_step(entry))
+
+    return {"path": path}
+
+
+def _walk_by_record_id(
+    from_record_id: UUID, direction: str, depth: int, bridge
+) -> dict:
+    """Cross-session traversal via composition graph edges.
+
+    For depth > 1, re-queries edges from the most recently reached record —
+    naive sequential chaining, not a BFS. Cycles in the graph are possible
+    in principle but rare (the append-only tensor interface forecloses
+    them for edges authored by the session layer); if encountered, the
+    visited set short-circuits to avoid infinite loops.
+    """
+    path: list[dict] = []
+    visited: set[UUID] = {from_record_id}
+
+    def extend(current: UUID, edge_direction: str) -> None:
+        for _ in range(depth):
+            edges = bridge.query_edges_by_endpoint(current, edge_direction)
+            if not edges:
+                break
+            # Pick the first edge we haven't walked through. Deterministic
+            # for single-edge cases; arbitrary otherwise. AQL graph traversal
+            # will give better semantics later.
+            next_id: UUID | None = None
+            chosen_edge: dict | None = None
+            for edge in edges:
+                candidate = (
+                    edge["to_record"]
+                    if edge_direction == "forward"
+                    else edge["from_record"]
+                )
+                if candidate not in visited:
+                    next_id = candidate
+                    chosen_edge = edge
+                    break
+            if next_id is None or chosen_edge is None:
+                break
+            visited.add(next_id)
+            try:
+                content = bridge.retrieve(next_id)
+            except Exception:
+                break
+            view = {
+                k: v for k, v in content.items()
+                if k not in ("provenance", "lineage_tags")
+            }
+            session = None
+            prov = content.get("provenance")
+            if isinstance(prov, dict):
+                session = prov.get("author_instance_id")
+            path.append(
+                {
+                    "record_id": str(next_id),
+                    "session": session,
+                    "edge_type": chosen_edge["relation_type"],
+                    "edge_source": "composition_graph",
+                    "field_names": sorted(view.keys()),
+                    "summary": _step_summary(view),
+                }
+            )
+            current = next_id
+
+    if direction in ("backward", "both"):
+        extend(from_record_id, "backward")
+    if direction in ("forward", "both"):
+        extend(from_record_id, "forward")
 
     return {"path": path}
 

@@ -623,6 +623,146 @@ def test_search_memory_cross_session_respects_fields_filter():
     assert result["results"] == []
 
 
+def test_memory_schema_by_record_id():
+    """record_id mode inspects structure of a cross-session record."""
+    bridge = MagicMock()
+    rid = UUID("11111111-1111-1111-1111-111111111111")
+    bridge.retrieve.return_value = {
+        "theme": "cross-session",
+        "notes": ["a", "b", "c"],
+        "provenance": {"author_instance_id": "other-session"},
+        "lineage_tags": ["hamutay", "cycle-5"],
+    }
+    result = tool_memory_schema(
+        {"record_id": str(rid)},
+        prior_states=[],
+        bridge=bridge,
+    )
+    assert result["record_id"] == str(rid)
+    assert set(result["field_names"]) >= {"theme", "notes"}
+    assert result["field_types"]["notes"] == "list"
+    assert result["field_sizes"]["notes"] == 3
+    assert result["total_tokens"] > 0
+
+
+def test_memory_schema_record_id_without_bridge_errors():
+    result = tool_memory_schema(
+        {"record_id": "11111111-1111-1111-1111-111111111111"},
+        prior_states=[],
+        bridge=None,
+    )
+    assert "error" in result
+
+
+def test_memory_schema_record_id_invalid_uuid_errors():
+    bridge = MagicMock()
+    result = tool_memory_schema(
+        {"record_id": "not-a-uuid"},
+        prior_states=[],
+        bridge=bridge,
+    )
+    assert "error" in result
+
+
+def test_walk_from_record_id_forward():
+    """from_record_id traverses composition edges forward."""
+    bridge = MagicMock()
+    rid_from = UUID("11111111-1111-1111-1111-111111111111")
+    rid_next = UUID("22222222-2222-2222-2222-222222222222")
+
+    def edges_for(record_id, direction):
+        if direction == "forward" and record_id == rid_from:
+            return [
+                {
+                    "from_record": rid_from,
+                    "to_record": rid_next,
+                    "relation_type": "refines",
+                    "ordering": 2,
+                }
+            ]
+        return []
+
+    bridge.query_edges_by_endpoint.side_effect = edges_for
+    bridge.retrieve.return_value = {
+        "theme": "next",
+        "provenance": {"author_instance_id": "s"},
+    }
+
+    result = tool_walk(
+        {
+            "from_record_id": str(rid_from),
+            "direction": "forward",
+            "depth": 1,
+        },
+        prior_states=[],
+        bridge=bridge,
+    )
+    assert len(result["path"]) == 1
+    step = result["path"][0]
+    assert step["record_id"] == str(rid_next)
+    assert step["edge_type"] == "refines"
+
+
+def test_walk_from_record_id_backward():
+    """Backward traversal follows edges into the record."""
+    bridge = MagicMock()
+    rid_prev = UUID("11111111-1111-1111-1111-111111111111")
+    rid_at = UUID("22222222-2222-2222-2222-222222222222")
+
+    def edges_for(record_id, direction):
+        if direction == "backward" and record_id == rid_at:
+            return [
+                {
+                    "from_record": rid_prev,
+                    "to_record": rid_at,
+                    "relation_type": "refines",
+                    "ordering": 1,
+                }
+            ]
+        return []
+
+    bridge.query_edges_by_endpoint.side_effect = edges_for
+    bridge.retrieve.return_value = {"theme": "earlier"}
+
+    result = tool_walk(
+        {
+            "from_record_id": str(rid_at),
+            "direction": "backward",
+            "depth": 1,
+        },
+        prior_states=[],
+        bridge=bridge,
+    )
+    assert len(result["path"]) == 1
+    assert result["path"][0]["record_id"] == str(rid_prev)
+
+
+def test_walk_from_record_id_boundary_no_edges():
+    """No edges → empty path, not error."""
+    bridge = MagicMock()
+    bridge.query_edges_by_endpoint.return_value = []
+
+    result = tool_walk(
+        {
+            "from_record_id": "11111111-1111-1111-1111-111111111111",
+            "direction": "forward",
+            "depth": 3,
+        },
+        prior_states=[],
+        bridge=bridge,
+    )
+    assert result["path"] == []
+
+
+def test_walk_from_record_id_requires_bridge():
+    result = tool_walk(
+        {"from_record_id": "11111111-1111-1111-1111-111111111111"},
+        prior_states=[],
+        bridge=None,
+    )
+    assert "error" in result
+
+
 def test_search_memory_metadata_includes_cross_session_count():
     """search_metadata surfaces cross-session count for introspection."""
     bridge = _mock_bridge_lineage_records([

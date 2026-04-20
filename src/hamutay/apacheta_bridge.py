@@ -262,6 +262,37 @@ class ApachetaBridge:
         """
         return self._backend.list_author_instances()
 
+    def query_edges_by_endpoint(
+        self, record_id: UUID, direction: str = "both"
+    ) -> list[dict]:
+        """Composition edges touching ``record_id``.
+
+        direction='forward': edges where record_id is from_tensor
+        direction='backward': edges where record_id is to_tensor
+        direction='both': union
+
+        Returns dicts so callers don't import yanantin's CompositionEdge.
+        """
+        edges = self._backend.query_composition_graph()
+        results: list[dict] = []
+        for edge in edges:
+            rel = getattr(edge.relation_type, "value", str(edge.relation_type))
+            as_dict = {
+                "from_record": edge.from_tensor,
+                "to_record": edge.to_tensor,
+                "relation_type": rel,
+                "ordering": edge.ordering,
+            }
+            if direction in ("forward", "both") and edge.from_tensor == record_id:
+                results.append(as_dict)
+            if direction in ("backward", "both") and edge.to_tensor == record_id:
+                # Avoid double-adding self-loops in 'both' mode
+                if not (
+                    direction == "both" and edge.from_tensor == record_id
+                ):
+                    results.append(as_dict)
+        return results
+
     @property
     def session_id(self) -> str:
         """The session_id this bridge tags its writes with."""
