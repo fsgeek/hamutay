@@ -135,33 +135,42 @@ _REASON_FIELD = {
 MEMORY_SCHEMA_SCHEMA = {
     "name": "memory_schema",
     "description": (
-        "Returns the structure of a prior cycle's state without its "
-        "content — field names, types, sizes, and a token estimate. "
-        "Cheap introspection: decide what's worth retrieving before "
-        "retrieving it."
+        "Returns the structure of a prior state without its content — "
+        "field names, types, sizes, and a token estimate. Cheap "
+        "introspection: decide what's worth retrieving before "
+        "retrieving it. Address by cycle (in-session) or record_id "
+        "(cross-session UUID)."
     ),
     "input_schema": {
         "type": "object",
         "properties": {
             "cycle": {
                 "type": "integer",
-                "description": "The cycle number to inspect.",
+                "description": "The cycle number to inspect (in-session).",
+            },
+            "record_id": {
+                "type": "string",
+                "description": (
+                    "UUID of a record (cross-session). Obtain via recall, "
+                    "search_memory, or walk results that carry record_id."
+                ),
             },
             "reason": _REASON_FIELD,
         },
-        "required": ["cycle"],
+        "required": [],
     },
 }
 
 RECALL_SCHEMA = {
     "name": "recall",
     "description": (
-        "Retrieve content from a prior cycle. Four mutually exclusive "
-        "modes: (a) cycle + field: one field at one cycle; "
-        "(b) cycle alone: the full state snapshot; "
-        "(c) recent + field: the last N values of one field across cycles; "
+        "Retrieve content from a prior state. Five mutually exclusive "
+        "modes: (a) cycle + field: one field at one cycle (session-scoped); "
+        "(b) cycle alone: the full state snapshot (session-scoped); "
+        "(c) recent + field: the last N values of one field across states; "
         "(d) random + field: one value of the field from a randomly chosen "
-        "prior cycle. What you retrieve is what you claimed then, not "
+        "state; (e) record_id: address a specific record by UUID "
+        "(cross-session). What you retrieve is what you claimed then, not "
         "necessarily what was true."
     ),
     "input_schema": {
@@ -169,7 +178,13 @@ RECALL_SCHEMA = {
         "properties": {
             "cycle": {
                 "type": "integer",
-                "description": "Which cycle to recall.",
+                "description": "Which cycle to recall (in-session only).",
+            },
+            "record_id": {
+                "type": "string",
+                "description": (
+                    "UUID of a specific record (cross-session by construction)."
+                ),
             },
             "field": {
                 "type": "string",
@@ -182,7 +197,17 @@ RECALL_SCHEMA = {
             "random": {
                 "type": "boolean",
                 "description": (
-                    "If true, pick a random prior cycle containing `field`."
+                    "If true, pick a random prior state containing `field`."
+                ),
+            },
+            "scope": {
+                "type": "string",
+                "enum": ["session", "cross_session", "all"],
+                "description": (
+                    "Which states are eligible for recent/random: 'session' "
+                    "(default, this session only), 'cross_session' (other "
+                    "sessions only), 'all' (union). cycle and record_id "
+                    "ignore scope."
                 ),
             },
             "reason": _REASON_FIELD,
@@ -226,10 +251,12 @@ COMPARE_SCHEMA = {
 WALK_SCHEMA = {
     "name": "walk",
     "description": (
-        "Traverse cycles adjacent to a starting cycle. direction chooses "
-        "forward, backward, or both. depth controls how many steps. Each "
-        "step returns cycle, record_id, timestamp, field names, and a "
-        "short summary — not full content. Use recall afterward if a "
+        "Traverse the composition graph from a starting point. Two "
+        "addressing modes: from_cycle walks in-session cycle-adjacency; "
+        "from_record_id follows composition edges across sessions. "
+        "direction chooses forward, backward, or both. depth controls "
+        "how many steps. Each step returns record_id, field names, and "
+        "a short summary — not full content. Use recall afterward if a "
         "step looks worth loading."
     ),
     "input_schema": {
@@ -237,7 +264,13 @@ WALK_SCHEMA = {
         "properties": {
             "from_cycle": {
                 "type": "integer",
-                "description": "The cycle to walk from.",
+                "description": "The cycle to walk from (in-session).",
+            },
+            "from_record_id": {
+                "type": "string",
+                "description": (
+                    "UUID to walk from (cross-session, via composition edges)."
+                ),
             },
             "direction": {
                 "type": "string",
@@ -252,19 +285,21 @@ WALK_SCHEMA = {
             },
             "reason": _REASON_FIELD,
         },
-        "required": ["from_cycle"],
+        "required": [],
     },
 }
 
 SEARCH_MEMORY_SCHEMA = {
     "name": "search_memory",
     "description": (
-        "Keyword/substring search across your prior cycles. Structural "
-        "narrowing happens first: cycle_range restricts to a span, "
-        "has_field requires a named field's presence, fields restricts "
-        "the match scope to listed field names. Then the query is matched "
-        "case-insensitively against the narrowed candidates. Results are "
-        "ranked cycle-descending with snippets."
+        "Keyword/substring search across prior states. Structural "
+        "narrowing happens first: cycle_range restricts to a span "
+        "(in-session only), has_field requires a named field's presence, "
+        "fields restricts the match scope to listed field names. Then "
+        "the query is matched case-insensitively against the narrowed "
+        "candidates. In-session results come first (cycle descending); "
+        "cross-session results follow and carry record_id + session in "
+        "place of cycle."
     ),
     "input_schema": {
         "type": "object",
@@ -283,7 +318,9 @@ SEARCH_MEMORY_SCHEMA = {
                     "cycle_range": {
                         "type": "array",
                         "items": {"type": "integer"},
-                        "description": "[lo, hi] inclusive cycle range.",
+                        "description": (
+                            "[lo, hi] inclusive cycle range (in-session only)."
+                        ),
                     },
                     "fields": {
                         "type": "array",
@@ -299,6 +336,15 @@ SEARCH_MEMORY_SCHEMA = {
                         ),
                     },
                 },
+            },
+            "scope": {
+                "type": "string",
+                "enum": ["session", "cross_session", "all"],
+                "description": (
+                    "'session' (default, this session only), 'cross_session' "
+                    "(hamutay-tagged records from other sessions), 'all' "
+                    "(union, in-session first)."
+                ),
             },
             "limit": {
                 "type": "integer",

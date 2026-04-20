@@ -752,6 +752,7 @@ class OpenTasteSession:
                 session_start=self._session_start,
                 last_cycle_time=self._last_cycle_time,
                 prior_states=self._prior_states,
+                bridge=self._bridge,
             )
             extra_tools = list(TOOL_SCHEMAS.values())
 

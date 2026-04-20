@@ -109,3 +109,65 @@ def test_executor_records_memory_tool_activity(tmp_path):
     log = executor.activity_log
     assert log[-1]["tool"] == "recall"
     assert log[-1]["reason"] == "curious"
+
+
+# ---------------------------------------------------------------------------
+# Bridge threaded through to memory tools (cross-session scope)
+# ---------------------------------------------------------------------------
+
+
+def test_executor_passes_bridge_to_recall(tmp_path):
+    """recall record_id mode works through the executor when a bridge is present."""
+    from unittest.mock import MagicMock
+    from uuid import UUID
+
+    rid = UUID("11111111-1111-1111-1111-111111111111")
+    bridge = MagicMock()
+    bridge.retrieve.return_value = {"theme": "cross-session-content"}
+
+    executor = ToolExecutor(
+        project_root=tmp_path, cycle=2,
+        prior_states=_prior_states_fixture(),
+        bridge=bridge,
+    )
+    result = executor.execute(
+        "recall", {"record_id": str(rid), "field": "theme"}
+    )
+    assert result["content"] == "cross-session-content"
+    bridge.retrieve.assert_called_once_with(rid)
+
+
+def test_executor_passes_bridge_to_memory_schema(tmp_path):
+    """memory_schema record_id mode routes through the bridge."""
+    from unittest.mock import MagicMock
+
+    bridge = MagicMock()
+    bridge.retrieve.return_value = {
+        "theme": "x", "notes": ["a", "b"],
+        "provenance": {"author_instance_id": "other"},
+    }
+    executor = ToolExecutor(
+        project_root=tmp_path, cycle=2,
+        prior_states=_prior_states_fixture(),
+        bridge=bridge,
+    )
+    result = executor.execute(
+        "memory_schema",
+        {"record_id": "11111111-1111-1111-1111-111111111111"},
+    )
+    assert "theme" in result["field_names"]
+    # Envelope fields stripped from the schema view.
+    assert "provenance" not in result["field_names"]
+
+
+def test_executor_without_bridge_returns_error_on_record_id(tmp_path):
+    """Sensible error when bridge isn't wired and cross-session mode is invoked."""
+    executor = ToolExecutor(
+        project_root=tmp_path, cycle=2,
+        prior_states=_prior_states_fixture(),
+    )
+    result = executor.execute(
+        "recall",
+        {"record_id": "11111111-1111-1111-1111-111111111111"},
+    )
+    assert "error" in result

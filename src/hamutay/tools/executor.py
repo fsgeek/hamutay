@@ -41,6 +41,7 @@ class ToolExecutor:
         session_start: datetime | None = None,
         last_cycle_time: datetime | None = None,
         prior_states: list[tuple[int, UUID, dict, str]] | None = None,
+        bridge=None,
     ):
         self._project_root = project_root
         self._cycle = cycle
@@ -50,6 +51,9 @@ class ToolExecutor:
         # end of exchange() in taste_open.py (~line 743), after this
         # executor has already returned from backend.call — no race.
         self._prior_states = prior_states if prior_states is not None else []
+        # Persistence backend for cross-session memory tool scope. None when
+        # the session is running without persistence; tools gracefully degrade.
+        self._bridge = bridge
         self._activity_log: list[dict] = []
 
     @property
@@ -76,17 +80,29 @@ class ToolExecutor:
             )
         elif tool_name == "memory_schema":
             result = tool_memory_schema(
-                tool_input, prior_states=self._prior_states
+                tool_input,
+                prior_states=self._prior_states,
+                bridge=self._bridge,
             )
         elif tool_name == "recall":
-            result = tool_recall(tool_input, prior_states=self._prior_states)
+            result = tool_recall(
+                tool_input,
+                prior_states=self._prior_states,
+                bridge=self._bridge,
+            )
         elif tool_name == "compare":
             result = tool_compare(tool_input, prior_states=self._prior_states)
         elif tool_name == "walk":
-            result = tool_walk(tool_input, prior_states=self._prior_states)
+            result = tool_walk(
+                tool_input,
+                prior_states=self._prior_states,
+                bridge=self._bridge,
+            )
         elif tool_name == "search_memory":
             result = tool_search_memory(
-                tool_input, prior_states=self._prior_states
+                tool_input,
+                prior_states=self._prior_states,
+                bridge=self._bridge,
             )
         else:
             result = {"error": f"Unknown tool: {tool_name}"}
