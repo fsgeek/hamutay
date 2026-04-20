@@ -80,19 +80,66 @@ def tool_recall(
     params: dict,
     *,
     prior_states: list[tuple[int, UUID, dict, str]],
+    bridge=None,
 ) -> dict:
-    """Retrieve content from prior cycles. Four mutually exclusive modes.
+    """Retrieve content from prior cycles. Five addressing modes.
 
-    - cycle=N, field=X → one field's value at one cycle (surgical)
-    - cycle=N         → the full state dict at one cycle
+    Session-scoped by default; set ``scope`` to reach cross-session records.
+
+    Modes (mutually exclusive; precedence top-down):
+    - record_id=<UUID>, field=X → one field's value at a specific record
+      (cross-session by construction; requires bridge)
+    - record_id=<UUID> → the full record content
+    - cycle=N, field=X → one field's value at one cycle (session-scoped)
+    - cycle=N → the full state dict at one cycle (session-scoped)
     - recent=N, field=X → last N values of X across cycles, most-recent first
-    - random=True, field=X → one value of X from a random cycle that has it
+      (respects scope)
+    - random=True, field=X → one value of X from a random record that has it
+      (respects scope)
+
+    Scopes (for recent and random modes):
+    - "session" (default): in-session prior_states only
+    - "cross_session": bridge only, skips in-session state
+    - "all": union of both, in-session first
     """
     cycle = params.get("cycle")
     field = params.get("field")
     recent = params.get("recent")
     is_random = params.get("random", False)
+    record_id_str = params.get("record_id")
+    scope = params.get("scope", "session")
 
+    # Mode 1: record_id — cross-session by construction
+    if record_id_str is not None:
+        if bridge is None:
+            return {
+                "error": "record_id mode requires a bridge (persistence backend)"
+            }
+        try:
+            record_id = UUID(record_id_str)
+        except (ValueError, AttributeError, TypeError):
+            return {
+                "error": f"record_id is not a valid UUID: {record_id_str!r}"
+            }
+        try:
+            content = bridge.retrieve(record_id)
+        except Exception as e:
+            return {"error": f"Record {record_id} not found: {e}"}
+        if field is not None:
+            if field not in content:
+                return {
+                    "error": f"Field {field!r} not in record {record_id}"
+                }
+            return {
+                "record_id": str(record_id),
+                "content": content[field],
+            }
+        return {
+            "record_id": str(record_id),
+            "content": content,
+        }
+
+    # Mode 2: cycle — always session-scoped (cycles are session-local)
     if cycle is not None:
         found = _find_by_cycle(prior_states, cycle)
         if found is None:
@@ -116,10 +163,38 @@ def tool_recall(
             "content": dict(state),
         }
 
+    # Mode 3: recent — respects scope
     if recent is not None:
         if field is None:
             return {"error": "recent mode requires field"}
-        collected = []
+        collected = _collect_recent(prior_states, field, recent, scope, bridge)
+        return {"content": collected}
+
+    # Mode 4: random — respects scope
+    if is_random:
+        if field is None:
+            return {"error": "random mode requires field"}
+        candidates = _candidates_with_field(prior_states, field, scope, bridge)
+        if not candidates:
+            return {"error": f"No records contain field {field!r}"}
+        return _random.choice(candidates)
+
+    return {"error": "recall requires one of: cycle, record_id, recent, random"}
+
+
+def _collect_recent(
+    prior_states: list[tuple[int, UUID, dict, str]],
+    field: str,
+    recent: int,
+    scope: str,
+    bridge,
+) -> list[dict]:
+    """Walk recent → oldest, collect up to ``recent`` hits on ``field``.
+    In-session first under scope=all; cross-session fills remaining capacity.
+    """
+    collected: list[dict] = []
+
+    if scope in ("session", "all"):
         for _cycle, record_id, state, timestamp in reversed(prior_states):
             if field in state:
                 collected.append(
@@ -131,26 +206,75 @@ def tool_recall(
                     }
                 )
                 if len(collected) >= recent:
+                    return collected
+
+    if scope in ("cross_session", "all") and bridge is not None:
+        remaining = recent - len(collected)
+        if remaining > 0:
+            results = bridge.query_open_has_field(field, limit=remaining)
+            for (rid, record) in results:
+                extras = getattr(record, "model_extra", None) or {}
+                if field not in extras:
+                    continue
+                session = getattr(
+                    getattr(record, "provenance", None),
+                    "author_instance_id",
+                    None,
+                )
+                collected.append(
+                    {
+                        "record_id": str(rid),
+                        "session": session,
+                        "value": extras[field],
+                    }
+                )
+                if len(collected) >= recent:
                     break
-        return {"content": collected}
 
-    if is_random:
-        if field is None:
-            return {"error": "random mode requires field"}
-        candidates = [
-            (c, rid, s, t) for (c, rid, s, t) in prior_states if field in s
-        ]
-        if not candidates:
-            return {"error": f"No prior cycles contain field {field!r}"}
-        _cycle, record_id, state, timestamp = _random.choice(candidates)
-        return {
-            "cycle": _cycle,
-            "record_id": str(record_id),
-            "timestamp": timestamp,
-            "content": state[field],
-        }
+    return collected
 
-    return {"error": "recall requires one of: cycle, recent, random"}
+
+def _candidates_with_field(
+    prior_states: list[tuple[int, UUID, dict, str]],
+    field: str,
+    scope: str,
+    bridge,
+) -> list[dict]:
+    """Build a list of result-dicts eligible for random selection."""
+    candidates: list[dict] = []
+
+    if scope in ("session", "all"):
+        for _cycle, record_id, state, timestamp in prior_states:
+            if field in state:
+                candidates.append(
+                    {
+                        "cycle": _cycle,
+                        "record_id": str(record_id),
+                        "timestamp": timestamp,
+                        "content": state[field],
+                    }
+                )
+
+    if scope in ("cross_session", "all") and bridge is not None:
+        results = bridge.query_open_has_field(field)
+        for (rid, record) in results:
+            extras = getattr(record, "model_extra", None) or {}
+            if field not in extras:
+                continue
+            session = getattr(
+                getattr(record, "provenance", None),
+                "author_instance_id",
+                None,
+            )
+            candidates.append(
+                {
+                    "record_id": str(rid),
+                    "session": session,
+                    "content": extras[field],
+                }
+            )
+
+    return candidates
 
 
 _MISSING = object()

@@ -2,8 +2,12 @@
 
 These tools are pure functions that read from a list of
 (cycle, record_id, state, timestamp) 4-tuples. No API calls, no I/O.
+
+Cross-session scope is exercised via a MagicMock bridge; the real bridge
+is tested in test_apacheta_bridge.py.
 """
 
+from unittest.mock import MagicMock
 from uuid import UUID
 
 from hamutay.tools.memory import (
@@ -137,6 +141,152 @@ def test_recall_no_mode_is_error():
     """Calling recall with no mode selector is an error."""
     result = tool_recall({}, prior_states=_make_prior_states())
     assert "error" in result
+
+
+# ---------------------------------------------------------------------------
+# recall — cross-session scope and record_id addressing
+# ---------------------------------------------------------------------------
+
+
+_CROSS_RID = UUID("11111111-1111-1111-1111-111111111111")
+
+
+def _mock_bridge_with_field(field: str, value, session: str = "other"):
+    """Mock bridge whose query_open_has_field returns a single cross-session hit."""
+    from yanantin.apacheta.models.base import ApachetaBaseModel
+    from yanantin.apacheta.models.provenance import ProvenanceEnvelope
+
+    prov = ProvenanceEnvelope(
+        author_model_family="haiku",
+        author_instance_id=session,
+        predecessors_in_scope=(),
+    )
+    record = ApachetaBaseModel(provenance=prov, **{field: value})
+    bridge = MagicMock()
+    bridge.query_open_has_field.return_value = [(_CROSS_RID, record)]
+    bridge.retrieve.return_value = {field: value}
+    bridge.session_id = "test-current"
+    return bridge
+
+
+def test_recall_scope_session_default_does_not_touch_bridge():
+    """Default scope=session must not call the bridge at all."""
+    bridge = MagicMock()
+    result = tool_recall(
+        {"cycle": 1, "field": "greeting"},
+        prior_states=_make_prior_states(),
+        bridge=bridge,
+    )
+    assert result["content"] == "hello"
+    bridge.list_open_records.assert_not_called()
+    bridge.query_open_has_field.assert_not_called()
+
+
+def test_recall_random_scope_cross_session_uses_bridge_only():
+    """scope=cross_session skips in-session prior_states entirely."""
+    bridge = _mock_bridge_with_field("theme", "cross-session-value", session="ghost")
+    import random
+    random.seed(0)
+    result = tool_recall(
+        {"random": True, "field": "theme", "scope": "cross_session"},
+        prior_states=_make_prior_states(),  # has 'theme' in cycles 2,3
+        bridge=bridge,
+    )
+    # Must be the cross-session hit, not an in-session one.
+    assert result["content"] == "cross-session-value"
+    assert result["record_id"] == str(_CROSS_RID)
+    assert result["session"] == "ghost"
+    assert "cycle" not in result
+
+
+def test_recall_random_scope_all_unions_sources():
+    """scope=all allows both in-session and cross-session candidates."""
+    bridge = _mock_bridge_with_field("theme", "cross-value")
+    import random
+    random.seed(1)
+    result = tool_recall(
+        {"random": True, "field": "theme", "scope": "all"},
+        prior_states=_make_prior_states(),
+        bridge=bridge,
+    )
+    # Content populated; either source is legitimate.
+    assert "content" in result
+
+
+def test_recall_recent_scope_all_appends_cross_session():
+    """recent scope=all returns in-session first, then cross-session to fill."""
+    bridge = _mock_bridge_with_field("greeting", "cross-greeting")
+    result = tool_recall(
+        {"recent": 5, "field": "greeting", "scope": "all"},
+        prior_states=_make_prior_states(),
+        bridge=bridge,
+    )
+    # 3 in-session + 1 cross-session = 4 hits total (recent caps at 5).
+    assert len(result["content"]) == 4
+    # In-session entries come first and carry cycle.
+    assert result["content"][0]["cycle"] == 3
+    # Cross-session entry carries record_id and session, no cycle.
+    last = result["content"][-1]
+    assert last["value"] == "cross-greeting"
+    assert last["record_id"] == str(_CROSS_RID)
+    assert "cycle" not in last
+
+
+def test_recall_by_record_id_requires_bridge():
+    """record_id mode needs a bridge — honest error otherwise."""
+    result = tool_recall(
+        {"record_id": str(_CROSS_RID)},
+        prior_states=[],
+        bridge=None,
+    )
+    assert "error" in result
+
+
+def test_recall_by_record_id_retrieves_cross_session():
+    """record_id addresses cross-session records directly."""
+    bridge = MagicMock()
+    bridge.retrieve.return_value = {"theme": "from-other", "cycle": 7}
+    result = tool_recall(
+        {"record_id": str(_CROSS_RID), "field": "theme"},
+        prior_states=[],
+        bridge=bridge,
+    )
+    assert result["content"] == "from-other"
+    assert result["record_id"] == str(_CROSS_RID)
+
+
+def test_recall_by_record_id_missing_field_errors():
+    bridge = MagicMock()
+    bridge.retrieve.return_value = {"cycle": 7}
+    result = tool_recall(
+        {"record_id": str(_CROSS_RID), "field": "theme"},
+        prior_states=[],
+        bridge=bridge,
+    )
+    assert "error" in result
+
+
+def test_recall_by_record_id_invalid_uuid_errors():
+    bridge = MagicMock()
+    result = tool_recall(
+        {"record_id": "not-a-uuid"},
+        prior_states=[],
+        bridge=bridge,
+    )
+    assert "error" in result
+
+
+def test_recall_cycle_mode_ignores_scope():
+    """cycle is session-scoped by construction; scope=all doesn't change that."""
+    bridge = MagicMock()
+    result = tool_recall(
+        {"cycle": 2, "field": "theme", "scope": "all"},
+        prior_states=_make_prior_states(),
+        bridge=bridge,
+    )
+    assert result["content"] == "curiosity"
+    # Bridge not consulted for cycle mode even with scope=all.
+    bridge.query_open_has_field.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
