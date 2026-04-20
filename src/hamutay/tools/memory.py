@@ -460,16 +460,27 @@ def tool_search_memory(
     params: dict,
     *,
     prior_states: list[tuple[int, UUID, dict, str]],
+    bridge=None,
 ) -> dict:
     """Keyword/substring search over prior states with structural narrowing.
 
     Structural narrowing (cycle_range, has_field, fields) happens first.
     Then the query is matched case-insensitively within the narrowed set.
-    Results are sorted most-recent-first (cycle descending).
+    Results are sorted most-recent-first: in-session (cycle descending) then
+    cross-session.
+
+    Scopes:
+    - "session" (default): in-session prior_states only
+    - "cross_session": bridge only (hamutay-tagged records), no prior_states
+    - "all": union of both; in-session first
+
+    cycle_range narrow_by applies to in-session only — cycle numbers are
+    session-local. has_field and fields apply symmetrically to both.
     """
     query = params.get("query")
     narrow_by = params.get("narrow_by") or {}
     limit = params.get("limit", 5)
+    scope = params.get("scope", "session")
 
     if not query:
         return {"error": "query is required"}
@@ -477,6 +488,40 @@ def tool_search_memory(
     query_lower = query.lower()
     total = len(prior_states)
 
+    in_session_matches: list[dict] = []
+    narrowed_in_session = 0
+    if scope in ("session", "all"):
+        in_session_matches, narrowed_in_session = _match_in_session(
+            prior_states, query_lower, narrow_by
+        )
+
+    cross_matches: list[dict] = []
+    if scope in ("cross_session", "all") and bridge is not None:
+        cross_matches = _match_cross_session(bridge, query_lower, narrow_by)
+
+    # Rank: in-session by cycle desc first, then cross-session.
+    combined = in_session_matches + cross_matches
+    limited = combined[:limit]
+
+    return {
+        "results": limited,
+        "search_metadata": {
+            "total_candidates": total,
+            "narrowed_to": narrowed_in_session,
+            "matched_count": len(combined),
+            "cross_session_count": len(cross_matches),
+        },
+    }
+
+
+def _match_in_session(
+    prior_states: list[tuple[int, UUID, dict, str]],
+    query_lower: str,
+    narrow_by: dict,
+) -> tuple[list[dict], int]:
+    """Apply narrowing + keyword match to in-session prior_states.
+    Returns (matches, narrowed_candidate_count).
+    """
     candidates = list(prior_states)
 
     cycle_range = narrow_by.get("cycle_range")
@@ -518,13 +563,47 @@ def tool_search_memory(
             )
 
     matches.sort(key=lambda r: r["cycle"], reverse=True)
-    limited = matches[:limit]
+    return matches, len(candidates)
 
-    return {
-        "results": limited,
-        "search_metadata": {
-            "total_candidates": total,
-            "narrowed_to": len(candidates),
-            "matched_count": len(matches),
-        },
-    }
+
+def _match_cross_session(bridge, query_lower: str, narrow_by: dict) -> list[dict]:
+    """Keyword search across hamutay-tagged records from other sessions."""
+    # Bound the cross-session search to hamutay-authored records via lineage tag.
+    candidates = bridge.query_open_by_lineage_tag("hamutay")
+
+    has_field = narrow_by.get("has_field")
+    field_filter = narrow_by.get("fields")
+
+    matches: list[dict] = []
+    for rid, record in candidates:
+        extras = getattr(record, "model_extra", None) or {}
+
+        if has_field and has_field not in extras:
+            continue
+
+        search_fields = field_filter if field_filter else list(extras.keys())
+        matched_fields: list[str] = []
+        snippets: dict[str, str] = {}
+        for key in search_fields:
+            if key not in extras:
+                continue
+            if _value_contains(extras[key], query_lower):
+                matched_fields.append(key)
+                snippets[key] = _snippet(extras[key], query_lower)
+        if matched_fields:
+            session = getattr(
+                getattr(record, "provenance", None),
+                "author_instance_id",
+                None,
+            )
+            matches.append(
+                {
+                    "record_id": str(rid),
+                    "session": session,
+                    "relevance": 1.0,
+                    "matched_fields": matched_fields,
+                    "snippets": snippets,
+                }
+            )
+
+    return matches

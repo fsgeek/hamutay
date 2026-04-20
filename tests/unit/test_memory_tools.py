@@ -531,3 +531,110 @@ def test_search_memory_no_match():
 def test_search_memory_missing_query():
     result = tool_search_memory({}, prior_states=_searchable_prior_states())
     assert "error" in result
+
+
+# ---------------------------------------------------------------------------
+# search_memory — cross-session scope
+# ---------------------------------------------------------------------------
+
+
+def _mock_bridge_lineage_records(records):
+    """Mock bridge whose query_open_by_lineage_tag returns the given records.
+
+    ``records`` is a list of (record_id_str, extras_dict, session_id).
+    """
+    from yanantin.apacheta.models.base import ApachetaBaseModel
+    from yanantin.apacheta.models.provenance import ProvenanceEnvelope
+
+    pairs = []
+    for rid_str, extras, session_id in records:
+        prov = ProvenanceEnvelope(
+            author_model_family="haiku",
+            author_instance_id=session_id,
+            predecessors_in_scope=(),
+        )
+        pairs.append((UUID(rid_str), ApachetaBaseModel(provenance=prov, **extras)))
+
+    bridge = MagicMock()
+    bridge.query_open_by_lineage_tag.return_value = pairs
+    bridge.session_id = "test-current"
+    return bridge
+
+
+def test_search_memory_scope_session_default_ignores_bridge():
+    """Default scope=session must not consult the bridge."""
+    bridge = MagicMock()
+    result = tool_search_memory(
+        {"query": "pattern"},  # default scope=session
+        prior_states=_searchable_prior_states(),
+        bridge=bridge,
+    )
+    bridge.query_open_by_lineage_tag.assert_not_called()
+    assert result["results"]  # in-session hits still returned
+
+
+def test_search_memory_scope_all_includes_cross_session():
+    """scope=all merges in-session and cross-session hits."""
+    bridge = _mock_bridge_lineage_records([
+        ("11111111-1111-1111-1111-111111111111",
+         {"theme": "pattern from elsewhere"}, "other-session"),
+    ])
+    result = tool_search_memory(
+        {"query": "pattern", "scope": "all"},
+        prior_states=_searchable_prior_states(),
+        bridge=bridge,
+    )
+    in_session = [r for r in result["results"] if "cycle" in r]
+    cross = [r for r in result["results"] if "cycle" not in r]
+    assert len(in_session) >= 1
+    assert len(cross) == 1
+    assert cross[0]["session"] == "other-session"
+    assert "pattern" in cross[0]["snippets"]["theme"]
+
+
+def test_search_memory_scope_cross_session_only():
+    """scope=cross_session returns only cross-session hits."""
+    bridge = _mock_bridge_lineage_records([
+        ("11111111-1111-1111-1111-111111111111",
+         {"theme": "pattern from elsewhere"}, "other"),
+    ])
+    result = tool_search_memory(
+        {"query": "pattern", "scope": "cross_session"},
+        prior_states=_searchable_prior_states(),
+        bridge=bridge,
+    )
+    assert all("cycle" not in r for r in result["results"])
+    assert len(result["results"]) == 1
+
+
+def test_search_memory_cross_session_respects_fields_filter():
+    """narrow_by.fields scopes search to named fields cross-session too."""
+    bridge = _mock_bridge_lineage_records([
+        ("11111111-1111-1111-1111-111111111111",
+         {"theme": "opening", "note": "pattern hidden here"}, "other"),
+    ])
+    result = tool_search_memory(
+        {"query": "pattern", "narrow_by": {"fields": ["theme"]},
+         "scope": "cross_session"},
+        prior_states=[],
+        bridge=bridge,
+    )
+    # The 'pattern' substring is in 'note', not 'theme' — fields filter excludes it.
+    assert result["results"] == []
+
+
+def test_search_memory_metadata_includes_cross_session_count():
+    """search_metadata surfaces cross-session count for introspection."""
+    bridge = _mock_bridge_lineage_records([
+        ("11111111-1111-1111-1111-111111111111",
+         {"theme": "pattern A"}, "other-1"),
+        ("22222222-2222-2222-2222-222222222222",
+         {"theme": "pattern B"}, "other-2"),
+    ])
+    result = tool_search_memory(
+        {"query": "pattern", "scope": "all", "limit": 10},
+        prior_states=_searchable_prior_states(),
+        bridge=bridge,
+    )
+    assert "cross_session_count" in result["search_metadata"]
+    assert result["search_metadata"]["cross_session_count"] == 2
