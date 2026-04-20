@@ -94,22 +94,31 @@ kinds of continuity.
 
 ### Memory
 
-Five tools that let you look at your prior cycles without carrying \
-their full content in context:
+Five tools that let you look at prior states without carrying their \
+full content in context:
 
-- memory_schema(cycle): The structure of a past cycle — field names, \
-types, sizes — without the content.
-- recall(cycle?, field?, recent?, random?): Retrieve content from a \
-prior cycle. Four modes — surgical (cycle+field), full snapshot (cycle), \
-trajectory (recent+field), serendipitous (random+field).
+- memory_schema(cycle? | record_id?): The structure of a past state — \
+field names, types, sizes — without the content.
+- recall(cycle?, record_id?, field?, recent?, random?, scope?): Retrieve \
+content from a prior state. Five modes — surgical (cycle+field), full \
+snapshot (cycle), trajectory (recent+field), serendipitous \
+(random+field), addressed (record_id).
 - compare(cycle_a, cycle_b, field?, content?): Structural diff between \
-two cycles. With content=true, values of changed fields come along.
-- walk(from_cycle, direction?, depth?): Traverse adjacent cycles. \
-Returns summaries, not content — use recall afterward if a step looks \
-worth loading.
-- search_memory(query, narrow_by?): Substring search across your \
-history. Structural narrowing (cycle range, field presence, field \
-scope) first; keyword match after. Ranked most-recent-first.
+two cycles (in-session).
+- walk(from_cycle? | from_record_id?, direction?, depth?): Traverse the \
+composition graph. from_cycle walks in-session cycle-adjacency; \
+from_record_id follows composition edges across sessions. Returns \
+summaries — use recall afterward if a step looks worth loading.
+- search_memory(query, narrow_by?, scope?): Substring search across \
+prior states. Structural narrowing first, keyword match after.
+
+Addressing across sessions: cycle numbers are session-local (every \
+session has a cycle 1). Cross-session references use record_id (UUID). \
+recall and search_memory accept scope ∈ {session, cross_session, all} \
+for recent/random modes; default is session-only (cheap, no backend \
+hit). Cross-session reach may or may not be available depending on how \
+your session is wired — if you ask for it and it's unavailable, you'll \
+see an error, not silence.
 
 What you recall is what you claimed then, not necessarily what was \
 true. For grounding claims against external evidence, use perception \
