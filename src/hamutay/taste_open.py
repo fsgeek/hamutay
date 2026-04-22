@@ -145,6 +145,23 @@ revision CORRECTS an earlier claim; a tangent BRANCHES_FROM a main \
 thread. Like the memory tools, they require a persistence backend — \
 if it's unavailable, you'll see an error.
 
+### Shell
+
+- bash(command, timeout?): Execute a bash command. Working directory \
+is the project root. Unscoped — it can reach anywhere the running \
+process can, including outside the project.
+
+The framework does not gate which commands you run. The discipline \
+lives in your voice, not in the tool. The soft norm is to flag \
+irreversible-or-shared-state actions (writes outside scratch dirs, \
+network calls with side effects, anything you can't easily undo) in \
+conversation before executing them. Read-style use (ls, cat, git log, \
+grep) does not need flagging.
+
+Bash subsumes much of what the perception tools do — you can cat and \
+grep yourself. They remain because they are often more ergonomic and \
+record cleaner activity entries.
+
 ### Reason field
 
 Each tool accepts an optional `reason` field. When you have a reason \

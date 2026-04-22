@@ -13,6 +13,17 @@ def test_tool_schemas_exist():
     assert "clock" in TOOL_SCHEMAS
 
 
+def test_bash_schema_present_and_requires_command():
+    schema = TOOL_SCHEMAS["bash"]
+    assert schema["name"] == "bash"
+    props = schema["input_schema"]["properties"]
+    assert "command" in props
+    assert "command" in schema["input_schema"]["required"]
+    # timeout is offered but optional
+    assert "timeout" in props
+    assert "timeout" not in schema["input_schema"]["required"]
+
+
 def test_read_schema_requires_path():
     schema = TOOL_SCHEMAS["read"]
     assert schema["name"] == "read"

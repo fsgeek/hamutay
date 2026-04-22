@@ -21,6 +21,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
 
+from hamutay.tools.bash import tool_bash
 from hamutay.tools.graph import tool_annotate_edge, tool_store
 from hamutay.tools.memory import (
     tool_compare,
@@ -113,6 +114,8 @@ class ToolExecutor:
             result = tool_annotate_edge(
                 tool_input, cycle=self._cycle, bridge=self._bridge,
             )
+        elif tool_name == "bash":
+            result = tool_bash(tool_input, project_root=self._project_root)
         else:
             result = {"error": f"Unknown tool: {tool_name}"}
 
@@ -175,4 +178,11 @@ def _summarize(tool_name: str, result: dict) -> str:
             f"annotate_edge: {result.get('relation', '?')} "
             f"edge {result.get('edge_id', '?')[:8]}"
         )
+    if tool_name == "bash":
+        if result.get("timed_out"):
+            return "bash: timed out"
+        exit_code = result.get("exit_code", "?")
+        out_chars = len(result.get("stdout", ""))
+        err_chars = len(result.get("stderr", ""))
+        return f"bash: exit {exit_code}, {out_chars}B out, {err_chars}B err"
     return json.dumps(result, default=str)[:100]

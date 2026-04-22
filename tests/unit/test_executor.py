@@ -24,6 +24,53 @@ def test_executor_rejects_unknown_tool(tmp_path):
     assert "error" in result
 
 
+def test_executor_resolves_bash(tmp_path):
+    executor = ToolExecutor(project_root=tmp_path, cycle=1)
+    result = executor.execute(
+        "bash", {"command": "printf hello", "reason": "smoke"}
+    )
+    assert result["exit_code"] == 0
+    assert result["stdout"] == "hello"
+    assert result["stderr"] == ""
+
+
+def test_executor_bash_runs_in_project_root(tmp_path):
+    (tmp_path / "marker.txt").write_text("here\n")
+    executor = ToolExecutor(project_root=tmp_path, cycle=1)
+    result = executor.execute("bash", {"command": "ls"})
+    assert "marker.txt" in result["stdout"]
+    assert result["exit_code"] == 0
+
+
+def test_executor_bash_propagates_nonzero_exit(tmp_path):
+    executor = ToolExecutor(project_root=tmp_path, cycle=1)
+    result = executor.execute("bash", {"command": "exit 7"})
+    assert result["exit_code"] == 7
+
+
+def test_executor_bash_records_activity_summary(tmp_path):
+    executor = ToolExecutor(project_root=tmp_path, cycle=1)
+    executor.execute("bash", {"command": "echo hi"})
+    log = executor.activity_log
+    assert len(log) == 1
+    assert log[0]["tool"] == "bash"
+    summary = log[0]["result_summary"]
+    assert summary.startswith("bash: exit 0")
+
+
+def test_executor_bash_rejects_empty_command(tmp_path):
+    executor = ToolExecutor(project_root=tmp_path, cycle=1)
+    result = executor.execute("bash", {"command": "   "})
+    assert "error" in result
+
+
+def test_executor_bash_timeout(tmp_path):
+    executor = ToolExecutor(project_root=tmp_path, cycle=1)
+    result = executor.execute("bash", {"command": "sleep 5", "timeout": 1})
+    assert result.get("timed_out") is True
+    assert "timed out" in result["error"]
+
+
 def test_executor_records_activity(tmp_path):
     (tmp_path / "f.py").write_text("x\n")
     executor = ToolExecutor(project_root=tmp_path, cycle=1)

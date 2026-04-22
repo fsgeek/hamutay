@@ -429,6 +429,40 @@ ANNOTATE_EDGE_SCHEMA = {
 }
 
 
+BASH_SCHEMA = {
+    "name": "bash",
+    "description": (
+        "Execute a bash command. Returns stdout, stderr, and exit_code. "
+        "Working directory is the project root. Bash is unscoped — it "
+        "can reach anywhere the running process can, including outside "
+        "the project. The framework does not gate which commands you "
+        "run; the discipline lives in your voice. The soft norm is to "
+        "flag irreversible-or-shared-state actions in conversation "
+        "before executing them. Output past a per-stream cap is "
+        "truncated in-band; timeout defaults to 60s, max 600s."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "command": {
+                "type": "string",
+                "description": "The bash command to execute.",
+            },
+            "timeout": {
+                "type": "integer",
+                "description": (
+                    "Timeout in seconds. Default 60, max 600. "
+                    "Long-running commands should raise this deliberately "
+                    "rather than relying on the default."
+                ),
+            },
+            "reason": _REASON_FIELD,
+        },
+        "required": ["command"],
+    },
+}
+
+
 TOOL_SCHEMAS: dict[str, dict] = {
     "read": READ_SCHEMA,
     "search_project": SEARCH_PROJECT_SCHEMA,
@@ -440,4 +474,5 @@ TOOL_SCHEMAS: dict[str, dict] = {
     "search_memory": SEARCH_MEMORY_SCHEMA,
     "store": STORE_SCHEMA,
     "annotate_edge": ANNOTATE_EDGE_SCHEMA,
+    "bash": BASH_SCHEMA,
 }
