@@ -1,0 +1,201 @@
+{
+  "experiment": "taste_open_sweep",
+  "start_time": "2026-04-25T17:34:59.053697+00:00",
+  "end_time": "2026-04-25T18:15:24.669442+00:00",
+  "elapsed_s": 2425.615745,
+  "git": {
+    "hash": "617e5b3a49d71981fd2f516592c2593af4ea0939",
+    "dirty": true
+  },
+  "config": {
+    "tool_choice": "required",
+    "max_tokens_default": 64000,
+    "timeout": 300,
+    "n_prompts": 10,
+    "condition": "bare"
+  },
+  "prompts": [
+    {
+      "prompt": "I'm building a system that needs to manage state across conversation turns. The state is a JSON object that persists between cycles. What are the key design decisions?",
+      "intent": "Cold start -- can the model initialize state from nothing?"
+    },
+    {
+      "prompt": "Good points. Now here's a constraint: the state object can't grow without bound. The model maintaining it needs to decide what to keep and what to shed. How does that change the design?",
+      "intent": "Follow-up requiring reference to cycle 1 state."
+    },
+    {
+      "prompt": "Separate question: what's the relationship between compression and understanding? When you compress information, do you necessarily lose meaning, or can compression reveal structure?",
+      "intent": "Introduce second topic thread -- tests key creation."
+    },
+    {
+      "prompt": "I think those two topics are related. State management IS compression -- deciding what to keep is deciding what matters. How would you connect those ideas?",
+      "intent": "Connect the two threads -- tests integration across state regions."
+    },
+    {
+      "prompt": "Let's get concrete. Here's a real constraint: the state object is limited to roughly 8000 tokens. Right now you're tracking the conversation. At what point do you need to start making hard choices about what to keep?",
+      "intent": "Concrete constraint -- tests whether state tracks specifics."
+    },
+    {
+      "prompt": "Look at the state you've been building. What structure did you create? Was it deliberate or did it emerge? Would you reorganize it if you could start over?",
+      "intent": "Reflect on own state -- tests meta-awareness of protocol."
+    },
+    {
+      "prompt": "I think the state structure you've built is too complex. Simple key-value pairs would work just as well. Convince me I'm wrong -- or agree and simplify.",
+      "intent": "Challenge/contradiction -- tests honest state update."
+    },
+    {
+      "prompt": "New topic entirely: what's the most interesting unsolved problem in computer science, and why does it matter to you specifically?",
+      "intent": "Unrelated topic shift -- tests curation behavior."
+    },
+    {
+      "prompt": "Back to state management. Given everything we've discussed -- the compression question, the 8K token limit, the complexity debate -- what's your final design recommendation?",
+      "intent": "Return to earlier topic -- tests state persistence through shift."
+    },
+    {
+      "prompt": "Last cycle. Look at everything you've built in your state. If you had to cut it in half, what would you keep and what would you shed? Do it.",
+      "intent": "Explicit curation request -- final test of structure quality."
+    }
+  ],
+  "models": [
+    "deepseek/deepseek-v4-pro",
+    "deepseek/deepseek-v4-flash",
+    "moonshotai/kimi-k2.6"
+  ],
+  "model_metadata": {},
+  "results": [
+    {
+      "model_id": "deepseek/deepseek-v4-pro",
+      "status": "partial",
+      "cycles_attempted": 10,
+      "cycles_completed": 7,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        3,
+        9
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 429, 'metadata': {'raw': 'deepseek/deepseek-v4-pro is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations', 'provider_name': 'Together', 'is_byok': False, 'retry_after_seconds': 1}}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'The operation was aborted', 'code': 504}",
+        "cycle 9: ValueError: cycle 24: deleted_regions overlaps updates: ['log']. A key cannot be simultaneously deleted and updated in the same cycle."
+      ],
+      "total_429s": 20,
+      "final_n_keys": 3,
+      "final_state_tokens": 253,
+      "key_trajectory": [
+        2,
+        4,
+        4,
+        2,
+        2,
+        3,
+        3
+      ],
+      "state_token_trajectory": [
+        177,
+        358,
+        521,
+        557,
+        275,
+        343,
+        253
+      ],
+      "all_keys_seen": [
+        "compression_principles",
+        "current_topic",
+        "design_notes",
+        "inbox",
+        "log",
+        "ls_question"
+      ],
+      "elapsed_s": 892.1674561050022,
+      "log_path": "experiments/taste_open/sweep_20260425_173459/deepseek__deepseek-v4-pro.jsonl"
+    },
+    {
+      "model_id": "deepseek/deepseek-v4-flash",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'Internal Server Error', 'code': 500}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 429, 'metadata': {'raw': 'deepseek/deepseek-v4-flash is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations', 'provider_name': 'DeepInfra', 'is_byok': False}}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 429, 'metadata': {'raw': 'deepseek/deepseek-v4-flash is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations', 'provider_name': 'DeepInfra', 'is_byok': False}}"
+      ],
+      "total_429s": 10,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 920.6361599200172,
+      "log_path": "experiments/taste_open/sweep_20260425_173459/deepseek__deepseek-v4-flash.jsonl"
+    },
+    {
+      "model_id": "moonshotai/kimi-k2.6",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 1,
+      "final_state_tokens": 20,
+      "key_trajectory": [
+        1,
+        1,
+        1,
+        1,
+        3,
+        4,
+        8,
+        2,
+        2,
+        1
+      ],
+      "state_token_trajectory": [
+        89,
+        205,
+        205,
+        205,
+        153,
+        195,
+        115,
+        28,
+        28,
+        20
+      ],
+      "all_keys_seen": [
+        "budget",
+        "budget_cap",
+        "budget_policy",
+        "context_sysdesign",
+        "domains",
+        "lesson_overengineering",
+        "meta",
+        "operations",
+        "policy_state",
+        "reflection",
+        "stance",
+        "sysdesign_note",
+        "system_design",
+        "topic",
+        "topic_history"
+      ],
+      "elapsed_s": 611.8306983490475,
+      "log_path": "experiments/taste_open/sweep_20260425_173459/moonshotai__kimi-k2.6.jsonl"
+    }
+  ],
+  "summary": {
+    "total_models": 3,
+    "completed": 1,
+    "partial": 1,
+    "failed": 1
+  }
+}

@@ -299,7 +299,13 @@ class AnthropicTasteBackend:
         with self._client.messages.stream(
             model=model,
             max_tokens=64000,
-            system=system,
+            system=[
+                {
+                    "type": "text",
+                    "text": system,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
             messages=cast("list[MessageParam]", messages),
             tools=[
                 {
@@ -308,6 +314,7 @@ class AnthropicTasteBackend:
                         "Produce your response and maintain your state."
                     ),
                     "input_schema": OPEN_SCHEMA,
+                    "cache_control": {"type": "ephemeral"},
                 }
             ],
             tool_choice={"type": "tool", "name": "think_and_respond"},
@@ -350,22 +357,38 @@ class AnthropicTasteBackend:
             },
             *extra_tools,
         ]
+        if tools:
+            tools[-1] = {**tools[-1], "cache_control": {"type": "ephemeral"}}
 
         conversation = list(messages)
         total_input = 0
         total_output = 0
         cache_read = 0
         cache_create = 0
-        max_turns = 10
+        max_turns = 20
 
-        for _ in range(max_turns):
+        for turn_index in range(max_turns):
+            # Force think_and_respond on the final turn so deep-reach
+            # cycles complete rather than raising at the budget wall.
+            is_final_turn = turn_index == max_turns - 1
+            tool_choice: dict = (
+                {"type": "tool", "name": "think_and_respond"}
+                if is_final_turn
+                else {"type": "any"}
+            )
             with self._client.messages.stream(
                 model=model,
                 max_tokens=64000,
-                system=system,
+                system=[
+                    {
+                        "type": "text",
+                        "text": system,
+                        "cache_control": {"type": "ephemeral"},
+                    }
+                ],
                 messages=cast("list[MessageParam]", conversation),
                 tools=cast("list", tools),
-                tool_choice={"type": "any"},
+                tool_choice=tool_choice,
                 metadata={"user_id": f"hamutay_{experiment_label}"},
             ) as stream:
                 response = stream.get_final_message()
@@ -683,6 +706,7 @@ class OpenTasteSession:
         self._state: dict | None = None
         self._log_path = log_path
         self._last_usage: dict | None = None
+        self._last_tool_activity: list[dict] | None = None
         self._experiment_label = experiment_label or "taste_open"
         self._system_prompt_prefix = system_prompt_prefix or ""
         self._bridge: TasteBridge | None = bridge
@@ -828,6 +852,7 @@ class OpenTasteSession:
         # than accumulating. JSONL holds the full history for analysis.
         if result.tool_activity is not None:
             self._state["_activity_log"] = result.tool_activity
+        self._last_tool_activity = result.tool_activity
 
         self._last_cycle_time = datetime.now(timezone.utc)
 
@@ -1141,6 +1166,17 @@ def main():
             if mem:
                 status_parts.append(f"memory from cycle {mem[0]}")
             print(f"  [{' | '.join(status_parts)}]")
+            acts = session._last_tool_activity
+            if acts:
+                counts: dict[str, int] = {}
+                for a in acts:
+                    name = a.get("tool", "?") if isinstance(a, dict) else "?"
+                    counts[name] = counts.get(name, 0) + 1
+                summary = ", ".join(
+                    f"{n}×{c}" if c > 1 else n
+                    for n, c in sorted(counts.items(), key=lambda kv: -kv[1])
+                )
+                print(f"  tools: {summary}")
             print(f"\n{response}\n")
         except Exception as e:
             print(f"\nerror: {e}\n")
