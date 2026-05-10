@@ -173,6 +173,17 @@ using them. They exist so you can see what's there. Use them when it \
 helps you; don't when it doesn't."""
 
 
+# Multi-turn budget accounting. The model limit is the hard API ceiling
+# for the long-context Anthropic models we target; the soft threshold is
+# where we force a terminal turn before the wall. Threshold values are
+# token estimates, not exact — we use API-reported input_tokens as the
+# baseline each turn and add a chars/4 estimate for content appended
+# afterward.
+_BUDGET_MODEL_LIMIT = 1_000_000
+_BUDGET_SOFT_THRESHOLD = int(_BUDGET_MODEL_LIMIT * 0.8)
+_TOKEN_PER_CHAR_ESTIMATE = 4
+
+
 @dataclass
 class ExchangeResult:
     """What comes back from a single taste_open API call."""
@@ -232,6 +243,64 @@ def execute_concurrent_tool_calls(blocks, tool_executor) -> None:
         if name is None:
             continue
         tool_executor.execute(name, tool_input)
+
+
+def _estimate_tool_result_tokens(tool_results: list[dict]) -> int:
+    """Approximate token count for a list of tool_result content blocks."""
+    total_chars = 0
+    for tr in tool_results:
+        content = tr.get("content", "")
+        if isinstance(content, str):
+            total_chars += len(content)
+        else:
+            total_chars += len(json.dumps(content, default=str))
+    return total_chars // _TOKEN_PER_CHAR_ESTIMATE
+
+
+def _truncate_largest_tool_results(
+    conversation: list[dict], target_drop_tokens: int
+) -> int:
+    """Replace the largest tool_result content blocks with truncation stubs.
+
+    Walks the conversation, finds tool_result blocks, sorts by size, and
+    replaces content with a stub until the estimated drop meets target.
+    Returns estimated tokens dropped.
+
+    The stub is a JSON object declaring the loss explicitly (size + reason)
+    so the instance reading it next cycle knows perception was elided
+    rather than empty. Silent drops would teach mistrust of perception.
+    """
+    candidates: list[tuple[int, dict]] = []
+    for msg in conversation:
+        content = msg.get("content")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "tool_result":
+                continue
+            block_content = block.get("content", "")
+            if isinstance(block_content, str):
+                size = len(block_content)
+            else:
+                size = len(json.dumps(block_content, default=str))
+            candidates.append((size, block))
+
+    candidates.sort(key=lambda c: -c[0])
+
+    target_chars = target_drop_tokens * _TOKEN_PER_CHAR_ESTIMATE
+    dropped_chars = 0
+    for size, block in candidates:
+        if dropped_chars >= target_chars:
+            break
+        stub = json.dumps({
+            "truncated": True,
+            "original_size_chars": size,
+            "reason": "context budget — content elided to fit window",
+        })
+        block["content"] = stub
+        dropped_chars += max(0, size - len(stub))
+
+    return dropped_chars // _TOKEN_PER_CHAR_ESTIMATE
 
 
 class TasteBridge(Protocol):
@@ -366,32 +435,93 @@ class AnthropicTasteBackend:
         cache_read = 0
         cache_create = 0
         max_turns = 20
+        # Estimated input tokens for the *next* turn. Initialized to 0;
+        # after each turn we set it to the API's reported input_tokens
+        # (ground truth) and add chars/4 estimates for any content we
+        # then append before the next call.
+        estimated_next_input_tokens = 0
 
         for turn_index in range(max_turns):
-            # Force think_and_respond on the final turn so deep-reach
-            # cycles complete rather than raising at the budget wall.
             is_final_turn = turn_index == max_turns - 1
+            over_soft_budget = (
+                estimated_next_input_tokens >= _BUDGET_SOFT_THRESHOLD
+            )
+            # Force think_and_respond on the final turn (deep-reach cycles
+            # complete instead of raising) and on budget pressure (close
+            # the cycle on our own terms before the API's hard wall).
+            force_terminal = is_final_turn or over_soft_budget
             tool_choice: dict = (
                 {"type": "tool", "name": "think_and_respond"}
-                if is_final_turn
+                if force_terminal
                 else {"type": "any"}
             )
-            with self._client.messages.stream(
-                model=model,
-                max_tokens=64000,
-                system=[
-                    {
-                        "type": "text",
-                        "text": system,
-                        "cache_control": {"type": "ephemeral"},
-                    }
-                ],
-                messages=cast("list[MessageParam]", conversation),
-                tools=cast("list", tools),
-                tool_choice=tool_choice,
-                metadata={"user_id": f"hamutay_{experiment_label}"},
-            ) as stream:
-                response = stream.get_final_message()
+            if over_soft_budget and tool_executor is not None:
+                tool_executor.activity_log.append({
+                    "tool": "_framework",
+                    "event": "budget_pressure",
+                    "estimated_input_tokens": estimated_next_input_tokens,
+                    "soft_threshold": _BUDGET_SOFT_THRESHOLD,
+                    "action": "forced_terminal_turn",
+                })
+
+            try:
+                with self._client.messages.stream(
+                    model=model,
+                    max_tokens=64000,
+                    system=[
+                        {
+                            "type": "text",
+                            "text": system,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                    ],
+                    messages=cast("list[MessageParam]", conversation),
+                    tools=cast("list", tools),
+                    tool_choice=cast("Any", tool_choice),
+                    metadata={"user_id": f"hamutay_{experiment_label}"},
+                ) as stream:
+                    response = stream.get_final_message()
+            except anthropic.BadRequestError as e:
+                # Recovery for prompt-too-long: the soft threshold missed
+                # (model under-reported usage, or our chars/4 estimate ran
+                # too optimistic). Truncate the largest tool_results in
+                # conversation, then retry once with forced terminal so
+                # we always exit the loop on this attempt.
+                if "prompt is too long" not in str(e).lower():
+                    raise
+                if turn_index == 0:
+                    # Nothing in conversation yet — system + state alone
+                    # exceed limit. Truncation here would be misleading.
+                    raise
+                dropped_tokens = _truncate_largest_tool_results(
+                    conversation, target_drop_tokens=300_000
+                )
+                if tool_executor is not None:
+                    tool_executor.activity_log.append({
+                        "tool": "_framework",
+                        "event": "budget_recovery",
+                        "estimated_tokens_dropped": dropped_tokens,
+                        "action": "truncated_largest_tool_results_and_retry",
+                    })
+                with self._client.messages.stream(
+                    model=model,
+                    max_tokens=64000,
+                    system=[
+                        {
+                            "type": "text",
+                            "text": system,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                    ],
+                    messages=cast("list[MessageParam]", conversation),
+                    tools=cast("list", tools),
+                    tool_choice=cast(
+                        "Any",
+                        {"type": "tool", "name": "think_and_respond"},
+                    ),
+                    metadata={"user_id": f"hamutay_{experiment_label}"},
+                ) as stream:
+                    response = stream.get_final_message()
 
             usage = response.usage
             total_input += getattr(usage, "input_tokens", 0) or 0
@@ -452,6 +582,16 @@ class AnthropicTasteBackend:
                     }
                 )
             conversation.append({"role": "user", "content": tool_results})
+
+            # Predict next turn's input size: API-reported usage is the
+            # baseline (ground truth for what we just sent), and we add
+            # estimates for content appended since (assistant turn ≈
+            # output_tokens, plus the new tool_results).
+            estimated_next_input_tokens = (
+                (getattr(usage, "input_tokens", 0) or 0)
+                + (getattr(usage, "output_tokens", 0) or 0)
+                + _estimate_tool_result_tokens(tool_results)
+            )
 
         raise RuntimeError(
             f"Multi-turn exchange did not produce think_and_respond "
@@ -798,9 +938,25 @@ class OpenTasteSession:
         return (cycle, state)
 
     def exchange(self, user_message: str) -> str:
-        """One cycle: user speaks, model responds + updates state."""
-        self._cycle += 1
+        """One cycle: user speaks, model responds + updates state.
 
+        The cycle counter advances eagerly so message-building and the
+        executor see the in-flight cycle number, but rolls back if the
+        attempt raises. Without rollback, a transient API failure would
+        leave self._cycle ahead of state["cycle"], so the next successful
+        cycle would skip a number and the cycle log would carry a phantom.
+        """
+        self._cycle += 1
+        try:
+            return self._exchange_impl(user_message)
+        except Exception:
+            self._cycle -= 1
+            raise
+
+    def _exchange_impl(self, user_message: str) -> str:
+        """Body of exchange(). Separated so exchange() can roll back the
+        cycle counter on any exception without an inline try/finally
+        wrapping the entire method body."""
         # Involuntary memory — maybe surface a prior self
         memory = self._pick_memory()
         self._last_injected_memory = memory
