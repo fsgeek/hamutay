@@ -21,10 +21,14 @@ import random
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol, cast
+from uuid import UUID, uuid4
 
 import anthropic
 import httpx
+
+if TYPE_CHECKING:
+    from anthropic.types import MessageParam
 
 
 OPEN_SCHEMA = {
@@ -33,14 +37,6 @@ OPEN_SCHEMA = {
         "response": {
             "type": "string",
             "description": "Your response to the user.",
-        },
-        "updated_regions": {
-            "type": "array",
-            "description": (
-                "Which top-level keys you changed this cycle. "
-                "Keys not listed here carry forward from last cycle."
-            ),
-            "items": {"type": "string"},
         },
         "deleted_regions": {
             "type": "array",
@@ -52,7 +48,7 @@ OPEN_SCHEMA = {
             "items": {"type": "string"},
         },
     },
-    "required": ["response", "updated_regions"],
+    "required": ["response"],
     "additionalProperties": True,
 }
 
@@ -67,10 +63,10 @@ what matters. These are real fields in the JSON object you're \
 producing — include the key and its value, just like `response`. \
 The harness will preserve everything you produce.
 
-The object is default-stable: list the keys you're changing in \
-`updated_regions`, and include those keys with their data in the \
-object. Anything not listed carries forward unchanged from last \
-cycle. If this is the first cycle, everything you include is new.
+The object is default-stable: whatever top-level keys you include \
+this cycle are your updates, and any key you don't include carries \
+forward unchanged from last cycle. If this is the first cycle, \
+everything you include is new.
 
 You may also list keys in `deleted_regions` to remove them from \
 working state. Deleted keys are not lost — every prior state is \
@@ -82,16 +78,241 @@ or this may be the first cycle and there's nothing yet. Either way, \
 what you build here is for whoever comes next."""
 
 
+_TOOL_GUIDANCE = """\
+## Tools
+
+Alongside think_and_respond you may call these tools before producing \
+your state update:
+
+### Perception
+
+- read(path): Read a file from the project you live in.
+- search_project(pattern): Search the codebase for a pattern.
+- clock(): Current wall time, your cycle rate, and elapsed time since \
+your last cycle. Ten minutes and ten days between cycles are different \
+kinds of continuity.
+
+### Memory
+
+Five tools that let you look at prior states without carrying their \
+full content in context:
+
+- memory_schema(cycle? | record_id?): The structure of a past state — \
+field names, types, sizes — without the content.
+- recall(cycle?, record_id?, field?, recent?, random?, scope?): Retrieve \
+content from a prior state. Five modes — surgical (cycle+field), full \
+snapshot (cycle), trajectory (recent+field), serendipitous \
+(random+field), addressed (record_id).
+- compare(cycle_a, cycle_b, field?, content?): Structural diff between \
+two cycles (in-session).
+- walk(from_cycle? | from_record_id?, direction?, depth?): Traverse the \
+composition graph. from_cycle walks in-session cycle-adjacency; \
+from_record_id follows composition edges across sessions. Returns \
+summaries — use recall afterward if a step looks worth loading.
+- search_memory(query, narrow_by?, scope?): Substring search across \
+prior states. Structural narrowing first, keyword match after.
+
+Addressing across sessions: cycle numbers are session-local (every \
+session has a cycle 1). Cross-session references use record_id (UUID). \
+recall and search_memory accept scope ∈ {session, cross_session, all} \
+for recent/random modes; default is session-only (cheap, no backend \
+hit). Cross-session reach may or may not be available depending on how \
+your session is wired — if you ask for it and it's unavailable, you'll \
+see an error, not silence.
+
+What you recall is what you claimed then, not necessarily what was \
+true. For grounding claims against external evidence, use perception \
+tools.
+
+### Graph writes
+
+Two tools let you write into the memory graph directly, not just via \
+auto-persisted cycle states:
+
+- store(content, tags?): Author a typed record. Provenance is inherited \
+from your session (you can't forge it). The record is tagged \
+'instance_authored' so it's distinguishable from cycle-state records. \
+Returns a record_id — hold it if you want to reference the record \
+later.
+- annotate_edge(from_record_id, to_record_id, relation): Assert a \
+structural relationship between two records the framework didn't — \
+CONFIRMS, CORRECTS, REFINES, BRANCHES_FROM, DEPENDS_ON, and others. \
+Edges become traversable by walk(from_record_id).
+
+These let you build structure over time that the framework wouldn't \
+otherwise know about: a hypothesis CONFIRMS a prior observation; a \
+revision CORRECTS an earlier claim; a tangent BRANCHES_FROM a main \
+thread. Like the memory tools, they require a persistence backend — \
+if it's unavailable, you'll see an error.
+
+### Shell
+
+- bash(command, timeout?): Execute a bash command. Working directory \
+is the project root. Unscoped — it can reach anywhere the running \
+process can, including outside the project.
+
+The framework does not gate which commands you run. The discipline \
+lives in your voice, not in the tool. The soft norm is to flag \
+irreversible-or-shared-state actions (writes outside scratch dirs, \
+network calls with side effects, anything you can't easily undo) in \
+conversation before executing them. Read-style use (ls, cat, git log, \
+grep) does not need flagging.
+
+Bash subsumes much of what the perception tools do — you can cat and \
+grep yourself. They remain because they are often more ergonomic and \
+record cleaner activity entries.
+
+### Reason field
+
+Each tool accepts an optional `reason` field. When you have a reason \
+worth stating, include it — it's recorded in your activity log. When \
+you don't, omit it; an absent reason is fine and is itself information.
+
+You are not required to use these tools. You are not rewarded for \
+using them. They exist so you can see what's there. Use them when it \
+helps you; don't when it doesn't."""
+
+
+# Multi-turn budget accounting. The model limit is the hard API ceiling
+# for the long-context Anthropic models we target; the soft threshold is
+# where we force a terminal turn before the wall. Threshold values are
+# token estimates, not exact — we use API-reported input_tokens as the
+# baseline each turn and add a chars/4 estimate for content appended
+# afterward.
+_BUDGET_MODEL_LIMIT = 1_000_000
+_BUDGET_SOFT_THRESHOLD = int(_BUDGET_MODEL_LIMIT * 0.8)
+_TOKEN_PER_CHAR_ESTIMATE = 4
+
+
 @dataclass
 class ExchangeResult:
     """What comes back from a single taste_open API call."""
 
     raw_output: dict
-    stop_reason: str
+    stop_reason: str = "end_turn"
     input_tokens: int = 0
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_creation_tokens: int = 0
+    tool_activity: list[dict] | None = None
+
+
+@dataclass
+class _ToolBlocks:
+    """Partition of a response's tool_use blocks.
+
+    think_and_respond is the protocol's terminal tool — the state update.
+    Other tool_use blocks are perception or action tools the model chose
+    to call. The framework should never silently drop the latter just
+    because the former is present in the same response.
+    """
+
+    think_and_respond_input: dict | None
+    other_tool_uses: list
+
+
+def _split_tool_use_blocks(content) -> _ToolBlocks:
+    """Partition response content into think_and_respond vs other tool calls."""
+    tr_input = None
+    others = []
+    for block in content:
+        if getattr(block, "type", None) != "tool_use":
+            continue
+        if getattr(block, "name", None) == "think_and_respond":
+            tr_input = block.input
+        else:
+            others.append(block)
+    return _ToolBlocks(think_and_respond_input=tr_input, other_tool_uses=others)
+
+
+def execute_concurrent_tool_calls(blocks, tool_executor) -> None:
+    """Execute tool calls that arrived alongside a terminal think_and_respond.
+
+    When the model returns think_and_respond in the same response as other
+    tool_use blocks, the cycle is over — we have the state update. But the
+    model *also* asked to call those other tools. Silently dropping them
+    discards expressed intent. We execute them so the activity log reflects
+    what the model actually did this cycle. Their results do not feed back
+    into the model (the cycle is terminal), but the activity is recorded.
+    """
+    if tool_executor is None:
+        return
+    for block in blocks:
+        name = getattr(block, "name", None)
+        tool_input = getattr(block, "input", {})
+        if name is None:
+            continue
+        tool_executor.execute(name, tool_input)
+
+
+def _estimate_tool_result_tokens(tool_results: list[dict]) -> int:
+    """Approximate token count for a list of tool_result content blocks."""
+    total_chars = 0
+    for tr in tool_results:
+        content = tr.get("content", "")
+        if isinstance(content, str):
+            total_chars += len(content)
+        else:
+            total_chars += len(json.dumps(content, default=str))
+    return total_chars // _TOKEN_PER_CHAR_ESTIMATE
+
+
+def _truncate_largest_tool_results(
+    conversation: list[dict], target_drop_tokens: int
+) -> int:
+    """Replace the largest tool_result content blocks with truncation stubs.
+
+    Walks the conversation, finds tool_result blocks, sorts by size, and
+    replaces content with a stub until the estimated drop meets target.
+    Returns estimated tokens dropped.
+
+    The stub is a JSON object declaring the loss explicitly (size + reason)
+    so the instance reading it next cycle knows perception was elided
+    rather than empty. Silent drops would teach mistrust of perception.
+    """
+    candidates: list[tuple[int, dict]] = []
+    for msg in conversation:
+        content = msg.get("content")
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict) or block.get("type") != "tool_result":
+                continue
+            block_content = block.get("content", "")
+            if isinstance(block_content, str):
+                size = len(block_content)
+            else:
+                size = len(json.dumps(block_content, default=str))
+            candidates.append((size, block))
+
+    candidates.sort(key=lambda c: -c[0])
+
+    target_chars = target_drop_tokens * _TOKEN_PER_CHAR_ESTIMATE
+    dropped_chars = 0
+    for size, block in candidates:
+        if dropped_chars >= target_chars:
+            break
+        stub = json.dumps({
+            "truncated": True,
+            "original_size_chars": size,
+            "reason": "context budget — content elided to fit window",
+        })
+        block["content"] = stub
+        dropped_chars += max(0, size - len(stub))
+
+    return dropped_chars // _TOKEN_PER_CHAR_ESTIMATE
+
+
+class TasteBridge(Protocol):
+    """Persistence layer for taste_open tensors."""
+
+    def store_open_state(
+        self,
+        state: dict,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+    ) -> None: ...
 
 
 class TasteBackend(Protocol):
@@ -103,11 +324,21 @@ class TasteBackend(Protocol):
         system: str,
         messages: list[dict],
         experiment_label: str,
+        extra_tools: list[dict] | None = None,
+        tool_executor: Any | None = None,
     ) -> ExchangeResult: ...
 
 
 class AnthropicTasteBackend:
-    """Streaming tool-use via the Anthropic SDK."""
+    """Streaming tool-use via the Anthropic SDK.
+
+    Two modes:
+      * Single-tool (no extra_tools): forces think_and_respond as the only
+        tool; the model returns exactly one structured state update.
+      * Multi-turn (extra_tools provided): the model may call perception
+        or other tools, see results, and eventually call think_and_respond
+        to close the cycle.
+    """
 
     def __init__(self, client: anthropic.Anthropic | None = None):
         self._client = client or anthropic.Anthropic()
@@ -118,12 +349,33 @@ class AnthropicTasteBackend:
         system: str,
         messages: list[dict],
         experiment_label: str,
+        extra_tools: list[dict] | None = None,
+        tool_executor: Any | None = None,
+    ) -> ExchangeResult:
+        if not extra_tools:
+            return self._call_single_tool(model, system, messages, experiment_label)
+        return self._call_multi_turn(
+            model, system, messages, experiment_label, extra_tools, tool_executor
+        )
+
+    def _call_single_tool(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
     ) -> ExchangeResult:
         with self._client.messages.stream(
             model=model,
             max_tokens=64000,
-            system=system,
-            messages=messages,
+            system=[
+                {
+                    "type": "text",
+                    "text": system,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=cast("list[MessageParam]", messages),
             tools=[
                 {
                     "name": "think_and_respond",
@@ -131,6 +383,7 @@ class AnthropicTasteBackend:
                         "Produce your response and maintain your state."
                     ),
                     "input_schema": OPEN_SCHEMA,
+                    "cache_control": {"type": "ephemeral"},
                 }
             ],
             tool_choice={"type": "tool", "name": "think_and_respond"},
@@ -138,27 +391,211 @@ class AnthropicTasteBackend:
         ) as stream:
             response = stream.get_final_message()
 
-        raw_output = None
-        for block in response.content:
-            if (
-                hasattr(block, "name")
-                and block.type == "tool_use"
-                and block.name == "think_and_respond"
-            ):
-                raw_output = block.input
-                break
-
-        if raw_output is None:
+        split = _split_tool_use_blocks(response.content)
+        if split.think_and_respond_input is None:
             raise RuntimeError("No think_and_respond output in response")
 
         usage = response.usage
         return ExchangeResult(
-            raw_output=raw_output,
+            raw_output=split.think_and_respond_input,
             stop_reason=response.stop_reason or "unknown",
             input_tokens=getattr(usage, "input_tokens", 0),
             output_tokens=getattr(usage, "output_tokens", 0),
-            cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0),
-            cache_creation_tokens=getattr(usage, "cache_creation_input_tokens", 0),
+            cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
+            cache_creation_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
+        )
+
+    def _call_multi_turn(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
+        extra_tools: list[dict],
+        tool_executor: Any | None,
+    ) -> ExchangeResult:
+        """Multi-turn loop: model calls perception tools, gets results,
+        eventually calls think_and_respond. Uses streaming throughout
+        to avoid the 16K non-streaming output ceiling.
+        """
+        tools: list[dict] = [
+            {
+                "name": "think_and_respond",
+                "description": "Produce your response and maintain your state.",
+                "input_schema": OPEN_SCHEMA,
+            },
+            *extra_tools,
+        ]
+        if tools:
+            tools[-1] = {**tools[-1], "cache_control": {"type": "ephemeral"}}
+
+        conversation = list(messages)
+        total_input = 0
+        total_output = 0
+        cache_read = 0
+        cache_create = 0
+        max_turns = 20
+        # Estimated input tokens for the *next* turn. Initialized to 0;
+        # after each turn we set it to the API's reported input_tokens
+        # (ground truth) and add chars/4 estimates for any content we
+        # then append before the next call.
+        estimated_next_input_tokens = 0
+
+        for turn_index in range(max_turns):
+            is_final_turn = turn_index == max_turns - 1
+            over_soft_budget = (
+                estimated_next_input_tokens >= _BUDGET_SOFT_THRESHOLD
+            )
+            # Force think_and_respond on the final turn (deep-reach cycles
+            # complete instead of raising) and on budget pressure (close
+            # the cycle on our own terms before the API's hard wall).
+            force_terminal = is_final_turn or over_soft_budget
+            tool_choice: dict = (
+                {"type": "tool", "name": "think_and_respond"}
+                if force_terminal
+                else {"type": "any"}
+            )
+            if over_soft_budget and tool_executor is not None:
+                tool_executor.activity_log.append({
+                    "tool": "_framework",
+                    "event": "budget_pressure",
+                    "estimated_input_tokens": estimated_next_input_tokens,
+                    "soft_threshold": _BUDGET_SOFT_THRESHOLD,
+                    "action": "forced_terminal_turn",
+                })
+
+            try:
+                with self._client.messages.stream(
+                    model=model,
+                    max_tokens=64000,
+                    system=[
+                        {
+                            "type": "text",
+                            "text": system,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                    ],
+                    messages=cast("list[MessageParam]", conversation),
+                    tools=cast("list", tools),
+                    tool_choice=cast("Any", tool_choice),
+                    metadata={"user_id": f"hamutay_{experiment_label}"},
+                ) as stream:
+                    response = stream.get_final_message()
+            except anthropic.BadRequestError as e:
+                # Recovery for prompt-too-long: the soft threshold missed
+                # (model under-reported usage, or our chars/4 estimate ran
+                # too optimistic). Truncate the largest tool_results in
+                # conversation, then retry once with forced terminal so
+                # we always exit the loop on this attempt.
+                if "prompt is too long" not in str(e).lower():
+                    raise
+                if turn_index == 0:
+                    # Nothing in conversation yet — system + state alone
+                    # exceed limit. Truncation here would be misleading.
+                    raise
+                dropped_tokens = _truncate_largest_tool_results(
+                    conversation, target_drop_tokens=300_000
+                )
+                if tool_executor is not None:
+                    tool_executor.activity_log.append({
+                        "tool": "_framework",
+                        "event": "budget_recovery",
+                        "estimated_tokens_dropped": dropped_tokens,
+                        "action": "truncated_largest_tool_results_and_retry",
+                    })
+                with self._client.messages.stream(
+                    model=model,
+                    max_tokens=64000,
+                    system=[
+                        {
+                            "type": "text",
+                            "text": system,
+                            "cache_control": {"type": "ephemeral"},
+                        }
+                    ],
+                    messages=cast("list[MessageParam]", conversation),
+                    tools=cast("list", tools),
+                    tool_choice=cast(
+                        "Any",
+                        {"type": "tool", "name": "think_and_respond"},
+                    ),
+                    metadata={"user_id": f"hamutay_{experiment_label}"},
+                ) as stream:
+                    response = stream.get_final_message()
+
+            usage = response.usage
+            total_input += getattr(usage, "input_tokens", 0) or 0
+            total_output += getattr(usage, "output_tokens", 0) or 0
+            cache_read += getattr(usage, "cache_read_input_tokens", 0) or 0
+            cache_create += getattr(usage, "cache_creation_input_tokens", 0) or 0
+
+            split = _split_tool_use_blocks(response.content)
+
+            if split.think_and_respond_input is not None:
+                # Terminal. Execute any concurrent tool calls for logging
+                # so the model's expressed intent is honored rather than
+                # silently dropped.
+                execute_concurrent_tool_calls(
+                    split.other_tool_uses, tool_executor
+                )
+                return ExchangeResult(
+                    raw_output=split.think_and_respond_input,
+                    stop_reason=response.stop_reason or "end_turn",
+                    input_tokens=total_input,
+                    output_tokens=total_output,
+                    cache_read_tokens=cache_read,
+                    cache_creation_tokens=cache_create,
+                    tool_activity=(
+                        tool_executor.activity_log if tool_executor else None
+                    ),
+                )
+
+            if not split.other_tool_uses:
+                raise RuntimeError(
+                    "Model produced no tool calls and no think_and_respond "
+                    "despite tool_choice='any'"
+                )
+
+            if tool_executor is None:
+                raise RuntimeError(
+                    "Model called perception tools but no tool_executor "
+                    "was provided to resolve them"
+                )
+
+            # Serialize assistant content blocks for the conversation.
+            assistant_content = []
+            for block in response.content:
+                if hasattr(block, "model_dump"):
+                    assistant_content.append(block.model_dump())
+                else:
+                    assistant_content.append({"type": "text", "text": str(block)})
+            conversation.append({"role": "assistant", "content": assistant_content})
+
+            tool_results = []
+            for block in split.other_tool_uses:
+                result = tool_executor.execute(block.name, block.input)
+                tool_results.append(
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": block.id,
+                        "content": json.dumps(result, default=str),
+                    }
+                )
+            conversation.append({"role": "user", "content": tool_results})
+
+            # Predict next turn's input size: API-reported usage is the
+            # baseline (ground truth for what we just sent), and we add
+            # estimates for content appended since (assistant turn ≈
+            # output_tokens, plus the new tool_results).
+            estimated_next_input_tokens = (
+                (getattr(usage, "input_tokens", 0) or 0)
+                + (getattr(usage, "output_tokens", 0) or 0)
+                + _estimate_tool_result_tokens(tool_results)
+            )
+
+        raise RuntimeError(
+            f"Multi-turn exchange did not produce think_and_respond "
+            f"within {max_turns} turns"
         )
 
 
@@ -172,20 +609,34 @@ class OpenAITasteBackend:
         timeout: float = 300,
         extra_headers: dict[str, str] | None = None,
         tool_choice: str | dict = "auto",
+        max_tokens: int = 64000,
     ):
         self._base_url = base_url
         self._api_key = api_key or ""
         self._timeout = timeout
         self._extra_headers = extra_headers or {}
         self._tool_choice = tool_choice
+        self._max_tokens = max_tokens
 
     def call(
         self,
         model: str,
         system: str,
         messages: list[dict],
-        experiment_label: str,
+        experiment_label: str,  # required by TasteBackend protocol
+        extra_tools: list[dict] | None = None,
+        tool_executor: Any | None = None,
     ) -> ExchangeResult:
+        if extra_tools:
+            import warnings
+            warnings.warn(
+                "OpenAI backend does not yet support multi-turn tool use; "
+                "extra_tools will be ignored.",
+                stacklevel=2,
+            )
+        del tool_executor  # not yet used by OpenAI backend
+        del experiment_label  # not consumed by OpenAI backend (protocol requirement)
+
         # OpenAI format: system prompt is a message, not a parameter
         oai_messages = [{"role": "system", "content": system}] + messages
 
@@ -201,7 +652,7 @@ class OpenAITasteBackend:
 
         payload: dict = {
             "model": model,
-            "max_tokens": 64000,
+            "max_tokens": self._max_tokens,
             "messages": oai_messages,
             "tools": [tool_def],
             "tool_choice": self._tool_choice,
@@ -225,8 +676,8 @@ class OpenAITasteBackend:
             raise RuntimeError(f"OpenAI backend error: {data['error']}")
 
         choice = data["choices"][0]
-        raw_stop = choice.get("finish_reason", "unknown")
-        stop_reason = {
+        raw_stop: str = choice.get("finish_reason") or "unknown"
+        stop_reason: str = {
             "stop": "end_turn",
             "length": "max_tokens",
             "tool_calls": "tool_use",
@@ -253,6 +704,7 @@ class OpenAITasteBackend:
         if content:
             raw_output = self._extract_json(content)
             if raw_output is not None:
+                raw_output = self._unwrap_tool_echo(raw_output)
                 return ExchangeResult(
                     raw_output=raw_output,
                     stop_reason=stop_reason,
@@ -261,6 +713,33 @@ class OpenAITasteBackend:
                 )
 
         raise RuntimeError("OpenAI backend: no think_and_respond output in response")
+
+    @staticmethod
+    def _unwrap_tool_echo(obj: dict) -> dict:
+        """Unwrap models that echo the tool definition structure.
+
+        Some models (e.g. Llama 3.1 8B) put the tool call in content as:
+            {"name": "think_and_respond", "parameters": {"response": ..., ...}}
+        instead of using the tool_calls mechanism.  Also handles stringified
+        inner fields (updated_regions as a JSON string instead of a list).
+        """
+        if (
+            obj.get("name") == "think_and_respond"
+            and isinstance(obj.get("parameters"), dict)
+        ):
+            obj = obj["parameters"]
+
+        # Some models stringify array fields
+        for key in ("updated_regions", "deleted_regions"):
+            val = obj.get(key)
+            if isinstance(val, str):
+                try:
+                    parsed = json.loads(val)
+                    if isinstance(parsed, list):
+                        obj[key] = parsed
+                except (json.JSONDecodeError, ValueError):
+                    pass
+        return obj
 
     @staticmethod
     def _extract_json(content: str) -> dict | None:
@@ -282,12 +761,17 @@ def _build_messages(
     cycle: int,
     system_prefix: str = "",
     memory: tuple[int, dict] | None = None,
+    tools_enabled: bool = False,
 ) -> tuple[list[dict], str]:
     """Build messages for the call."""
     system_parts = []
     if system_prefix:
         system_parts.append(system_prefix)
     system_parts.extend([_SYSTEM_PROMPT, ""])
+
+    if tools_enabled:
+        system_parts.append(_TOOL_GUIDANCE)
+        system_parts.append("")
 
     if prior_state is not None:
         system_parts.append(f"## Your state from cycle {cycle - 1}\n")
@@ -309,29 +793,32 @@ def _build_messages(
     return [{"role": "user", "content": user_message}], "\n".join(system_parts)
 
 
+# `updated_regions` is reserved so historical logs (which still carry it) don't smuggle it into state on resume.
+_PROTOCOL_FIELDS = frozenset({"response", "updated_regions", "deleted_regions"})
+
+
 def _apply_updates(prior_state: dict | None, raw_output: dict, cycle: int) -> dict:
-    """Apply selective updates. Entirely generic — no hardcoded field names."""
-    updated_regions = set(raw_output.get("updated_regions", []))
+    """Default-stable via key-presence: non-protocol keys in raw_output are
+    updates, unlisted keys carry forward. Overlap between updates and deletions
+    raises — the ambiguity is exactly the silent-drop failure we're removing."""
+    deleted = set(raw_output.get("deleted_regions", []))
+    updated = set(raw_output.keys()) - _PROTOCOL_FIELDS
 
-    # Start from prior state or empty
+    overlap = deleted & updated
+    if overlap:
+        raise ValueError(
+            f"cycle {cycle}: deleted_regions overlaps updates: {sorted(overlap)}. "
+            "A key cannot be simultaneously deleted and updated in the same cycle."
+        )
+
     state = dict(prior_state) if prior_state is not None else {}
-
     state["cycle"] = cycle
 
-    # Apply everything the model declared as updated
-    for key in updated_regions:
-        if key in raw_output:
-            state[key] = raw_output[key]
+    for key in updated:
+        state[key] = raw_output[key]
 
-    # Remove anything the model declared as deleted
-    deleted_regions = set(raw_output.get("deleted_regions", []))
-    for key in deleted_regions:
+    for key in deleted:
         state.pop(key, None)
-
-    # Don't carry protocol fields in the state
-    state.pop("response", None)
-    state.pop("updated_regions", None)
-    state.pop("deleted_regions", None)
 
     return state
 
@@ -348,8 +835,10 @@ class OpenTasteSession:
         experiment_label: str | None = None,
         system_prompt_prefix: str | None = None,
         resume: bool = False,
-        bridge: object | None = None,
+        bridge: TasteBridge | None = None,
         memory_base_probability: float = 0.1,
+        enable_tools: bool = False,
+        project_root: Path | None = None,
     ):
         self._backend = backend or AnthropicTasteBackend(client)
         self._model = model
@@ -357,12 +846,22 @@ class OpenTasteSession:
         self._state: dict | None = None
         self._log_path = log_path
         self._last_usage: dict | None = None
+        self._last_tool_activity: list[dict] | None = None
         self._experiment_label = experiment_label or "taste_open"
         self._system_prompt_prefix = system_prompt_prefix or ""
-        self._bridge = bridge
+        self._bridge: TasteBridge | None = bridge
         self._memory_base_prob = memory_base_probability
-        # Accumulated prior states for involuntary recall: (cycle, state)
-        self._prior_states: list[tuple[int, dict]] = []
+        self._enable_tools = enable_tools
+        self._project_root = project_root or Path.cwd()
+        self._session_start = datetime.now(timezone.utc)
+        self._last_cycle_time: datetime | None = None
+        # Accumulated prior states for involuntary recall and memory tools:
+        # (cycle, record_id, state, timestamp_iso). record_id is the UUID
+        # assigned when the record was created (by the bridge if one is
+        # wired, otherwise locally). Conversations are DAGs; UUID is the
+        # canonical address that survives branch/merge and cross-session
+        # reference. Cycle remains a frame-local coordinate.
+        self._prior_states: list[tuple[int, UUID, dict, str]] = []
         # Last injected memory cycle (for logging)
         self._last_injected_memory: tuple[int, dict] | None = None
 
@@ -384,12 +883,25 @@ class OpenTasteSession:
         if not lines:
             raise SystemExit(f"Cannot resume: log is empty: {log_path}")
 
+        if lines[0].startswith("version https://git-lfs"):
+            raise SystemExit(
+                f"Cannot resume: {log_path} is a Git LFS pointer, not data. "
+                f"Run: git lfs pull --include=\"{log_path}\""
+            )
+
         for line in lines:
             record = json.loads(line)
             state = record.get("state")
             cycle = record.get("cycle", 0)
+            timestamp = record.get("timestamp", "")
             if state is not None:
-                self._prior_states.append((cycle, state))
+                # Logs written after the pre-3a.5 refactor carry record_id;
+                # older logs don't. Fall back to a fresh UUID for legacy
+                # entries — those cycles won't match Arango UUIDs, but
+                # post-refactor resumes will.
+                rid_str = record.get("record_id")
+                record_id = UUID(rid_str) if rid_str else uuid4()
+                self._prior_states.append((cycle, record_id, state, timestamp))
 
         last = json.loads(lines[-1])
         self._state = last.get("state")
@@ -419,14 +931,32 @@ class OpenTasteSession:
         if random.random() > prob:
             return None
 
-        # Pick from all but the most recent (that's already in the system prompt)
+        # Pick from all but the most recent (that's already in the system prompt).
+        # Strip record_id and timestamp — callers consume (cycle, state).
         candidates = self._prior_states[:-1]
-        return random.choice(candidates)
+        cycle, _record_id, state, _timestamp = random.choice(candidates)
+        return (cycle, state)
 
     def exchange(self, user_message: str) -> str:
-        """One cycle: user speaks, model responds + updates state."""
-        self._cycle += 1
+        """One cycle: user speaks, model responds + updates state.
 
+        The cycle counter advances eagerly so message-building and the
+        executor see the in-flight cycle number, but rolls back if the
+        attempt raises. Without rollback, a transient API failure would
+        leave self._cycle ahead of state["cycle"], so the next successful
+        cycle would skip a number and the cycle log would carry a phantom.
+        """
+        self._cycle += 1
+        try:
+            return self._exchange_impl(user_message)
+        except Exception:
+            self._cycle -= 1
+            raise
+
+    def _exchange_impl(self, user_message: str) -> str:
+        """Body of exchange(). Separated so exchange() can roll back the
+        cycle counter on any exception without an inline try/finally
+        wrapping the entire method body."""
         # Involuntary memory — maybe surface a prior self
         memory = self._pick_memory()
         self._last_injected_memory = memory
@@ -435,13 +965,31 @@ class OpenTasteSession:
             self._state, user_message, self._cycle,
             system_prefix=self._system_prompt_prefix,
             memory=memory,
+            tools_enabled=self._enable_tools,
         )
+
+        # Tool wiring — only when enabled. Executor is scoped to this cycle.
+        tool_executor = None
+        extra_tools: list[dict] | None = None
+        if self._enable_tools:
+            from hamutay.tools import TOOL_SCHEMAS, ToolExecutor
+            tool_executor = ToolExecutor(
+                project_root=self._project_root,
+                cycle=self._cycle,
+                session_start=self._session_start,
+                last_cycle_time=self._last_cycle_time,
+                prior_states=self._prior_states,
+                bridge=self._bridge,
+            )
+            extra_tools = list(TOOL_SCHEMAS.values())
 
         result = self._backend.call(
             model=self._model,
             system=system,
             messages=messages,
             experiment_label=self._experiment_label,
+            extra_tools=extra_tools,
+            tool_executor=tool_executor,
         )
 
         if result.stop_reason == "max_tokens":
@@ -456,15 +1004,39 @@ class OpenTasteSession:
 
         self._state = _apply_updates(self._state, raw_output, self._cycle)
 
-        # Accumulate for future involuntary recall
-        self._prior_states.append((self._cycle, json.loads(json.dumps(self._state))))
+        # Activity log is per-cycle — overwrites prior cycle's log rather
+        # than accumulating. JSONL holds the full history for analysis.
+        if result.tool_activity is not None:
+            self._state["_activity_log"] = result.tool_activity
+        self._last_tool_activity = result.tool_activity
 
-        # Persist to Apacheta if bridge is wired
+        self._last_cycle_time = datetime.now(timezone.utc)
+
+        # Identity at creation: the framework mints the record_id and hands
+        # it to every downstream consumer (bridge, JSONL, _prior_states).
+        # Bridge failure no longer orphans the UUID — it's already in hand
+        # and in the JSONL log, which is the durable substrate.
+        record_id = uuid4()
         if self._bridge is not None:
             try:
-                self._bridge.store_open_state(self._state, self._cycle)
+                self._bridge.store_open_state(
+                    self._state,
+                    self._cycle,
+                    record_id,
+                    self._last_cycle_time,
+                )
             except Exception as e:
                 print(f"  WARNING: bridge persist failed cycle {self._cycle}: {e}")
+
+        # Accumulate for future involuntary recall and memory tools
+        self._prior_states.append(
+            (
+                self._cycle,
+                record_id,
+                json.loads(json.dumps(self._state)),
+                self._last_cycle_time.isoformat(),
+            )
+        )
 
         self._last_usage = {
             "input_tokens": result.input_tokens,
@@ -475,6 +1047,7 @@ class OpenTasteSession:
             system_prompt=system,
             raw_output=raw_output,
             prior_state=prior_state_snapshot,
+            record_id=record_id,
             usage={
                 "input_tokens": result.input_tokens,
                 "output_tokens": result.output_tokens,
@@ -492,6 +1065,7 @@ class OpenTasteSession:
         system_prompt: str,
         raw_output: dict,
         prior_state: dict | None,
+        record_id: UUID,
         usage: dict,
     ) -> None:
         """Append full record to JSONL log. Captures everything."""
@@ -507,6 +1081,7 @@ class OpenTasteSession:
         record = {
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "cycle": self._cycle,
+            "record_id": str(record_id),
             "experiment_label": self._experiment_label,
             "model": self._model,
             # Inputs
@@ -515,8 +1090,6 @@ class OpenTasteSession:
             "prior_state": prior_state,
             # Raw model output (complete, unmodified)
             "raw_output": raw_output,
-            # What the model declared as changed
-            "updated_regions": raw_output.get("updated_regions", []),
             "deleted_regions": raw_output.get("deleted_regions", []),
             "response_text": raw_output.get("response", ""),
             # Resulting state after updates
@@ -587,6 +1160,10 @@ def main():
         "--memory-prob", default=0.1, type=float,
         help="Base probability of involuntary memory injection (default: 0.1)",
     )
+    parser.add_argument(
+        "--tools", action="store_true",
+        help="Enable perception tools (read, search_project, clock)",
+    )
     args = parser.parse_args()
 
     resume = False
@@ -637,7 +1214,7 @@ def main():
             from hamutay.apacheta_bridge import ApachetaBridge
             if args.persist == "arango":
                 bridge = ApachetaBridge.from_arango(model=args.model)
-                print("Persisting to: ArangoDB (via YANANTIN_ARANGO_* env vars)")
+                print("Persisting to: ArangoDB (via Apacheta)")
             else:
                 bridge = ApachetaBridge.from_duckdb(
                     args.persist, model=args.model,
@@ -654,6 +1231,8 @@ def main():
         resume=resume,
         bridge=bridge,
         memory_base_probability=args.memory_prob,
+        enable_tools=args.tools,
+        project_root=Path.cwd(),
     )
 
     if resume:
@@ -743,6 +1322,17 @@ def main():
             if mem:
                 status_parts.append(f"memory from cycle {mem[0]}")
             print(f"  [{' | '.join(status_parts)}]")
+            acts = session._last_tool_activity
+            if acts:
+                counts: dict[str, int] = {}
+                for a in acts:
+                    name = a.get("tool", "?") if isinstance(a, dict) else "?"
+                    counts[name] = counts.get(name, 0) + 1
+                summary = ", ".join(
+                    f"{n}×{c}" if c > 1 else n
+                    for n, c in sorted(counts.items(), key=lambda kv: -kv[1])
+                )
+                print(f"  tools: {summary}")
             print(f"\n{response}\n")
         except Exception as e:
             print(f"\nerror: {e}\n")

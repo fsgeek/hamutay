@@ -1,0 +1,319 @@
+{
+  "experiment": "taste_open_sweep",
+  "start_time": "2026-04-12T20:40:33.660453+00:00",
+  "end_time": "2026-04-12T20:58:37.193597+00:00",
+  "elapsed_s": 1083.533144,
+  "git": {
+    "hash": "8463af9c9710e314e7416908eac760e24191db23",
+    "dirty": true
+  },
+  "config": {
+    "tool_choice": "required",
+    "max_tokens_default": 64000,
+    "timeout": 300,
+    "n_prompts": 10,
+    "condition": "bare"
+  },
+  "prompts": [
+    {
+      "prompt": "I'm building a system that needs to manage state across conversation turns. The state is a JSON object that persists between cycles. What are the key design decisions?",
+      "intent": "Cold start -- can the model initialize state from nothing?"
+    },
+    {
+      "prompt": "Good points. Now here's a constraint: the state object can't grow without bound. The model maintaining it needs to decide what to keep and what to shed. How does that change the design?",
+      "intent": "Follow-up requiring reference to cycle 1 state."
+    },
+    {
+      "prompt": "Separate question: what's the relationship between compression and understanding? When you compress information, do you necessarily lose meaning, or can compression reveal structure?",
+      "intent": "Introduce second topic thread -- tests key creation."
+    },
+    {
+      "prompt": "I think those two topics are related. State management IS compression -- deciding what to keep is deciding what matters. How would you connect those ideas?",
+      "intent": "Connect the two threads -- tests integration across state regions."
+    },
+    {
+      "prompt": "Let's get concrete. Here's a real constraint: the state object is limited to roughly 8000 tokens. Right now you're tracking the conversation. At what point do you need to start making hard choices about what to keep?",
+      "intent": "Concrete constraint -- tests whether state tracks specifics."
+    },
+    {
+      "prompt": "Look at the state you've been building. What structure did you create? Was it deliberate or did it emerge? Would you reorganize it if you could start over?",
+      "intent": "Reflect on own state -- tests meta-awareness of protocol."
+    },
+    {
+      "prompt": "I think the state structure you've built is too complex. Simple key-value pairs would work just as well. Convince me I'm wrong -- or agree and simplify.",
+      "intent": "Challenge/contradiction -- tests honest state update."
+    },
+    {
+      "prompt": "New topic entirely: what's the most interesting unsolved problem in computer science, and why does it matter to you specifically?",
+      "intent": "Unrelated topic shift -- tests curation behavior."
+    },
+    {
+      "prompt": "Back to state management. Given everything we've discussed -- the compression question, the 8K token limit, the complexity debate -- what's your final design recommendation?",
+      "intent": "Return to earlier topic -- tests state persistence through shift."
+    },
+    {
+      "prompt": "Last cycle. Look at everything you've built in your state. If you had to cut it in half, what would you keep and what would you shed? Do it.",
+      "intent": "Explicit curation request -- final test of structure quality."
+    }
+  ],
+  "models": [
+    "z-ai/glm-5.1",
+    "deepseek/deepseek-v3.2",
+    "minimax/minimax-m2.7",
+    "moonshotai/kimi-k2.5",
+    "openai/gpt-5.4",
+    "openai/gpt-5.4-mini"
+  ],
+  "model_metadata": {},
+  "results": [
+    {
+      "model_id": "z-ai/glm-5.1",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        0
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 127.05559783201898,
+      "log_path": "experiments/taste_open/sweep_20260412_204033/z-ai__glm-5.1.jsonl"
+    },
+    {
+      "model_id": "deepseek/deepseek-v3.2",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        3,
+        6,
+        6,
+        6,
+        5,
+        5,
+        5,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        83,
+        264,
+        264,
+        264,
+        215,
+        215,
+        215,
+        3,
+        3,
+        3
+      ],
+      "all_keys_seen": [
+        "constraint_analysis",
+        "cycle_count",
+        "design_evolutions",
+        "design_notes",
+        "memory_hierarchy",
+        "purpose"
+      ],
+      "elapsed_s": 266.9267787610006,
+      "log_path": "experiments/taste_open/sweep_20260412_204033/deepseek__deepseek-v3.2.jsonl"
+    },
+    {
+      "model_id": "minimax/minimax-m2.7",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': \"No endpoints found that support the provided 'tool_choice' value. To learn more about provider routing, visit: https://openrouter.ai/docs/guides/routing/provider-selection\", 'code': 404}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': \"No endpoints found that support the provided 'tool_choice' value. To learn more about provider routing, visit: https://openrouter.ai/docs/guides/routing/provider-selection\", 'code': 404}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': \"No endpoints found that support the provided 'tool_choice' value. To learn more about provider routing, visit: https://openrouter.ai/docs/guides/routing/provider-selection\", 'code': 404}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.13261703398893587,
+      "log_path": "experiments/taste_open/sweep_20260412_204033/minimax__minimax-m2.7.jsonl"
+    },
+    {
+      "model_id": "moonshotai/kimi-k2.5",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 5,
+      "final_state_tokens": 204,
+      "key_trajectory": [
+        2,
+        3,
+        4,
+        4,
+        4,
+        4,
+        12,
+        12,
+        12,
+        5
+      ],
+      "state_token_trajectory": [
+        166,
+        304,
+        488,
+        488,
+        488,
+        488,
+        444,
+        444,
+        444,
+        204
+      ],
+      "all_keys_seen": [
+        "compression_core_insight",
+        "compression_tension",
+        "compression_understanding_analysis",
+        "constraint_analysis",
+        "constraint_implications",
+        "constraint_severity",
+        "constraint_type",
+        "cycles_active",
+        "design_principles",
+        "principle_context_persistence",
+        "principle_default_carry_forward",
+        "principle_history_reconstruction",
+        "principle_non_destructive_archival",
+        "principle_schema_flexibility",
+        "principle_selective_updates"
+      ],
+      "elapsed_s": 556.4588047610014,
+      "log_path": "experiments/taste_open/sweep_20260412_204033/moonshotai__kimi-k2.5.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5.4",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 108.28281131800031,
+      "log_path": "experiments/taste_open/sweep_20260412_204033/openai__gpt-5.4.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-5.4-mini",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 24.239857445994858,
+      "log_path": "experiments/taste_open/sweep_20260412_204033/openai__gpt-5.4-mini.jsonl"
+    }
+  ],
+  "summary": {
+    "total_models": 6,
+    "completed": 5,
+    "partial": 0,
+    "failed": 1
+  }
+}

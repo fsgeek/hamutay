@@ -14,10 +14,10 @@ from hamutay.taste import (
 class TestSchema:
     """Verify schema structure."""
 
-    def test_schema_has_response_and_updated_regions(self):
+    def test_schema_has_response_no_updated_regions(self):
         assert "response" in SELF_CURATING_SCHEMA["properties"]
-        assert "updated_regions" in SELF_CURATING_SCHEMA["properties"]
-        assert SELF_CURATING_SCHEMA["required"] == ["response", "updated_regions"]
+        assert "updated_regions" not in SELF_CURATING_SCHEMA["properties"]
+        assert SELF_CURATING_SCHEMA["required"] == ["response"]
 
     def test_strands_have_depends_on(self):
         strand_props = SELF_CURATING_SCHEMA["properties"]["strands"]["items"]["properties"]

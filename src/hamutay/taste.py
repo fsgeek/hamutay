@@ -35,25 +35,13 @@ SELF_CURATING_SCHEMA = {
                 "Write naturally — this is a conversation, not a form."
             ),
         },
-        "updated_regions": {
-            "type": "array",
-            "description": (
-                "Which top-level tensor regions you are updating this cycle. "
-                "Only these regions will be replaced. Regions not listed here "
-                "are carried forward unchanged from the previous tensor. "
-                "Valid region names: strands, declared_losses, open_questions, "
-                "unresolved_tensions, instructions_for_next, epistemic, "
-                "feedback_to_harness."
-            ),
-            "items": {"type": "string"},
-        },
         "strands": {
             "type": "array",
             "description": (
                 "Thematic threads of accumulated reasoning. Each strand "
                 "integrates prior content with new content — not appending, "
                 "integrating. A strand is a running sum, not a list. "
-                "Only include this if 'strands' is in updated_regions."
+                "Only include this cycle if you're updating strands."
             ),
             "items": {
                 "type": "object",
@@ -112,8 +100,8 @@ SELF_CURATING_SCHEMA = {
             "description": (
                 "What was actively dropped this cycle and why. In the "
                 "default-stable architecture, nothing disappears silently — "
-                "every removal is declared. Only include if 'declared_losses' "
-                "is in updated_regions."
+                "every removal is declared. Per-cycle: include only when "
+                "declaring new losses this cycle; omit to indicate none."
             ),
             "items": {
                 "type": "object",
@@ -143,8 +131,8 @@ SELF_CURATING_SCHEMA = {
         "open_questions": {
             "type": "array",
             "description": (
-                "Unresolved questions. Only include if 'open_questions' "
-                "is in updated_regions."
+                "Unresolved questions. Only include this cycle if you're "
+                "updating open_questions."
             ),
             "items": {"type": "string"},
         },
@@ -152,7 +140,7 @@ SELF_CURATING_SCHEMA = {
             "type": "string",
             "description": (
                 "Branch prediction: what the next cycle will likely need. "
-                "Only include if 'instructions_for_next' is in updated_regions."
+                "Only include this cycle if you're updating it."
             ),
         },
         "unresolved_tensions": {
@@ -166,7 +154,7 @@ SELF_CURATING_SCHEMA = {
                 "to one framing, or by discovering they're not in tension). "
                 "When you resolve a tension, remove it and optionally "
                 "declare a loss if the unchosen framing had value. "
-                "Only include if 'unresolved_tensions' is in updated_regions."
+                "Only include this cycle if you're updating tensions."
             ),
             "items": {
                 "type": "object",
@@ -224,9 +212,8 @@ SELF_CURATING_SCHEMA = {
             "type": "object",
             "description": (
                 "Signal back to the harness about the curation process "
-                "itself. Cleared each cycle. The harness reads this and "
-                "may respond next cycle. Only include if "
-                "'feedback_to_harness' is in updated_regions."
+                "itself. Per-cycle: include only when sending feedback "
+                "this cycle; cleared automatically otherwise."
             ),
             "properties": {
                 "requests": {
@@ -261,7 +248,7 @@ SELF_CURATING_SCHEMA = {
             "description": "Overall evidence of error [0,1]",
         },
     },
-    "required": ["response", "updated_regions"],
+    "required": ["response"],
     "additionalProperties": True,
 }
 
@@ -282,9 +269,10 @@ stops earning its place, drop it and say what you lost.
 
 ## Protocol
 
-DEFAULT-STABLE: list what you're changing in `updated_regions`. \
-Everything else carries forward. Custom regions you've added work \
-the same way. First cycle: initialize everything.
+DEFAULT-STABLE: whatever top-level keys you include this cycle are \
+your updates; anything you don't include carries forward unchanged. \
+Custom regions you've added work the same way. First cycle: \
+initialize everything.
 
 `response` is what the user sees. The rest is yours.
 
@@ -313,6 +301,7 @@ def _generate_feedback(
 
     The harness observes and logs. It does not direct.
     """
+    del tensor, cycle, loss_history, integration_loss_history
     return []
 
 
@@ -345,104 +334,91 @@ def _build_messages(
     return [{"role": "user", "content": user_message}], "\n".join(system_parts)
 
 
+# `updated_regions` and `cycle` are reserved so historical logs and harness metadata don't smuggle into state.
+_PROTOCOL_FIELDS = frozenset({"response", "updated_regions", "cycle"})
+_KNOWN_REGIONS = frozenset({
+    "strands", "declared_losses", "open_questions",
+    "unresolved_tensions", "instructions_for_next",
+    "feedback_to_harness",
+})
+_EPISTEMIC_FIELDS = frozenset({
+    "overall_truth", "overall_indeterminacy", "overall_falsity",
+})
+
+
 def _apply_updates(prior_tensor: dict | None, raw_output: dict, cycle: int) -> dict:
-    """Apply selective updates to produce the next tensor.
-
-    Default-stable: only regions listed in updated_regions are replaced.
-    Everything else carries forward from the prior tensor.
-    """
-    updated_regions = set(raw_output.get("updated_regions", []))
-
-    # Start from prior tensor or empty
-    if prior_tensor is not None:
-        tensor = dict(prior_tensor)
-    else:
-        tensor = {}
-
-    # Always update metadata
+    """Default-stable via key-presence: non-protocol keys in raw_output are
+    updates, unlisted keys carry forward. Per-cycle fields (declared_losses,
+    feedback_to_harness) clear when absent. `updated_regions` is reserved
+    so historical logs don't smuggle it into state on resume."""
+    tensor = dict(prior_tensor) if prior_tensor is not None else {}
     tensor["cycle"] = cycle
 
-    # Apply declared updates with type validation
-    list_regions = ["strands", "declared_losses", "open_questions", "unresolved_tensions"]
+    # Known list-regions: validate type and apply when present.
+    list_regions = ("strands", "declared_losses", "open_questions", "unresolved_tensions")
     for key in list_regions:
-        if key in updated_regions and key in raw_output:
-            value = raw_output[key]
-            if isinstance(value, list):
-                # Normalize string items in list regions that expect dicts
-                if key == "strands":
-                    value = [
-                        {"title": "unknown", "content": v} if isinstance(v, str) else v
-                        for v in value
-                    ]
-                tensor[key] = value
-            elif isinstance(value, str):
-                # Model produced a string where an array was expected.
-                # Try to parse it as JSON; if that fails, log and skip.
-                import json as _json
-                try:
-                    parsed = _json.loads(value)
-                    if isinstance(parsed, list):
-                        tensor[key] = parsed
-                    else:
-                        print(f"  WARNING: {key} parsed as {type(parsed).__name__}, "
-                              f"expected list — skipping update")
-                except _json.JSONDecodeError:
-                    print(f"  WARNING: {key} is a string, not a list — "
-                          f"skipping update")
-            else:
-                print(f"  WARNING: {key} is {type(value).__name__}, "
-                      f"expected list — skipping update")
+        if key not in raw_output:
+            continue
+        value = raw_output[key]
+        if isinstance(value, list):
+            if key == "strands":
+                value = [
+                    {"title": "unknown", "content": v} if isinstance(v, str) else v
+                    for v in value
+                ]
+            tensor[key] = value
+        elif isinstance(value, str):
+            import json as _json
+            try:
+                parsed = _json.loads(value)
+                if isinstance(parsed, list):
+                    tensor[key] = parsed
+                else:
+                    print(f"  WARNING: {key} parsed as {type(parsed).__name__}, "
+                          f"expected list — skipping update")
+            except _json.JSONDecodeError:
+                print(f"  WARNING: {key} is a string, not a list — "
+                      f"skipping update")
+        else:
+            print(f"  WARNING: {key} is {type(value).__name__}, "
+                  f"expected list — skipping update")
 
-    if "instructions_for_next" in updated_regions and "instructions_for_next" in raw_output:
+    if "instructions_for_next" in raw_output:
         tensor["instructions_for_next"] = raw_output["instructions_for_next"]
 
-    # Epistemic values — update if present
-    for key in ["overall_truth", "overall_indeterminacy", "overall_falsity"]:
+    for key in _EPISTEMIC_FIELDS:
         if key in raw_output:
             tensor[key] = raw_output[key]
 
-    # Handle feedback_to_harness — per-cycle, like declared_losses
-    if "feedback_to_harness" in updated_regions and "feedback_to_harness" in raw_output:
+    # feedback_to_harness is per-cycle: present = apply, absent = clear.
+    if "feedback_to_harness" in raw_output:
         tensor["feedback_to_harness"] = raw_output["feedback_to_harness"]
     else:
         tensor.pop("feedback_to_harness", None)
 
-    # declared_losses is per-cycle, not cumulative — clear it unless
-    # the model explicitly updated it this cycle. The harness tracks
-    # cumulative loss history in self._loss_history separately.
-    # Without this, default-stable carries forward old losses and the
-    # model re-declares them (observed in LSE-Chicago: same 2 losses
-    # repeated cycles 5-7, inflating cumulative count).
-    if "declared_losses" not in updated_regions:
+    # declared_losses is per-cycle: absent = clear. Without this,
+    # default-stable carries forward old losses and the model re-declares
+    # them (observed in LSE-Chicago: same 2 losses repeated cycles 5-7,
+    # inflating cumulative count). Cumulative history lives in
+    # self._loss_history.
+    if "declared_losses" not in raw_output:
         tensor["declared_losses"] = []
 
-    # Auto-increment cycles_held for unresolved tensions that carried forward
+    # Auto-increment cycles_held for tensions that carried forward.
     for tension in tensor.get("unresolved_tensions", []):
         tension["cycles_held"] = tension.get("cycles_held", 0) + 1
 
-    # Strip integration_losses from strands — per-cycle only.
-    # The harness tracks them in _integration_loss_history.
+    # Strip per-cycle integration_losses; harness tracks them in
+    # _integration_loss_history.
     for strand in tensor.get("strands", []):
         strand.pop("integration_losses", None)
 
-    # Preserve custom regions the model added.
-    # Anything in raw_output that's in updated_regions but not in
-    # the known set above is a model-created field. Carry it through.
-    _KNOWN_REGIONS = {
-        "strands", "declared_losses", "open_questions",
-        "unresolved_tensions", "instructions_for_next",
-        "feedback_to_harness",
-    }
-    _HARNESS_FIELDS = {
-        "response", "updated_regions", "cycle",
-        "overall_truth", "overall_indeterminacy", "overall_falsity",
-    }
-    for key in updated_regions:
-        if key not in _KNOWN_REGIONS and key not in _HARNESS_FIELDS:
-            if key in raw_output:
-                tensor[key] = raw_output[key]
+    # Custom regions the model added. Apply any non-protocol, non-known,
+    # non-epistemic key from raw_output.
+    custom_keys = set(raw_output.keys()) - _PROTOCOL_FIELDS - _KNOWN_REGIONS - _EPISTEMIC_FIELDS
+    for key in custom_keys:
+        tensor[key] = raw_output[key]
 
-    # Don't carry the response or updated_regions in the tensor
     tensor.pop("response", None)
     tensor.pop("updated_regions", None)
 
@@ -597,9 +573,6 @@ class TasteSession:
         if cycle_integration_losses:
             self._integration_loss_history.extend(cycle_integration_losses)
 
-        # Capture feedback_to_harness BEFORE _apply_updates clears it
-        cycle_feedback_to_harness = raw_output.get("feedback_to_harness")
-
         # Apply selective updates
         self._tensor = _apply_updates(
             self._tensor, raw_output, self._cycle
@@ -667,8 +640,6 @@ class TasteSession:
             "prior_tensor": prior_tensor,
             # Raw model output (complete, unmodified)
             "raw_output": raw_output,
-            # State transition metadata
-            "updated_regions": raw_output.get("updated_regions", []),
             "response_text": raw_output.get("response", ""),
             # Resulting tensor after updates applied
             "tensor": self._tensor,

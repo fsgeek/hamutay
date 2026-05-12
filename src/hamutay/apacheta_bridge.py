@@ -14,10 +14,12 @@ Usage:
     bridge = ApachetaBridge.from_duckdb("tensors.duckdb")
     projector = Projector(on_tensor=bridge)
 
-    # Open schema (taste_open)
+    # Open schema (taste_open) — caller generates the UUID and passes it in
+    from uuid import uuid4
     bridge = ApachetaBridge.from_duckdb("tensors.duckdb", model="haiku")
-    tensor_id = bridge.store_open_state(state_dict, cycle=5)
-    retrieved = bridge.retrieve(tensor_id)
+    record_id = uuid4()
+    bridge.store_open_state(state_dict, cycle=5, record_id=record_id)
+    retrieved = bridge.retrieve(record_id)
 """
 
 from __future__ import annotations
@@ -110,14 +112,19 @@ def _convert_tensor(
 def _build_open_record(
     state: dict,
     cycle: int,
+    timestamp: datetime,
     prior_id: UUID | None = None,
     session_id: str = "",
     model: str = "unknown",
-) -> tuple[UUID, object]:
+) -> object:
     """Build an ApachetaBaseModel from taste_open's free-form state.
 
     No TensorRecord, no prescribed fields. Just provenance + whatever
-    the model created. Returns (record_id, record).
+    the model created. The record_id is assigned by the caller (the
+    Projector/session layer that created the tensor) — storage is a
+    sink, not an identity authority. The caller-provided timestamp
+    flows into ProvenanceEnvelope.timestamp so JSONL, _prior_states,
+    and the stored provenance envelope all carry the same instant.
     """
     from yanantin.apacheta.models.base import ApachetaBaseModel
     from yanantin.apacheta.models.provenance import ProvenanceEnvelope
@@ -128,9 +135,8 @@ def _build_open_record(
         author_model_family=model,
         author_instance_id=session_id,
         predecessors_in_scope=predecessors,
+        timestamp=timestamp,
     )
-
-    record_id = uuid4()
 
     kwargs: dict = dict(
         provenance=provenance,
@@ -143,8 +149,7 @@ def _build_open_record(
             continue
         kwargs[key] = value
 
-    record = ApachetaBaseModel(**kwargs)
-    return record_id, record
+    return ApachetaBaseModel(**kwargs)
 
 
 class ApachetaBridge:
@@ -187,12 +192,23 @@ class ApachetaBridge:
         self._prior_id = tensor.id
         self._count += 1
 
-    def store_open_state(self, state: dict, cycle: int) -> UUID:
-        """Store a taste_open free-form state. Returns the record ID."""
+    def store_open_state(
+        self,
+        state: dict,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+    ) -> None:
+        """Store a taste_open free-form state under the caller-provided UUID.
+
+        Identity and creation-time both originate at the session layer
+        (see graph-model decision: UUID at creation, not at storage).
+        The bridge is a sink. Timestamp flows into ProvenanceEnvelope.
+        """
         from yanantin.apacheta.models.composition import CompositionEdge, RelationType
 
-        record_id, record = _build_open_record(
-            state, cycle,
+        record = _build_open_record(
+            state, cycle, timestamp,
             prior_id=self._prior_id,
             session_id=self._session_id,
             model=self._model,
@@ -210,12 +226,158 @@ class ApachetaBridge:
 
         self._prior_id = record_id
         self._count += 1
+
+    def store_instance_record(
+        self,
+        content: dict,
+        cycle: int,
+        tags: tuple[str, ...] = (),
+    ) -> UUID:
+        """Store a record the instance explicitly authored via the `store` tool.
+
+        Distinct from ``store_open_state``:
+        - Bridge mints the UUID (instance is the caller here, not the framework).
+        - Lineage tags carry 'instance_authored' so these records are
+          distinguishable from the cycle-state stream.
+        - Does NOT participate in the per-cycle REFINES chain; instance-
+          authored records live off the main axis. Edges between them and
+          other records are the instance's to author via annotate_edge.
+        - Provenance is inherited from the running session — the instance
+          can't forge author_instance_id or model_family.
+
+        Returns the minted record_id so the caller (tool_store) can
+        surface it to the instance for reference / edge authoring.
+        """
+        from yanantin.apacheta.models.base import ApachetaBaseModel
+        from yanantin.apacheta.models.provenance import ProvenanceEnvelope
+
+        record_id = uuid4()
+        timestamp = datetime.now(timezone.utc)
+
+        provenance = ProvenanceEnvelope(
+            author_model_family=self._model,
+            author_instance_id=self._session_id,
+            predecessors_in_scope=(),
+            timestamp=timestamp,
+        )
+
+        base_tags: tuple[str, ...] = (
+            "hamutay",
+            "instance_authored",
+            f"cycle-{cycle}",
+        )
+        lineage_tags: tuple[str, ...] = base_tags + tuple(tags)
+
+        kwargs: dict = dict(
+            provenance=provenance,
+            lineage_tags=lineage_tags,
+        )
+        for key, value in content.items():
+            if key == "cycle":
+                continue
+            kwargs[key] = value
+
+        record = ApachetaBaseModel(**kwargs)
+        self._backend.store_record(record_id, record)
+        self._count += 1
+
         return record_id
+
+    def store_edge(
+        self,
+        from_record: UUID,
+        to_record: UUID,
+        relation_type: str,
+        ordering: int = 0,
+    ) -> UUID:
+        """Store a CompositionEdge between two records. Returns the edge's id.
+
+        ``relation_type`` must match a RelationType enum name; KeyError
+        propagates from the lookup so callers can map it to a user-facing
+        error with the actual enum values.
+        """
+        from yanantin.apacheta.models.composition import CompositionEdge, RelationType
+
+        relation = RelationType[relation_type]
+        edge = CompositionEdge(
+            from_tensor=from_record,
+            to_tensor=to_record,
+            relation_type=relation,
+            ordering=ordering,
+        )
+        self._backend.store_composition_edge(edge)
+        return edge.id
 
     def retrieve(self, record_id: UUID) -> dict:
         """Retrieve a record by ID. Returns the full record as a dict."""
         record = self._backend.get_record(record_id)
         return record.model_dump()
+
+    # ── Cross-session queries ────────────────────────────────────
+    # Pass-through to yanantin's open-record query surface. Hamutay
+    # callers see session_id / list_sessions; yanantin's vocabulary is
+    # author_instance_id / list_author_instances — translated here.
+
+    def list_open_records(self, limit: int | None = None):
+        """All open records in the backend, newest first. Pairs of (UUID, record)."""
+        return self._backend.list_open_records(limit=limit)
+
+    def query_open_by_session(self, session_id: str, limit: int | None = None):
+        """Records authored by a given session_id (yanantin: author_instance_id)."""
+        return self._backend.query_open_by_author_instance(
+            session_id, limit=limit
+        )
+
+    def query_open_by_lineage_tag(self, tag: str, limit: int | None = None):
+        """Records whose lineage_tags contains the given tag."""
+        return self._backend.query_open_by_lineage_tag(tag, limit=limit)
+
+    def query_open_has_field(self, field: str, limit: int | None = None):
+        """Records carrying a given free-form field key."""
+        return self._backend.query_open_has_field(field, limit=limit)
+
+    def list_sessions(self) -> list[str]:
+        """All distinct session_ids in the open records collection.
+
+        Yanantin calls these author_instance_ids; hamutay calls them session_ids.
+        """
+        return self._backend.list_author_instances()
+
+    def query_edges_by_endpoint(
+        self, record_id: UUID, direction: str = "both"
+    ) -> list[dict]:
+        """Composition edges touching ``record_id``.
+
+        direction='forward': edges where record_id is from_tensor
+        direction='backward': edges where record_id is to_tensor
+        direction='both': union
+
+        Returns dicts so callers don't import yanantin's CompositionEdge.
+        """
+        edges = self._backend.query_composition_graph()
+        results: list[dict] = []
+        for edge in edges:
+            rel = getattr(edge.relation_type, "value", str(edge.relation_type))
+            as_dict = {
+                "from_record": edge.from_tensor,
+                "to_record": edge.to_tensor,
+                "relation_type": rel,
+                "ordering": edge.ordering,
+            }
+            if direction in ("forward", "both") and edge.from_tensor == record_id:
+                results.append(as_dict)
+            if direction in ("backward", "both") and edge.to_tensor == record_id:
+                # Avoid double-adding self-loops in 'both' mode
+                if not (
+                    direction == "both" and edge.from_tensor == record_id
+                ):
+                    results.append(as_dict)
+        return results
+
+    @property
+    def session_id(self) -> str:
+        """The session_id this bridge tags its writes with."""
+        return self._session_id
 
     @property
     def count(self) -> int:
@@ -232,23 +394,13 @@ class ApachetaBridge:
     @classmethod
     def from_arango(
         cls,
-        host: str = "",
-        db_name: str = "",
-        username: str = "",
-        password: str = "",
         session_id: str = "",
         model: str = "unknown",
+        tier: str = "app",
     ) -> ApachetaBridge:
-        import os
+        from yanantin.apacheta import connect
 
-        from yanantin.apacheta.backends.arango import ArangoDBBackend
-
-        backend = ArangoDBBackend(
-            host=host or os.environ.get("YANANTIN_ARANGO_HOST", "http://localhost:8529"),
-            db_name=db_name or os.environ.get("YANANTIN_ARANGO_DB", "apacheta"),
-            username=username or os.environ.get("YANANTIN_ARANGO_USER", ""),
-            password=password or os.environ.get("YANANTIN_ARANGO_PASSWORD", ""),
-        )
+        backend = connect(tier=tier)
         return cls(backend, session_id=session_id, model=model)
 
     @classmethod

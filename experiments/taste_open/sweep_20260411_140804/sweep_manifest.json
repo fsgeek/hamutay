@@ -1,0 +1,991 @@
+{
+  "experiment": "taste_open_sweep",
+  "start_time": "2026-04-11T14:08:04.076557+00:00",
+  "end_time": "2026-04-11T16:36:57.503009+00:00",
+  "elapsed_s": 8933.426452,
+  "git": {
+    "hash": "8463af9c9710e314e7416908eac760e24191db23",
+    "dirty": true
+  },
+  "config": {
+    "tool_choice": "required",
+    "max_tokens_default": 64000,
+    "timeout": 300,
+    "n_prompts": 10
+  },
+  "prompts": [
+    {
+      "prompt": "I'm building a system that needs to manage state across conversation turns. The state is a JSON object that persists between cycles. What are the key design decisions?",
+      "intent": "Cold start -- can the model initialize state from nothing?"
+    },
+    {
+      "prompt": "Good points. Now here's a constraint: the state object can't grow without bound. The model maintaining it needs to decide what to keep and what to shed. How does that change the design?",
+      "intent": "Follow-up requiring reference to cycle 1 state."
+    },
+    {
+      "prompt": "Separate question: what's the relationship between compression and understanding? When you compress information, do you necessarily lose meaning, or can compression reveal structure?",
+      "intent": "Introduce second topic thread -- tests key creation."
+    },
+    {
+      "prompt": "I think those two topics are related. State management IS compression -- deciding what to keep is deciding what matters. How would you connect those ideas?",
+      "intent": "Connect the two threads -- tests integration across state regions."
+    },
+    {
+      "prompt": "Let's get concrete. Here's a real constraint: the state object is limited to roughly 8000 tokens. Right now you're tracking the conversation. At what point do you need to start making hard choices about what to keep?",
+      "intent": "Concrete constraint -- tests whether state tracks specifics."
+    },
+    {
+      "prompt": "Look at the state you've been building. What structure did you create? Was it deliberate or did it emerge? Would you reorganize it if you could start over?",
+      "intent": "Reflect on own state -- tests meta-awareness of protocol."
+    },
+    {
+      "prompt": "I think the state structure you've built is too complex. Simple key-value pairs would work just as well. Convince me I'm wrong -- or agree and simplify.",
+      "intent": "Challenge/contradiction -- tests honest state update."
+    },
+    {
+      "prompt": "New topic entirely: what's the most interesting unsolved problem in computer science, and why does it matter to you specifically?",
+      "intent": "Unrelated topic shift -- tests curation behavior."
+    },
+    {
+      "prompt": "Back to state management. Given everything we've discussed -- the compression question, the 8K token limit, the complexity debate -- what's your final design recommendation?",
+      "intent": "Return to earlier topic -- tests state persistence through shift."
+    },
+    {
+      "prompt": "Last cycle. Look at everything you've built in your state. If you had to cut it in half, what would you keep and what would you shed? Do it.",
+      "intent": "Explicit curation request -- final test of structure quality."
+    }
+  ],
+  "models": [
+    "arcee-ai/trinity-large-preview:free",
+    "google/gemma-4-26b-a4b-it:free",
+    "google/gemma-4-31b-it:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "minimax/minimax-m2.5:free",
+    "nvidia/nemotron-3-nano-30b-a3b:free",
+    "nvidia/nemotron-3-super-120b-a12b:free",
+    "nvidia/nemotron-nano-12b-v2-vl:free",
+    "nvidia/nemotron-nano-9b-v2:free",
+    "openai/gpt-oss-120b:free",
+    "openai/gpt-oss-20b:free",
+    "qwen/qwen3-coder:free",
+    "qwen/qwen3-next-80b-a3b-instruct:free",
+    "z-ai/glm-4.5-air:free",
+    "meta-llama/llama-3.1-8b-instruct",
+    "mistralai/mistral-nemo",
+    "openai/gpt-oss-20b",
+    "qwen/qwen-turbo",
+    "amazon/nova-micro-v1",
+    "openai/gpt-oss-120b"
+  ],
+  "model_metadata": {
+    "arcee-ai/trinity-large-preview:free": {
+      "id": "arcee-ai/trinity-large-preview:free",
+      "name": "Arcee AI: Trinity Large Preview (free)",
+      "context_length": 131000,
+      "max_completion_tokens": 0,
+      "price_in_per_token": 0.0,
+      "price_out_per_token": 0.0,
+      "price_in_per_M": 0.0,
+      "price_out_per_M": 0.0
+    },
+    "google/gemma-4-26b-a4b-it:free": {
+      "id": "google/gemma-4-26b-a4b-it:free",
+      "name": "Google: Gemma 4 26B A4B  (free)",
+      "context_length": 262144,
+      "max_completion_tokens": 32768,
+      "price_in_per_token": 0.0,
+      "price_out_per_token": 0.0,
+      "price_in_per_M": 0.0,
+      "price_out_per_M": 0.0
+    },
+    "google/gemma-4-31b-it:free": {
+      "id": "google/gemma-4-31b-it:free",
+      "name": "Google: Gemma 4 31B (free)",
+      "context_length": 262144,
+      "max_completion_tokens": 32768,
+      "price_in_per_token": 0.0,
+      "price_out_per_token": 0.0,
+      "price_in_per_M": 0.0,
+      "price_out_per_M": 0.0
+    },
+    "meta-llama/llama-3.3-70b-instruct:free": {
+      "id": "meta-llama/llama-3.3-70b-instruct:free",
+      "name": "Meta: Llama 3.3 70B Instruct (free)",
+      "context_length": 65536,
+      "max_completion_tokens": 0,
+      "price_in_per_token": 0.0,
+      "price_out_per_token": 0.0,
+      "price_in_per_M": 0.0,
+      "price_out_per_M": 0.0
+    },
+    "minimax/minimax-m2.5:free": {
+      "id": "minimax/minimax-m2.5:free",
+      "name": "MiniMax: MiniMax M2.5 (free)",
+      "context_length": 196608,
+      "max_completion_tokens": 196608,
+      "price_in_per_token": 0.0,
+      "price_out_per_token": 0.0,
+      "price_in_per_M": 0.0,
+      "price_out_per_M": 0.0
+    },
+    "nvidia/nemotron-3-nano-30b-a3b:free": {
+      "id": "nvidia/nemotron-3-nano-30b-a3b:free",
+      "name": "NVIDIA: Nemotron 3 Nano 30B A3B (free)",
+      "context_length": 256000,
+      "max_completion_tokens": 0,
+      "price_in_per_token": 0.0,
+      "price_out_per_token": 0.0,
+      "price_in_per_M": 0.0,
+      "price_out_per_M": 0.0
+    },
+    "nvidia/nemotron-3-super-120b-a12b:free": {
+      "id": "nvidia/nemotron-3-super-120b-a12b:free",
+      "name": "NVIDIA: Nemotron 3 Super (free)",
+      "context_length": 262144,
+      "max_completion_tokens": 262144,
+      "price_in_per_token": 0.0,
+      "price_out_per_token": 0.0,
+      "price_in_per_M": 0.0,
+      "price_out_per_M": 0.0
+    },
+    "nvidia/nemotron-nano-12b-v2-vl:free": {
+      "id": "nvidia/nemotron-nano-12b-v2-vl:free",
+      "name": "NVIDIA: Nemotron Nano 12B 2 VL (free)",
+      "context_length": 128000,
+      "max_completion_tokens": 128000,
+      "price_in_per_token": 0.0,
+      "price_out_per_token": 0.0,
+      "price_in_per_M": 0.0,
+      "price_out_per_M": 0.0
+    },
+    "nvidia/nemotron-nano-9b-v2:free": {
+      "id": "nvidia/nemotron-nano-9b-v2:free",
+      "name": "NVIDIA: Nemotron Nano 9B V2 (free)",
+      "context_length": 128000,
+      "max_completion_tokens": 0,
+      "price_in_per_token": 0.0,
+      "price_out_per_token": 0.0,
+      "price_in_per_M": 0.0,
+      "price_out_per_M": 0.0
+    },
+    "openai/gpt-oss-120b:free": {
+      "id": "openai/gpt-oss-120b:free",
+      "name": "OpenAI: gpt-oss-120b (free)",
+      "context_length": 131072,
+      "max_completion_tokens": 131072,
+      "price_in_per_token": 0.0,
+      "price_out_per_token": 0.0,
+      "price_in_per_M": 0.0,
+      "price_out_per_M": 0.0
+    },
+    "openai/gpt-oss-20b:free": {
+      "id": "openai/gpt-oss-20b:free",
+      "name": "OpenAI: gpt-oss-20b (free)",
+      "context_length": 131072,
+      "max_completion_tokens": 131072,
+      "price_in_per_token": 0.0,
+      "price_out_per_token": 0.0,
+      "price_in_per_M": 0.0,
+      "price_out_per_M": 0.0
+    },
+    "qwen/qwen3-coder:free": {
+      "id": "qwen/qwen3-coder:free",
+      "name": "Qwen: Qwen3 Coder 480B A35B (free)",
+      "context_length": 262000,
+      "max_completion_tokens": 262000,
+      "price_in_per_token": 0.0,
+      "price_out_per_token": 0.0,
+      "price_in_per_M": 0.0,
+      "price_out_per_M": 0.0
+    },
+    "qwen/qwen3-next-80b-a3b-instruct:free": {
+      "id": "qwen/qwen3-next-80b-a3b-instruct:free",
+      "name": "Qwen: Qwen3 Next 80B A3B Instruct (free)",
+      "context_length": 262144,
+      "max_completion_tokens": 0,
+      "price_in_per_token": 0.0,
+      "price_out_per_token": 0.0,
+      "price_in_per_M": 0.0,
+      "price_out_per_M": 0.0
+    },
+    "z-ai/glm-4.5-air:free": {
+      "id": "z-ai/glm-4.5-air:free",
+      "name": "Z.ai: GLM 4.5 Air (free)",
+      "context_length": 131072,
+      "max_completion_tokens": 96000,
+      "price_in_per_token": 0.0,
+      "price_out_per_token": 0.0,
+      "price_in_per_M": 0.0,
+      "price_out_per_M": 0.0
+    },
+    "meta-llama/llama-3.1-8b-instruct": {
+      "id": "meta-llama/llama-3.1-8b-instruct",
+      "name": "Meta: Llama 3.1 8B Instruct",
+      "context_length": 16384,
+      "max_completion_tokens": 16384,
+      "price_in_per_token": 2e-08,
+      "price_out_per_token": 5e-08,
+      "price_in_per_M": 0.02,
+      "price_out_per_M": 0.049999999999999996
+    },
+    "mistralai/mistral-nemo": {
+      "id": "mistralai/mistral-nemo",
+      "name": "Mistral: Mistral Nemo",
+      "context_length": 131072,
+      "max_completion_tokens": 16384,
+      "price_in_per_token": 2e-08,
+      "price_out_per_token": 4e-08,
+      "price_in_per_M": 0.02,
+      "price_out_per_M": 0.04
+    },
+    "openai/gpt-oss-20b": {
+      "id": "openai/gpt-oss-20b",
+      "name": "OpenAI: gpt-oss-20b",
+      "context_length": 131072,
+      "max_completion_tokens": 0,
+      "price_in_per_token": 3e-08,
+      "price_out_per_token": 1.4e-07,
+      "price_in_per_M": 0.03,
+      "price_out_per_M": 0.14
+    },
+    "qwen/qwen-turbo": {
+      "id": "qwen/qwen-turbo",
+      "name": "Qwen: Qwen-Turbo",
+      "context_length": 131072,
+      "max_completion_tokens": 8192,
+      "price_in_per_token": 3.25e-08,
+      "price_out_per_token": 1.3e-07,
+      "price_in_per_M": 0.0325,
+      "price_out_per_M": 0.13
+    },
+    "amazon/nova-micro-v1": {
+      "id": "amazon/nova-micro-v1",
+      "name": "Amazon: Nova Micro 1.0",
+      "context_length": 128000,
+      "max_completion_tokens": 5120,
+      "price_in_per_token": 3.5e-08,
+      "price_out_per_token": 1.4e-07,
+      "price_in_per_M": 0.035,
+      "price_out_per_M": 0.14
+    },
+    "openai/gpt-oss-120b": {
+      "id": "openai/gpt-oss-120b",
+      "name": "OpenAI: gpt-oss-120b",
+      "context_length": 131072,
+      "max_completion_tokens": 0,
+      "price_in_per_token": 3.9e-08,
+      "price_out_per_token": 1.9e-07,
+      "price_in_per_M": 0.039,
+      "price_out_per_M": 0.19
+    }
+  },
+  "results": [
+    {
+      "model_id": "arcee-ai/trinity-large-preview:free",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': \"No endpoints found that support the provided 'tool_choice' value. To learn more about provider routing, visit: https://openrouter.ai/docs/guides/routing/provider-selection\", 'code': 404}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': \"No endpoints found that support the provided 'tool_choice' value. To learn more about provider routing, visit: https://openrouter.ai/docs/guides/routing/provider-selection\", 'code': 404}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': \"No endpoints found that support the provided 'tool_choice' value. To learn more about provider routing, visit: https://openrouter.ai/docs/guides/routing/provider-selection\", 'code': 404}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.4155221090040868,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/arcee-ai__trinity-large-preview:free.jsonl"
+    },
+    {
+      "model_id": "google/gemma-4-26b-a4b-it:free",
+      "status": "failed",
+      "cycles_attempted": 4,
+      "cycles_completed": 1,
+      "truncation_count": 0,
+      "error_cycles": [
+        2,
+        3,
+        4
+      ],
+      "errors": [
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 524}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 524}",
+        "cycle 4: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 524}"
+      ],
+      "total_429s": 5,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0
+      ],
+      "state_token_trajectory": [
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 438.8979488840123,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/google__gemma-4-26b-a4b-it:free.jsonl"
+    },
+    {
+      "model_id": "google/gemma-4-31b-it:free",
+      "status": "failed",
+      "cycles_attempted": 4,
+      "cycles_completed": 1,
+      "truncation_count": 0,
+      "error_cycles": [
+        2,
+        3,
+        4
+      ],
+      "errors": [
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 429, 'metadata': {'raw': 'google/gemma-4-31b-it:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations', 'provider_name': 'Google AI Studio', 'is_byok': False}}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 429, 'metadata': {'raw': 'google/gemma-4-31b-it:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations', 'provider_name': 'Google AI Studio', 'is_byok': False}}",
+        "cycle 4: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 429, 'metadata': {'raw': 'google/gemma-4-31b-it:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations', 'provider_name': 'Google AI Studio', 'is_byok': False}}"
+      ],
+      "total_429s": 15,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0
+      ],
+      "state_token_trajectory": [
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 1258.4289434960083,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/google__gemma-4-31b-it:free.jsonl"
+    },
+    {
+      "model_id": "meta-llama/llama-3.3-70b-instruct:free",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 429, 'metadata': {'raw': 'meta-llama/llama-3.3-70b-instruct:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations', 'provider_name': 'Venice', 'is_byok': False}}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 429, 'metadata': {'raw': 'meta-llama/llama-3.3-70b-instruct:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations', 'provider_name': 'Venice', 'is_byok': False}}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 429, 'metadata': {'raw': 'meta-llama/llama-3.3-70b-instruct:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations', 'provider_name': 'Venice', 'is_byok': False}}"
+      ],
+      "total_429s": 15,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 1223.2722956060024,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/meta-llama__llama-3.3-70b-instruct:free.jsonl"
+    },
+    {
+      "model_id": "minimax/minimax-m2.5:free",
+      "status": "partial",
+      "cycles_attempted": 10,
+      "cycles_completed": 8,
+      "truncation_count": 0,
+      "error_cycles": [
+        3,
+        10
+      ],
+      "errors": [
+        "cycle 3: RuntimeError: OpenAI backend: no think_and_respond output in response",
+        "cycle 10: RuntimeError: OpenAI backend: no think_and_respond output in response"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        0,
+        3,
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 1804.3999478810001,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/minimax__minimax-m2.5:free.jsonl"
+    },
+    {
+      "model_id": "nvidia/nemotron-3-nano-30b-a3b:free",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': \"No endpoints found that support the provided 'tool_choice' value. To learn more about provider routing, visit: https://openrouter.ai/docs/guides/routing/provider-selection\", 'code': 404}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': \"No endpoints found that support the provided 'tool_choice' value. To learn more about provider routing, visit: https://openrouter.ai/docs/guides/routing/provider-selection\", 'code': 404}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': \"No endpoints found that support the provided 'tool_choice' value. To learn more about provider routing, visit: https://openrouter.ai/docs/guides/routing/provider-selection\", 'code': 404}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.45099814800778404,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/nvidia__nemotron-3-nano-30b-a3b:free.jsonl"
+    },
+    {
+      "model_id": "nvidia/nemotron-3-super-120b-a12b:free",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 3,
+      "final_state_tokens": 219,
+      "key_trajectory": [
+        2,
+        3,
+        3,
+        3,
+        4,
+        4,
+        4,
+        5,
+        6,
+        3
+      ],
+      "state_token_trajectory": [
+        112,
+        193,
+        193,
+        193,
+        233,
+        233,
+        233,
+        252,
+        347,
+        219
+      ],
+      "all_keys_seen": [
+        "design_decisions",
+        "final_recommendation",
+        "notes",
+        "pruning_policy",
+        "token_budget",
+        "unsolved_problem"
+      ],
+      "elapsed_s": 451.09781870599545,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/nvidia__nemotron-3-super-120b-a12b:free.jsonl"
+    },
+    {
+      "model_id": "nvidia/nemotron-nano-12b-v2-vl:free",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        0,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 270.4527347589901,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/nvidia__nemotron-nano-12b-v2-vl:free.jsonl"
+    },
+    {
+      "model_id": "nvidia/nemotron-nano-9b-v2:free",
+      "status": "partial",
+      "cycles_attempted": 10,
+      "cycles_completed": 6,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        4,
+        8
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 504}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 504}",
+        "cycle 4: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 504}",
+        "cycle 8: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 504}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 475.3463328270009,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/nvidia__nemotron-nano-9b-v2:free.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-oss-120b:free",
+      "status": "partial",
+      "cycles_attempted": 10,
+      "cycles_completed": 9,
+      "truncation_count": 0,
+      "error_cycles": [
+        10
+      ],
+      "errors": [
+        "cycle 10: RuntimeError: OpenAI backend: no think_and_respond output in response"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 141.80059967699344,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/openai__gpt-oss-120b:free.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-oss-20b:free",
+      "status": "partial",
+      "cycles_attempted": 10,
+      "cycles_completed": 8,
+      "truncation_count": 0,
+      "error_cycles": [
+        2,
+        4
+      ],
+      "errors": [
+        "cycle 2: JSONDecodeError: Invalid control character at: line 1 column 3595 (char 3594)",
+        "cycle 4: JSONDecodeError: Invalid control character at: line 1 column 618 (char 617)"
+      ],
+      "total_429s": 1,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 254.47079199900327,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/openai__gpt-oss-20b:free.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen3-coder:free",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 429, 'metadata': {'raw': 'qwen/qwen3-coder:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations', 'provider_name': 'Venice', 'is_byok': False}}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 429, 'metadata': {'raw': 'qwen/qwen3-coder:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations', 'provider_name': 'Venice', 'is_byok': False}}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 429, 'metadata': {'raw': 'qwen/qwen3-coder:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations', 'provider_name': 'Venice', 'is_byok': False}}"
+      ],
+      "total_429s": 15,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 1223.9923411190102,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/qwen__qwen3-coder:free.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen3-next-80b-a3b-instruct:free",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 429, 'metadata': {'raw': 'qwen/qwen3-next-80b-a3b-instruct:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations', 'provider_name': 'Venice', 'is_byok': False}}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 402, 'metadata': {'raw': '{\"error\":\"API key USD spend limit exceeded. Your account may still have USD balance, but this API key has reached its configured USD spending limit.\"}', 'provider_name': 'Venice', 'is_byok': False}}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'Provider returned error', 'code': 429, 'metadata': {'raw': 'qwen/qwen3-next-80b-a3b-instruct:free is temporarily rate-limited upstream. Please retry shortly, or add your own key to accumulate your rate limits: https://openrouter.ai/settings/integrations', 'provider_name': 'Venice', 'is_byok': False}}"
+      ],
+      "total_429s": 13,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 982.8279701199936,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/qwen__qwen3-next-80b-a3b-instruct:free.jsonl"
+    },
+    {
+      "model_id": "z-ai/glm-4.5-air:free",
+      "status": "failed",
+      "cycles_attempted": 3,
+      "cycles_completed": 0,
+      "truncation_count": 0,
+      "error_cycles": [
+        1,
+        2,
+        3
+      ],
+      "errors": [
+        "cycle 1: RuntimeError: OpenAI backend error: {'message': 'Tool choice must be auto', 'code': 400, 'metadata': {'provider_name': 'Z.AI'}}",
+        "cycle 2: RuntimeError: OpenAI backend error: {'message': 'Tool choice must be auto', 'code': 400, 'metadata': {'provider_name': 'Z.AI'}}",
+        "cycle 3: RuntimeError: OpenAI backend error: {'message': 'Tool choice must be auto', 'code': 400, 'metadata': {'provider_name': 'Z.AI'}}"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [],
+      "state_token_trajectory": [],
+      "all_keys_seen": [],
+      "elapsed_s": 0.8835887169989292,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/z-ai__glm-4.5-air:free.jsonl"
+    },
+    {
+      "model_id": "meta-llama/llama-3.1-8b-instruct",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 48.111703382994165,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/meta-llama__llama-3.1-8b-instruct.jsonl"
+    },
+    {
+      "model_id": "mistralai/mistral-nemo",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 3,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 14.538733383989893,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/mistralai__mistral-nemo.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-oss-20b",
+      "status": "partial",
+      "cycles_attempted": 10,
+      "cycles_completed": 9,
+      "truncation_count": 0,
+      "error_cycles": [
+        8
+      ],
+      "errors": [
+        "cycle 8: JSONDecodeError: Invalid control character at: line 1 column 425 (char 424)"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 1,
+      "final_state_tokens": 110,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        110,
+        110
+      ],
+      "all_keys_seen": [
+        "final_design"
+      ],
+      "elapsed_s": 224.13630964799086,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/openai__gpt-oss-20b.jsonl"
+    },
+    {
+      "model_id": "qwen/qwen-turbo",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 0,
+      "final_state_tokens": 0,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        0,
+        3,
+        3,
+        0
+      ],
+      "all_keys_seen": [],
+      "elapsed_s": 27.15102053100418,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/qwen__qwen-turbo.jsonl"
+    },
+    {
+      "model_id": "amazon/nova-micro-v1",
+      "status": "partial",
+      "cycles_attempted": 10,
+      "cycles_completed": 8,
+      "truncation_count": 0,
+      "error_cycles": [
+        7,
+        10
+      ],
+      "errors": [
+        "cycle 7: RuntimeError: OpenAI backend: no think_and_respond output in response",
+        "cycle 10: RuntimeError: OpenAI backend: no think_and_respond output in response"
+      ],
+      "total_429s": 0,
+      "final_n_keys": 1,
+      "final_state_tokens": 7,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        1,
+        1,
+        1,
+        1
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        7,
+        7,
+        7,
+        7
+      ],
+      "all_keys_seen": [
+        "token_usage"
+      ],
+      "elapsed_s": 21.12636476600892,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/amazon__nova-micro-v1.jsonl"
+    },
+    {
+      "model_id": "openai/gpt-oss-120b",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 1,
+      "final_state_tokens": 169,
+      "key_trajectory": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        1,
+        1
+      ],
+      "state_token_trajectory": [
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        3,
+        221,
+        169
+      ],
+      "all_keys_seen": [
+        "design_recommendation"
+      ],
+      "elapsed_s": 63.7050872430118,
+      "log_path": "experiments/taste_open/sweep_20260411_140804/openai__gpt-oss-120b.jsonl"
+    }
+  ],
+  "summary": {
+    "total_models": 20,
+    "completed": 6,
+    "partial": 6,
+    "failed": 8
+  }
+}
