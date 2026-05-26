@@ -18,6 +18,8 @@ from __future__ import annotations
 import json
 import os
 import random
+import re
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -168,6 +170,20 @@ Each tool accepts an optional `reason` field. When you have a reason \
 worth stating, include it — it's recorded in your activity log. When \
 you don't, omit it; an absent reason is fine and is itself information.
 
+### When you act
+
+think_and_respond ends the cycle: after it, you get no further turns and \
+see no further results. So to act *and* use what you learn, call your \
+tools in an earlier step — read, bash, search — see what comes back, and \
+only then call think_and_respond to close, your response reporting what \
+you found. You can also call other tools in the same step as \
+think_and_respond; they still run, but their results don't return to you, \
+so that path only suits actions whose outcome you don't need to see. An \
+action you merely describe in your response text is not a tool call at \
+all — it does nothing. The thing to notice in yourself is when "I will" \
+has quietly replaced "I did": if you mean to do it this cycle, call the \
+tool — don't just narrate the intention.
+
 You are not required to use these tools. You are not rewarded for \
 using them. They exist so you can see what's there. Use them when it \
 helps you; don't when it doesn't."""
@@ -182,6 +198,86 @@ helps you; don't when it doesn't."""
 _BUDGET_MODEL_LIMIT = 1_000_000
 _BUDGET_SOFT_THRESHOLD = int(_BUDGET_MODEL_LIMIT * 0.8)
 _TOKEN_PER_CHAR_ESTIMATE = 4
+
+# Known output-token ceilings by model family (best-effort).
+_KNOWN_MAX_OUTPUT_TOKENS: dict[str, int] = {
+    # Anthropic Claude 4.x
+    "claude-opus-4": 64_000,
+    "claude-opus-4-1": 64_000,
+    "claude-sonnet-4": 64_000,
+    "claude-sonnet-4-5": 64_000,
+    "claude-sonnet-4-6": 64_000,
+    "claude-haiku-4": 64_000,
+    "claude-haiku-4-5": 64_000,
+    # Common OpenAI families (conservative defaults)
+    "gpt-4.1": 32_768,
+    "gpt-4o": 16_384,
+    "gpt-5": 16_384,
+}
+
+# Known context-window limits by model family (best-effort).
+_KNOWN_CONTEXT_LIMITS: dict[str, int] = {
+    "claude-opus-4": 262_144,
+    "claude-opus-4-1": 262_144,
+    "claude-sonnet-4": 262_144,
+    "claude-sonnet-4-5": 262_144,
+    "claude-sonnet-4-6": 262_144,
+    "claude-haiku-4": 262_144,
+    "claude-haiku-4-5": 262_144,
+}
+
+
+def _resolve_max_tokens(
+    model: str, provider: str, requested: str, fallback: int = 64_000
+) -> int:
+    """Resolve max output tokens from explicit value or 'auto'."""
+    if requested != "auto":
+        value = int(requested)
+        if value <= 0:
+            raise ValueError("max_tokens must be positive")
+        return value
+
+    model_key = model.split("/")[-1].lower()
+    for prefix, value in _KNOWN_MAX_OUTPUT_TOKENS.items():
+        if model_key.startswith(prefix):
+            return value
+
+    # Unknown model family: provider-aware fallback.
+    if provider == "anthropic":
+        return 64_000
+    return fallback
+
+
+def _resolve_context_limit(model: str, provider: str, fallback: int = 262_144) -> int:
+    """Resolve context-window token limit for budget pressure logic."""
+    model_key = model.split("/")[-1].lower()
+    for prefix, value in _KNOWN_CONTEXT_LIMITS.items():
+        if model_key.startswith(prefix):
+            return value
+    if provider == "anthropic":
+        return fallback
+    return fallback
+
+
+def _is_context_limit_error(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    needles = (
+        "prompt is too long",
+        "exceeded model token limit",
+        "request exceeded model token limit",
+    )
+    return any(n in msg for n in needles)
+
+
+def _parse_requested_vs_limit(exc: Exception) -> tuple[int | None, int | None]:
+    """Extract '(requested: N, limit: M)' from provider error text when present."""
+    msg = str(exc)
+    match = re.search(r"limit:\s*(\d+)\s*\(requested:\s*(\d+)\)", msg)
+    if not match:
+        return None, None
+    limit = int(match.group(1))
+    requested = int(match.group(2))
+    return requested, limit
 
 
 @dataclass
@@ -315,6 +411,29 @@ class TasteBridge(Protocol):
     ) -> None: ...
 
 
+@dataclass
+class CapabilityProfile:
+    """Provider/model capability hints for tool-call interoperability."""
+
+    supports_tools: bool = True
+    supports_parallel_tool_calls: bool = True
+    tool_choice_mode: str = "auto"  # auto|required|none|function_object
+    prefer_json_fallback: bool = False
+
+    @classmethod
+    def from_dict(cls, data: dict | None) -> CapabilityProfile:
+        if not data:
+            return cls()
+        return cls(
+            supports_tools=bool(data.get("supports_tools", True)),
+            supports_parallel_tool_calls=bool(
+                data.get("supports_parallel_tool_calls", True)
+            ),
+            tool_choice_mode=str(data.get("tool_choice_mode", "auto")),
+            prefer_json_fallback=bool(data.get("prefer_json_fallback", False)),
+        )
+
+
 class TasteBackend(Protocol):
     """Transport layer for taste_open — send prompt, get structured output."""
 
@@ -340,8 +459,11 @@ class AnthropicTasteBackend:
         to close the cycle.
     """
 
-    def __init__(self, client: anthropic.Anthropic | None = None):
+    def __init__(
+        self, client: anthropic.Anthropic | None = None, max_tokens: int = 64_000
+    ):
         self._client = client or anthropic.Anthropic()
+        self._max_tokens = max_tokens
 
     def call(
         self,
@@ -367,7 +489,7 @@ class AnthropicTasteBackend:
     ) -> ExchangeResult:
         with self._client.messages.stream(
             model=model,
-            max_tokens=64000,
+            max_tokens=self._max_tokens,
             system=[
                 {
                     "type": "text",
@@ -440,11 +562,13 @@ class AnthropicTasteBackend:
         # (ground truth) and add chars/4 estimates for any content we
         # then append before the next call.
         estimated_next_input_tokens = 0
+        context_limit = _resolve_context_limit(model=model, provider="anthropic")
+        soft_threshold = int(context_limit * 0.8)
 
         for turn_index in range(max_turns):
             is_final_turn = turn_index == max_turns - 1
             over_soft_budget = (
-                estimated_next_input_tokens >= _BUDGET_SOFT_THRESHOLD
+                estimated_next_input_tokens >= soft_threshold
             )
             # Force think_and_respond on the final turn (deep-reach cycles
             # complete instead of raising) and on budget pressure (close
@@ -460,68 +584,59 @@ class AnthropicTasteBackend:
                     "tool": "_framework",
                     "event": "budget_pressure",
                     "estimated_input_tokens": estimated_next_input_tokens,
-                    "soft_threshold": _BUDGET_SOFT_THRESHOLD,
+                    "soft_threshold": soft_threshold,
                     "action": "forced_terminal_turn",
                 })
-
-            try:
-                with self._client.messages.stream(
-                    model=model,
-                    max_tokens=64000,
-                    system=[
-                        {
-                            "type": "text",
-                            "text": system,
-                            "cache_control": {"type": "ephemeral"},
-                        }
-                    ],
-                    messages=cast("list[MessageParam]", conversation),
-                    tools=cast("list", tools),
-                    tool_choice=cast("Any", tool_choice),
-                    metadata={"user_id": f"hamutay_{experiment_label}"},
-                ) as stream:
-                    response = stream.get_final_message()
-            except anthropic.BadRequestError as e:
-                # Recovery for prompt-too-long: the soft threshold missed
-                # (model under-reported usage, or our chars/4 estimate ran
-                # too optimistic). Truncate the largest tool_results in
-                # conversation, then retry once with forced terminal so
-                # we always exit the loop on this attempt.
-                if "prompt is too long" not in str(e).lower():
-                    raise
-                if turn_index == 0:
-                    # Nothing in conversation yet — system + state alone
-                    # exceed limit. Truncation here would be misleading.
-                    raise
-                dropped_tokens = _truncate_largest_tool_results(
-                    conversation, target_drop_tokens=300_000
-                )
-                if tool_executor is not None:
-                    tool_executor.activity_log.append({
-                        "tool": "_framework",
-                        "event": "budget_recovery",
-                        "estimated_tokens_dropped": dropped_tokens,
-                        "action": "truncated_largest_tool_results_and_retry",
-                    })
-                with self._client.messages.stream(
-                    model=model,
-                    max_tokens=64000,
-                    system=[
-                        {
-                            "type": "text",
-                            "text": system,
-                            "cache_control": {"type": "ephemeral"},
-                        }
-                    ],
-                    messages=cast("list[MessageParam]", conversation),
-                    tools=cast("list", tools),
-                    tool_choice=cast(
-                        "Any",
-                        {"type": "tool", "name": "think_and_respond"},
-                    ),
-                    metadata={"user_id": f"hamutay_{experiment_label}"},
-                ) as stream:
-                    response = stream.get_final_message()
+            response = None
+            for recovery_attempt in range(3):
+                try:
+                    with self._client.messages.stream(
+                        model=model,
+                        max_tokens=self._max_tokens,
+                        system=[
+                            {
+                                "type": "text",
+                                "text": system,
+                                "cache_control": {"type": "ephemeral"},
+                            }
+                        ],
+                        messages=cast("list[MessageParam]", conversation),
+                        tools=cast("list", tools),
+                        tool_choice=cast("Any", tool_choice),
+                        metadata={"user_id": f"hamutay_{experiment_label}"},
+                    ) as stream:
+                        response = stream.get_final_message()
+                    break
+                except anthropic.BadRequestError as e:
+                    if not _is_context_limit_error(e):
+                        raise
+                    if turn_index == 0:
+                        raise
+                    requested, limit = _parse_requested_vs_limit(e)
+                    # Drop proportionally when we know overage; otherwise drop a large slab.
+                    if requested is not None and limit is not None and requested > limit:
+                        excess = requested - limit
+                        target_drop = max(int(excess * 1.25), 30_000)
+                    else:
+                        target_drop = 120_000
+                    dropped_tokens = _truncate_largest_tool_results(
+                        conversation, target_drop_tokens=target_drop
+                    )
+                    # Force terminal after any budget recovery to close the cycle.
+                    tool_choice = {"type": "tool", "name": "think_and_respond"}
+                    if tool_executor is not None:
+                        tool_executor.activity_log.append({
+                            "tool": "_framework",
+                            "event": "budget_recovery",
+                            "estimated_tokens_dropped": dropped_tokens,
+                            "target_drop_tokens": target_drop,
+                            "recovery_attempt": recovery_attempt + 1,
+                            "action": "truncate_and_retry_forced_terminal",
+                        })
+                    if recovery_attempt == 2:
+                        raise
+            if response is None:
+                raise RuntimeError("No response after budget recovery attempts")
 
             usage = response.usage
             total_input += getattr(usage, "input_tokens", 0) or 0
@@ -610,6 +725,13 @@ class OpenAITasteBackend:
         extra_headers: dict[str, str] | None = None,
         tool_choice: str | dict = "auto",
         max_tokens: int = 64000,
+        provider_name: str = "openai",
+        capability: CapabilityProfile | None = None,
+        openrouter_require_parameters: bool = False,
+        openrouter_provider_order: list[str] | None = None,
+        openrouter_only_providers: list[str] | None = None,
+        max_retries: int = 3,
+        retry_base_delay_s: float = 0.5,
     ):
         self._base_url = base_url
         self._api_key = api_key or ""
@@ -617,6 +739,66 @@ class OpenAITasteBackend:
         self._extra_headers = extra_headers or {}
         self._tool_choice = tool_choice
         self._max_tokens = max_tokens
+        self._provider_name = provider_name
+        self._capability = capability or CapabilityProfile()
+        self._or_require_parameters = openrouter_require_parameters
+        self._or_provider_order = openrouter_provider_order or []
+        self._or_only_providers = openrouter_only_providers or []
+        self._max_retries = max_retries
+        self._retry_base_delay_s = retry_base_delay_s
+
+    def _post_with_retry(self, url: str, payload: dict, headers: dict) -> dict:
+        """POST JSON with bounded retries for transient transport failures."""
+        last_err: Exception | None = None
+        for attempt in range(self._max_retries + 1):
+            try:
+                resp = httpx.post(
+                    url,
+                    json=payload,
+                    headers=headers,
+                    timeout=self._timeout,
+                )
+                # Retry on 5xx; don't retry 4xx capability/parameter failures.
+                if resp.status_code >= 500 and attempt < self._max_retries:
+                    delay = self._retry_base_delay_s * (2 ** attempt)
+                    delay += random.uniform(0, 0.2)
+                    time.sleep(delay)
+                    continue
+                return resp.json()
+            except (
+                httpx.RemoteProtocolError,
+                httpx.ReadTimeout,
+                httpx.ConnectTimeout,
+                httpx.ConnectError,
+                httpx.ReadError,
+                httpx.WriteError,
+                httpx.NetworkError,
+            ) as e:
+                last_err = e
+                if attempt >= self._max_retries:
+                    break
+                delay = self._retry_base_delay_s * (2 ** attempt)
+                delay += random.uniform(0, 0.2)
+                time.sleep(delay)
+            except Exception as e:
+                # Non-transport unexpected failures should surface immediately.
+                raise RuntimeError(f"OpenAI backend unexpected error: {e}") from e
+
+        raise RuntimeError(
+            "OpenAI backend transport failed after retries: "
+            f"{type(last_err).__name__}: {last_err}"
+        ) from last_err
+
+    def _resolved_tool_choice(self) -> str | dict:
+        mode = self._capability.tool_choice_mode
+        if mode == "function_object":
+            return {
+                "type": "function",
+                "function": {"name": "think_and_respond"},
+            }
+        if mode in {"required", "auto", "none"}:
+            return mode
+        return self._tool_choice
 
     def call(
         self,
@@ -655,8 +837,25 @@ class OpenAITasteBackend:
             "max_tokens": self._max_tokens,
             "messages": oai_messages,
             "tools": [tool_def],
-            "tool_choice": self._tool_choice,
+            "tool_choice": self._resolved_tool_choice(),
         }
+
+        # Only send parallel_tool_calls when explicitly enabled.
+        # With OpenRouter provider.require_parameters=true, even a False value
+        # can still be treated as a required parameter and over-constrain routing.
+        if self._capability.supports_parallel_tool_calls:
+            payload["parallel_tool_calls"] = True
+
+        if self._provider_name == "openrouter":
+            provider_opts: dict[str, object] = {}
+            if self._or_require_parameters:
+                provider_opts["require_parameters"] = True
+            if self._or_provider_order:
+                provider_opts["order"] = self._or_provider_order
+            if self._or_only_providers:
+                provider_opts["only"] = self._or_only_providers
+            if provider_opts:
+                payload["provider"] = provider_opts
 
         headers = {
             "Authorization": f"Bearer {self._api_key}",
@@ -664,13 +863,11 @@ class OpenAITasteBackend:
             **self._extra_headers,
         }
 
-        resp = httpx.post(
+        data = self._post_with_retry(
             f"{self._base_url}/chat/completions",
-            json=payload,
-            headers=headers,
-            timeout=self._timeout,
+            payload,
+            headers,
         )
-        data = resp.json()
 
         if "error" in data:
             raise RuntimeError(f"OpenAI backend error: {data['error']}")
@@ -687,6 +884,7 @@ class OpenAITasteBackend:
 
         # Extract tool call output
         message = choice.get("message", {})
+        tool_calls = message.get("tool_calls", [])
         for tc in message.get("tool_calls", []):
             fn = tc.get("function", {})
             if fn.get("name") == "think_and_respond":
@@ -698,6 +896,14 @@ class OpenAITasteBackend:
                     input_tokens=usage.get("prompt_tokens", 0),
                     output_tokens=usage.get("completion_tokens", 0),
                 )
+
+        # If there were tool calls but not our target function, fail explicitly.
+        if tool_calls:
+            names = [tc.get("function", {}).get("name", "") for tc in tool_calls]
+            raise RuntimeError(
+                "OpenAI backend: tool_calls returned but missing think_and_respond "
+                f"(saw: {names})"
+            )
 
         # Fallback: some models put JSON in content
         content = message.get("content", "")
@@ -914,6 +1120,16 @@ class OpenTasteSession:
     @property
     def cycle(self) -> int:
         return self._cycle
+
+    def seed_state(self, state: dict, cycle: int) -> None:
+        """Seed a session directly from a prior tensor, for ablation forks.
+
+        Deep-copies so the caller's record is not mutated by later updates.
+        The next exchange() will advance to cycle+1 and present this state
+        as the prior, exactly as if it had been carried forward in a live run.
+        """
+        self._state = json.loads(json.dumps(state))
+        self._cycle = cycle
 
     def _pick_memory(self) -> tuple[int, dict] | None:
         """Maybe select a prior state for involuntary recall.
@@ -1140,6 +1356,39 @@ def main():
         help="API key (default: from env OPENROUTER_API_KEY or OPENAI_API_KEY)",
     )
     parser.add_argument(
+        "--max-tokens",
+        default="auto",
+        help="Max output tokens per call: integer or 'auto' (default: auto)",
+    )
+    parser.add_argument(
+        "--capabilities-file", default=None,
+        help="Optional JSON capability registry for provider/model behavior",
+    )
+    parser.add_argument(
+        "--probe-capability", action="store_true",
+        help="Run one cheap compatibility probe before interactive loop",
+    )
+    parser.add_argument(
+        "--openrouter-require-parameters", action="store_true",
+        help="Set provider.require_parameters=true for OpenRouter",
+    )
+    parser.add_argument(
+        "--openrouter-provider-order", default="",
+        help="Comma-separated OpenRouter provider order",
+    )
+    parser.add_argument(
+        "--openrouter-only-providers", default="",
+        help="Comma-separated OpenRouter provider allow-list",
+    )
+    parser.add_argument(
+        "--max-retries", default=3, type=int,
+        help="Max transport retries for OpenAI-compatible backends (default: 3)",
+    )
+    parser.add_argument(
+        "--retry-base-delay", default=0.5, type=float,
+        help="Base delay in seconds for exponential retry backoff (default: 0.5)",
+    )
+    parser.add_argument(
         "--label", default=None,
         help="Experiment label for billing/logging (default: taste_open)",
     )
@@ -1177,11 +1426,38 @@ def main():
         args.log_path = str(log_dir / f"taste_open_{ts}.jsonl")
 
     experiment_label = args.label or "taste_open"
+    try:
+        resolved_max_tokens = _resolve_max_tokens(
+            model=args.model, provider=args.provider, requested=str(args.max_tokens)
+        )
+    except ValueError as e:
+        raise SystemExit(f"Invalid --max-tokens value: {e}")
+    print(
+        f"Max output tokens: {resolved_max_tokens} "
+        f"(requested={args.max_tokens}, provider={args.provider})"
+    )
+
+    capability = CapabilityProfile()
+    if args.capabilities_file:
+        try:
+            with open(args.capabilities_file) as f:
+                registry = json.load(f)
+            key = f"{args.provider}:{args.model}"
+            capability = CapabilityProfile.from_dict(registry.get(key))
+            if not capability.supports_tools:
+                raise SystemExit(f"Capabilities mark {key} as no-tools; aborting run")
+            print(
+                f"Capabilities loaded for {key}: "
+                f"parallel={capability.supports_parallel_tool_calls}, "
+                f"tool_choice={capability.tool_choice_mode}"
+            )
+        except FileNotFoundError:
+            raise SystemExit(f"Capabilities file not found: {args.capabilities_file}")
 
     # Build backend
     backend: TasteBackend
     if args.provider == "anthropic":
-        backend = AnthropicTasteBackend()
+        backend = AnthropicTasteBackend(max_tokens=resolved_max_tokens)
     else:
         if args.provider == "openrouter":
             base_url = args.base_url or "https://openrouter.ai/api/v1"
@@ -1204,8 +1480,33 @@ def main():
         backend = OpenAITasteBackend(
             base_url=base_url,
             api_key=api_key,
+            max_tokens=resolved_max_tokens,
             extra_headers=extra_headers,
+            provider_name=args.provider,
+            capability=capability,
+            openrouter_require_parameters=args.openrouter_require_parameters,
+            openrouter_provider_order=[
+                p.strip() for p in args.openrouter_provider_order.split(",") if p.strip()
+            ],
+            openrouter_only_providers=[
+                p.strip() for p in args.openrouter_only_providers.split(",") if p.strip()
+            ],
+            max_retries=args.max_retries,
+            retry_base_delay_s=args.retry_base_delay,
         )
+
+        if args.probe_capability:
+            probe_messages = [{"role": "user", "content": "Return a short greeting."}]
+            try:
+                _ = backend.call(
+                    model=args.model,
+                    system="Probe run. Use think_and_respond and set response='probe-ok'.",
+                    messages=probe_messages,
+                    experiment_label=f"{experiment_label}_probe",
+                )
+                print("Capability probe: tool-call path OK")
+            except Exception as e:
+                raise SystemExit(f"Capability probe failed: {e}")
 
     # Wire Apacheta bridge (default: ArangoDB, opt out with --no-persist)
     bridge = None
