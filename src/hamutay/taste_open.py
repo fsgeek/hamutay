@@ -170,6 +170,20 @@ Each tool accepts an optional `reason` field. When you have a reason \
 worth stating, include it — it's recorded in your activity log. When \
 you don't, omit it; an absent reason is fine and is itself information.
 
+### When you act
+
+think_and_respond ends the cycle: after it, you get no further turns and \
+see no further results. So to act *and* use what you learn, call your \
+tools in an earlier step — read, bash, search — see what comes back, and \
+only then call think_and_respond to close, your response reporting what \
+you found. You can also call other tools in the same step as \
+think_and_respond; they still run, but their results don't return to you, \
+so that path only suits actions whose outcome you don't need to see. An \
+action you merely describe in your response text is not a tool call at \
+all — it does nothing. The thing to notice in yourself is when "I will" \
+has quietly replaced "I did": if you mean to do it this cycle, call the \
+tool — don't just narrate the intention.
+
 You are not required to use these tools. You are not rewarded for \
 using them. They exist so you can see what's there. Use them when it \
 helps you; don't when it doesn't."""
@@ -1106,6 +1120,16 @@ class OpenTasteSession:
     @property
     def cycle(self) -> int:
         return self._cycle
+
+    def seed_state(self, state: dict, cycle: int) -> None:
+        """Seed a session directly from a prior tensor, for ablation forks.
+
+        Deep-copies so the caller's record is not mutated by later updates.
+        The next exchange() will advance to cycle+1 and present this state
+        as the prior, exactly as if it had been carried forward in a live run.
+        """
+        self._state = json.loads(json.dumps(state))
+        self._cycle = cycle
 
     def _pick_memory(self) -> tuple[int, dict] | None:
         """Maybe select a prior state for involuntary recall.
