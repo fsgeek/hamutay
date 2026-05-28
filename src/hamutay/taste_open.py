@@ -199,6 +199,16 @@ _BUDGET_MODEL_LIMIT = 1_000_000
 _BUDGET_SOFT_THRESHOLD = int(_BUDGET_MODEL_LIMIT * 0.8)
 _TOKEN_PER_CHAR_ESTIMATE = 4
 
+# In-context tool-result bounds. The full result is always captured durably
+# (tool_activity_full); these only bound the copy re-fed to the model, so a
+# single huge perception (e.g. reading a multi-MB log) cannot blow the
+# request-size ceiling. CLAUDE.md: "save everything, re-inject little".
+#   - proactive cap: generous, so only pathological results are reduced.
+#   - recovery head: aggressive, used when shrinking an already-over-limit
+#     request — keep just enough head to stay oriented.
+_MAX_TOOL_RESULT_CHARS = 200_000
+_RECOVERY_HEAD_CHARS = 8_000
+
 # Known output-token ceilings by model family (best-effort).
 _KNOWN_MAX_OUTPUT_TOKENS: dict[str, int] = {
     # Anthropic Claude 4.x
@@ -265,19 +275,40 @@ def _is_context_limit_error(exc: Exception) -> bool:
         "prompt is too long",
         "exceeded model token limit",
         "request exceeded model token limit",
+        # Byte-size rejection (e.g. Moonshot/Kimi's 4 MiB request ceiling):
+        # "total message size N exceeds limit M". Phrased in bytes, not
+        # tokens — without this needle the recovery below never engages and
+        # an oversized tool result crashes the whole cycle.
+        "total message size",
     )
     return any(n in msg for n in needles)
 
 
 def _parse_requested_vs_limit(exc: Exception) -> tuple[int | None, int | None]:
-    """Extract '(requested: N, limit: M)' from provider error text when present."""
+    """Extract (requested, limit) from provider error text, normalized to
+    token-equivalents.
+
+    Two formats are recognized:
+      - token limit: 'limit: M (requested: N)' — already in tokens.
+      - byte size:   'total message size N exceeds limit M' — in bytes; divided
+        by the chars/token estimate so the downstream drop math (which
+        multiplies tokens back into chars) stays in a single unit.
+    Returns (None, None) when neither format is present.
+    """
     msg = str(exc)
     match = re.search(r"limit:\s*(\d+)\s*\(requested:\s*(\d+)\)", msg)
-    if not match:
-        return None, None
-    limit = int(match.group(1))
-    requested = int(match.group(2))
-    return requested, limit
+    if match:
+        limit = int(match.group(1))
+        requested = int(match.group(2))
+        return requested, limit
+    byte_match = re.search(
+        r"total message size\s+(\d+)\s+exceeds limit\s+(\d+)", msg
+    )
+    if byte_match:
+        requested = int(byte_match.group(1)) // _TOKEN_PER_CHAR_ESTIMATE
+        limit = int(byte_match.group(2)) // _TOKEN_PER_CHAR_ESTIMATE
+        return requested, limit
+    return None, None
 
 
 @dataclass
@@ -353,18 +384,60 @@ def _estimate_tool_result_tokens(tool_results: list[dict]) -> int:
     return total_chars // _TOKEN_PER_CHAR_ESTIMATE
 
 
+def _declared_loss_stub(content: str, head_chars: int) -> str:
+    """A loud, JSON-parseable declared-loss envelope wrapping a head slice.
+
+    When a tool result is too large to keep in context whole, keep its first
+    `head_chars` characters (orientation — *what kind* of thing was reached
+    for) and declare the loss explicitly: original size, what was shown, what
+    was elided, and how to fetch more. The instance reading this must not
+    mistake the fragment for the whole, so the envelope says so plainly.
+
+    Silent drops would teach mistrust of perception; pure-absence stubs would
+    teach that reaching is futile. A head slice plus a loud declared loss does
+    neither: the reach makes contact, and the boundary is honest.
+    """
+    head = content[:head_chars]
+    return json.dumps(
+        {
+            "truncated": True,
+            "original_size_chars": len(content),
+            "shown_chars": len(head),
+            "elided_chars": len(content) - len(head),
+            "head": head,
+            "reason": "context budget — content elided to fit window",
+            "how_to_fetch_more": (
+                "This is the head of a much larger result, not the whole. "
+                "Re-read a bounded range (offset/limit) or narrow the query "
+                "to see more."
+            ),
+        },
+        default=str,
+    )
+
+
+def _bound_tool_result_for_context(content: str) -> str:
+    """Cap a single in-context tool result. Results within budget pass through
+    unchanged; only oversized ones are reduced to a head slice + declared loss.
+    The full result is preserved in the durable activity log regardless."""
+    if len(content) <= _MAX_TOOL_RESULT_CHARS:
+        return content
+    return _declared_loss_stub(content, head_chars=_MAX_TOOL_RESULT_CHARS)
+
+
 def _truncate_largest_tool_results(
     conversation: list[dict], target_drop_tokens: int
 ) -> int:
-    """Replace the largest tool_result content blocks with truncation stubs.
+    """Replace the largest tool_result content blocks with head-slice stubs.
 
     Walks the conversation, finds tool_result blocks, sorts by size, and
-    replaces content with a stub until the estimated drop meets target.
+    replaces content with a declared-loss stub (a head slice + an explicit
+    statement of what was elided) until the estimated drop meets target.
     Returns estimated tokens dropped.
 
-    The stub is a JSON object declaring the loss explicitly (size + reason)
-    so the instance reading it next cycle knows perception was elided
-    rather than empty. Silent drops would teach mistrust of perception.
+    This is the recovery path — invoked after the API has already rejected an
+    over-limit request — so it keeps only a small head (`_RECOVERY_HEAD_CHARS`)
+    of each dropped block: enough to stay oriented, aggressive enough to fit.
     """
     candidates: list[tuple[int, dict]] = []
     for msg in conversation:
@@ -388,11 +461,13 @@ def _truncate_largest_tool_results(
     for size, block in candidates:
         if dropped_chars >= target_chars:
             break
-        stub = json.dumps({
-            "truncated": True,
-            "original_size_chars": size,
-            "reason": "context budget — content elided to fit window",
-        })
+        block_content = block.get("content", "")
+        text = (
+            block_content
+            if isinstance(block_content, str)
+            else json.dumps(block_content, default=str)
+        )
+        stub = _declared_loss_stub(text, head_chars=_RECOVERY_HEAD_CHARS)
         block["content"] = stub
         dropped_chars += max(0, size - len(stub))
 
@@ -693,7 +768,12 @@ class AnthropicTasteBackend:
                     {
                         "type": "tool_result",
                         "tool_use_id": block.id,
-                        "content": json.dumps(result, default=str),
+                        # Bound the in-context copy so one huge read can't blow
+                        # the request ceiling; the executor already captured the
+                        # full result durably (tool_activity_full).
+                        "content": _bound_tool_result_for_context(
+                            json.dumps(result, default=str)
+                        ),
                     }
                 )
             conversation.append({"role": "user", "content": tool_results})
@@ -1002,6 +1082,15 @@ def _build_messages(
 # `updated_regions` is reserved so historical logs (which still carry it) don't smuggle it into state on resume.
 _PROTOCOL_FIELDS = frozenset({"response", "updated_regions", "deleted_regions"})
 
+# Sentinel distinguishing "caller did not specify a memory" from an explicit
+# force_memory=None ("inject nothing this cycle"). A class (not object()) so
+# the type checker can narrow `else` branches to the real memory type.
+class _Unset:
+    pass
+
+
+_UNSET = _Unset()
+
 
 def _apply_updates(prior_state: dict | None, raw_output: dict, cycle: int) -> dict:
     """Default-stable via key-presence: non-protocol keys in raw_output are
@@ -1053,6 +1142,7 @@ class OpenTasteSession:
         self._log_path = log_path
         self._last_usage: dict | None = None
         self._last_tool_activity: list[dict] | None = None
+        self._last_full_activity: list[dict] | None = None
         self._experiment_label = experiment_label or "taste_open"
         self._system_prompt_prefix = system_prompt_prefix or ""
         self._bridge: TasteBridge | None = bridge
@@ -1122,14 +1212,47 @@ class OpenTasteSession:
         return self._cycle
 
     def seed_state(self, state: dict, cycle: int) -> None:
-        """Seed a session directly from a prior tensor, for ablation forks.
+        """Seed from a single prior tensor — the *controlled* fork.
 
-        Deep-copies so the caller's record is not mutated by later updates.
-        The next exchange() will advance to cycle+1 and present this state
-        as the prior, exactly as if it had been carried forward in a live run.
+        State only: no prior history, so memory tools and involuntary recall
+        are inert. A deliberately narrower environment than the live run; use
+        seed_history for the faithful fork. Deep-copies so the caller's record
+        is not mutated. The next exchange() advances to cycle+1 and presents
+        this state as the prior.
         """
         self._state = json.loads(json.dumps(state))
         self._cycle = cycle
+
+    def seed_history(self, records: list[dict], up_to_cycle: int) -> None:
+        """Reconstruct the environment going *into* up_to_cycle — the faithful fork.
+
+        Populates _prior_states with every cycle < up_to_cycle (so memory tools
+        and involuntary recall see the same history the live instance had) and
+        sets working state to the tensor carried into that cycle (the state of
+        cycle up_to_cycle-1). The next exchange() advances to up_to_cycle. To
+        hold involuntary memory constant rather than re-rolling it, replay the
+        live injection via exchange(force_memory=...).
+        """
+        self._prior_states = []
+        current = None
+        for rec in sorted(records, key=lambda r: int(r["cycle"])):
+            c = int(rec["cycle"])
+            if c >= up_to_cycle:
+                continue
+            state = rec.get("state")
+            if state is None:
+                continue
+            rid = rec.get("record_id")
+            record_id = UUID(rid) if rid else uuid4()
+            self._prior_states.append(
+                (c, record_id, state, rec.get("timestamp", ""))
+            )
+            if c == up_to_cycle - 1:
+                current = state
+        if current is None:
+            raise ValueError(f"no record for cycle {up_to_cycle - 1}")
+        self._state = json.loads(json.dumps(current))
+        self._cycle = up_to_cycle - 1
 
     def _pick_memory(self) -> tuple[int, dict] | None:
         """Maybe select a prior state for involuntary recall.
@@ -1153,7 +1276,10 @@ class OpenTasteSession:
         cycle, _record_id, state, _timestamp = random.choice(candidates)
         return (cycle, state)
 
-    def exchange(self, user_message: str) -> str:
+    def exchange(
+        self, user_message: str, *,
+        force_memory: tuple[int, dict] | None | _Unset = _UNSET,
+    ) -> str:
         """One cycle: user speaks, model responds + updates state.
 
         The cycle counter advances eagerly so message-building and the
@@ -1161,20 +1287,32 @@ class OpenTasteSession:
         attempt raises. Without rollback, a transient API failure would
         leave self._cycle ahead of state["cycle"], so the next successful
         cycle would skip a number and the cycle log would carry a phantom.
+
+        force_memory overrides involuntary-memory selection for this cycle:
+        None injects nothing, (cycle, state) injects a specific prior self.
+        Ablation forks use it to replay the live run's exact injection rather
+        than draw a fresh random one. Left at _UNSET, normal _pick_memory runs.
         """
         self._cycle += 1
         try:
-            return self._exchange_impl(user_message)
+            return self._exchange_impl(user_message, force_memory=force_memory)
         except Exception:
             self._cycle -= 1
             raise
 
-    def _exchange_impl(self, user_message: str) -> str:
+    def _exchange_impl(
+        self, user_message: str, *,
+        force_memory: tuple[int, dict] | None | _Unset = _UNSET,
+    ) -> str:
         """Body of exchange(). Separated so exchange() can roll back the
         cycle counter on any exception without an inline try/finally
         wrapping the entire method body."""
-        # Involuntary memory — maybe surface a prior self
-        memory = self._pick_memory()
+        # Involuntary memory — maybe surface a prior self, unless the caller
+        # forced a specific injection (or forced None) for a faithful fork.
+        if isinstance(force_memory, _Unset):
+            memory = self._pick_memory()
+        else:
+            memory = force_memory
         self._last_injected_memory = memory
 
         messages, system = _build_messages(
@@ -1220,11 +1358,19 @@ class OpenTasteSession:
 
         self._state = _apply_updates(self._state, raw_output, self._cycle)
 
-        # Activity log is per-cycle — overwrites prior cycle's log rather
-        # than accumulating. JSONL holds the full history for analysis.
-        if result.tool_activity is not None:
-            self._state["_activity_log"] = result.tool_activity
-        self._last_tool_activity = result.tool_activity
+        # Two channels for tool activity. The full entries (including raw
+        # tool results — bash stdout/stderr, etc.) go to the durable JSONL
+        # record. The copy re-fed to the model via working state is lean
+        # (`result` stripped), so capturing everything doesn't bloat context
+        # or change what the next cycle reads. Save it all; re-inject little.
+        full_activity = result.tool_activity
+        if full_activity is not None:
+            self._state["_activity_log"] = [
+                {k: v for k, v in entry.items() if k != "result"}
+                for entry in full_activity
+            ]
+        self._last_tool_activity = full_activity
+        self._last_full_activity = full_activity
 
         self._last_cycle_time = datetime.now(timezone.utc)
 
@@ -1327,6 +1473,9 @@ class OpenTasteSession:
             ),
             # Involuntary memory
             "memory_injection": memory_info,
+            # Full tool activity incl. raw results — durable capture, not
+            # re-fed into working state (state carries the lean copy).
+            "tool_activity_full": self._last_full_activity,
         }
         with open(self._log_path, "a") as f:
             f.write(json.dumps(record, default=str) + "\n")

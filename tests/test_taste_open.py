@@ -8,17 +8,45 @@ Covers:
 - OpenTasteSession.exchange cycle-counter rollback on failure
 """
 
+import copy
 import json
 
+import anthropic
+import httpx
 import pytest
 
 from hamutay.taste_open import (
+    AnthropicTasteBackend,
     ExchangeResult,
     OpenTasteSession,
     _apply_updates,
     _estimate_tool_result_tokens,
+    _is_context_limit_error,
+    _parse_requested_vs_limit,
     _truncate_largest_tool_results,
 )
+
+
+def _byte_size_400() -> anthropic.BadRequestError:
+    """The exact error class Moonshot/Kimi raises when the request body
+    exceeds its 4 MiB ceiling. The message talks about *bytes*, not tokens —
+    which is why the token-keyed recovery guard was blind to it."""
+    body = {
+        "error": {
+            "type": "invalid_request_error",
+            "message": (
+                "Invalid request: total message size 11041058 "
+                "exceeds limit 4194304"
+            ),
+        }
+    }
+    request = httpx.Request(
+        "POST", "https://api.moonshot.ai/anthropic/v1/messages"
+    )
+    response = httpx.Response(400, request=request, json=body)
+    return anthropic.BadRequestError(
+        f"Error code: 400 - {body}", response=response, body=body
+    )
 
 
 class TestApplyUpdatesKeyPresence:
@@ -110,6 +138,20 @@ class TestTruncateLargestToolResults:
         conv = [{"role": "user", "content": "a string, not a block list"}]
         dropped = _truncate_largest_tool_results(conv, target_drop_tokens=1_000)
         assert dropped == 0
+
+    def test_stub_keeps_loud_head_slice(self):
+        # The dropped block keeps an orientation head + a loud declared loss,
+        # not a pure-absence stub: the reach makes contact and the boundary
+        # is honest about what was elided.
+        original = "HEADMARKER" + ("z" * 100_000)
+        conv = self._make_conversation([len(original)])
+        conv[0]["content"][0]["content"] = original
+        _truncate_largest_tool_results(conv, target_drop_tokens=10_000)
+        stub = json.loads(conv[0]["content"][0]["content"])
+        assert stub["head"].startswith("HEADMARKER")
+        assert stub["shown_chars"] < stub["original_size_chars"]
+        assert stub["elided_chars"] == stub["original_size_chars"] - stub["shown_chars"]
+        assert "fetch_more" in "".join(stub.keys()) or stub.get("how_to_fetch_more")
 
     def test_stops_when_target_met(self):
         conv = self._make_conversation([50_000, 50_000, 50_000])
@@ -214,3 +256,185 @@ class TestExchangeCycleRollback:
         assert session.cycle == 1
         session.exchange("second")
         assert session.cycle == 2
+
+
+class TestContextLimitErrorDetection:
+    """The recovery guard must recognize the *byte-size* rejection, not just
+    the token-limit phrasing. Kimi's 'total message size N exceeds limit M'
+    crashed the framework because the guard was keyed only to token errors."""
+
+    def test_recognizes_byte_size_rejection(self):
+        assert _is_context_limit_error(_byte_size_400()) is True
+
+    def test_recognizes_token_limit_phrasing(self):
+        exc = RuntimeError("prompt is too long: 300000 tokens > 200000")
+        assert _is_context_limit_error(exc) is True
+
+    def test_ignores_unrelated_error(self):
+        exc = RuntimeError("invalid api key")
+        assert _is_context_limit_error(exc) is False
+
+
+class TestParseRequestedVsLimit:
+    def test_token_limit_format(self):
+        exc = RuntimeError("... limit: 200000 (requested: 250000) ...")
+        requested, limit = _parse_requested_vs_limit(exc)
+        assert (requested, limit) == (250000, 200000)
+
+    def test_byte_size_format_normalized_to_token_equivalents(self):
+        # 'total message size 11041058 exceeds limit 4194304' is in *bytes*;
+        # the helper normalizes to token-equivalents so the downstream drop
+        # math (which multiplies by chars/token) stays in one unit.
+        requested, limit = _parse_requested_vs_limit(_byte_size_400())
+        assert requested is not None and limit is not None
+        assert requested > limit
+        # bytes // 4 (the chars/token estimate)
+        assert limit == 4194304 // 4
+        assert requested == 11041058 // 4
+
+
+# --- Fakes mimicking the anthropic streaming client for _call_multi_turn ---
+
+
+class _FakeBlock:
+    def __init__(self, *, btype, name=None, input=None, id=None, text=None):
+        self.type = btype
+        self.name = name
+        self.input = input
+        self.id = id
+        self.text = text
+
+    def model_dump(self):
+        if self.type == "tool_use":
+            return {
+                "type": "tool_use",
+                "name": self.name,
+                "input": self.input,
+                "id": self.id,
+            }
+        return {"type": self.type, "text": self.text}
+
+
+class _FakeUsage:
+    def __init__(self, input_tokens=0, output_tokens=0):
+        self.input_tokens = input_tokens
+        self.output_tokens = output_tokens
+        self.cache_read_input_tokens = 0
+        self.cache_creation_input_tokens = 0
+
+
+class _FakeMessage:
+    def __init__(self, content, *, stop_reason="tool_use", usage=None):
+        self.content = content
+        self.stop_reason = stop_reason
+        self.usage = usage or _FakeUsage()
+
+
+class _FakeStreamCtx:
+    def __init__(self, item):
+        self._item = item
+
+    def __enter__(self):
+        if isinstance(self._item, Exception):
+            raise self._item
+        return self
+
+    def __exit__(self, *_):
+        return False
+
+    def get_final_message(self):
+        return self._item
+
+
+class _FakeMessages:
+    """Plays a scripted sequence of responses/exceptions; snapshots each
+    outgoing `messages` payload so the test can inspect request sizes."""
+
+    def __init__(self, script):
+        self._script = list(script)
+        self.calls = 0
+        self.sent_messages = []
+
+    def stream(self, **kwargs):
+        self.sent_messages.append(copy.deepcopy(kwargs["messages"]))
+        item = self._script[self.calls]
+        self.calls += 1
+        return _FakeStreamCtx(item)
+
+
+class _FakeClient:
+    def __init__(self, script):
+        self.messages = _FakeMessages(script)
+
+
+class _FakeToolExecutor:
+    """Returns a fixed (large) result for any perception tool call."""
+
+    def __init__(self, result):
+        self._result = result
+        self.activity_log = []
+        self.executed = []
+
+    def execute(self, name, tool_input):
+        self.executed.append((name, tool_input))
+        return self._result
+
+
+class TestMultiTurnByteSizeRecovery:
+    """End-to-end: a perception tool returns a large result, the next request
+    is rejected for byte size, and the loop must recover (truncate + force a
+    terminal turn) rather than crashing the cycle."""
+
+    def _run(self):
+        big = {"stdout": "L" * 300_000}
+        perception = _FakeMessage(
+            [
+                _FakeBlock(
+                    btype="tool_use",
+                    name="read",
+                    input={"path": "experiments/taste_open/other.jsonl"},
+                    id="tu_read_1",
+                )
+            ],
+            usage=_FakeUsage(input_tokens=100, output_tokens=50),
+        )
+        terminal = _FakeMessage(
+            [
+                _FakeBlock(
+                    btype="tool_use",
+                    name="think_and_respond",
+                    input={"response": "that file was larger than I could hold"},
+                    id="tu_tr_1",
+                )
+            ],
+            usage=_FakeUsage(input_tokens=200, output_tokens=80),
+        )
+        client = _FakeClient([perception, _byte_size_400(), terminal])
+        backend = AnthropicTasteBackend(client=client, max_tokens=64_000)  # type: ignore[arg-type]
+        executor = _FakeToolExecutor(big)
+        result = backend._call_multi_turn(
+            model="kimi-k2.6",
+            system="sys",
+            messages=[{"role": "user", "content": "read the other log"}],
+            experiment_label="bytesize_recovery_test",
+            extra_tools=[
+                {"name": "read", "description": "d", "input_schema": {}}
+            ],
+            tool_executor=executor,
+        )
+        return result, client
+
+    def test_recovers_instead_of_raising(self):
+        result, client = self._run()
+        assert result.raw_output == {
+            "response": "that file was larger than I could hold"
+        }
+        # perception, rejected request, retry-after-truncation = 3 stream calls.
+        assert client.messages.calls == 3
+
+    def test_retry_request_is_smaller_than_rejected_request(self):
+        _, client = self._run()
+        rejected = len(json.dumps(client.messages.sent_messages[1], default=str))
+        retried = len(json.dumps(client.messages.sent_messages[2], default=str))
+        assert retried < rejected
+        assert retried < 50_000

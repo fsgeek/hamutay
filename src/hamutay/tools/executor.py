@@ -2,14 +2,18 @@
 
 Each tool call is logged with:
   - cycle, timestamp, tool name
+  - capability (read_only | bounded_write | unbounded) — descriptive, not a gate
   - parameters (excluding reason, which is stored separately)
   - reason (None if the model did not provide one)
+  - exit_code (None for tools that don't report one)
   - result_summary (short human-readable)
   - result_hash (sha256 of the full result dict, JSON-serialized)
   - duration_ms
+  - result (the full result dict — captured durably)
 
-The activity log is attached to the cycle's tensor by the session layer.
-Absence of reason is recorded as None — information, not noise.
+The session layer logs the full entry to the durable record and re-feeds a
+lean copy (without `result`) into the tensor, so capturing everything does
+not bloat working context. Absence of reason is recorded as None.
 """
 
 from __future__ import annotations
@@ -31,6 +35,24 @@ from hamutay.tools.memory import (
     tool_walk,
 )
 from hamutay.tools.perception import tool_clock, tool_read, tool_search_project
+
+
+# Capability of each tool. Descriptive metadata for analysis and for a future
+# knowing compression — not a gate on what gets captured. Everything is logged
+# regardless of capability; this just tags how far a call could reach.
+_CAPABILITY: dict[str, str] = {
+    "read": "read_only",
+    "search_project": "read_only",
+    "clock": "read_only",
+    "memory_schema": "read_only",
+    "recall": "read_only",
+    "compare": "read_only",
+    "walk": "read_only",
+    "search_memory": "read_only",
+    "store": "bounded_write",
+    "annotate_edge": "bounded_write",
+    "bash": "unbounded",
+}
 
 
 class ToolExecutor:
@@ -124,19 +146,25 @@ class ToolExecutor:
             json.dumps(result, sort_keys=True, default=str).encode()
         ).hexdigest()
 
-        # Record activity. Parameters exclude `reason` (stored separately).
+        # Capture everything durable here. Parameters exclude `reason`
+        # (stored separately). The full `result` is kept; the consumer
+        # decides what to re-feed into working state (taste_open strips
+        # `result` for the in-context copy but logs the full entry).
         self._activity_log.append(
             {
                 "cycle": self._cycle,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "tool": tool_name,
+                "capability": _CAPABILITY.get(tool_name, "unknown"),
                 "parameters": {
                     k: v for k, v in tool_input.items() if k != "reason"
                 },
                 "reason": reason,
+                "exit_code": result.get("exit_code"),
                 "result_summary": _summarize(tool_name, result),
                 "result_hash": result_hash,
                 "duration_ms": duration_ms,
+                "result": result,
             }
         )
 
