@@ -379,6 +379,9 @@ class _FakeToolExecutor:
         self.executed.append((name, tool_input))
         return self._result
 
+    def log_event(self, event):
+        self.activity_log.append(event)
+
 
 class TestMultiTurnByteSizeRecovery:
     """End-to-end: a perception tool returns a large result, the next request

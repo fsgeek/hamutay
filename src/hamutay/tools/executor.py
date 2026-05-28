@@ -84,6 +84,13 @@ class ToolExecutor:
     def activity_log(self) -> list[dict]:
         return list(self._activity_log)
 
+    def log_event(self, event: dict) -> None:
+        """Append a framework-level event (e.g. budget pressure/recovery) to the
+        durable activity log. Callers must use this rather than
+        `activity_log.append(...)`: the property returns a snapshot copy, so
+        appending to it silently drops the event."""
+        self._activity_log.append(event)
+
     def execute(self, tool_name: str, tool_input: dict) -> dict:
         """Dispatch a tool call and return its result dict."""
         start = time.monotonic()

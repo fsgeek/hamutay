@@ -655,7 +655,7 @@ class AnthropicTasteBackend:
                 else {"type": "any"}
             )
             if over_soft_budget and tool_executor is not None:
-                tool_executor.activity_log.append({
+                tool_executor.log_event({
                     "tool": "_framework",
                     "event": "budget_pressure",
                     "estimated_input_tokens": estimated_next_input_tokens,
@@ -700,7 +700,7 @@ class AnthropicTasteBackend:
                     # Force terminal after any budget recovery to close the cycle.
                     tool_choice = {"type": "tool", "name": "think_and_respond"}
                     if tool_executor is not None:
-                        tool_executor.activity_log.append({
+                        tool_executor.log_event({
                             "tool": "_framework",
                             "event": "budget_recovery",
                             "estimated_tokens_dropped": dropped_tokens,

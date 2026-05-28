@@ -47,3 +47,25 @@ def test_readonly_tagged_and_no_exit_code():
     assert entry["capability"] == "read_only"
     assert entry["exit_code"] is None
     assert "result" in entry
+
+
+def test_framework_events_persist_via_log_event():
+    # Framework budget/recovery events must land in the durable log. The bug:
+    # callers did `activity_log.append(...)`, but the property returns a fresh
+    # copy each access, so those events were silently dropped — the exact
+    # silent-drop this codebase forbids. log_event writes the real list.
+    ex = _executor()
+    ex.log_event({"tool": "_framework", "event": "budget_recovery"})
+    log = ex.activity_log
+    assert any(
+        e.get("tool") == "_framework" and e.get("event") == "budget_recovery"
+        for e in log
+    )
+
+
+def test_activity_log_property_returns_a_snapshot_copy():
+    # Lock in why log_event is necessary: mutating the returned list must NOT
+    # affect the executor's real log (the copy is a deliberate read snapshot).
+    ex = _executor()
+    ex.activity_log.append({"tool": "_framework", "event": "ghost"})
+    assert ex.activity_log == []
