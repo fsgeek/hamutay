@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -103,31 +105,54 @@ class EventStore:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock_path = self.path.with_suffix(self.path.suffix + ".lock")
 
-    def append(self, record: dict) -> None:
+    @contextmanager
+    def _locked(self):
+        self._lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._lock_path.open("a") as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+    def _append_unlocked(self, record: dict) -> None:
         with self.path.open("a") as f:
             f.write(json.dumps(record, default=str) + "\n")
 
-    def append_many(self, records: list[dict]) -> None:
-        if not records:
-            return
-        with self.path.open("a") as f:
-            for record in records:
-                f.write(json.dumps(record, default=str) + "\n")
-
-    def read_records(self) -> list[dict]:
+    def _read_records_unlocked(self) -> list[dict]:
         if not self.path.exists():
             return []
         with self.path.open() as f:
             return [json.loads(line) for line in f if line.strip()]
 
-    def latest_by_event_id(self) -> dict[str, dict]:
+    @staticmethod
+    def _latest_by_event_id_from_records(records: list[dict]) -> dict[str, dict]:
         latest: dict[str, dict] = {}
-        for record in self.read_records():
+        for record in records:
             event_id = record.get("event_id")
             if event_id:
                 latest[str(event_id)] = record
         return latest
+
+    def append(self, record: dict) -> None:
+        with self._locked():
+            self._append_unlocked(record)
+
+    def append_many(self, records: list[dict]) -> None:
+        if not records:
+            return
+        with self._locked():
+            for record in records:
+                self._append_unlocked(record)
+
+    def read_records(self) -> list[dict]:
+        with self._locked():
+            return self._read_records_unlocked()
+
+    def latest_by_event_id(self) -> dict[str, dict]:
+        return self._latest_by_event_id_from_records(self.read_records())
 
     def next_pending(self, *, now: datetime | None = None) -> dict | None:
         """Return the oldest pending event by created_at, if any."""
@@ -141,7 +166,12 @@ class EventStore:
         return pending[0]
 
     def append_running(self, event: dict, run_id: UUID | None = None) -> dict:
-        record = {
+        record = self._build_running(event, run_id=run_id)
+        self.append(record)
+        return record
+
+    def _build_running(self, event: dict, run_id: UUID | None = None) -> dict:
+        return {
             "record_type": "event_status",
             "event_id": event["event_id"],
             "event_type": event.get("event_type", EVENT_TYPE_REFLECTION),
@@ -149,8 +179,40 @@ class EventStore:
             "run_id": str(run_id or uuid4()),
             "started_at": utc_now_iso(),
         }
-        self.append(record)
-        return record
+
+    def claim_next_pending(
+        self,
+        *,
+        now: datetime | None = None,
+        run_id: UUID | None = None,
+    ) -> tuple[dict, dict] | None:
+        """Atomically mark the oldest runnable pending event as running."""
+        with self._locked():
+            latest = self._latest_by_event_id_from_records(
+                self._read_records_unlocked()
+            )
+            pending = [
+                r for r in latest.values()
+                if r.get("status") == "pending"
+            ]
+            pending.sort(key=lambda r: r.get("created_at", ""))
+            for event in pending:
+                if is_expired(event, now=now):
+                    expired = {
+                        "record_type": "event_status",
+                        "event_id": event["event_id"],
+                        "event_type": event.get(
+                            "event_type", EVENT_TYPE_REFLECTION
+                        ),
+                        "status": "expired",
+                        "expired_at": utc_now_iso(),
+                    }
+                    self._append_unlocked(expired)
+                    return event, expired
+                running = self._build_running(event, run_id=run_id)
+                self._append_unlocked(running)
+                return event, running
+        return None
 
     def append_completed(
         self,
@@ -212,6 +274,18 @@ def is_expired(event: dict, *, now: datetime | None = None) -> bool:
     if deadline.tzinfo is None:
         deadline = deadline.replace(tzinfo=timezone.utc)
     return (now or datetime.now(timezone.utc)) >= deadline
+
+
+def _parse_iso(value: object) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed
 
 
 def resolve_requested_context(
@@ -321,6 +395,8 @@ def summarize_event_log(
     *,
     limit: int = 10,
     snippet_limit: int = 160,
+    stale_after_seconds: int = 3600,
+    now: datetime | None = None,
 ) -> dict:
     """Summarize an append-only event log for observability."""
     histories: dict[str, list[dict]] = {}
@@ -361,12 +437,30 @@ def summarize_event_log(
         ),
         reverse=True,
     )
+    current_time = now or datetime.now(timezone.utc)
+    stale_running = []
+    for event in events:
+        if event.get("status") != "running":
+            continue
+        started_at = _parse_iso(event.get("started_at"))
+        if started_at is None:
+            continue
+        age_seconds = (current_time - started_at).total_seconds()
+        if age_seconds >= stale_after_seconds:
+            stale = dict(event)
+            stale["running_age_seconds"] = int(age_seconds)
+            stale_running.append(stale)
+    stale_running.sort(
+        key=lambda event: int(event.get("running_age_seconds", 0)),
+        reverse=True,
+    )
 
     return {
         "record_count": len(records),
         "event_count": len(events),
         "status_counts": dict(sorted(status_counts.items())),
         "oldest_pending": pending[0] if pending else None,
+        "stale_running": stale_running[:limit],
         "failed": failed[:limit],
         "completed": completed[:limit],
         "context_errors": context_errors[:limit],
@@ -419,6 +513,18 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
                 f"{event.get('error', '')}"
             )
 
+    if report.get("stale_running"):
+        lines.append("")
+        lines.append("Stale running:")
+        for event in report["stale_running"]:
+            lines.append(
+                "  "
+                f"{event['event_id']} "
+                f"age={event.get('running_age_seconds', '?')}s "
+                f"run_id={event.get('run_id', '?')} "
+                f"purpose={event.get('purpose', '')}"
+            )
+
     if report.get("context_errors"):
         lines.append("")
         lines.append("Context errors:")
@@ -448,13 +554,13 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
 
 def run_next_event(session, store: EventStore) -> dict:
     """Run the oldest pending event once using an OpenTasteSession."""
-    event = store.next_pending()
-    if event is None:
+    claim = store.claim_next_pending()
+    if claim is None:
         return {"status": "none", "message": "no pending events"}
-    if is_expired(event):
-        return store.append_expired(event)
+    event, running = claim
+    if running.get("status") == "expired":
+        return running
 
-    running = store.append_running(event)
     run_id = running["run_id"]
     try:
         context_results = resolve_requested_context(
@@ -475,6 +581,41 @@ def run_next_event(session, store: EventStore) -> dict:
     except Exception as e:
         store.append_failed(event=event, run_id=run_id, exc=e)
         raise
+
+
+def run_pending_events(
+    session,
+    store: EventStore,
+    *,
+    limit: int = 10,
+    stop_on_failure: bool = True,
+) -> dict:
+    """Run up to limit pending events and return a batch summary."""
+    results: list[dict] = []
+    for _ in range(limit):
+        try:
+            result = run_next_event(session, store)
+        except Exception as e:
+            failure = {
+                "status": "failed",
+                "error_type": type(e).__name__,
+                "error": str(e),
+            }
+            results.append(failure)
+            if stop_on_failure:
+                break
+            continue
+        results.append(result)
+        if result.get("status") == "none":
+            break
+        if result.get("status") == "failed" and stop_on_failure:
+            break
+    return {
+        "status": "completed",
+        "limit": limit,
+        "ran": len([r for r in results if r.get("status") != "none"]),
+        "results": results,
+    }
 
 
 def main() -> None:
@@ -508,6 +649,35 @@ def main() -> None:
         type=int,
         default=4096,
         help="Maximum output tokens for the wake cycle.",
+    )
+    run_all = sub.add_parser("run-all")
+    run_all.add_argument("--log-path", required=True)
+    run_all.add_argument("--event-log-path", default=None)
+    run_all.add_argument("--model", default="claude-haiku-4-5")
+    run_all.add_argument(
+        "--provider",
+        choices=["anthropic", "openrouter", "openai"],
+        default="anthropic",
+    )
+    run_all.add_argument("--base-url", default=None)
+    run_all.add_argument("--api-key", default=None)
+    run_all.add_argument("--project-root", default=".")
+    run_all.add_argument(
+        "--max-tokens",
+        type=int,
+        default=4096,
+        help="Maximum output tokens for each wake cycle.",
+    )
+    run_all.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help="Maximum number of pending events to run.",
+    )
+    run_all.add_argument(
+        "--continue-on-failure",
+        action="store_true",
+        help="Keep processing later events after a wake failure.",
     )
     report = sub.add_parser("report")
     report.add_argument(
@@ -585,7 +755,16 @@ def main() -> None:
         enable_tools=True,
         project_root=Path(args.project_root),
     )
-    result = run_next_event(session, EventStore(event_log_path))
+    store = EventStore(event_log_path)
+    if args.command == "run-all":
+        result = run_pending_events(
+            session,
+            store,
+            limit=args.limit,
+            stop_on_failure=not args.continue_on_failure,
+        )
+    else:
+        result = run_next_event(session, store)
     print(json.dumps(result, indent=2, default=str))
 
 

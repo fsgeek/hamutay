@@ -18,6 +18,7 @@ from hamutay.events import (
     format_event_report,
     resolve_requested_context,
     run_next_event,
+    run_pending_events,
     summarize_event_log,
 )
 from hamutay.taste_open import ExchangeResult, OpenTasteSession
@@ -99,6 +100,37 @@ def test_event_store_next_pending_returns_oldest(tmp_path):
     store.append(second)
 
     assert store.next_pending()["event_id"] == first["event_id"]
+
+
+def test_event_store_claim_next_pending_is_single_claim(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    pending = _event_record()
+    store.append(pending)
+
+    claim = store.claim_next_pending(
+        run_id=UUID("00000000-0000-0000-0000-000000000123")
+    )
+    assert claim is not None
+    event, running = claim
+
+    assert event["event_id"] == pending["event_id"]
+    assert running["status"] == "running"
+    assert store.claim_next_pending() is None
+    assert store.latest_by_event_id()[pending["event_id"]]["status"] == "running"
+
+
+def test_event_store_claim_marks_expired_without_running(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    event = _event_record()
+    event["expires_at"] = "2000-01-01T00:00:00+00:00"
+    store.append(event)
+
+    claim = store.claim_next_pending()
+
+    assert claim is not None
+    _event, expired = claim
+    assert expired["status"] == "expired"
+    assert [r["status"] for r in store.read_records()] == ["pending", "expired"]
 
 
 def test_schedule_event_schema_exists():
@@ -310,6 +342,34 @@ def test_run_next_event_logs_failure(tmp_path):
     assert store.read_records()[-1]["status"] == "failed"
 
 
+def test_run_pending_events_respects_limit(tmp_path):
+    log_path = tmp_path / "session.jsonl"
+    event_path = tmp_path / "session.events.jsonl"
+    session = OpenTasteSession(
+        backend=_FakeBackend(),
+        log_path=str(log_path),
+        event_log_path=str(event_path),
+        enable_tools=True,
+        project_root=tmp_path,
+    )
+    session.exchange("seed")
+    store = EventStore(event_path)
+    for _ in range(2):
+        store.append(build_pending_event(
+            purpose="Reflect on seed.",
+            requested_context=[{"tool": "recall", "cycle": 1}],
+            scheduled_by_cycle=1,
+            scheduled_by_record_id=session._prior_states[-1][1],
+        ))
+
+    result = run_pending_events(session, store, limit=1)
+
+    assert result["ran"] == 1
+    assert len(result["results"]) == 1
+    statuses = [r["status"] for r in store.latest_by_event_id().values()]
+    assert sorted(statuses) == ["completed", "pending"]
+
+
 def test_summarize_event_log_reports_statuses_and_context_errors(tmp_path):
     store = EventStore(tmp_path / "events.jsonl")
     completed = _event_record()
@@ -353,6 +413,30 @@ def test_summarize_event_log_reports_statuses_and_context_errors(tmp_path):
     assert summary["failed"][0]["error"] == "wake failed"
     assert summary["context_errors"][0]["event_id"] == completed["event_id"]
     assert summary["completed"][0]["context_error_count"] == 1
+
+
+def test_summarize_event_log_reports_stale_running(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    event = _event_record()
+    running = {
+        "record_type": "event_status",
+        "event_id": event["event_id"],
+        "event_type": event["event_type"],
+        "status": "running",
+        "run_id": "run-stale",
+        "started_at": "2026-06-01T00:00:00+00:00",
+    }
+    store.append(event)
+    store.append(running)
+
+    summary = summarize_event_log(
+        store.read_records(),
+        stale_after_seconds=60,
+        now=datetime(2026, 6, 1, 0, 2, tzinfo=timezone.utc),
+    )
+
+    assert summary["stale_running"][0]["event_id"] == event["event_id"]
+    assert summary["stale_running"][0]["running_age_seconds"] == 120
 
 
 def test_format_event_report_includes_operational_sections(tmp_path):
