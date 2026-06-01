@@ -905,77 +905,44 @@ class OpenAITasteBackend:
         extra_tools: list[dict] | None = None,
         tool_executor: Any | None = None,
     ) -> ExchangeResult:
-        if extra_tools:
-            import warnings
-            warnings.warn(
-                "OpenAI backend does not yet support multi-turn tool use; "
-                "extra_tools will be ignored.",
-                stacklevel=2,
-            )
-        del tool_executor  # not yet used by OpenAI backend
         del experiment_label  # not consumed by OpenAI backend (protocol requirement)
+        if extra_tools:
+            return self._call_multi_turn(
+                model=model,
+                system=system,
+                messages=messages,
+                extra_tools=extra_tools,
+                tool_executor=tool_executor,
+            )
+        return self._call_single_tool(model=model, system=system, messages=messages)
 
+    def _call_single_tool(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+    ) -> ExchangeResult:
         # OpenAI format: system prompt is a message, not a parameter
         oai_messages = [{"role": "system", "content": system}] + messages
-
-        # OpenAI function calling format
-        tool_def = {
-            "type": "function",
-            "function": {
-                "name": "think_and_respond",
-                "description": "Produce your response and maintain your state.",
-                "parameters": OPEN_SCHEMA,
-            },
-        }
 
         payload: dict = {
             "model": model,
             "max_tokens": self._max_tokens,
             "messages": oai_messages,
-            "tools": [tool_def],
+            "tools": [self._think_tool_def()],
             "tool_choice": self._resolved_tool_choice(),
         }
+        self._apply_openai_payload_options(payload)
 
-        # Only send parallel_tool_calls when explicitly enabled.
-        # With OpenRouter provider.require_parameters=true, even a False value
-        # can still be treated as a required parameter and over-constrain routing.
-        if self._capability.supports_parallel_tool_calls:
-            payload["parallel_tool_calls"] = True
-
-        if self._provider_name == "openrouter":
-            provider_opts: dict[str, object] = {}
-            if self._or_require_parameters:
-                provider_opts["require_parameters"] = True
-            if self._or_provider_order:
-                provider_opts["order"] = self._or_provider_order
-            if self._or_only_providers:
-                provider_opts["only"] = self._or_only_providers
-            if self._or_allow_fallbacks is not None:
-                provider_opts["allow_fallbacks"] = self._or_allow_fallbacks
-            if provider_opts:
-                payload["provider"] = provider_opts
-            # transforms=[] disables middle-out compression (which would silently
-            # truncate a 20-cycle context — measuring the gateway, not the model).
-            if self._or_transforms is not None:
-                payload["transforms"] = self._or_transforms
-
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-            **self._extra_headers,
-        }
-
-        data = self._post_with_retry(
-            f"{self._base_url}/chat/completions",
-            payload,
-            headers,
-        )
-
-        if "error" in data:
-            raise RuntimeError(f"OpenAI backend error: {data['error']}")
+        data = self._post_chat(payload)
 
         choice = data["choices"][0]
         raw_stop: str = choice.get("finish_reason") or "unknown"
+        if raw_stop == "length":
+            raise RuntimeError(
+                "OpenAI backend: finish_reason=length; refusing to parse "
+                "possibly truncated structured output"
+            )
         stop_reason: str = {
             "stop": "end_turn",
             "length": "max_tokens",
@@ -990,8 +957,10 @@ class OpenAITasteBackend:
         for tc in message.get("tool_calls", []):
             fn = tc.get("function", {})
             if fn.get("name") == "think_and_respond":
-                args = fn.get("arguments", "")
-                raw_output = json.loads(args) if isinstance(args, str) else args
+                raw_output = self._parse_tool_arguments(
+                    "think_and_respond",
+                    fn.get("arguments", ""),
+                )
                 return ExchangeResult(
                     raw_output=raw_output,
                     stop_reason=stop_reason,
@@ -1021,6 +990,211 @@ class OpenAITasteBackend:
                 )
 
         raise RuntimeError("OpenAI backend: no think_and_respond output in response")
+
+    def _call_multi_turn(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        extra_tools: list[dict],
+        tool_executor: Any | None,
+    ) -> ExchangeResult:
+        """OpenAI-compatible multi-turn tool loop.
+
+        Non-terminal tool calls are resolved through ToolExecutor and returned
+        as role=tool messages keyed by tool_call_id. The cycle completes only
+        when the model calls think_and_respond.
+        """
+        conversation = [{"role": "system", "content": system}] + list(messages)
+        tools = [
+            self._think_tool_def(),
+            *[self._openai_tool_def(tool) for tool in extra_tools],
+        ]
+        total_input = 0
+        total_output = 0
+        max_turns = 20
+
+        for _turn_index in range(max_turns):
+            payload: dict = {
+                "model": model,
+                "max_tokens": self._max_tokens,
+                "messages": conversation,
+                "tools": tools,
+                "tool_choice": self._resolved_tool_choice(),
+            }
+            self._apply_openai_payload_options(payload)
+
+            data = self._post_chat(payload)
+            choice = data["choices"][0]
+            raw_stop: str = choice.get("finish_reason") or "unknown"
+            if raw_stop == "length":
+                raise RuntimeError(
+                    "OpenAI backend: finish_reason=length; refusing to parse "
+                    "possibly truncated structured output"
+                )
+            stop_reason: str = {
+                "stop": "end_turn",
+                "length": "max_tokens",
+                "tool_calls": "tool_use",
+            }.get(raw_stop, raw_stop)
+
+            usage = data.get("usage", {})
+            total_input += usage.get("prompt_tokens", 0) or 0
+            total_output += usage.get("completion_tokens", 0) or 0
+
+            message = choice.get("message", {})
+            tool_calls = message.get("tool_calls") or []
+            if not tool_calls:
+                raise RuntimeError(
+                    "OpenAI backend: no tool_calls returned before "
+                    "think_and_respond"
+                )
+
+            terminal_output: dict | None = None
+            non_terminal_calls: list[tuple[dict, str, dict]] = []
+            for tc in tool_calls:
+                fn = tc.get("function", {})
+                name = fn.get("name")
+                if not name:
+                    raise RuntimeError("OpenAI backend: tool_call missing function name")
+                arguments = self._parse_tool_arguments(
+                    name,
+                    fn.get("arguments", ""),
+                )
+                if name == "think_and_respond":
+                    terminal_output = arguments
+                else:
+                    tool_call_id = tc.get("id")
+                    if not tool_call_id:
+                        raise RuntimeError(
+                            "OpenAI backend: non-terminal tool_call missing id"
+                        )
+                    non_terminal_calls.append((tc, tool_call_id, arguments))
+
+            if terminal_output is not None:
+                if tool_executor is not None:
+                    for tc, _tool_call_id, arguments in non_terminal_calls:
+                        name = tc.get("function", {}).get("name", "")
+                        tool_executor.execute(name, arguments)
+                return ExchangeResult(
+                    raw_output=terminal_output,
+                    stop_reason=stop_reason,
+                    input_tokens=total_input,
+                    output_tokens=total_output,
+                    tool_activity=(
+                        tool_executor.activity_log if tool_executor else None
+                    ),
+                )
+
+            if tool_executor is None:
+                raise RuntimeError(
+                    "Model called tools but no tool_executor was provided "
+                    "to resolve them"
+                )
+
+            assistant_message = {
+                "role": "assistant",
+                "content": message.get("content"),
+                "tool_calls": tool_calls,
+            }
+            conversation.append(assistant_message)
+            for tc, tool_call_id, arguments in non_terminal_calls:
+                name = tc.get("function", {}).get("name", "")
+                result = tool_executor.execute(name, arguments)
+                conversation.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "name": name,
+                        "content": _bound_tool_result_for_context(
+                            json.dumps(result, default=str)
+                        ),
+                    }
+                )
+
+        raise RuntimeError(
+            f"OpenAI multi-turn exchange did not produce think_and_respond "
+            f"within {max_turns} turns"
+        )
+
+    @staticmethod
+    def _think_tool_def() -> dict:
+        return {
+            "type": "function",
+            "function": {
+                "name": "think_and_respond",
+                "description": "Produce your response and maintain your state.",
+                "parameters": OPEN_SCHEMA,
+            },
+        }
+
+    @staticmethod
+    def _openai_tool_def(tool: dict) -> dict:
+        if tool.get("type") == "function" and isinstance(tool.get("function"), dict):
+            return tool
+        return {
+            "type": "function",
+            "function": {
+                "name": tool["name"],
+                "description": tool.get("description", ""),
+                "parameters": tool.get("input_schema", {"type": "object"}),
+            },
+        }
+
+    def _apply_openai_payload_options(self, payload: dict) -> None:
+        # Only send parallel_tool_calls when explicitly enabled.
+        # With OpenRouter provider.require_parameters=true, even a False value
+        # can still be treated as a required parameter and over-constrain routing.
+        if self._capability.supports_parallel_tool_calls:
+            payload["parallel_tool_calls"] = True
+
+        if self._provider_name != "openrouter":
+            return
+
+        provider_opts: dict[str, object] = {}
+        if self._or_require_parameters:
+            provider_opts["require_parameters"] = True
+        if self._or_provider_order:
+            provider_opts["order"] = self._or_provider_order
+        if self._or_only_providers:
+            provider_opts["only"] = self._or_only_providers
+        if self._or_allow_fallbacks is not None:
+            provider_opts["allow_fallbacks"] = self._or_allow_fallbacks
+        if provider_opts:
+            payload["provider"] = provider_opts
+        # transforms=[] disables middle-out compression (which would silently
+        # truncate a 20-cycle context — measuring the gateway, not the model).
+        if self._or_transforms is not None:
+            payload["transforms"] = self._or_transforms
+
+    def _post_chat(self, payload: dict) -> dict:
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+            **self._extra_headers,
+        }
+        data = self._post_with_retry(
+            f"{self._base_url}/chat/completions",
+            payload,
+            headers,
+        )
+        if "error" in data:
+            raise RuntimeError(f"OpenAI backend error: {data['error']}")
+        return data
+
+    @staticmethod
+    def _parse_tool_arguments(name: str, arguments: Any) -> dict:
+        try:
+            parsed = json.loads(arguments) if isinstance(arguments, str) else arguments
+        except json.JSONDecodeError as e:
+            raise RuntimeError(
+                f"OpenAI backend: malformed JSON arguments for {name}: {e}"
+            ) from e
+        if not isinstance(parsed, dict):
+            raise RuntimeError(
+                f"OpenAI backend: tool arguments for {name} must be an object"
+            )
+        return parsed
 
     @staticmethod
     def _unwrap_tool_echo(obj: dict) -> dict:
