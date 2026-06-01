@@ -15,8 +15,10 @@ from hamutay.events import (
     build_event_envelope,
     build_pending_event,
     default_event_log_path,
+    format_event_report,
     resolve_requested_context,
     run_next_event,
+    summarize_event_log,
 )
 from hamutay.taste_open import ExchangeResult, OpenTasteSession
 from hamutay.tools.executor import ToolExecutor
@@ -265,6 +267,7 @@ def test_run_next_event_completes(tmp_path):
     result = run_next_event(session, store)
 
     assert result["status"] == "completed"
+    assert result["context_results"][0]["result"]["cycle"] == 1
     records = store.read_records()
     assert [r["status"] for r in records] == ["pending", "running", "completed"]
     assert session._prior_states[-1][2]["reflection"] == "revised"
@@ -305,3 +308,59 @@ def test_run_next_event_logs_failure(tmp_path):
         run_next_event(session, store)
 
     assert store.read_records()[-1]["status"] == "failed"
+
+
+def test_summarize_event_log_reports_statuses_and_context_errors(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    completed = _event_record()
+    failed = _event_record()
+    pending = _event_record()
+
+    store.append(completed)
+    store.append_running(completed, run_id=UUID("00000000-0000-0000-0000-000000000111"))
+    store.append_completed(
+        event=completed,
+        run_id="00000000-0000-0000-0000-000000000111",
+        wake_cycle=3,
+        result_record_id=UUID("00000000-0000-0000-0000-000000000003"),
+        response_text="handled with a context issue",
+        context_results=[
+            {
+                "request": {"tool": "recall", "cycle": 99},
+                "result": {"error": "cycle not found: 99"},
+            }
+        ],
+    )
+    store.append(failed)
+    store.append_running(failed, run_id=UUID("00000000-0000-0000-0000-000000000222"))
+    store.append_failed(
+        event=failed,
+        run_id="00000000-0000-0000-0000-000000000222",
+        exc=RuntimeError("wake failed"),
+    )
+    store.append(pending)
+
+    summary = summarize_event_log(store.read_records())
+
+    assert summary["record_count"] == 7
+    assert summary["event_count"] == 3
+    assert summary["status_counts"] == {
+        "completed": 1,
+        "failed": 1,
+        "pending": 1,
+    }
+    assert summary["oldest_pending"]["event_id"] == pending["event_id"]
+    assert summary["failed"][0]["error"] == "wake failed"
+    assert summary["context_errors"][0]["event_id"] == completed["event_id"]
+    assert summary["completed"][0]["context_error_count"] == 1
+
+
+def test_format_event_report_includes_operational_sections(tmp_path):
+    event = _event_record()
+    summary = summarize_event_log([event])
+
+    report = format_event_report(summary, path=tmp_path / "events.jsonl")
+
+    assert "Event log:" in report
+    assert "Statuses: pending=1" in report
+    assert "Oldest pending:" in report

@@ -160,6 +160,7 @@ class EventStore:
         wake_cycle: int,
         result_record_id: UUID,
         response_text: str,
+        context_results: list[dict] | None = None,
     ) -> dict:
         record = {
             "record_type": "event_status",
@@ -172,6 +173,8 @@ class EventStore:
             "result_record_id": str(result_record_id),
             "response_text": response_text,
         }
+        if context_results is not None:
+            record["context_results"] = context_results
         self.append(record)
         return record
 
@@ -254,6 +257,195 @@ def build_event_envelope(event: dict, context_results: list[dict], run_id: str) 
     return json.dumps(envelope, indent=2, default=str)
 
 
+def _shorten(value: object, *, limit: int = 160) -> str:
+    text = str(value)
+    if len(text) <= limit:
+        return text
+    return text[: limit - 3] + "..."
+
+
+def _context_error_count(history: list[dict]) -> int:
+    count = 0
+    for record in history:
+        for item in record.get("context_results", []) or []:
+            result = item.get("result") if isinstance(item, dict) else None
+            if isinstance(result, dict) and "error" in result:
+                count += 1
+    return count
+
+
+def summarize_event_history(
+    event_id: str,
+    history: list[dict],
+    *,
+    snippet_limit: int = 160,
+) -> dict:
+    """Return a compact summary for one event's append-only history."""
+    first = history[0]
+    latest = history[-1]
+    response_text = latest.get("response_text")
+    summary = {
+        "event_id": event_id,
+        "event_type": first.get("event_type", latest.get("event_type")),
+        "status": latest.get("status"),
+        "record_count": len(history),
+        "created_at": first.get("created_at"),
+        "started_at": next(
+            (r.get("started_at") for r in history if r.get("started_at")),
+            None,
+        ),
+        "completed_at": latest.get("completed_at"),
+        "failed_at": latest.get("failed_at"),
+        "expired_at": latest.get("expired_at"),
+        "scheduled_by_cycle": first.get("scheduled_by_cycle"),
+        "scheduled_by_record_id": first.get("scheduled_by_record_id"),
+        "wake_cycle": latest.get("wake_cycle"),
+        "result_record_id": latest.get("result_record_id"),
+        "run_id": latest.get("run_id"),
+        "label": first.get("label"),
+        "purpose": first.get("purpose", ""),
+        "requested_context_count": len(first.get("requested_context", []) or []),
+        "context_error_count": _context_error_count(history),
+        "error_type": latest.get("error_type"),
+        "error": latest.get("error"),
+        "response_snippet": (
+            _shorten(response_text, limit=snippet_limit)
+            if response_text is not None else None
+        ),
+    }
+    return {k: v for k, v in summary.items() if v is not None}
+
+
+def summarize_event_log(
+    records: list[dict],
+    *,
+    limit: int = 10,
+    snippet_limit: int = 160,
+) -> dict:
+    """Summarize an append-only event log for observability."""
+    histories: dict[str, list[dict]] = {}
+    for record in records:
+        event_id = record.get("event_id")
+        if event_id:
+            histories.setdefault(str(event_id), []).append(record)
+
+    events = [
+        summarize_event_history(
+            event_id,
+            history,
+            snippet_limit=snippet_limit,
+        )
+        for event_id, history in histories.items()
+    ]
+    status_counts: dict[str, int] = {}
+    for event in events:
+        status = str(event.get("status", "unknown"))
+        status_counts[status] = status_counts.get(status, 0) + 1
+
+    pending = [event for event in events if event.get("status") == "pending"]
+    pending.sort(key=lambda event: str(event.get("created_at", "")))
+    failed = [event for event in events if event.get("status") == "failed"]
+    failed.sort(key=lambda event: str(event.get("failed_at", "")), reverse=True)
+    completed = [event for event in events if event.get("status") == "completed"]
+    completed.sort(key=lambda event: str(event.get("completed_at", "")), reverse=True)
+    context_errors = [
+        event for event in events
+        if int(event.get("context_error_count", 0)) > 0
+    ]
+    context_errors.sort(
+        key=lambda event: str(
+            event.get("completed_at")
+            or event.get("failed_at")
+            or event.get("created_at")
+            or ""
+        ),
+        reverse=True,
+    )
+
+    return {
+        "record_count": len(records),
+        "event_count": len(events),
+        "status_counts": dict(sorted(status_counts.items())),
+        "oldest_pending": pending[0] if pending else None,
+        "failed": failed[:limit],
+        "completed": completed[:limit],
+        "context_errors": context_errors[:limit],
+        "events": sorted(
+            events,
+            key=lambda event: str(
+                event.get("created_at")
+                or event.get("started_at")
+                or event.get("completed_at")
+                or ""
+            ),
+        ),
+    }
+
+
+def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
+    """Render an event-log summary for humans."""
+    lines: list[str] = []
+    if path is not None:
+        lines.append(f"Event log: {path}")
+    lines.append(
+        f"Records: {report['record_count']} | Events: {report['event_count']}"
+    )
+    status_counts = report.get("status_counts", {})
+    status_text = ", ".join(
+        f"{status}={count}" for status, count in status_counts.items()
+    ) or "none"
+    lines.append(f"Statuses: {status_text}")
+
+    oldest_pending = report.get("oldest_pending")
+    if oldest_pending:
+        lines.append("")
+        lines.append("Oldest pending:")
+        lines.append(
+            "  "
+            f"{oldest_pending['event_id']} "
+            f"cycle={oldest_pending.get('scheduled_by_cycle', '?')} "
+            f"context={oldest_pending.get('requested_context_count', 0)} "
+            f"purpose={oldest_pending.get('purpose', '')}"
+        )
+
+    if report.get("failed"):
+        lines.append("")
+        lines.append("Failed:")
+        for event in report["failed"]:
+            lines.append(
+                "  "
+                f"{event['event_id']} "
+                f"{event.get('error_type', 'Error')}: "
+                f"{event.get('error', '')}"
+            )
+
+    if report.get("context_errors"):
+        lines.append("")
+        lines.append("Context errors:")
+        for event in report["context_errors"]:
+            lines.append(
+                "  "
+                f"{event['event_id']} "
+                f"errors={event.get('context_error_count', 0)} "
+                f"purpose={event.get('purpose', '')}"
+            )
+
+    if report.get("completed"):
+        lines.append("")
+        lines.append("Recently completed:")
+        for event in report["completed"]:
+            snippet = event.get("response_snippet") or ""
+            lines.append(
+                "  "
+                f"{event['event_id']} "
+                f"wake_cycle={event.get('wake_cycle', '?')} "
+                f"context_errors={event.get('context_error_count', 0)} "
+                f"response={snippet}"
+            )
+
+    return "\n".join(lines)
+
+
 def run_next_event(session, store: EventStore) -> dict:
     """Run the oldest pending event once using an OpenTasteSession."""
     event = store.next_pending()
@@ -278,6 +470,7 @@ def run_next_event(session, store: EventStore) -> dict:
             wake_cycle=session.cycle,
             result_record_id=session._prior_states[-1][1],
             response_text=response,
+            context_results=context_results,
         )
     except Exception as e:
         store.append_failed(event=event, run_id=run_id, exc=e)
@@ -310,11 +503,54 @@ def main() -> None:
     run.add_argument("--base-url", default=None)
     run.add_argument("--api-key", default=None)
     run.add_argument("--project-root", default=".")
+    run.add_argument(
+        "--max-tokens",
+        type=int,
+        default=4096,
+        help="Maximum output tokens for the wake cycle.",
+    )
+    report = sub.add_parser("report")
+    report.add_argument(
+        "--log-path",
+        default=None,
+        help="Session JSONL path; event sidecar is derived from this path.",
+    )
+    report.add_argument(
+        "--event-log-path",
+        default=None,
+        help="Event JSONL path. Overrides --log-path sidecar derivation.",
+    )
+    report.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit the report as JSON rather than human-readable text.",
+    )
+    report.add_argument(
+        "--limit",
+        type=int,
+        default=10,
+        help="Maximum failed/completed/context-error rows to show.",
+    )
     args = parser.parse_args()
+
+    if args.command == "report":
+        if args.event_log_path is None and args.log_path is None:
+            raise SystemExit("report requires --event-log-path or --log-path")
+        event_log_path = (
+            args.event_log_path
+            or str(default_event_log_path(args.log_path))
+        )
+        store = EventStore(event_log_path)
+        summary = summarize_event_log(store.read_records(), limit=args.limit)
+        if args.json:
+            print(json.dumps(summary, indent=2, default=str))
+        else:
+            print(format_event_report(summary, path=event_log_path))
+        return
 
     backend = None
     if args.provider == "anthropic":
-        backend = AnthropicTasteBackend()
+        backend = AnthropicTasteBackend(max_tokens=args.max_tokens)
     else:
         if args.provider == "openrouter":
             base_url = args.base_url or "https://openrouter.ai/api/v1"
@@ -334,6 +570,7 @@ def main() -> None:
         backend = OpenAITasteBackend(
             base_url=base_url,
             api_key=api_key,
+            max_tokens=args.max_tokens,
             extra_headers=extra_headers,
             provider_name=args.provider,
         )
