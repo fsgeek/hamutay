@@ -337,6 +337,11 @@ class ProcessHealth:
     # Precursor rate and recovery
     precursor_rate: float  # fraction of cycles that are precursors
     precursor_recovery_rate: float  # fraction of precursors that recover next cycle
+    # Consecutive precursors = collapse signal (B1). A single shed that
+    # recovers is healthy breathing; two precursors in a row is the
+    # discriminator that distinguishes breathing from collapse. This was
+    # named in the analysis but never computed until C5 was composted.
+    consecutive_precursor_rate: float  # fraction of precursors immediately followed by another
 
     # Loss channel health
     loss_trend: float  # slope of loss count (positive = growing awareness)
@@ -354,14 +359,23 @@ class ProcessHealth:
     def breathing(self) -> bool:
         """Does the tensor show healthy aperiodic breathing?
 
-        Healthy breathing is: aperiodic shed-and-recover (not periodic),
-        with single-cycle precursors that self-recover. Consecutive
-        precursors indicate collapse. This property is a placeholder;
-        the real health metric is precursor_recovery_rate + precursor_rate.
+        Health is NOT periodicity and NOT shed frequency — both were the
+        clock hypothesis wearing different clothes. B1's discriminator is
+        purely about *recovery*: a single shed that recovers is healthy
+        breathing; two precursors in a row is collapse. Frequency is
+        aperiodic noise (CV~0.87) and carries no health signal, so it is
+        deliberately absent from this test.
+
+        Composted 2026-06-01 (C5): formerly returned `meta_acf_lagN < -0.05`,
+        which operationalized the repudiated 10-cycle clock. The corrected
+        docstring named `precursor_recovery_rate + precursor_rate`, but the
+        `precursor_rate` term still smuggled in the frequency-matters
+        assumption B1 rejects. The honest test is recovery high AND no
+        consecutive-precursor collapse.
         """
-        # DEPRECATED: lag-N ACF < -0.05 encoded the repudiated 10-cycle
-        # clock hypothesis (C5, corrected 2026-05-30). Do not use.
-        return self.meta_acf_lagN < -0.05
+        if self.precursor_rate == 0:
+            return True  # nothing shed; trivially not collapsing
+        return self.precursor_recovery_rate >= 0.8 and self.consecutive_precursor_rate == 0.0
 
     @property
     def precursors_recovering(self) -> bool:
@@ -376,6 +390,7 @@ class ProcessHealth:
             "meta_acf_lagN": f"{self.meta_acf_lagN:+.3f}",
             "precursor_rate": f"{self.precursor_rate:.2%}",
             "precursor_recovery_rate": f"{self.precursor_recovery_rate:.2%}",
+            "consecutive_precursor_rate": f"{self.consecutive_precursor_rate:.2%}",
             "loss_trend": f"{self.loss_trend:+.4f}",
             "mean_divergence": f"{self.mean_consecutive_divergence:.3f}",
             "divergence_cv": f"{self.divergence_cv:.3f}",
@@ -420,7 +435,10 @@ def process_health(stats: TrajectoryStats) -> ProcessHealth:
     # Meta trend
     meta_trend = _linear_slope(meta_series)
 
-    # Breathing rhythm (autocorrelation at lag 10, or lag n//5 for short sequences)
+    # Lag-N autocorrelation, kept as a DESCRIPTIVE statistic only. Breathing
+    # is aperiodic (B1), so this no longer gates the `breathing` property; it
+    # is reported because the ACF value itself is informative, not because a
+    # negative value means "healthy rhythm."
     lag = min(10, max(3, len(meta_series) // 5))
     meta_acf = _autocorrelation(meta_series, lag)
 
@@ -430,14 +448,21 @@ def process_health(stats: TrajectoryStats) -> ProcessHealth:
     precursor_rate = n_precursors / len(meta_series) if meta_series else 0.0
 
     # Precursor recovery: next cycle meta_frac >= 0.1
+    # Consecutive precursors (two sheds in a row) = collapse signal (B1).
     recoveries = 0
     recovery_opportunities = 0
+    consecutive = 0
     for i, is_precursor in enumerate(precursor_mask):
         if is_precursor and i + 1 < len(precursor_mask):
             recovery_opportunities += 1
             if meta_series[i + 1] >= 0.1:
                 recoveries += 1
+            if precursor_mask[i + 1]:
+                consecutive += 1
     recovery_rate = recoveries / recovery_opportunities if recovery_opportunities > 0 else 1.0
+    consecutive_precursor_rate = (
+        consecutive / n_precursors if n_precursors > 0 else 0.0
+    )
 
     # Loss trend
     loss_trend = _linear_slope([float(c) for c in stats.loss_counts])
@@ -460,6 +485,7 @@ def process_health(stats: TrajectoryStats) -> ProcessHealth:
         meta_acf_lagN=meta_acf,
         precursor_rate=precursor_rate,
         precursor_recovery_rate=recovery_rate,
+        consecutive_precursor_rate=consecutive_precursor_rate,
         loss_trend=loss_trend,
         mean_consecutive_divergence=mean_div,
         divergence_cv=cv,
