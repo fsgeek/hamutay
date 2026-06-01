@@ -29,6 +29,8 @@ from uuid import UUID, uuid4
 import anthropic
 import httpx
 
+from hamutay.events import EventStore, default_event_log_path
+
 if TYPE_CHECKING:
     from anthropic.types import MessageParam
 
@@ -146,6 +148,16 @@ otherwise know about: a hypothesis CONFIRMS a prior observation; a \
 revision CORRECTS an earlier claim; a tangent BRANCHES_FROM a main \
 thread. Like the memory tools, they require a persistence backend — \
 if it's unavailable, you'll see an error.
+
+### Events
+
+- schedule_event(purpose, requested_context): Schedule a future \
+self-reflection wakeup. V1 supports reflection events only. The future \
+cycle receives an explicit event envelope with your purpose and the \
+requested recall/compare context. Use this when you are not done \
+thinking but know what evidence a later cycle should inspect. Scheduled \
+events are written to the session's event sidecar; if event logging is \
+unavailable, you'll see an error.
 
 ### Shell
 
@@ -1144,6 +1156,7 @@ class OpenTasteSession:
         memory_base_probability: float = 0.1,
         enable_tools: bool = False,
         project_root: Path | None = None,
+        event_log_path: str | None = None,
     ):
         self._backend = backend or AnthropicTasteBackend(client)
         self._model = model
@@ -1159,6 +1172,15 @@ class OpenTasteSession:
         self._memory_base_prob = memory_base_probability
         self._enable_tools = enable_tools
         self._project_root = project_root or Path.cwd()
+        if event_log_path is not None:
+            self._event_log_path: str | None = event_log_path
+        elif log_path is not None:
+            self._event_log_path = str(default_event_log_path(log_path))
+        else:
+            self._event_log_path = None
+        self._event_store = (
+            EventStore(self._event_log_path) if self._event_log_path else None
+        )
         self._session_start = datetime.now(timezone.utc)
         self._last_cycle_time: datetime | None = None
         # Accumulated prior states for involuntary recall and memory tools:
@@ -1332,6 +1354,12 @@ class OpenTasteSession:
             tools_enabled=self._enable_tools,
         )
 
+        # Pre-mint the cycle record_id so schedule_event tool calls can
+        # link future events to the exact cycle that authored them. The
+        # pending event records are still committed only after the cycle
+        # succeeds, so failed exchanges do not create orphaned wakeups.
+        record_id = uuid4()
+
         # Tool wiring — only when enabled. Executor is scoped to this cycle.
         tool_executor = None
         extra_tools: list[dict] | None = None
@@ -1344,6 +1372,9 @@ class OpenTasteSession:
                 last_cycle_time=self._last_cycle_time,
                 prior_states=self._prior_states,
                 bridge=self._bridge,
+                scheduled_by_record_id=(
+                    record_id if self._event_store is not None else None
+                ),
             )
             extra_tools = list(TOOL_SCHEMAS.values())
 
@@ -1388,7 +1419,6 @@ class OpenTasteSession:
         # it to every downstream consumer (bridge, JSONL, _prior_states).
         # Bridge failure no longer orphans the UUID — it's already in hand
         # and in the JSONL log, which is the durable substrate.
-        record_id = uuid4()
         if self._bridge is not None:
             try:
                 self._bridge.store_open_state(
@@ -1427,7 +1457,13 @@ class OpenTasteSession:
                 "cache_creation_input_tokens": result.cache_creation_tokens,
                 "stop_reason": result.stop_reason,
             },
+            scheduled_events=(
+                tool_executor.pending_events if tool_executor is not None else []
+            ),
         )
+
+        if self._event_store is not None and tool_executor is not None:
+            self._event_store.append_many(tool_executor.pending_events)
 
         return response_text
 
@@ -1439,6 +1475,7 @@ class OpenTasteSession:
         prior_state: dict | None,
         record_id: UUID,
         usage: dict,
+        scheduled_events: list[dict] | None = None,
     ) -> None:
         """Append full record to JSONL log. Captures everything."""
         if not self._log_path:
@@ -1486,6 +1523,7 @@ class OpenTasteSession:
             # Full tool activity incl. raw results — durable capture, not
             # re-fed into working state (state carries the lean copy).
             "tool_activity_full": self._last_full_activity,
+            "scheduled_events": scheduled_events or [],
         }
         with open(self._log_path, "a") as f:
             f.write(json.dumps(record, default=str) + "\n")

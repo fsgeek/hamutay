@@ -17,7 +17,11 @@ from hamutay.eval.divergence import (
     component_divergence,
     divergence_profile,
 )
-from hamutay.eval.trajectory import trajectory_stats, compare_trajectories
+from hamutay.eval.trajectory import (
+    ProcessHealth,
+    trajectory_stats,
+    compare_trajectories,
+)
 
 
 def _make_tensor(
@@ -196,3 +200,33 @@ class TestTrajectory:
         stats = trajectory_stats([])
         assert stats.cycles == 0
         assert stats.strand_counts == []
+
+
+class TestProcessHealth:
+    def test_breathing_does_not_require_negative_autocorrelation(self):
+        health = ProcessHealth(
+            meta_trend=0.0,
+            meta_acf_lagN=0.75,
+            precursor_rate=0.2,
+            precursor_recovery_rate=1.0,
+            consecutive_precursor_rate=0.0,
+            loss_trend=0.0,
+            mean_consecutive_divergence=0.0,
+            divergence_cv=0.0,
+        )
+
+        assert health.breathing is True
+
+    def test_breathing_rejects_consecutive_precursors_despite_negative_acf(self):
+        health = ProcessHealth(
+            meta_trend=0.0,
+            meta_acf_lagN=-0.75,
+            precursor_rate=0.2,
+            precursor_recovery_rate=0.5,
+            consecutive_precursor_rate=0.5,
+            loss_trend=0.0,
+            mean_consecutive_divergence=0.0,
+            divergence_cv=0.0,
+        )
+
+        assert health.breathing is False

@@ -57,14 +57,15 @@ live during the writing.
    corrected consecutiveness/pressure framing. Keep the stale version in
    git history — it IS the methods exhibit. *Blocks any claim that cites
    the detector.*
-2. **Cheap experiment: A2.** Run a real consecutive-cycle *embedding*
-   similarity on `observation_full` (not BoW, not cross-condition). Either
-   earns "meaning survives the rewrite" or we drop that companion claim and
-   let Act 1 stand on structural survival alone. Fixes the docstrings that
-   falsely call BoW "embedding-based."
-3. **Cheap experiment: B2.** Fit `survival ~ batch_size` (regression / R²)
-   so "batch size drives rewrite depth" has a statistic, not just binned
-   means. Or soften the wording to "strongly modulates."
+2. **Cheap experiment: A2. DONE 2026-06-01.** Consecutive-cycle embedding
+   similarity on `observation_full` with `BAAI/bge-large-en-v1.5` gives
+   mean content cosine 0.870 over 103 transitions while 3-gram survival is
+   0.095. Artifact: `experiments/observation_full/embedding_similarity_analysis.md`.
+3. **Cheap experiment: B2. DONE 2026-06-01.** Batch-size bins reproduce
+   the large effect (<500tok -> 14.1% survival; >2000tok -> 4.1%), but
+   `survival ~ log1p(batch_tokens)` gives R²=0.034. The earned wording is
+   "modulator/confound," not "dominant predictor." Artifact:
+   `experiments/observation_full/batch_survival_regression.md`.
 4. **Medium experiment: A3.** Build the key-classifier over the 90-model
    sweep so "no model invents a loss-changelog" is a measured prevalence,
    not a grep-level absence. Labels each invented key
@@ -184,9 +185,7 @@ itself the C5 move run on the roadmap: a husk the authors loved, composted
 when a peer supplied the frost.)
 
 ## Immediate next actions (this is the executable head of the roadmap)
-1. Fix `trajectory.py` (C-step-1) — unblocks everything that cites breathing.
-2. Run A2 embedding similarity (C-step-2) — cheap, high narrative payoff.
-3. Run B2 regression (C-step-3) — cheap.
-4. Build A3 classifier (C-step-4) — medium; also quantifies the relational finding.
-Steps 1-4 are independent. Do them, then write (C-step-5).
+1. Build A3 classifier (C-step-4) — medium; also quantifies the relational finding.
+2. Write (C-step-5) once A3 is resolved or explicitly kept qualitative.
+Completed: C-step-1 (`trajectory.py` re-operationalized away from lag-10 ACF), C-step-2 (A2 embedding similarity), and C-step-3 (B2 regression).
 A-exp-1 (the heartbeat) can proceed in parallel — it's independent of the paper and gates Depth A.

@@ -47,8 +47,9 @@ almost entirely ephemeral:
   rebuilt each cycle.
 - **Concept transience: 87%.** Most specific phrasings appear in exactly
   one cycle out of 104 and never again.
-- **But content similarity: 71–89%** (bag-of-words cosine, cross-condition, not embedding-based consecutive-cycle). Two runs given identical material
-  but organized completely differently still cover the same ground.
+- **But consecutive content-embedding similarity: 0.870 mean cosine.**
+  Across 103 adjacent rewrites, a real embedding model sees the content
+  as semantically close even while lexical 3-gram survival averages 9.5%.
 
 The ideas survive; the sentences don't. It's not compression and it's
 not accumulation. **It's rewriting a document from memory** — the way you
@@ -111,9 +112,9 @@ finding a beat in noise. The breathing is *real* — the shed-and-recover
 is genuine, and it's a perfect predictor of health (a single-cycle
 shed always recovers; two in a row is always collapse). But it's a
 characteristic *timescale*, not a *timer*. It's driven by pressure to
-reorganize, and the strongest predictor of when it happens isn't a clock
-at all — it's simply how much new material we fed in. *Bigger n killed the
-clock.*
+reorganize, and one visible pressure signal is how much new material we
+fed in. Batch size strongly stratifies rewrite depth, though it is not a
+complete one-variable explanation. *Bigger n killed the clock.*
 
 **The ceiling wasn't a ceiling.** Early on we reported that tensors
 couldn't grow past about 4,000 tokens — a natural limit, we thought, a
@@ -165,17 +166,16 @@ funeral:
   so a small, honest, rewritten memory beats a large faithful log. This
   is grounded in independent work, not just ours.
 - The tensor is a **semantic rewriter**: 9% of the structure survives a
-  cycle. Whether meaning survives at a similar rate is still being measured
-  (the 71–89% figure is bag-of-words cosine across conditions, not
-  embedding similarity on consecutive cycles). Memory as re-explanation, not
-  storage.
+  cycle, while consecutive content embeddings stay close (0.870 mean
+  cosine over 103 transitions). Memory as re-explanation, not storage.
 - A mind will build itself scaffolding, and it will sometimes even
   volunteer tension-tracking and uncertainty markers. But it will **not**
   spontaneously keep a changelog of what it threw away. That specific
   honesty — the declared-losses record — must be designed in. It is the
   load-bearing part.
-- Breathing is real and cross-architecture — the same shed-and-recover
-  shows up in different models at the same rate. It just isn't a clock.
+- Breathing is real, and shed-and-recover has been observed across
+  several architectures. It just isn't a clock; the cross-architecture
+  rate claim is still thin.
 - A frozen belief is not a settled one. We watched a confident claim sit
   unexamined in a tensor for 170 cycles — a fossil — until *external
   reality* (an actual git history) contradicted it. Same-lineage memory

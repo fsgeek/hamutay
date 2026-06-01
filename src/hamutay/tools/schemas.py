@@ -429,6 +429,67 @@ ANNOTATE_EDGE_SCHEMA = {
 }
 
 
+SCHEDULE_EVENT_SCHEMA = {
+    "name": "schedule_event",
+    "description": (
+        "Schedule a future self-reflection event. The event will wake a "
+        "future cycle with an explicit event envelope containing your "
+        "purpose and requested memory context. V1 supports reflection only: "
+        "use this when you are not done thinking, but know what context "
+        "you need later."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "purpose": {
+                "type": "string",
+                "description": (
+                    "Why this future reflection should happen. This is "
+                    "recorded durably and shown to the future cycle."
+                ),
+            },
+            "requested_context": {
+                "type": "array",
+                "description": (
+                    "Memory context to resolve before wake. Each item is "
+                    "one of: recall by cycle/record_id with optional field; "
+                    "or compare by cycle_a/cycle_b with optional field/content."
+                ),
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "tool": {
+                            "type": "string",
+                            "enum": ["recall", "compare"],
+                        },
+                        "cycle": {"type": "integer"},
+                        "record_id": {"type": "string"},
+                        "field": {"type": "string"},
+                        "cycle_a": {"type": "integer"},
+                        "cycle_b": {"type": "integer"},
+                        "content": {"type": "boolean"},
+                    },
+                    "required": ["tool"],
+                },
+            },
+            "label": {
+                "type": "string",
+                "description": "Optional short label for browsing the event log.",
+            },
+            "expires_at": {
+                "type": "string",
+                "description": (
+                    "Optional ISO timestamp. If expired when the runner sees "
+                    "it, the event is marked expired rather than run."
+                ),
+            },
+            "reason": _REASON_FIELD,
+        },
+        "required": ["purpose", "requested_context"],
+    },
+}
+
+
 BASH_SCHEMA = {
     "name": "bash",
     "description": (
@@ -474,5 +535,6 @@ TOOL_SCHEMAS: dict[str, dict] = {
     "search_memory": SEARCH_MEMORY_SCHEMA,
     "store": STORE_SCHEMA,
     "annotate_edge": ANNOTATE_EDGE_SCHEMA,
+    "schedule_event": SCHEDULE_EVENT_SCHEMA,
     "bash": BASH_SCHEMA,
 }

@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
 
+from hamutay.events import build_pending_event
 from hamutay.tools.bash import tool_bash
 from hamutay.tools.graph import tool_annotate_edge, tool_store
 from hamutay.tools.memory import (
@@ -51,6 +52,7 @@ _CAPABILITY: dict[str, str] = {
     "search_memory": "read_only",
     "store": "bounded_write",
     "annotate_edge": "bounded_write",
+    "schedule_event": "bounded_write",
     "bash": "unbounded",
 }
 
@@ -66,6 +68,7 @@ class ToolExecutor:
         last_cycle_time: datetime | None = None,
         prior_states: list[tuple[int, UUID, dict, str]] | None = None,
         bridge=None,
+        scheduled_by_record_id: UUID | None = None,
     ):
         self._project_root = project_root
         self._cycle = cycle
@@ -78,11 +81,17 @@ class ToolExecutor:
         # Persistence backend for cross-session memory tool scope. None when
         # the session is running without persistence; tools gracefully degrade.
         self._bridge = bridge
+        self._scheduled_by_record_id = scheduled_by_record_id
+        self._pending_events: list[dict] = []
         self._activity_log: list[dict] = []
 
     @property
     def activity_log(self) -> list[dict]:
         return list(self._activity_log)
+
+    @property
+    def pending_events(self) -> list[dict]:
+        return list(self._pending_events)
 
     def log_event(self, event: dict) -> None:
         """Append a framework-level event (e.g. budget pressure/recovery) to the
@@ -143,6 +152,8 @@ class ToolExecutor:
             result = tool_annotate_edge(
                 tool_input, cycle=self._cycle, bridge=self._bridge,
             )
+        elif tool_name == "schedule_event":
+            result = self._schedule_event(tool_input)
         elif tool_name == "bash":
             result = tool_bash(tool_input, project_root=self._project_root)
         else:
@@ -176,6 +187,28 @@ class ToolExecutor:
         )
 
         return result
+
+    def _schedule_event(self, tool_input: dict) -> dict:
+        """Validate and buffer a scheduled event for cycle-commit time."""
+        if self._scheduled_by_record_id is None:
+            return {"error": "schedule_event requires a cycle record_id"}
+        try:
+            record = build_pending_event(
+                purpose=tool_input.get("purpose", ""),
+                requested_context=tool_input.get("requested_context"),
+                scheduled_by_cycle=self._cycle,
+                scheduled_by_record_id=self._scheduled_by_record_id,
+                label=tool_input.get("label"),
+                expires_at=tool_input.get("expires_at"),
+            )
+        except (TypeError, ValueError) as e:
+            return {"error": str(e)}
+        self._pending_events.append(record)
+        return {
+            "event_id": record["event_id"],
+            "status": "pending",
+            "accepted_context_count": len(record["requested_context"]),
+        }
 
 
 def _summarize(tool_name: str, result: dict) -> str:
@@ -213,6 +246,8 @@ def _summarize(tool_name: str, result: dict) -> str:
             f"annotate_edge: {result.get('relation', '?')} "
             f"edge {result.get('edge_id', '?')[:8]}"
         )
+    if tool_name == "schedule_event":
+        return f"schedule_event: {result.get('event_id', '?')[:8]}"
     if tool_name == "bash":
         if result.get("timed_out"):
             return "bash: timed out"

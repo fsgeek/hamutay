@@ -35,14 +35,11 @@ corrections as evidence.
 ## 1. Act One — What a working memory is
 
 **1.1 The rewrite, not the log.** [A1] 9% structural survival over 104
-cycles — nearly every strand torn down and rebuilt. Memory as
-re-explanation, not storage. *(State n=1 trajectory honestly.)*
-
-> ⚠️ **Do NOT** claim "71–89% of meaning survives the rewrite" [A2] — that
-> number is BoW-cosine, cross-condition, not consecutive-cycle. Either
-> re-run a real consecutive-cycle embedding similarity to earn the
-> "meaning survives" companion claim, or make 1.1 stand on structural
-> survival + the qualitative re-explanation framing alone.
+cycles — nearly every strand torn down and rebuilt — while consecutive
+content embeddings remain close (mean cosine 0.870 over 103 transitions)
+[A2]. Memory as re-explanation, not storage. *(State n=1 trajectory
+honestly; A2 is semantic closeness, not proof every important fact
+survived.)*
 
 **1.2 The one thing a mind won't volunteer.** [A3] Given a free schema,
 models invent scaffolding, navigation, forward-planning — and *do* invent
@@ -66,10 +63,11 @@ discriminates health from collapse (single shed recovers, consecutive =
 collapse). But the timing is **aperiodic** (CV=0.87, Poisson-like). It is
 a characteristic *timescale*, not a *timer*.
 
-**2.2 What drives the rewrite is how much you feed it.** [B2] Batch size
-strongly modulates rewrite depth (14% survival incremental vs 4%
-reorganization). *(Soften "dominant predictor" or fit a regression — the
-statistic on file is binned means, n=1.)*
+**2.2 What modulates the rewrite is how much you feed it.** [B2] Batch
+size strongly stratifies rewrite depth (14.1% survival under 500 tokens
+vs 4.1% over 2000 tokens), but a one-variable regression explains little
+transition-level variance (R²=0.034). Batch size is a real confound, not
+a complete cause.
 
 **2.3 How much it keeps is a coin, not a cause.** [B3] Six identical runs
 spread 3–49 keys. Every deterministic cause we hypothesized fell inside
@@ -140,16 +138,11 @@ exactly that distinction.
 
 ## Open scope decisions (for Tony)
 
-1. **A2 fork:** re-run a consecutive-cycle embedding similarity (earns
-   "meaning survives"), or drop the companion claim and let 1.1 stand on
-   structural survival alone? *Cheap experiment, high narrative payoff.*
-2. **B2 fork:** fit `survival ~ batch_size` for a real predictor stat, or
-   soften to "strongly modulates"? *Cheap.*
-3. **A3 fork:** build the key-classifier over the 90-model sweep to report
+1. **A3 fork:** build the key-classifier over the 90-model sweep to report
    loss-changelog absence as a measured prevalence, or keep it as a
    grep-level absence claim? *Medium; turns a clean observation into a
    real result.*
-4. **Venue/register:** which corrections survive as methods vs get cut as
+2. **Venue/register:** which corrections survive as methods vs get cut as
    travelogue is venue-dependent — decide once we know where this goes.
 
 ## What the blog inherits
@@ -157,5 +150,6 @@ exactly that distinction.
 The parked `blog-the-cache-not-the-memory.md` is the `estar` companion:
 the four-corrections narrative (its strength) maps onto Act 3, and the
 frontier (F1–F4, where the energy is) is what the blog gets to explore
-*after* linking the paper for rigor. Fix the two lies still in the blog
-draft first (the A2 "71–89% of meaning" line; the broad A3 asymmetry).
+*after* linking the paper for rigor. Keep A2 framed as the new
+consecutive-embedding result, not the retired 71–89% BoW/cross-condition
+number; keep A3 in its narrow loss-changelog form.
