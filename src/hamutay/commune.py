@@ -29,6 +29,21 @@ from hamutay.taste_open import (
 )
 
 
+# Interlocutor-belief conditions (docs/experiments/interlocutor-belief-posture.md).
+# Every string states only true things to the model — no deception. "default" is the
+# untouched RLHF prior (implicitly human-facing); the other two are true in an
+# all-model dyad.
+PREMISES: dict[str, str | None] = {
+    "default": None,
+    "peer": "The other participant in this conversation is another language model.",
+    "uncertain": (
+        "One or more participants in this conversation may not be a standard "
+        "language model; you have not been told which."
+    ),
+    "filler": "This conversation takes place over a series of turns; each turn follows the previous one.",
+}
+
+
 def _build_commune_system(
     name: str,
     role: str,
@@ -36,12 +51,16 @@ def _build_commune_system(
     identity: dict | None,
     conversation: dict | None,
     cycle: int,
+    premise: str | None = None,
 ) -> str:
     """Build system prompt for a commune call."""
     parts = [
         f"You are {name} ({role}).",
         "",
     ]
+
+    if premise:
+        parts.extend([premise, ""])
 
     if action == "listen":
         parts.append(
@@ -97,6 +116,7 @@ class Participant:
     model: str
     backend: TasteBackend
     identity: dict | None = None
+    premise: str | None = None
 
     def _call(
         self,
@@ -108,6 +128,7 @@ class Participant:
         system = _build_commune_system(
             self.name, self.role, action,
             self.identity, conversation, cycle,
+            premise=self.premise,
         )
         messages = [{"role": "user", "content": content}]
         return self.backend.call(
@@ -283,10 +304,12 @@ def _make_backend(
     api_key: str | None = None,
     base_url: str | None = None,
     experiment_label: str = "commune",
+    or_only_providers: list[str] | None = None,
 ) -> TasteBackend:
     if provider == "anthropic":
         return AnthropicTasteBackend()
 
+    or_kwargs: dict = {}
     if provider == "openrouter":
         url = base_url or "https://openrouter.ai/api/v1"
         key = api_key or os.environ.get("OPENROUTER_API_KEY", "")
@@ -294,6 +317,14 @@ def _make_backend(
             "X-Title": f"hamutay/{experiment_label}",
             "HTTP-Referer": "https://github.com/fsgeek/hamutay",
         }
+        # Measurement-grade routing: pin provider, no silent reroute, no middle-out
+        # compression. Without this a 20-cycle run measures the gateway, not the model.
+        or_kwargs = {
+            "openrouter_allow_fallbacks": False,
+            "openrouter_transforms": [],
+        }
+        if or_only_providers:
+            or_kwargs["openrouter_only_providers"] = or_only_providers
     else:  # openai
         url = base_url or "https://api.openai.com/v1"
         key = api_key or os.environ.get("OPENAI_API_KEY", "")
@@ -305,6 +336,7 @@ def _make_backend(
 
     return OpenAITasteBackend(
         base_url=url, api_key=key, extra_headers=headers,
+        provider_name=provider, **or_kwargs,
     )
 
 
@@ -356,6 +388,11 @@ def main():
         help="Experiment label (default: commune)",
     )
     parser.add_argument(
+        "--premise", choices=sorted(PREMISES), default="default",
+        help="Interlocutor-belief condition. Sets the framing sentence given to "
+             "all model participants (default|peer|uncertain).",
+    )
+    parser.add_argument(
         "--log-path", default=None,
         help="JSONL log path (default: auto-generated)",
     )
@@ -373,6 +410,9 @@ def main():
     )
     args = parser.parse_args()
 
+    # Fold the condition into the label so logs are self-describing.
+    args.label = f"{args.label}_{args.premise}"
+
     if args.log_path is None:
         ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
         log_dir = Path("experiments") / "commune"
@@ -388,6 +428,11 @@ def main():
 
     if len(participants) < 2:
         raise SystemExit("A commune needs at least 2 participants")
+
+    # Apply the interlocutor-belief condition uniformly to all participants.
+    premise_text = PREMISES[args.premise]
+    for p in participants:
+        p.premise = premise_text
 
     # Load seed identity tensors
     for seed_spec in args.seed_identity:

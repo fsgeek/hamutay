@@ -810,6 +810,8 @@ class OpenAITasteBackend:
         openrouter_require_parameters: bool = False,
         openrouter_provider_order: list[str] | None = None,
         openrouter_only_providers: list[str] | None = None,
+        openrouter_allow_fallbacks: bool | None = None,
+        openrouter_transforms: list[str] | None = None,
         max_retries: int = 3,
         retry_base_delay_s: float = 0.5,
     ):
@@ -824,6 +826,8 @@ class OpenAITasteBackend:
         self._or_require_parameters = openrouter_require_parameters
         self._or_provider_order = openrouter_provider_order or []
         self._or_only_providers = openrouter_only_providers or []
+        self._or_allow_fallbacks = openrouter_allow_fallbacks
+        self._or_transforms = openrouter_transforms
         self._max_retries = max_retries
         self._retry_base_delay_s = retry_base_delay_s
 
@@ -934,8 +938,14 @@ class OpenAITasteBackend:
                 provider_opts["order"] = self._or_provider_order
             if self._or_only_providers:
                 provider_opts["only"] = self._or_only_providers
+            if self._or_allow_fallbacks is not None:
+                provider_opts["allow_fallbacks"] = self._or_allow_fallbacks
             if provider_opts:
                 payload["provider"] = provider_opts
+            # transforms=[] disables middle-out compression (which would silently
+            # truncate a 20-cycle context — measuring the gateway, not the model).
+            if self._or_transforms is not None:
+                payload["transforms"] = self._or_transforms
 
         headers = {
             "Authorization": f"Bearer {self._api_key}",
