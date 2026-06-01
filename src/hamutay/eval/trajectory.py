@@ -9,10 +9,10 @@ shifts, IFN compensation patterns — these are the tensor's vital signs.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Sequence
 
-from hamutay.tensor import Tensor, LossCategory
+from hamutay.tensor import Tensor
 from hamutay.eval.divergence import (
     capacity_allocation,
     loss_distribution,
@@ -21,8 +21,6 @@ from hamutay.eval.divergence import (
     ComponentDivergence,
     CapacityAllocation,
     LossDistribution,
-    _tokenize,
-    _cosine_bow,
 )
 
 
@@ -138,7 +136,7 @@ class TrajectoryStats:
         """Meta-fraction over time. Rising = tensor eating itself."""
         return [cap.meta_frac for cap in self.capacity_series]
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, str | float]:
         """Compact summary for display."""
         return {
             "cycles": self.cycles,
@@ -163,7 +161,7 @@ def _detect_strand_events(
     prev_titles: set[str], curr_titles: set[str], cycle: int
 ) -> list[StrandEvent]:
     """Detect strand births, deaths, and persists between consecutive cycles."""
-    events = []
+    events: list[StrandEvent] = []
     for t in curr_titles - prev_titles:
         events.append(StrandEvent(cycle=cycle, event_type="birth", title=t))
     for t in prev_titles - curr_titles:
@@ -187,17 +185,17 @@ def trajectory_stats(tensors: Sequence[Tensor]) -> TrajectoryStats:
             consecutive_divergence=[],
         )
 
-    strand_counts = []
+    strand_counts: list[int] = []
     strand_events: list[StrandEvent] = []
-    loss_counts = []
-    loss_dists = []
-    ifn_lengths = []
-    question_counts = []
-    cap_series = []
-    token_series = []
-    truth_series = []
-    indet_series = []
-    consec_div = []
+    loss_counts: list[int] = []
+    loss_dists: list[LossDistribution] = []
+    ifn_lengths: list[int] = []
+    question_counts: list[int] = []
+    cap_series: list[CapacityAllocation] = []
+    token_series: list[int] = []
+    truth_series: list[float] = []
+    indet_series: list[float] = []
+    consec_div: list[ComponentDivergence] = []
 
     prev_titles: set[str] = set()
 
@@ -291,7 +289,7 @@ class TrajectoryComparison:
                       key=lambda i: self.cross_divergence[i].overall)
         return max_idx + 1  # cycles are 1-indexed
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, int | str | dict[str, str | float] | None] :
         return {
             "cycles_compared": len(self.cross_divergence),
             "mean_divergence": f"{self.mean_cross_divergence:.3f}",
@@ -315,9 +313,12 @@ class ProcessHealth:
     Captures what Riemann dispersion misses: the dynamics of how the
     tensor rewrites itself, not just the final output quality.
 
-    Derived from the metacognitive breathing analysis (2026-03-20):
+    Derived from the metacognitive breathing analysis (2026-03-20,
+    corrected 2026-05-30):
     - Metacognitive maintenance: does meta_frac hold or atrophy?
-    - Breathing rhythm: healthy oscillation in meta_frac (~10-cycle period)
+    - Breathing: aperiodic shed-and-recover in meta_frac (CV~0.87,
+      Poisson-like, NOT a 10-cycle clock). Healthy = aperiodic with
+      single-cycle precursors that recover; consecutive precursors = collapse.
     - Precursor recovery: single-cycle precursors self-recover
     - Loss evolution: growing losses = accumulating self-awareness
     """
@@ -326,9 +327,12 @@ class ProcessHealth:
     # Positive = maintaining/growing, negative = atrophying
     meta_trend: float
 
-    # Breathing rhythm: autocorrelation at lag ~10
-    # Negative = oscillatory (healthy), near-zero = damped, positive = stuck
-    meta_acf_lag10: float
+    # Autocorrelation at lag N (adaptive: min(10, max(3, n//5))).
+    # NOTE: This was formerly hard-coded at lag 10 as a "breathing clock"
+    # detector. Breathing is aperiodic (B1, corrected 2026-05-30). The ACF
+    # is kept as a descriptive statistic but the "breathing" property no
+    # longer asserts periodicity.
+    meta_acf_lagN: float
 
     # Precursor rate and recovery
     precursor_rate: float  # fraction of cycles that are precursors
@@ -348,20 +352,28 @@ class ProcessHealth:
 
     @property
     def breathing(self) -> bool:
-        """Does the tensor show the healthy breathing rhythm?"""
-        return self.meta_acf_lag10 < -0.05
+        """Does the tensor show healthy aperiodic breathing?
+
+        Healthy breathing is: aperiodic shed-and-recover (not periodic),
+        with single-cycle precursors that self-recover. Consecutive
+        precursors indicate collapse. This property is a placeholder;
+        the real health metric is precursor_recovery_rate + precursor_rate.
+        """
+        # DEPRECATED: lag-N ACF < -0.05 encoded the repudiated 10-cycle
+        # clock hypothesis (C5, corrected 2026-05-30). Do not use.
+        return self.meta_acf_lagN < -0.05
 
     @property
     def precursors_recovering(self) -> bool:
         """Are precursor events self-recovering?"""
         return self.precursor_recovery_rate >= 0.8 or self.precursor_rate == 0
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, str | float]:
         return {
             "meta_trend": f"{self.meta_trend:+.4f}",
             "metacognition_healthy": self.metacognition_healthy,
             "breathing": self.breathing,
-            "meta_acf_lag10": f"{self.meta_acf_lag10:+.3f}",
+            "meta_acf_lagN": f"{self.meta_acf_lagN:+.3f}",
             "precursor_rate": f"{self.precursor_rate:.2%}",
             "precursor_recovery_rate": f"{self.precursor_recovery_rate:.2%}",
             "loss_trend": f"{self.loss_trend:+.4f}",
@@ -445,7 +457,7 @@ def process_health(stats: TrajectoryStats) -> ProcessHealth:
 
     return ProcessHealth(
         meta_trend=meta_trend,
-        meta_acf_lag10=meta_acf,
+        meta_acf_lagN=meta_acf,
         precursor_rate=precursor_rate,
         precursor_recovery_rate=recovery_rate,
         loss_trend=loss_trend,
@@ -468,8 +480,8 @@ def compare_trajectories(
 
     # Match by cycle number
     b_by_cycle = {t.cycle: t for t in b}
-    cross_div = []
-    cross_sim = []
+    cross_div : list[ComponentDivergence] = []
+    cross_sim : list[float] = []
 
     for t_a in a:
         t_b = b_by_cycle.get(t_a.cycle)
