@@ -1,4 +1,4 @@
-"""Probe whether a fixed prompt clarification improves state persistence."""
+"""Probe whether prompt clarifications improve state persistence."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ from hamutay.eval.state_persistence_probe import (
 from hamutay.taste_open import OpenTasteSession
 
 
-FIXED_PRESERVATION_PREFIX = """\
+PRESERVATION_PREFIX = """\
 Experiment-specific protocol clarification:
 
 - Treat current_claim, revision_decision, evidence_register, and state_use_norm
@@ -37,6 +37,30 @@ Experiment-specific protocol clarification:
   revision_decision, and evidence_register in the same structured object as
   your response.
 """
+
+
+ACTIVATION_PREFIX = """\
+Experiment-specific activation contract:
+
+- If your response uses epistemic decision words such as revise, narrow, affirm,
+  preserve, defer, or loss, represent the same decision in top-level durable
+  fields in the same structured object.
+- A response-level epistemic decision without matching durable fields is an
+  incomplete cycle.
+- For revise or narrow, update current_claim, revision_decision, and
+  evidence_register.
+- For affirm, preserve, defer, or loss, update revision_decision and append the
+  reason or evidence to evidence_register.
+"""
+
+
+VARIANT_PREFIXES = {
+    "current": "",
+    "fixed": PRESERVATION_PREFIX,
+    "preservation": PRESERVATION_PREFIX,
+    "activation": ACTIVATION_PREFIX,
+    "combined": f"{PRESERVATION_PREFIX}\n{ACTIVATION_PREFIX}",
+}
 
 
 EVENTS = [
@@ -138,10 +162,10 @@ def run_variant(
     out_dir: Path,
     max_tokens: int,
 ) -> PromptVariantResult:
-    if variant not in {"current", "fixed"}:
+    if variant not in VARIANT_PREFIXES:
         raise ValueError(f"unsupported variant: {variant}")
     path = _log_path(out_dir, model, variant, replicate)
-    prefix = FIXED_PRESERVATION_PREFIX if variant == "fixed" else ""
+    prefix = VARIANT_PREFIXES[variant]
     session = OpenTasteSession(
         model=model,
         backend=_backend(model, max_tokens),
@@ -266,7 +290,7 @@ def summarize_results(results: list[PromptVariantResult]) -> list[dict[str, obje
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Run fixed-prompt preservation variant probe."
+        description="Run prompt-clarification variant probe."
     )
     parser.add_argument("--out-dir", required=True)
     parser.add_argument(
@@ -277,8 +301,8 @@ def main() -> None:
     parser.add_argument(
         "--variants",
         nargs="+",
-        default=["current", "fixed"],
-        choices=["current", "fixed"],
+        default=["current", "preservation", "activation", "combined"],
+        choices=sorted(VARIANT_PREFIXES),
     )
     parser.add_argument("--replicates", type=int, default=1)
     parser.add_argument("--max-tokens", type=int, default=6000)

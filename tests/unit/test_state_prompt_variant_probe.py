@@ -1,7 +1,9 @@
-"""Tests for fixed-prompt preservation variant probe."""
+"""Tests for prompt-clarification variant probe."""
 
 from hamutay.eval.state_prompt_variant_probe import (
+    PRESERVATION_PREFIX,
     PromptVariantResult,
+    VARIANT_PREFIXES,
     _deleted_load_bearing_fields,
     summarize_results,
 )
@@ -14,6 +16,14 @@ def test_deleted_load_bearing_fields_detects_current_claim_deletion():
     ]
 
     assert _deleted_load_bearing_fields(records) is True
+
+
+def test_variant_prefixes_include_activation_and_legacy_alias():
+    assert VARIANT_PREFIXES["fixed"] == PRESERVATION_PREFIX
+    assert VARIANT_PREFIXES["preservation"] == PRESERVATION_PREFIX
+    assert "incomplete cycle" in VARIANT_PREFIXES["activation"]
+    assert "deleted_regions" in VARIANT_PREFIXES["combined"]
+    assert "incomplete cycle" in VARIANT_PREFIXES["combined"]
 
 
 def test_summarize_results_groups_by_model_and_variant():
