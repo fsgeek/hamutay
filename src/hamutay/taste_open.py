@@ -114,7 +114,9 @@ composition graph. from_cycle walks in-session cycle-adjacency; \
 from_record_id follows composition edges across sessions. Returns \
 summaries — use recall afterward if a step looks worth loading.
 - search_memory(query, narrow_by?, scope?): Substring search across \
-prior states. Structural narrowing first, keyword match after.
+prior states. Structural narrowing first, keyword match after. Searches \
+your content fields by default, not framework-authored _-prefixed ones \
+(e.g. _activity_log); name them in narrow_by.fields to include them.
 
 Addressing across sessions: cycle numbers are session-local (every \
 session has a cycle 1). Cross-session references use record_id (UUID). \

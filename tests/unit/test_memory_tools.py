@@ -533,6 +533,47 @@ def test_search_memory_missing_query():
     assert "error" in result
 
 
+def _prior_states_with_activity_log():
+    """A cycle whose framework-authored _activity_log mentions the query term.
+
+    The instance's content (theme) does NOT contain the term; only the
+    framework's record of its own tool calls does.
+    """
+    return [
+        (1, _RID_1, {"theme": "opening", "cycle": 1}, "2026-04-18T10:00:00+00:00"),
+        (2, _RID_2,
+         {
+             "theme": "curiosity",
+             "cycle": 2,
+             "_activity_log": [{"tool": "recall", "params": {"field": "pattern"}}],
+         },
+         "2026-04-18T10:01:00+00:00"),
+    ]
+
+
+def test_search_memory_excludes_underscore_fields_by_default():
+    """Framework-authored _-prefixed fields are not the instance's content;
+    a default search must not match against them (self-pollution guard)."""
+    result = tool_search_memory(
+        {"query": "pattern"},
+        prior_states=_prior_states_with_activity_log(),
+    )
+    # The only occurrence of "pattern" is inside _activity_log — excluded.
+    assert result["results"] == []
+
+
+def test_search_memory_includes_underscore_field_when_named():
+    """If the instance explicitly names a _-prefixed field, honor it —
+    exclusion is a default, not a prohibition."""
+    result = tool_search_memory(
+        {"query": "pattern", "narrow_by": {"fields": ["_activity_log"]}},
+        prior_states=_prior_states_with_activity_log(),
+    )
+    matched_cycles = [r["cycle"] for r in result["results"]]
+    assert matched_cycles == [2]
+    assert result["results"][0]["matched_fields"] == ["_activity_log"]
+
+
 # ---------------------------------------------------------------------------
 # search_memory — cross-session scope
 # ---------------------------------------------------------------------------

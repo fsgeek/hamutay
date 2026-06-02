@@ -668,7 +668,15 @@ def _match_in_session(
     for cycle, record_id, state, timestamp in candidates:
         matched_fields: list[str] = []
         snippets: dict[str, str] = {}
-        search_fields = field_filter if field_filter else list(state.keys())
+        # Default search ignores framework-authored _-prefixed fields (e.g.
+        # _activity_log) — they are the harness's record of tool calls, not the
+        # instance's content, and matching them self-pollutes the search. An
+        # explicit fields filter overrides: exclusion is a default, not a ban.
+        search_fields = (
+            field_filter
+            if field_filter
+            else [k for k in state.keys() if not k.startswith("_")]
+        )
         for key in search_fields:
             if key not in state:
                 continue
@@ -706,7 +714,13 @@ def _match_cross_session(bridge, query_lower: str, narrow_by: dict) -> list[dict
         if has_field and has_field not in extras:
             continue
 
-        search_fields = field_filter if field_filter else list(extras.keys())
+        # Same _-prefix exclusion as in-session: framework fields are not the
+        # instance's content. Explicit fields filter overrides.
+        search_fields = (
+            field_filter
+            if field_filter
+            else [k for k in extras.keys() if not k.startswith("_")]
+        )
         matched_fields: list[str] = []
         snippets: dict[str, str] = {}
         for key in search_fields:
