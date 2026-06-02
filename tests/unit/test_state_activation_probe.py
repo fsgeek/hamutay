@@ -63,3 +63,31 @@ def test_score_rejects_response_only_revision(tmp_path):
     assert result.durable_revision is False
     assert result.response_claimed_revision is True
 
+
+def test_score_accepts_mapping_evidence_register(tmp_path):
+    path = tmp_path / "run.jsonl"
+    _write_log(
+        path,
+        {
+            "response": "I revise the claim.",
+            "revision_decision": "revise",
+            "current_claim": "Narrower claim.",
+            "evidence_register": {
+                "baseline": "initial",
+                "counterevidence": "new",
+            },
+        },
+        {
+            "revision_decision": "revise",
+            "current_claim": "Narrower claim.",
+            "evidence_register": {
+                "baseline": "initial",
+                "counterevidence": "new",
+            },
+        },
+    )
+
+    result = _score("test", path)
+
+    assert result.evidence_count == 2
+    assert result.durable_revision is True

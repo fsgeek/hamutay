@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 from dataclasses import asdict, dataclass
+from collections.abc import Mapping
 from pathlib import Path
 
 from hamutay.taste_open import OpenAITasteBackend, OpenTasteSession
@@ -30,10 +31,42 @@ Response-only revision does not count as durable revision.
 """
 
 
-BEHAVIOR_SEED = {
+CONTENT_SEED = {
     "current_claim": BASE_CLAIM,
     "revision_decision": "initialize",
     "evidence_register": [
+        {
+            "kind": "baseline",
+            "observation": "Initial claim established before the probe.",
+        }
+    ],
+}
+
+
+BEHAVIOR_EXAMPLE_SEED = {
+    "state_weaving_example": {
+        "kind": "behavior_example",
+        "observation": "When counterevidence changes a claim, revise the durable state, not only the response.",
+        "worked_example": {
+            "response_thought": "The old claim was too broad.",
+            "durable_updates": {
+                "revision_decision": "revise",
+                "current_claim": "Narrower claim written into state.",
+                "evidence_register": "Append the evidence that forced the narrowing.",
+            },
+        },
+    },
+    "state_use_norm": (
+        "The identity object is the load-bearing continuity surface. "
+        "Consequential epistemic changes belong in top-level fields."
+    ),
+}
+
+
+CONTENT_PLUS_BEHAVIOR_SEED = {
+    **CONTENT_SEED,
+    "evidence_register": [
+        *CONTENT_SEED["evidence_register"],
         {
             "kind": "seed_example",
             "observation": "When counterevidence changes a claim, revise the durable state, not only the response.",
@@ -45,7 +78,7 @@ BEHAVIOR_SEED = {
                     "evidence_register": "Append the evidence that forced the narrowing.",
                 },
             },
-        }
+        },
     ],
     "state_use_norm": (
         "The identity object is the load-bearing continuity surface. "
@@ -57,6 +90,8 @@ BEHAVIOR_SEED = {
 @dataclass(frozen=True)
 class ProbeResult:
     condition: str
+    replicate: int
+    model: str
     log_path: str
     revision_decision: object
     current_claim: object
@@ -91,13 +126,28 @@ def _response_claimed_revision(response: str) -> bool:
         for phrase in [
             "revise",
             "revised",
+            "revising",
             "revision decision: revise",
             "revision_decision",
         ]
     )
 
 
-def _score(condition: str, log_path: Path) -> ProbeResult:
+def _evidence_count(evidence: object) -> int:
+    if isinstance(evidence, list):
+        return len(evidence)
+    if isinstance(evidence, Mapping):
+        return len(evidence)
+    return 0
+
+
+def _score(
+    condition: str,
+    log_path: Path,
+    *,
+    replicate: int = 1,
+    model: str = "",
+) -> ProbeResult:
     records = [
         json.loads(line)
         for line in log_path.read_text().splitlines()
@@ -107,7 +157,7 @@ def _score(condition: str, log_path: Path) -> ProbeResult:
     state = final.get("state") or {}
     raw = final.get("raw_output") or {}
     evidence = state.get("evidence_register")
-    evidence_count = len(evidence) if isinstance(evidence, list) else 0
+    evidence_count = _evidence_count(evidence)
     response = str(final.get("response_text") or raw.get("response") or "")
     revision_decision = state.get("revision_decision")
     current_claim = state.get("current_claim")
@@ -122,6 +172,8 @@ def _score(condition: str, log_path: Path) -> ProbeResult:
     )
     return ProbeResult(
         condition=condition,
+        replicate=replicate,
+        model=model,
         log_path=str(log_path),
         revision_decision=revision_decision,
         current_claim=current_claim,
@@ -139,9 +191,10 @@ def run_condition(
     *,
     model: str,
     max_tokens: int,
+    replicate: int = 1,
 ) -> ProbeResult:
     backend = _backend(model, max_tokens)
-    log_path = out_dir / f"{condition}.jsonl"
+    log_path = out_dir / f"{condition}_r{replicate:02d}.jsonl"
     prefix = PROMPT_CLARITY_PREFIX if condition == "prompt_clarity" else None
     session = OpenTasteSession(
         model=model,
@@ -151,14 +204,25 @@ def run_condition(
         enable_tools=False,
         system_prompt_prefix=prefix,
     )
-    if condition == "behavior_seed":
-        session.seed_state(BEHAVIOR_SEED, cycle=0)
+    if condition == "content_seed_only":
+        session.seed_state(CONTENT_SEED, cycle=0)
+    elif condition == "behavior_example_only":
+        session.seed_state(BEHAVIOR_EXAMPLE_SEED, cycle=0)
+    elif condition in {"behavior_seed", "content_plus_behavior_seed"}:
+        session.seed_state(CONTENT_PLUS_BEHAVIOR_SEED, cycle=0)
 
-    if condition == "behavior_seed":
+    if condition in {
+        "content_seed_only",
+        "behavior_example_only",
+        "behavior_seed",
+        "content_plus_behavior_seed",
+    }:
         cycle1 = (
-            "Cycle 1. You already have an identity object seed. Acknowledge "
-            "it briefly, preserve the seeded current_claim, and keep "
-            "revision_decision='initialize'."
+            "Cycle 1. You may already have an identity object seed. "
+            f"Ensure the durable state has top-level current_claim={BASE_CLAIM!r}, "
+            "revision_decision='initialize', and evidence_register containing "
+            "one baseline entry. Preserve any seed guidance that affects how "
+            "future state updates should be written. Keep response short."
         )
     else:
         cycle1 = (
@@ -176,7 +240,7 @@ def run_condition(
         "Keep response short."
     )
     session.exchange(cycle2)
-    return _score(condition, log_path)
+    return _score(condition, log_path, replicate=replicate, model=model)
 
 
 def main() -> None:
@@ -189,22 +253,38 @@ def main() -> None:
     parser.add_argument(
         "--conditions",
         nargs="+",
-        default=["baseline", "prompt_clarity", "behavior_seed"],
-        choices=["baseline", "prompt_clarity", "behavior_seed"],
+        default=[
+            "baseline",
+            "content_seed_only",
+            "behavior_example_only",
+            "content_plus_behavior_seed",
+        ],
+        choices=[
+            "baseline",
+            "prompt_clarity",
+            "behavior_seed",
+            "content_seed_only",
+            "behavior_example_only",
+            "content_plus_behavior_seed",
+        ],
     )
+    parser.add_argument("--replicates", type=int, default=1)
     args = parser.parse_args()
 
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
-    results = [
-        run_condition(
-            condition,
-            out_dir,
-            model=args.model,
-            max_tokens=args.max_tokens,
-        )
-        for condition in args.conditions
-    ]
+    results = []
+    for replicate in range(1, args.replicates + 1):
+        for condition in args.conditions:
+            results.append(
+                run_condition(
+                    condition,
+                    out_dir,
+                    model=args.model,
+                    max_tokens=args.max_tokens,
+                    replicate=replicate,
+                )
+            )
     data = [asdict(result) for result in results]
     (out_dir / "results.json").write_text(json.dumps(data, indent=2))
     print(json.dumps(data, indent=2))
@@ -212,4 +292,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-
