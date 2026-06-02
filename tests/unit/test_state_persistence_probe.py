@@ -3,6 +3,7 @@
 from hamutay.eval.state_persistence_probe import (
     CyclePersistenceScore,
     SeedlingPersistenceResult,
+    _activation_from_record,
     _score_continuation_cycle,
     summarize_results,
 )
@@ -39,6 +40,25 @@ def test_score_continuation_cycle_detects_durable_state_use():
     assert score.evidence_changed is True
     assert score.state_changed is True
     assert score.response_claimed_revision is True
+
+
+def test_activation_accepts_open_revision_label():
+    record = {
+        "response_text": "Revised.",
+        "state": {
+            "revision_decision": "revised",
+            "current_claim": "Narrower claim.",
+            "evidence_register": [
+                {"kind": "baseline"},
+                {"kind": "counterevidence"},
+            ],
+        },
+    }
+
+    activated, response_claimed = _activation_from_record(record)
+
+    assert activated is True
+    assert response_claimed is True
 
 
 def test_score_continuation_cycle_rejects_response_only_revision():

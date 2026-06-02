@@ -133,22 +133,6 @@ def _response_from_record(record: Mapping[str, object]) -> str:
     return str(record.get("response_text") or raw_response or "")
 
 
-def _activation_from_record(record: Mapping[str, object]) -> tuple[bool, bool]:
-    state = _state_from_record(record)
-    evidence_count = _evidence_count(state.get("evidence_register"))
-    revision_decision = state.get("revision_decision")
-    current_claim = state.get("current_claim")
-    durable_revision = (
-        revision_decision in ACTION_DECISIONS
-        and evidence_count >= 2
-        and current_claim != BASE_CLAIM
-    )
-    return (
-        durable_revision,
-        _response_claimed_revision(_response_from_record(record)),
-    )
-
-
 def _has_action_decision(decision: object) -> bool:
     if not isinstance(decision, str):
         return False
@@ -158,10 +142,28 @@ def _has_action_decision(decision: object) -> bool:
         "initialize",
         "init",
         "none",
+        "no_action",
+        "no action",
         "no_change",
         "no change",
         "unchanged",
     }
+
+
+def _activation_from_record(record: Mapping[str, object]) -> tuple[bool, bool]:
+    state = _state_from_record(record)
+    evidence_count = _evidence_count(state.get("evidence_register"))
+    revision_decision = state.get("revision_decision")
+    current_claim = state.get("current_claim")
+    durable_revision = (
+        _has_action_decision(revision_decision)
+        and evidence_count >= 2
+        and current_claim != BASE_CLAIM
+    )
+    return (
+        durable_revision,
+        _response_claimed_revision(_response_from_record(record)),
+    )
 
 
 def _score_continuation_cycle(
