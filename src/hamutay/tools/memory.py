@@ -50,6 +50,36 @@ def _token_estimate(state: dict) -> int:
     return len(json.dumps(state, default=str)) // 4
 
 
+_MISSING = object()
+
+
+def _resolve_field(container: dict, field: str):
+    """Resolve exact, dotted, or model-nested state fields.
+
+    Some OpenAI-compatible models wrap their durable object in a top-level
+    ``state`` key despite the prompt asking for top-level fields. Preserve
+    exact top-level semantics first, then allow dotted paths, then fall back
+    to the nested state object for simple field recall.
+    """
+    if field in container:
+        return container[field]
+
+    current = container
+    for part in field.split("."):
+        if not isinstance(current, dict) or part not in current:
+            current = _MISSING
+            break
+        current = current[part]
+    if current is not _MISSING:
+        return current
+
+    nested = container.get("state")
+    if isinstance(nested, dict) and field != "state":
+        return _resolve_field(nested, field)
+
+    return _MISSING
+
+
 def tool_memory_schema(
     params: dict,
     *,
@@ -163,13 +193,14 @@ def tool_recall(
         except Exception as e:
             return {"error": f"Record {record_id} not found: {e}"}
         if field is not None:
-            if field not in content:
+            value = _resolve_field(content, field)
+            if value is _MISSING:
                 return {
                     "error": f"Field {field!r} not in record {record_id}"
                 }
             return {
                 "record_id": str(record_id),
-                "content": content[field],
+                "content": value,
             }
         return {
             "record_id": str(record_id),
@@ -183,7 +214,8 @@ def tool_recall(
             return {"error": f"No state found for cycle {cycle}"}
         _cycle, record_id, state, timestamp = found
         if field is not None:
-            if field not in state:
+            value = _resolve_field(state, field)
+            if value is _MISSING:
                 return {
                     "error": f"Field {field!r} not in state at cycle {cycle}"
                 }
@@ -191,7 +223,7 @@ def tool_recall(
                 "cycle": _cycle,
                 "record_id": str(record_id),
                 "timestamp": timestamp,
-                "content": state[field],
+                "content": value,
             }
         return {
             "cycle": _cycle,
@@ -233,13 +265,14 @@ def _collect_recent(
 
     if scope in ("session", "all"):
         for _cycle, record_id, state, timestamp in reversed(prior_states):
-            if field in state:
+            value = _resolve_field(state, field)
+            if value is not _MISSING:
                 collected.append(
                     {
                         "cycle": _cycle,
                         "record_id": str(record_id),
                         "timestamp": timestamp,
-                        "value": state[field],
+                        "value": value,
                     }
                 )
                 if len(collected) >= recent:
@@ -282,13 +315,14 @@ def _candidates_with_field(
 
     if scope in ("session", "all"):
         for _cycle, record_id, state, timestamp in prior_states:
-            if field in state:
+            value = _resolve_field(state, field)
+            if value is not _MISSING:
                 candidates.append(
                     {
                         "cycle": _cycle,
                         "record_id": str(record_id),
                         "timestamp": timestamp,
-                        "content": state[field],
+                        "content": value,
                     }
                 )
 
@@ -312,9 +346,6 @@ def _candidates_with_field(
             )
 
     return candidates
-
-
-_MISSING = object()
 
 
 def tool_compare(

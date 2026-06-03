@@ -78,6 +78,57 @@ def test_recall_surgical():
     assert result["content"] == "curiosity"
 
 
+def test_recall_surgical_falls_back_to_nested_state_object():
+    prior_states = [
+        (
+            1,
+            _RID_1,
+            {
+                "state": {
+                    "current_claim": "nested claim",
+                    "evidence_register": [{"entry": 1}],
+                },
+                "cycle": 1,
+            },
+            "2026-04-18T10:00:00+00:00",
+        ),
+    ]
+
+    claim = tool_recall(
+        {"cycle": 1, "field": "current_claim"},
+        prior_states=prior_states,
+    )
+    evidence = tool_recall(
+        {"cycle": 1, "field": "state.evidence_register"},
+        prior_states=prior_states,
+    )
+
+    assert claim["content"] == "nested claim"
+    assert evidence["content"] == [{"entry": 1}]
+
+
+def test_recall_surgical_prefers_top_level_field_over_nested_state():
+    prior_states = [
+        (
+            1,
+            _RID_1,
+            {
+                "current_claim": "top claim",
+                "state": {"current_claim": "nested claim"},
+                "cycle": 1,
+            },
+            "2026-04-18T10:00:00+00:00",
+        ),
+    ]
+
+    result = tool_recall(
+        {"cycle": 1, "field": "current_claim"},
+        prior_states=prior_states,
+    )
+
+    assert result["content"] == "top claim"
+
+
 def test_recall_full_snapshot():
     """cycle alone returns the full state dict, with record_id."""
     result = tool_recall({"cycle": 3}, prior_states=_make_prior_states())
@@ -110,6 +161,30 @@ def test_recall_recent_skips_missing_field():
     assert len(result["content"]) == 2
     cycles_returned = {e["cycle"] for e in result["content"]}
     assert cycles_returned == {2, 3}
+
+
+def test_recall_recent_finds_nested_state_fields():
+    prior_states = [
+        (
+            1,
+            _RID_1,
+            {"state": {"theme": "nested"}, "cycle": 1},
+            "2026-04-18T10:00:00+00:00",
+        ),
+        (
+            2,
+            _RID_2,
+            {"theme": "top", "cycle": 2},
+            "2026-04-18T10:01:00+00:00",
+        ),
+    ]
+
+    result = tool_recall(
+        {"recent": 5, "field": "theme"},
+        prior_states=prior_states,
+    )
+
+    assert [item["value"] for item in result["content"]] == ["top", "nested"]
 
 
 def test_recall_random_picks_from_history():
