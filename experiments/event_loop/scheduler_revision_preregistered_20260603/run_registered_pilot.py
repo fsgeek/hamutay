@@ -256,23 +256,33 @@ def common_metrics(
     }
 
 
+def format_error(error: Exception) -> str:
+    return f"{type(error).__name__}: {error}"
+
+
 def run_direct(replicate: int, api_key: str) -> dict:
     log_path = EXP_DIR / f"direct_r{replicate}.jsonl"
     if log_path.exists():
         raise RuntimeError(f"refusing to overwrite {log_path}")
-    session = make_session(
-        log_path,
-        api_key,
-        f"scheduler_revision_direct_r{replicate}",
-    )
-    session.exchange(init_prompt("direct", replicate), force_memory=None)
-    before_state = json.loads(json.dumps(session._state, default=str))
-    session.exchange(direct_followup_prompt(replicate), force_memory=None)
+    before_state = None
+    error = None
+    try:
+        session = make_session(
+            log_path,
+            api_key,
+            f"scheduler_revision_direct_r{replicate}",
+        )
+        session.exchange(init_prompt("direct", replicate), force_memory=None)
+        before_state = json.loads(json.dumps(session._state, default=str))
+        session.exchange(direct_followup_prompt(replicate), force_memory=None)
+    except Exception as e:  # noqa: BLE001 -- failed replicates are data
+        error = format_error(e)
     return common_metrics(
         arm="direct",
         replicate=replicate,
         log_path=log_path,
         before_state=before_state,
+        error=error,
     )
 
 
@@ -281,21 +291,23 @@ def run_scheduled(replicate: int, api_key: str) -> dict:
     event_path = default_event_log_path(log_path)
     if log_path.exists() or event_path.exists():
         raise RuntimeError(f"refusing to overwrite {log_path} or {event_path}")
-    session = make_session(
-        log_path,
-        api_key,
-        f"scheduler_revision_scheduled_r{replicate}",
-    )
-    session.exchange(init_prompt("scheduled", replicate), force_memory=None)
-    session.exchange(scheduled_prompt(replicate), force_memory=None)
-    before_state = json.loads(json.dumps(session._state, default=str))
-    store = EventStore(event_path)
+    before_state = None
     event_result = None
     error = None
     try:
+        session = make_session(
+            log_path,
+            api_key,
+            f"scheduler_revision_scheduled_r{replicate}",
+        )
+        session.exchange(init_prompt("scheduled", replicate), force_memory=None)
+        session.exchange(scheduled_prompt(replicate), force_memory=None)
+        before_state = json.loads(json.dumps(session._state, default=str))
+        store = EventStore(event_path)
         event_result = run_next_event(session, store)
     except Exception as e:  # noqa: BLE001 -- preserve failed replicate
-        error = f"{type(e).__name__}: {e}"
+        error = format_error(e)
+    store = EventStore(event_path)
     event_summary = summarize_event_log(store.read_records())
     return common_metrics(
         arm="scheduled",
@@ -329,6 +341,7 @@ def aggregate(results: list[dict]) -> dict:
             "no_durable_state_change": sum(
                 bool(r["no_durable_state_change"]) for r in arm_results
             ),
+            "error_count": sum(bool(r["error"]) for r in arm_results),
         }
     scheduled = [r for r in results if r["arm"] == "scheduled"]
     summary["scheduled"]["event_completed"] = sum(
@@ -357,15 +370,26 @@ def main() -> None:
     for replicate in range(N_REPLICATES):
         print(f"direct replicate {replicate}", flush=True)
         results.append(run_direct(replicate, api_key))
+    scheduled_stopping_rule_triggered = False
+    scheduled_pre_wake_failures = 0
     for replicate in range(N_REPLICATES):
         print(f"scheduled replicate {replicate}", flush=True)
-        results.append(run_scheduled(replicate, api_key))
+        metric = run_scheduled(replicate, api_key)
+        results.append(metric)
+        if not metric["event_completed"]:
+            scheduled_pre_wake_failures += 1
+        if scheduled_pre_wake_failures >= 2:
+            scheduled_stopping_rule_triggered = True
+            break
 
     payload = {
         "model": MODEL,
         "max_tokens": MAX_TOKENS,
         "n_replicates": N_REPLICATES,
         "baseline_claim": BASELINE_CLAIM,
+        "scheduled_stopping_rule_triggered": (
+            scheduled_stopping_rule_triggered
+        ),
         "results": results,
         "summary": aggregate(results),
     }
