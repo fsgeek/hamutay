@@ -132,3 +132,44 @@ Before using it in a registered scheduler comparison, either run it in a
 terminal-tool-only condition or add a local compatibility mode that can recover
 from content-only OpenAI `auto` turns and capture provider-side tool-generation
 failures as failed-cycle artifacts.
+
+## Local LM Studio Probe: Qwen 3.5 and OLMo3
+
+User-reported local result:
+
+- `qwen/qwen3.5-35b-a3b` loaded in LM Studio, but did not use the
+  `think_and_respond` tool in the live taste-open probe. No JSONL log was
+  inspected for this note.
+
+Inspected local log:
+
+- `experiments/taste_open/taste_open_20260603_165857.jsonl`
+- Model: `olmo-3-7b-instruct`
+- Completed cycles in log: 10
+- Stop reason in recorded cycles: `tool_use` for all 10
+- Top-level state key trajectory, excluding `cycle`: 0, 1, 1, 1, 1, 2, 2, 2, 2,
+  2
+- Durable keys seen: `read`, `prompt`
+
+Observed OLMo3 behavior:
+
+- Transport reliability is partial. The user observed multiple failed attempts
+  with no `think_and_respond` usage; retrying eventually produced a 10-cycle
+  log.
+- Several recorded cycles have empty visible responses or empty raw outputs
+  despite `stop_reason: tool_use`.
+- The state object was used minimally and not in an identity-bearing way:
+  `read: true` appeared at cycle 2, and a copied/reframed prompt appeared at
+  cycle 6.
+- When directly invited to test the state object by adding a suggested
+  `framework` key, the model instead answered the older saved prompt about AI
+  effects on human perception and left state unchanged.
+
+Interpretation:
+
+OLMo3 is a useful local diagnostic for weak state-object literacy. It can
+sometimes satisfy the terminal tool boundary, but its durable object use is
+thin, task-echoed, and prone to stale-prompt fixation. It should not be used as
+a scheduler comparison model until an initialization-validity gate can reject
+or separately classify runs with empty responses, empty raw outputs, and
+non-identity state fields.
