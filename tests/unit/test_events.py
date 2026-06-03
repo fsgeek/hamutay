@@ -134,9 +134,71 @@ def test_event_store_claim_marks_expired_without_running(tmp_path):
     assert [r["status"] for r in store.read_records()] == ["pending", "expired"]
 
 
+def test_build_pending_event_accepts_and_validates_not_before():
+    event = build_pending_event(
+        purpose="Wait before waking.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=UUID("00000000-0000-0000-0000-000000000001"),
+        not_before="2026-06-01T01:00:00Z",
+    )
+
+    assert event["not_before"] == "2026-06-01T01:00:00Z"
+    with pytest.raises(ValueError):
+        build_pending_event(
+            purpose="Bad time.",
+            requested_context=[{"tool": "recall", "cycle": 1}],
+            scheduled_by_cycle=1,
+            scheduled_by_record_id=UUID(
+                "00000000-0000-0000-0000-000000000001"
+            ),
+            not_before="not-a-timestamp",
+        )
+
+
+def test_event_store_claim_skips_not_yet_due_event(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    future = _event_record()
+    future["created_at"] = "2026-06-01T00:00:00+00:00"
+    future["not_before"] = "2026-06-01T01:00:00+00:00"
+    ready = _event_record()
+    ready["created_at"] = "2026-06-01T00:00:01+00:00"
+    store.append(future)
+    store.append(ready)
+
+    claim = store.claim_next_pending(
+        now=datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc),
+        run_id=UUID("00000000-0000-0000-0000-000000000123"),
+    )
+
+    assert claim is not None
+    claimed, running = claim
+    assert claimed["event_id"] == ready["event_id"]
+    assert running["status"] == "running"
+    latest = store.latest_by_event_id()
+    assert latest[future["event_id"]]["status"] == "pending"
+    assert latest[ready["event_id"]]["status"] == "running"
+
+
+def test_event_store_claim_returns_none_when_no_event_is_due(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    future = _event_record()
+    future["not_before"] = "2026-06-01T01:00:00+00:00"
+    store.append(future)
+
+    claim = store.claim_next_pending(
+        now=datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc)
+    )
+
+    assert claim is None
+    assert store.latest_by_event_id()[future["event_id"]]["status"] == "pending"
+
+
 def test_schedule_event_schema_exists():
     assert "schedule_event" in TOOL_SCHEMAS
     assert "purpose" in TOOL_SCHEMAS["schedule_event"]["input_schema"]["required"]
+    properties = TOOL_SCHEMAS["schedule_event"]["input_schema"]["properties"]
+    assert "not_before" in properties
 
 
 def test_executor_buffers_scheduled_event(tmp_path):
@@ -150,14 +212,19 @@ def test_executor_buffers_scheduled_event(tmp_path):
         {
             "purpose": "Check whether the claim still holds.",
             "requested_context": [{"tool": "recall", "cycle": 2}],
+            "not_before": "2026-06-01T01:00:00+00:00",
             "reason": "future self needs evidence",
         },
     )
 
     assert result["status"] == "pending"
     assert result["accepted_context_count"] == 1
+    assert result["not_before"] == "2026-06-01T01:00:00+00:00"
     assert len(executor.pending_events) == 1
     assert executor.pending_events[0]["scheduled_by_cycle"] == 4
+    assert executor.pending_events[0]["not_before"] == (
+        "2026-06-01T01:00:00+00:00"
+    )
     assert executor.activity_log[-1]["tool"] == "schedule_event"
     assert executor.activity_log[-1]["reason"] == "future self needs evidence"
 
@@ -367,6 +434,21 @@ def test_run_next_event_marks_expired(tmp_path):
     assert result["status"] == "expired"
 
 
+def test_run_next_event_reports_none_when_pending_event_not_due(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    event = _event_record()
+    event["not_before"] = "2999-01-01T00:00:00+00:00"
+    store.append(event)
+
+    result = run_next_event(SimpleNamespace(), store)
+
+    assert result == {
+        "status": "none",
+        "message": "no runnable pending events",
+    }
+    assert store.latest_by_event_id()[event["event_id"]]["status"] == "pending"
+
+
 def test_run_next_event_logs_failure(tmp_path):
     log_path = tmp_path / "session.jsonl"
     event_path = tmp_path / "session.events.jsonl"
@@ -426,6 +508,7 @@ def test_summarize_event_log_reports_statuses_and_context_errors(tmp_path):
     completed = _event_record()
     failed = _event_record()
     pending = _event_record()
+    pending["not_before"] = "2026-06-01T01:00:00+00:00"
 
     store.append(completed)
     store.append_running(completed, run_id=UUID("00000000-0000-0000-0000-000000000111"))
@@ -469,6 +552,9 @@ def test_summarize_event_log_reports_statuses_and_context_errors(tmp_path):
         "pending": 1,
     }
     assert summary["oldest_pending"]["event_id"] == pending["event_id"]
+    assert summary["oldest_pending"]["not_before"] == (
+        "2026-06-01T01:00:00+00:00"
+    )
     assert summary["failed"][0]["error"] == "wake failed"
     assert summary["context_errors"][0]["event_id"] == completed["event_id"]
     assert summary["outcome_warnings"][0]["event_id"] == completed["event_id"]

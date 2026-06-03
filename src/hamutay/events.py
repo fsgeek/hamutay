@@ -87,6 +87,7 @@ def build_pending_event(
     scheduled_by_cycle: int,
     scheduled_by_record_id: UUID,
     label: str | None = None,
+    not_before: str | None = None,
     expires_at: str | None = None,
 ) -> dict:
     """Create a pending event record. Does not write it."""
@@ -108,6 +109,10 @@ def build_pending_event(
     }
     if label:
         record["label"] = str(label)
+    if not_before:
+        # Validate parseability but preserve original ISO spelling.
+        datetime.fromisoformat(str(not_before).replace("Z", "+00:00"))
+        record["not_before"] = str(not_before)
     if expires_at:
         # Validate parseability but preserve original ISO spelling.
         datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
@@ -228,6 +233,8 @@ class EventStore:
                     }
                     self._append_unlocked(expired)
                     return event, expired
+                if not is_due(event, now=now):
+                    continue
                 running = self._build_running(event, run_id=run_id)
                 self._append_unlocked(running)
                 return event, running
@@ -296,6 +303,16 @@ def is_expired(event: dict, *, now: datetime | None = None) -> bool:
     if deadline.tzinfo is None:
         deadline = deadline.replace(tzinfo=timezone.utc)
     return (now or datetime.now(timezone.utc)) >= deadline
+
+
+def is_due(event: dict, *, now: datetime | None = None) -> bool:
+    not_before = event.get("not_before")
+    if not not_before:
+        return True
+    threshold = datetime.fromisoformat(str(not_before).replace("Z", "+00:00"))
+    if threshold.tzinfo is None:
+        threshold = threshold.replace(tzinfo=timezone.utc)
+    return (now or datetime.now(timezone.utc)) >= threshold
 
 
 def _parse_iso(value: object) -> datetime | None:
@@ -450,6 +467,8 @@ def summarize_event_history(
         "completed_at": latest.get("completed_at"),
         "failed_at": latest.get("failed_at"),
         "expired_at": latest.get("expired_at"),
+        "not_before": first.get("not_before"),
+        "expires_at": first.get("expires_at"),
         "scheduled_by_cycle": first.get("scheduled_by_cycle"),
         "scheduled_by_record_id": first.get("scheduled_by_record_id"),
         "wake_cycle": latest.get("wake_cycle"),
@@ -684,7 +703,7 @@ def run_next_event(session, store: EventStore) -> dict:
     """Run the oldest pending event once using an OpenTasteSession."""
     claim = store.claim_next_pending()
     if claim is None:
-        return {"status": "none", "message": "no pending events"}
+        return {"status": "none", "message": "no runnable pending events"}
     event, running = claim
     if running.get("status") == "expired":
         return running

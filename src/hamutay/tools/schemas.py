@@ -476,6 +476,13 @@ SCHEDULE_EVENT_SCHEMA = {
                 "type": "string",
                 "description": "Optional short label for browsing the event log.",
             },
+            "not_before": {
+                "type": "string",
+                "description": (
+                    "Optional ISO timestamp. The event remains pending but is "
+                    "not runnable before this time."
+                ),
+            },
             "expires_at": {
                 "type": "string",
                 "description": (

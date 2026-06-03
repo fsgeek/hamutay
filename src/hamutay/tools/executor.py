@@ -199,6 +199,7 @@ class ToolExecutor:
                 scheduled_by_cycle=self._cycle,
                 scheduled_by_record_id=self._scheduled_by_record_id,
                 label=tool_input.get("label"),
+                not_before=tool_input.get("not_before"),
                 expires_at=tool_input.get("expires_at"),
             )
         except (TypeError, ValueError) as e:
@@ -208,6 +209,7 @@ class ToolExecutor:
             "event_id": record["event_id"],
             "status": "pending",
             "accepted_context_count": len(record["requested_context"]),
+            **({"not_before": record["not_before"]} if "not_before" in record else {}),
         }
 
 
