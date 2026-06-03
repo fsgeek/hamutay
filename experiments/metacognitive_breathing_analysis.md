@@ -31,7 +31,21 @@ The meta_frac time series shows a ~10-12 cycle oscillatory signal.
 However, the inter-precursor gap analysis reveals the process is
 **aperiodic, not periodic**:
 
-- Aggregate CV = 0.87 across 62 inter-precursor gaps (Poisson-like)
+- Aggregate CV ≈ 0.84 across 60 inter-precursor gaps (5 sessions:
+  observation_full + Pichay/Arbiter/Thesis/Uncapped), Poisson-like
+  (exponential gaps → CV = 1.0).
+  — ✅ **NOW REPRODUCED (`experiments/breathing_cv.py`, 2026-06-03).**
+  Supersedes the earlier "CV=0.87 / 62 gaps", which was flagged
+  ASSERTED-NOT-REPRODUCED: no script emitted it and the precursor counts
+  it implied don't fall out of any natural corpus boundary. The script
+  detects precursors as `n_losses == 0 and not has_ifn` (the methodology
+  note's meta_frac<0.01 shed) and self-checks against the on-file
+  observation_full gap list `[12,7,12,5,1,16,10,5,9,8]` (reproduced exactly).
+  Slicing sensitivity: 5-session aggregate CV=0.841 (N=60); 4×104-only
+  (excluding observation_full) CV=0.922 (N=50) — both bracket the original
+  0.87 and confirm aperiodic, mildly under-dispersed gaps. The exact "62"
+  was a hand-count artifact. The *qualitative* aperiodicity stands and is
+  now grounded by the script, not just asserted.
 - Gap distribution is bimodal: clusters at 1-3 (consecutive, often pre-collapse)
   and 8-12 (characteristic breathing interval), with a long tail to 23
 - Gap autocorrelation is near-zero at all lags (no sequential structure)
