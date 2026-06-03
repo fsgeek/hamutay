@@ -366,7 +366,7 @@ def _split_tool_use_blocks(content) -> _ToolBlocks:
     return _ToolBlocks(think_and_respond_input=tr_input, other_tool_uses=others)
 
 
-def execute_concurrent_tool_calls(blocks, tool_executor) -> None:
+def execute_concurrent_tool_calls(blocks, tool_executor) -> list[dict]:
     """Execute tool calls that arrived alongside a terminal think_and_respond.
 
     When the model returns think_and_respond in the same response as other
@@ -377,13 +377,34 @@ def execute_concurrent_tool_calls(blocks, tool_executor) -> None:
     into the model (the cycle is terminal), but the activity is recorded.
     """
     if tool_executor is None:
-        return
+        return []
+    results = []
     for block in blocks:
         name = getattr(block, "name", None)
         tool_input = getattr(block, "input", {})
         if name is None:
             continue
-        tool_executor.execute(name, tool_input)
+        result = tool_executor.execute(name, tool_input)
+        results.append({"tool": name, "result": result})
+    return results
+
+
+def raise_for_terminal_tool_errors(results: list[dict]) -> None:
+    """Abort a terminal state update if same-batch side effects failed.
+
+    Tool calls that happen before the terminal turn feed their results back
+    to the model, so an error is recoverable. Tool calls concurrent with
+    think_and_respond do not feed back; committing the terminal state after
+    a failed side effect preserves false claims like "event scheduled" when
+    the scheduler rejected the request.
+    """
+    for entry in results:
+        result = entry.get("result")
+        if isinstance(result, dict) and "error" in result:
+            raise RuntimeError(
+                "Terminal-batch tool call failed: "
+                f"{entry.get('tool', '?')}: {result['error']}"
+            )
 
 
 def _estimate_tool_result_tokens(tool_results: list[dict]) -> int:
@@ -739,9 +760,10 @@ class AnthropicTasteBackend:
                 # Terminal. Execute any concurrent tool calls for logging
                 # so the model's expressed intent is honored rather than
                 # silently dropped.
-                execute_concurrent_tool_calls(
+                concurrent_results = execute_concurrent_tool_calls(
                     split.other_tool_uses, tool_executor
                 )
+                raise_for_terminal_tool_errors(concurrent_results)
                 return ExchangeResult(
                     raw_output=split.think_and_respond_input,
                     stop_reason=response.stop_reason or "end_turn",
@@ -1074,10 +1096,16 @@ class OpenAITasteBackend:
                     non_terminal_calls.append((tc, tool_call_id, arguments))
 
             if terminal_output is not None:
+                terminal_results = []
                 if tool_executor is not None:
                     for tc, _tool_call_id, arguments in non_terminal_calls:
                         name = tc.get("function", {}).get("name", "")
-                        tool_executor.execute(name, arguments)
+                        result = tool_executor.execute(name, arguments)
+                        terminal_results.append({
+                            "tool": name,
+                            "result": result,
+                        })
+                raise_for_terminal_tool_errors(terminal_results)
                 return ExchangeResult(
                     raw_output=terminal_output,
                     stop_reason=stop_reason,

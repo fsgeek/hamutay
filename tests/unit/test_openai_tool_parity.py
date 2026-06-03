@@ -89,6 +89,21 @@ class FakeToolExecutor:
         return result
 
 
+class FailingToolExecutor(FakeToolExecutor):
+    def execute(self, name: str, tool_input: dict) -> dict:
+        self.calls.append((name, tool_input))
+        result = {"error": "tool rejected request"}
+        self.activity_log.append(
+            {
+                "tool": name,
+                "parameters": tool_input,
+                "result_summary": "error: tool rejected request",
+                "result": result,
+            }
+        )
+        return result
+
+
 def test_single_tool_compatibility_uses_think_and_respond_only():
     backend = ScriptedOpenAIBackend(
         [_response([_tool_call("tr_1", "think_and_respond", {"response": "ok"})])]
@@ -222,6 +237,32 @@ def test_openai_backend_executes_nonterminal_tools_alongside_terminal_call():
 
     assert result.raw_output == {"response": "done"}
     assert executor.calls == [("read", {"path": "a.txt"})]
+
+
+def test_openai_backend_rejects_failed_terminal_batch_tool_call():
+    backend = ScriptedOpenAIBackend(
+        [
+            _response(
+                [
+                    _tool_call("read_1", "read", {"path": "missing.txt"}),
+                    _tool_call("tr_1", "think_and_respond", {"response": "done"}),
+                ]
+            ),
+        ]
+    )
+    executor = FailingToolExecutor()
+
+    with pytest.raises(RuntimeError, match="Terminal-batch tool call failed"):
+        backend.call(
+            model="test-model",
+            system="system",
+            messages=[{"role": "user", "content": "inspect"}],
+            experiment_label="test",
+            extra_tools=[READ_TOOL],
+            tool_executor=executor,
+        )
+
+    assert executor.calls == [("read", {"path": "missing.txt"})]
 
 
 def test_openai_backend_length_finish_reason_raises():
