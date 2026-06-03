@@ -179,7 +179,7 @@ class EventStore:
         return self._latest_by_event_id_from_records(self.read_records())
 
     def next_pending(self, *, now: datetime | None = None) -> dict | None:
-        """Return the oldest pending event by created_at, if any."""
+        """Return the oldest claimable pending event by created_at, if any."""
         pending = [
             r for r in self.latest_by_event_id().values()
             if r.get("status") == "pending"
@@ -187,7 +187,10 @@ class EventStore:
         if not pending:
             return None
         pending.sort(key=lambda r: r.get("created_at", ""))
-        return pending[0]
+        for event in pending:
+            if is_expired(event, now=now) or is_due(event, now=now):
+                return event
+        return None
 
     def append_running(self, event: dict, run_id: UUID | None = None) -> dict:
         record = self._build_running(event, run_id=run_id)

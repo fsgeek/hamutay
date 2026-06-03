@@ -104,6 +104,42 @@ def test_event_store_next_pending_returns_oldest(tmp_path):
     assert store.next_pending()["event_id"] == first["event_id"]
 
 
+def test_event_store_next_pending_skips_waiting_events(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    future = _event_record()
+    future["created_at"] = "2026-06-01T00:00:00+00:00"
+    future["not_before"] = "2026-06-01T01:00:00+00:00"
+    ready = _event_record()
+    ready["created_at"] = "2026-06-01T00:00:01+00:00"
+    store.append(future)
+    store.append(ready)
+
+    next_event = store.next_pending(
+        now=datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc)
+    )
+
+    assert next_event is not None
+    assert next_event["event_id"] == ready["event_id"]
+
+
+def test_event_store_next_pending_returns_expired_event_for_sweep(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    expired = _event_record()
+    expired["created_at"] = "2026-06-01T00:00:00+00:00"
+    expired["expires_at"] = "2026-05-31T23:59:00+00:00"
+    ready = _event_record()
+    ready["created_at"] = "2026-06-01T00:00:01+00:00"
+    store.append(expired)
+    store.append(ready)
+
+    next_event = store.next_pending(
+        now=datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc)
+    )
+
+    assert next_event is not None
+    assert next_event["event_id"] == expired["event_id"]
+
+
 def test_event_store_claim_next_pending_is_single_claim(tmp_path):
     store = EventStore(tmp_path / "events.jsonl")
     pending = _event_record()
