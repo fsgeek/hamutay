@@ -367,14 +367,12 @@ def _split_tool_use_blocks(content) -> _ToolBlocks:
 
 
 def execute_concurrent_tool_calls(blocks, tool_executor) -> list[dict]:
-    """Execute tool calls that arrived alongside a terminal think_and_respond.
+    """Execute non-terminal tool calls from a mixed tool batch.
 
-    When the model returns think_and_respond in the same response as other
-    tool_use blocks, the cycle is over — we have the state update. But the
-    model *also* asked to call those other tools. Silently dropping them
-    discards expressed intent. We execute them so the activity log reflects
-    what the model actually did this cycle. Their results do not feed back
-    into the model (the cycle is terminal), but the activity is recorded.
+    A model may emit think_and_respond alongside other tool calls. The
+    terminal state update is premature in that case: it would be based on
+    tool results the model has not seen. The caller should feed these
+    results back and ask the model to produce a later terminal update.
     """
     if tool_executor is None:
         return []
@@ -387,24 +385,6 @@ def execute_concurrent_tool_calls(blocks, tool_executor) -> list[dict]:
         result = tool_executor.execute(name, tool_input)
         results.append({"tool": name, "result": result})
     return results
-
-
-def raise_for_terminal_tool_errors(results: list[dict]) -> None:
-    """Abort a terminal state update if same-batch side effects failed.
-
-    Tool calls that happen before the terminal turn feed their results back
-    to the model, so an error is recoverable. Tool calls concurrent with
-    think_and_respond do not feed back; committing the terminal state after
-    a failed side effect preserves false claims like "event scheduled" when
-    the scheduler rejected the request.
-    """
-    for entry in results:
-        result = entry.get("result")
-        if isinstance(result, dict) and "error" in result:
-            raise RuntimeError(
-                "Terminal-batch tool call failed: "
-                f"{entry.get('tool', '?')}: {result['error']}"
-            )
 
 
 def _estimate_tool_result_tokens(tool_results: list[dict]) -> int:
@@ -757,13 +737,51 @@ class AnthropicTasteBackend:
             split = _split_tool_use_blocks(response.content)
 
             if split.think_and_respond_input is not None:
-                # Terminal. Execute any concurrent tool calls for logging
-                # so the model's expressed intent is honored rather than
-                # silently dropped.
-                concurrent_results = execute_concurrent_tool_calls(
-                    split.other_tool_uses, tool_executor
-                )
-                raise_for_terminal_tool_errors(concurrent_results)
+                if split.other_tool_uses:
+                    if tool_executor is None:
+                        raise RuntimeError(
+                            "Model called perception tools but no tool_executor "
+                            "was provided to resolve them"
+                        )
+                    assistant_content = []
+                    for block in response.content:
+                        if (
+                            getattr(block, "type", None) == "tool_use"
+                            and getattr(block, "name", None) == "think_and_respond"
+                        ):
+                            continue
+                        if hasattr(block, "model_dump"):
+                            assistant_content.append(block.model_dump())
+                        else:
+                            assistant_content.append({
+                                "type": "text",
+                                "text": str(block),
+                            })
+                    conversation.append({
+                        "role": "assistant",
+                        "content": assistant_content,
+                    })
+
+                    tool_results = []
+                    for block in split.other_tool_uses:
+                        result = tool_executor.execute(block.name, block.input)
+                        tool_results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": block.id,
+                                "content": _bound_tool_result_for_context(
+                                    json.dumps(result, default=str)
+                                ),
+                            }
+                        )
+                    conversation.append({"role": "user", "content": tool_results})
+                    estimated_next_input_tokens = (
+                        (getattr(usage, "input_tokens", 0) or 0)
+                        + (getattr(usage, "output_tokens", 0) or 0)
+                        + _estimate_tool_result_tokens(tool_results)
+                    )
+                    continue
+
                 return ExchangeResult(
                     raw_output=split.think_and_respond_input,
                     stop_reason=response.stop_reason or "end_turn",
@@ -1096,16 +1114,33 @@ class OpenAITasteBackend:
                     non_terminal_calls.append((tc, tool_call_id, arguments))
 
             if terminal_output is not None:
-                terminal_results = []
-                if tool_executor is not None:
-                    for tc, _tool_call_id, arguments in non_terminal_calls:
+                if non_terminal_calls:
+                    if tool_executor is None:
+                        raise RuntimeError(
+                            "Model called tools but no tool_executor was provided "
+                            "to resolve them"
+                        )
+                    assistant_message = {
+                        "role": "assistant",
+                        "content": message.get("content"),
+                        "tool_calls": [tc for tc, _id, _args in non_terminal_calls],
+                    }
+                    conversation.append(assistant_message)
+                    for tc, tool_call_id, arguments in non_terminal_calls:
                         name = tc.get("function", {}).get("name", "")
                         result = tool_executor.execute(name, arguments)
-                        terminal_results.append({
-                            "tool": name,
-                            "result": result,
-                        })
-                raise_for_terminal_tool_errors(terminal_results)
+                        conversation.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tool_call_id,
+                                "name": name,
+                                "content": _bound_tool_result_for_context(
+                                    json.dumps(result, default=str)
+                                ),
+                            }
+                        )
+                    continue
+
                 return ExchangeResult(
                     raw_output=terminal_output,
                     stop_reason=stop_reason,

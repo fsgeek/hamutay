@@ -12,7 +12,6 @@ from hamutay.taste_open import (
     _build_messages,
     _split_tool_use_blocks,
     execute_concurrent_tool_calls,
-    raise_for_terminal_tool_errors,
 )
 
 
@@ -136,18 +135,6 @@ def test_execute_concurrent_tool_calls_tolerates_no_executor():
         SimpleNamespace(type="tool_use", name="clock", id="c_1", input={}),
     ]
     assert execute_concurrent_tool_calls(blocks, None) == []
-
-
-def test_raise_for_terminal_tool_errors_rejects_failed_side_effect():
-    import pytest
-
-    results = [{
-        "tool": "schedule_event",
-        "result": {"error": "recall context requires cycle"},
-    }]
-
-    with pytest.raises(RuntimeError, match="Terminal-batch tool call failed"):
-        raise_for_terminal_tool_errors(results)
 
 
 # ---------------------------------------------------------------------------

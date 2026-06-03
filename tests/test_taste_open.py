@@ -383,6 +383,62 @@ class _FakeToolExecutor:
         self.activity_log.append(event)
 
 
+def test_anthropic_backend_returns_mixed_batch_tool_results_before_terminal_state():
+    mixed = _FakeMessage(
+        [
+            _FakeBlock(
+                btype="tool_use",
+                name="read",
+                input={"path": "README.md"},
+                id="tu_read_1",
+            ),
+            _FakeBlock(
+                btype="tool_use",
+                name="think_and_respond",
+                input={"response": "premature"},
+                id="tu_tr_1",
+            ),
+        ],
+        usage=_FakeUsage(input_tokens=100, output_tokens=50),
+    )
+    terminal = _FakeMessage(
+        [
+            _FakeBlock(
+                btype="tool_use",
+                name="think_and_respond",
+                input={"response": "saw tool result"},
+                id="tu_tr_2",
+            )
+        ],
+        usage=_FakeUsage(input_tokens=200, output_tokens=80),
+    )
+    client = _FakeClient([mixed, terminal])
+    backend = AnthropicTasteBackend(client=client, max_tokens=64_000)  # type: ignore[arg-type]
+    executor = _FakeToolExecutor({"content": "readme"})
+
+    result = backend._call_multi_turn(
+        model="kimi-k2.6",
+        system="sys",
+        messages=[{"role": "user", "content": "read then respond"}],
+        experiment_label="mixed_batch_test",
+        extra_tools=[
+            {"name": "read", "description": "d", "input_schema": {}}
+        ],
+        tool_executor=executor,
+    )
+
+    assert result.raw_output == {"response": "saw tool result"}
+    assert executor.executed == [("read", {"path": "README.md"})]
+    retry_messages = client.messages.sent_messages[1]
+    assistant_content = retry_messages[-2]["content"]
+    tool_uses = [
+        block for block in assistant_content
+        if block.get("type") == "tool_use"
+    ]
+    assert [block["id"] for block in tool_uses] == ["tu_read_1"]
+    assert retry_messages[-1]["content"][0]["tool_use_id"] == "tu_read_1"
+
+
 class TestMultiTurnByteSizeRecovery:
     """End-to-end: a perception tool returns a large result, the next request
     is rejected for byte size, and the loop must recover (truncate + force a

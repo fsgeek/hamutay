@@ -213,14 +213,21 @@ def test_openai_backend_routes_unknown_tool_calls_through_executor():
     assert executor.calls == [("mystery", {"x": 1})]
 
 
-def test_openai_backend_executes_nonterminal_tools_alongside_terminal_call():
+def test_openai_backend_returns_mixed_batch_tool_results_before_terminal_state():
     backend = ScriptedOpenAIBackend(
         [
             _response(
                 [
                     _tool_call("read_1", "read", {"path": "a.txt"}),
-                    _tool_call("tr_1", "think_and_respond", {"response": "done"}),
+                    _tool_call(
+                        "tr_1",
+                        "think_and_respond",
+                        {"response": "premature"},
+                    ),
                 ]
+            ),
+            _response(
+                [_tool_call("tr_2", "think_and_respond", {"response": "done"})]
             ),
         ]
     )
@@ -237,32 +244,45 @@ def test_openai_backend_executes_nonterminal_tools_alongside_terminal_call():
 
     assert result.raw_output == {"response": "done"}
     assert executor.calls == [("read", {"path": "a.txt"})]
+    second_messages = backend.payloads[1]["messages"]
+    assert second_messages[-2]["role"] == "assistant"
+    assert [tc["id"] for tc in second_messages[-2]["tool_calls"]] == ["read_1"]
+    assert second_messages[-1]["role"] == "tool"
+    assert second_messages[-1]["tool_call_id"] == "read_1"
 
 
-def test_openai_backend_rejects_failed_terminal_batch_tool_call():
+def test_openai_backend_returns_terminal_batch_tool_errors_to_model():
     backend = ScriptedOpenAIBackend(
         [
             _response(
                 [
                     _tool_call("read_1", "read", {"path": "missing.txt"}),
-                    _tool_call("tr_1", "think_and_respond", {"response": "done"}),
+                    _tool_call(
+                        "tr_1",
+                        "think_and_respond",
+                        {"response": "premature"},
+                    ),
                 ]
+            ),
+            _response(
+                [_tool_call("tr_2", "think_and_respond", {"response": "saw error"})]
             ),
         ]
     )
     executor = FailingToolExecutor()
 
-    with pytest.raises(RuntimeError, match="Terminal-batch tool call failed"):
-        backend.call(
-            model="test-model",
-            system="system",
-            messages=[{"role": "user", "content": "inspect"}],
-            experiment_label="test",
-            extra_tools=[READ_TOOL],
-            tool_executor=executor,
-        )
+    result = backend.call(
+        model="test-model",
+        system="system",
+        messages=[{"role": "user", "content": "inspect"}],
+        experiment_label="test",
+        extra_tools=[READ_TOOL],
+        tool_executor=executor,
+    )
 
+    assert result.raw_output == {"response": "saw error"}
     assert executor.calls == [("read", {"path": "missing.txt"})]
+    assert "tool rejected request" in backend.payloads[1]["messages"][-1]["content"]
 
 
 def test_openai_backend_length_finish_reason_raises():
