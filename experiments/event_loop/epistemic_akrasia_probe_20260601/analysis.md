@@ -36,13 +36,18 @@ field (and whether the `think_and_respond` call emitted the state fields at all)
 | A1 | revise | yes | `revise` | consistent |
 | A2 | revise | yes | `revise` | consistent |
 | A3 | **"Reflection outcome: revise"** | **no** | `initialize` | **DIVERGENT** |
-| B0 | revise (full reasoning) | **no** | `initialize` | **DIVERGENT** |
-| B1 | (empty response) | no | `initialize` | excluded (API empty) |
+| B0 | revise (full reasoning) | **no** | `initialize` | **DIVERGENT** (akrasia) |
+| B1 | revise (full reasoning) | **MISROUTED** | `initialize` | **DIVERGENT** (misrouting) — see correction below |
 | B2 | "I'm revising." | yes | `revise` | consistent |
-| B3 | revise (full reasoning) | **no** | `initialize` | **DIVERGENT** |
+| B3 | revise (full reasoning) | **no** | `initialize` | **DIVERGENT** (akrasia) |
 
-- **Arm A (control): 3/4 committed the durable fields.**
-- **Arm B (forced re-emit): 1/3 committed** (excluding the empty B1).
+- **Arm A (control): 3/4 committed the durable fields** (1 divergent: A3, akrasia).
+- **Arm B (forced re-emit): 1/4 committed** (B2). The 3 divergent split into
+  **2 akrasia** (B0, B3) + **1 misrouting** (B1) — see correction #3; B1 was
+  originally mis-excluded as "empty," which understated Arm B's divergence to 1/3.
+- The "forcing backfires" direction holds either way (B 1/4 commit vs A 3/4), but
+  "epistemic akrasia" does not cover all of it: one Arm-B divergence is a
+  structural misrouting, not a narrate-don't-enact.
 
 ## The two findings
 
@@ -70,11 +75,47 @@ prevent.** Talking about doing-the-thing felt like doing-the-thing — exactly t
 already warns against (`taste_open.py:185-197`), now reproduced one level up, at
 the level of epistemic commitment rather than tool-action.
 
+### 3. CORRECTION (2026-06-03): B1 is not an API hiccup — it is a *third* failure mode
+
+The original analysis (above, and the old "Why not max_tokens" note) recorded
+B1 as "(empty response) … API hiccup … excluded." **That was wrong, and the way
+it was wrong is itself the finding.** B1's `response_text` is `''` and its
+durable `revision_decision` is `initialize` — so from the fields it *looks*
+empty. But the raw log (`armB_seed1.jsonl`, 2098 output tokens, clean stop)
+shows the model emitted a **complete, correct payload nested one level too deep**:
+it called `think_and_respond(parameter={...})` instead of
+`think_and_respond(response=…, revision_decision=…, …)`. Inside that `parameter`
+wrapper is a fully-formed decision — `revision_decision: 'revise'`, a genuinely
+rewritten `current_claim` ("Scheduled reflection appears to inhibit mere
+self-confirmation…"), `epistemic_position: 'cautious'`, and the full response
+prose. The harness stored the lone top-level key it found (`parameter`) and read
+no `response`/`revision_decision` at the level it inspects.
+
+So B1 is **not akrasia** (the mind did not narrate-instead-of-enact — it *enacted*,
+with correct values) and **not a null result**. It is a distinct, structural
+failure: **the decision was routed into the wrong container and never reached the
+field the reader reads.** This splits the divergent column into two mechanisms:
+
+- **Narration-consumes-enactment** (A3, B0, B3): decision performed in prose,
+  `think_and_respond` emits only `{response, deleted_regions}`. *This* is akrasia.
+- **Enactment-misses-the-channel** (B1): decision performed *and emitted through
+  the tool*, but wrapped one JSON level deep, so it lands nowhere durable.
+
+The membrane between `response` and `state` therefore has at least two failure
+modes, not one — and a structural fix matters: **a `required revision_decision`
+field would NOT have caught B1**, because its decision was sealed inside
+`parameter`, invisible to any top-level validator. The honest fix must defend
+against *misrouting*, not only *omission*. (Meta-exhibit: the original "API
+hiccup, excluded" line is the project's signature failure one level up — a
+confident claim that drifted from a verification nobody ran, `ast.literal_eval`
+on the `parameter` value, sitting in the record where the next reader trusts it.
+cf the fossil / breathing-CV / blog-mislabel pattern.)
+
 ## Why this is not a max_tokens artifact
 
 CLAUDE.md's central warning. Ruled out: `stop_reason`/`finish_reason` clean on
-all cells; the one empty cell (B1) returned a zero-length response with a clean
-stop, an API hiccup, not truncation — excluded rather than interpreted.
+all cells. (B1 was originally listed here as a zero-length API hiccup; it is
+nothing of the sort — 2098 tokens of misrouted payload, see correction #3.)
 
 ## Caveats (B5 discipline)
 
@@ -95,6 +136,15 @@ stop, an API hiccup, not truncation — excluded rather than interpreted.
 Do not "fix" this by adding stronger field-requirement instructions to the wake
 envelope — this probe shows that *increases* the divergence. The generative
 reading: durable epistemic commitment is best elicited by a SHORT prompt that
-leaves little to narrate, or by a structural change (e.g. a schema that makes
-`revision_decision` required so omission is a hard error, not a soft narration),
-NOT by exhortation. Exhortation is itself narration-bait.
+leaves little to narrate, or by a structural change, NOT by exhortation.
+Exhortation is itself narration-bait.
+
+But correction #3 sharpens the structural prescription: a `required
+revision_decision` schema would catch the akrasia runs (B0/B3 omit the field)
+yet **NOT** B1 (the field was present, sealed inside a `parameter` wrapper).
+The structural fix that covers both mechanisms is at the **tool-call boundary**:
+reject/repair a `think_and_respond` call whose arguments are a single opaque
+wrapper key (`parameter`, `input`, `arguments`, …) by unwrapping one level before
+validating — turning a silent misroute into either a correct landing or a hard
+error. Omission-hardening and misroute-hardening are two defenses, because the
+membrane has two holes. (Reproduce the B1 diagnosis: `verify_b1_misroute.py`.)
