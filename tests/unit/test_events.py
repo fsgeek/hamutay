@@ -562,6 +562,33 @@ def test_summarize_event_log_reports_statuses_and_context_errors(tmp_path):
     assert summary["completed"][0]["context_error_count"] == 1
 
 
+def test_summarize_event_log_classifies_pending_runnability(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    ready = _event_record()
+    ready["created_at"] = "2026-06-01T00:00:00+00:00"
+    waiting = _event_record()
+    waiting["created_at"] = "2026-06-01T00:00:01+00:00"
+    waiting["not_before"] = "2026-06-01T01:00:00+00:00"
+    expired = _event_record()
+    expired["created_at"] = "2026-06-01T00:00:02+00:00"
+    expired["expires_at"] = "2026-05-31T23:59:00+00:00"
+    store.append(ready)
+    store.append(waiting)
+    store.append(expired)
+
+    summary = summarize_event_log(
+        store.read_records(),
+        now=datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc),
+    )
+
+    assert summary["pending_runnable_count"] == 1
+    assert summary["pending_waiting_count"] == 1
+    assert summary["pending_expired_count"] == 1
+    assert summary["oldest_runnable_pending"]["event_id"] == ready["event_id"]
+    assert summary["oldest_waiting_pending"]["event_id"] == waiting["event_id"]
+    assert summary["oldest_expired_pending"]["event_id"] == expired["event_id"]
+
+
 def test_summarize_event_log_reports_stale_running(tmp_path):
     store = EventStore(tmp_path / "events.jsonl")
     event = _event_record()
@@ -615,3 +642,22 @@ def test_format_event_report_includes_operational_sections(tmp_path):
     assert "Outcome warnings:" in report
     assert "response/state mismatch" in report
     assert "no durable state change" in report
+
+
+def test_format_event_report_includes_pending_runnability(tmp_path):
+    ready = _event_record()
+    waiting = _event_record()
+    waiting["not_before"] = "2026-06-01T01:00:00+00:00"
+    expired = _event_record()
+    expired["expires_at"] = "2026-05-31T23:59:00+00:00"
+    summary = summarize_event_log(
+        [ready, waiting, expired],
+        now=datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc),
+    )
+
+    report = format_event_report(summary, path=tmp_path / "events.jsonl")
+
+    assert "Pending: runnable=1, waiting=1, expired=1" in report
+    assert "Oldest runnable pending:" in report
+    assert "Oldest waiting pending:" in report
+    assert "Oldest expired pending:" in report

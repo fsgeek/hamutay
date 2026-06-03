@@ -531,8 +531,23 @@ def summarize_event_log(
         status = str(event.get("status", "unknown"))
         status_counts[status] = status_counts.get(status, 0) + 1
 
+    current_time = now or datetime.now(timezone.utc)
     pending = [event for event in events if event.get("status") == "pending"]
     pending.sort(key=lambda event: str(event.get("created_at", "")))
+    pending_expired = [
+        event for event in pending
+        if is_expired(event, now=current_time)
+    ]
+    pending_runnable = [
+        event for event in pending
+        if not is_expired(event, now=current_time)
+        and is_due(event, now=current_time)
+    ]
+    pending_waiting = [
+        event for event in pending
+        if not is_expired(event, now=current_time)
+        and not is_due(event, now=current_time)
+    ]
     failed = [event for event in events if event.get("status") == "failed"]
     failed.sort(key=lambda event: str(event.get("failed_at", "")), reverse=True)
     completed = [event for event in events if event.get("status") == "completed"]
@@ -563,7 +578,6 @@ def summarize_event_log(
         ),
         reverse=True,
     )
-    current_time = now or datetime.now(timezone.utc)
     stale_running = []
     for event in events:
         if event.get("status") != "running":
@@ -585,7 +599,19 @@ def summarize_event_log(
         "record_count": len(records),
         "event_count": len(events),
         "status_counts": dict(sorted(status_counts.items())),
+        "pending_runnable_count": len(pending_runnable),
+        "pending_waiting_count": len(pending_waiting),
+        "pending_expired_count": len(pending_expired),
         "oldest_pending": pending[0] if pending else None,
+        "oldest_runnable_pending": (
+            pending_runnable[0] if pending_runnable else None
+        ),
+        "oldest_waiting_pending": (
+            pending_waiting[0] if pending_waiting else None
+        ),
+        "oldest_expired_pending": (
+            pending_expired[0] if pending_expired else None
+        ),
         "stale_running": stale_running[:limit],
         "failed": failed[:limit],
         "completed": completed[:limit],
@@ -616,17 +642,61 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
         f"{status}={count}" for status, count in status_counts.items()
     ) or "none"
     lines.append(f"Statuses: {status_text}")
+    pending_counts = (
+        report.get("pending_runnable_count", 0),
+        report.get("pending_waiting_count", 0),
+        report.get("pending_expired_count", 0),
+    )
+    if any(pending_counts):
+        lines.append(
+            "Pending: "
+            f"runnable={pending_counts[0]}, "
+            f"waiting={pending_counts[1]}, "
+            f"expired={pending_counts[2]}"
+        )
 
-    oldest_pending = report.get("oldest_pending")
+    oldest_pending = report.get("oldest_runnable_pending")
     if oldest_pending:
+        not_before = (
+            f" not_before={oldest_pending['not_before']}"
+            if oldest_pending.get("not_before")
+            else ""
+        )
         lines.append("")
-        lines.append("Oldest pending:")
+        lines.append("Oldest runnable pending:")
         lines.append(
             "  "
             f"{oldest_pending['event_id']} "
             f"cycle={oldest_pending.get('scheduled_by_cycle', '?')} "
             f"context={oldest_pending.get('requested_context_count', 0)} "
             f"purpose={oldest_pending.get('purpose', '')}"
+            f"{not_before}"
+        )
+
+    waiting_pending = report.get("oldest_waiting_pending")
+    if waiting_pending:
+        lines.append("")
+        lines.append("Oldest waiting pending:")
+        lines.append(
+            "  "
+            f"{waiting_pending['event_id']} "
+            f"not_before={waiting_pending.get('not_before', '?')} "
+            f"cycle={waiting_pending.get('scheduled_by_cycle', '?')} "
+            f"context={waiting_pending.get('requested_context_count', 0)} "
+            f"purpose={waiting_pending.get('purpose', '')}"
+        )
+
+    expired_pending = report.get("oldest_expired_pending")
+    if expired_pending:
+        lines.append("")
+        lines.append("Oldest expired pending:")
+        lines.append(
+            "  "
+            f"{expired_pending['event_id']} "
+            f"expires_at={expired_pending.get('expires_at', '?')} "
+            f"cycle={expired_pending.get('scheduled_by_cycle', '?')} "
+            f"context={expired_pending.get('requested_context_count', 0)} "
+            f"purpose={expired_pending.get('purpose', '')}"
         )
 
     if report.get("failed"):
