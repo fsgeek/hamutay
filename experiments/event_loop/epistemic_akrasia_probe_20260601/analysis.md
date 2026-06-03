@@ -111,6 +111,36 @@ confident claim that drifted from a verification nobody ran, `ast.literal_eval`
 on the `parameter` value, sitting in the record where the next reader trusts it.
 cf the fossil / breathing-CV / blog-mislabel pattern.)
 
+### 4. Misrouting is CROSS-FAMILY, rare, and not monocausal (2026-06-03)
+
+Correction #3 raised the obvious question: is B1's misroute a DeepSeek quirk or
+a real second membrane hole? Scanned the whole experiment corpus for the
+signature — a `raw_output` whose keys are a lone opaque wrapper with none of the
+real top-level fields (`scan_misroute_corpus.py`). **2 hits / 6218 records
+(~0.03%), in two unrelated families:**
+
+- **DeepSeek** (this probe, B1, cycle 2): wrapper key `parameter`; the *model*
+  nested its own payload one level deep.
+- **Nemotron-3-nano** (`taste_open/sweep_20260411_163728/...`, cycle 10): keys
+  `{name, arguments}` — the raw OpenAI tool-call envelope leaked into the slot;
+  the *harness's* unwrap of `arguments` failed to strip `{name, arguments}`. The
+  real response ("…If I had to cut the state in half…") sits inside `arguments`;
+  `state` is `{cycle}` only.
+
+So misrouting is **real and cross-family** (not a single-model artifact) — but
+**rare**, and the two instances have **distinct proximate causes**: a model
+behavior (DeepSeek invents a wrapper) vs a parsing-layer behavior (the harness
+mis-unwraps a standard tool call). Same observable signature, same consequence,
+two different bugs. The misroute-hardening fix (#3) must therefore live at the
+harness unwrap boundary AND tolerate model-invented wrappers — it covers both
+because both end as "one opaque key, real payload one level down."
+
+Methods note (earned): the first ad-hoc scan mislabeled a 0-based line counter as
+a "line number" and a follow-up read landed on the wrong record, nearly yielding
+a false "signature evaporated" conclusion. The shipped scanner reports record
+*index* and re-opens by it. The verification had to survive my own sloppy first
+pass — which is the same lesson as the rest of this file, one more turn down.
+
 ## Why this is not a max_tokens artifact
 
 CLAUDE.md's central warning. Ruled out: `stop_reason`/`finish_reason` clean on
