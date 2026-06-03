@@ -12,6 +12,25 @@ from uuid import UUID, uuid4
 
 EVENT_TYPE_REFLECTION = "self_scheduled_reflection"
 VALID_CONTEXT_TOOLS = {"recall", "compare"}
+LOAD_BEARING_FIELDS = {
+    "current_claim",
+    "revision_decision",
+    "evidence_register",
+    "state_use_norm",
+}
+STATE_DELTA_IGNORED_KEYS = {"cycle"}
+EPISTEMIC_DECISION_WORDS = {
+    "revise",
+    "revised",
+    "revision",
+    "narrow",
+    "narrowed",
+    "preserve",
+    "preserved",
+    "defer",
+    "deferred",
+    "loss",
+}
 
 
 def utc_now_iso() -> str:
@@ -223,6 +242,7 @@ class EventStore:
         result_record_id: UUID,
         response_text: str,
         context_results: list[dict] | None = None,
+        outcome_observation: dict | None = None,
     ) -> dict:
         record = {
             "record_type": "event_status",
@@ -237,6 +257,8 @@ class EventStore:
         }
         if context_results is not None:
             record["context_results"] = context_results
+        if outcome_observation is not None:
+            record["outcome_observation"] = outcome_observation
         self.append(record)
         return record
 
@@ -331,6 +353,60 @@ def build_event_envelope(event: dict, context_results: list[dict], run_id: str) 
     return json.dumps(envelope, indent=2, default=str)
 
 
+def _json_safe_state(state: object) -> dict:
+    if not isinstance(state, dict):
+        return {}
+    return json.loads(json.dumps(state, default=str))
+
+
+def _response_mentions_epistemic_decision(response_text: str) -> bool:
+    lowered = response_text.lower()
+    return any(word in lowered for word in EPISTEMIC_DECISION_WORDS)
+
+
+def build_outcome_observation(
+    *,
+    before_state: dict | None,
+    after_state: dict | None,
+    response_text: str,
+) -> dict:
+    """Capture wake outcome deltas without changing event behavior."""
+    before = _json_safe_state(before_state)
+    after = _json_safe_state(after_state)
+    before_keys = set(before) - STATE_DELTA_IGNORED_KEYS
+    after_keys = set(after) - STATE_DELTA_IGNORED_KEYS
+    added = sorted(after_keys - before_keys)
+    removed = sorted(before_keys - after_keys)
+    changed = sorted(
+        key for key in before_keys & after_keys
+        if before.get(key) != after.get(key)
+    )
+    changed_or_removed = sorted(set(changed) | set(removed))
+    changed_load_bearing = sorted(
+        set(changed_or_removed) & LOAD_BEARING_FIELDS
+    )
+    deleted_load_bearing = sorted(set(removed) & LOAD_BEARING_FIELDS)
+    response_mentions_decision = _response_mentions_epistemic_decision(
+        response_text
+    )
+    durable_state_changed = bool(added or removed or changed)
+    return {
+        "state_changed": durable_state_changed,
+        "added_top_level_keys": added,
+        "removed_top_level_keys": removed,
+        "changed_top_level_keys": changed,
+        "changed_or_removed_top_level_keys": changed_or_removed,
+        "changed_load_bearing_fields": changed_load_bearing,
+        "deleted_load_bearing_fields": deleted_load_bearing,
+        "deleted_load_bearing_field": bool(deleted_load_bearing),
+        "response_mentions_epistemic_decision": response_mentions_decision,
+        "response_state_mismatch": (
+            response_mentions_decision and not changed_load_bearing
+        ),
+        "no_durable_state_change": not durable_state_changed,
+    }
+
+
 def _shorten(value: object, *, limit: int = 160) -> str:
     text = str(value)
     if len(text) <= limit:
@@ -358,6 +434,9 @@ def summarize_event_history(
     first = history[0]
     latest = history[-1]
     response_text = latest.get("response_text")
+    outcome = latest.get("outcome_observation")
+    if not isinstance(outcome, dict):
+        outcome = {}
     summary = {
         "event_id": event_id,
         "event_type": first.get("event_type", latest.get("event_type")),
@@ -380,6 +459,21 @@ def summarize_event_history(
         "purpose": first.get("purpose", ""),
         "requested_context_count": len(first.get("requested_context", []) or []),
         "context_error_count": _context_error_count(history),
+        "outcome_warning_count": sum(
+            1
+            for key in (
+                "response_state_mismatch",
+                "deleted_load_bearing_field",
+                "no_durable_state_change",
+            )
+            if outcome.get(key)
+        ),
+        "state_changed": outcome.get("state_changed"),
+        "response_state_mismatch": outcome.get("response_state_mismatch"),
+        "deleted_load_bearing_field": outcome.get("deleted_load_bearing_field"),
+        "no_durable_state_change": outcome.get("no_durable_state_change"),
+        "changed_load_bearing_fields": outcome.get("changed_load_bearing_fields"),
+        "deleted_load_bearing_fields": outcome.get("deleted_load_bearing_fields"),
         "error_type": latest.get("error_type"),
         "error": latest.get("error"),
         "response_snippet": (
@@ -437,6 +531,19 @@ def summarize_event_log(
         ),
         reverse=True,
     )
+    outcome_warnings = [
+        event for event in events
+        if int(event.get("outcome_warning_count", 0)) > 0
+    ]
+    outcome_warnings.sort(
+        key=lambda event: str(
+            event.get("completed_at")
+            or event.get("failed_at")
+            or event.get("created_at")
+            or ""
+        ),
+        reverse=True,
+    )
     current_time = now or datetime.now(timezone.utc)
     stale_running = []
     for event in events:
@@ -464,6 +571,7 @@ def summarize_event_log(
         "failed": failed[:limit],
         "completed": completed[:limit],
         "context_errors": context_errors[:limit],
+        "outcome_warnings": outcome_warnings[:limit],
         "events": sorted(
             events,
             key=lambda event: str(
@@ -536,6 +644,26 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
                 f"purpose={event.get('purpose', '')}"
             )
 
+    if report.get("outcome_warnings"):
+        lines.append("")
+        lines.append("Outcome warnings:")
+        for event in report["outcome_warnings"]:
+            flags = []
+            if event.get("response_state_mismatch"):
+                flags.append("response/state mismatch")
+            if event.get("deleted_load_bearing_field"):
+                flags.append("load-bearing deletion")
+            if event.get("no_durable_state_change"):
+                flags.append("no durable state change")
+            flag_text = ", ".join(flags) or "warning"
+            lines.append(
+                "  "
+                f"{event['event_id']} "
+                f"{flag_text} "
+                f"changed={event.get('changed_load_bearing_fields', [])} "
+                f"deleted={event.get('deleted_load_bearing_fields', [])}"
+            )
+
     if report.get("completed"):
         lines.append("")
         lines.append("Recently completed:")
@@ -569,7 +697,14 @@ def run_next_event(session, store: EventStore) -> dict:
             bridge=session._bridge,
         )
         envelope = build_event_envelope(event, context_results, run_id)
+        before_state = _json_safe_state(getattr(session, "_state", None))
         response = session.exchange(envelope, force_memory=None)
+        after_state = _json_safe_state(getattr(session, "_state", None))
+        outcome_observation = build_outcome_observation(
+            before_state=before_state,
+            after_state=after_state,
+            response_text=response,
+        )
         return store.append_completed(
             event=event,
             run_id=run_id,
@@ -577,6 +712,7 @@ def run_next_event(session, store: EventStore) -> dict:
             result_record_id=session._prior_states[-1][1],
             response_text=response,
             context_results=context_results,
+            outcome_observation=outcome_observation,
         )
     except Exception as e:
         store.append_failed(event=event, run_id=run_id, exc=e)

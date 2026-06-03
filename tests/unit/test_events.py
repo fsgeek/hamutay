@@ -13,6 +13,7 @@ import pytest
 from hamutay.events import (
     EventStore,
     build_event_envelope,
+    build_outcome_observation,
     build_pending_event,
     default_event_log_path,
     format_event_report,
@@ -287,6 +288,15 @@ def test_run_next_event_completes(tmp_path):
         project_root=tmp_path,
     )
     session.exchange("seed")
+    session._backend = _FakeBackend(
+        ExchangeResult(
+            raw_output={
+                "response": "event handled",
+                "event_reflection": "revised",
+            },
+            stop_reason="end_turn",
+        )
+    )
     event = build_pending_event(
         purpose="Reflect on claim.",
         requested_context=[{"tool": "recall", "cycle": 1}],
@@ -302,7 +312,48 @@ def test_run_next_event_completes(tmp_path):
     assert result["context_results"][0]["result"]["cycle"] == 1
     records = store.read_records()
     assert [r["status"] for r in records] == ["pending", "running", "completed"]
-    assert session._prior_states[-1][2]["reflection"] == "revised"
+    assert session._prior_states[-1][2]["event_reflection"] == "revised"
+    observation = records[-1]["outcome_observation"]
+    assert observation["state_changed"] is True
+    assert observation["added_top_level_keys"] == ["event_reflection"]
+    assert observation["no_durable_state_change"] is False
+
+
+def test_build_outcome_observation_detects_prose_only_decision():
+    observation = build_outcome_observation(
+        before_state={"current_claim": "old", "cycle": 1},
+        after_state={"current_claim": "old", "cycle": 2},
+        response_text="I revised the claim after reflection.",
+    )
+
+    assert observation["state_changed"] is False
+    assert observation["no_durable_state_change"] is True
+    assert observation["response_mentions_epistemic_decision"] is True
+    assert observation["response_state_mismatch"] is True
+
+
+def test_build_outcome_observation_detects_load_bearing_deletion():
+    observation = build_outcome_observation(
+        before_state={
+            "current_claim": "old",
+            "state_use_norm": "preserve durable fields",
+            "scratch": "x",
+            "cycle": 1,
+        },
+        after_state={"scratch": "x", "cycle": 2},
+        response_text="Declared loss.",
+    )
+
+    assert observation["state_changed"] is True
+    assert observation["removed_top_level_keys"] == [
+        "current_claim",
+        "state_use_norm",
+    ]
+    assert observation["deleted_load_bearing_field"] is True
+    assert observation["deleted_load_bearing_fields"] == [
+        "current_claim",
+        "state_use_norm",
+    ]
 
 
 def test_run_next_event_marks_expired(tmp_path):
@@ -390,6 +441,14 @@ def test_summarize_event_log_reports_statuses_and_context_errors(tmp_path):
                 "result": {"error": "cycle not found: 99"},
             }
         ],
+        outcome_observation={
+            "state_changed": False,
+            "changed_load_bearing_fields": [],
+            "deleted_load_bearing_fields": [],
+            "deleted_load_bearing_field": False,
+            "response_state_mismatch": True,
+            "no_durable_state_change": True,
+        },
     )
     store.append(failed)
     store.append_running(failed, run_id=UUID("00000000-0000-0000-0000-000000000222"))
@@ -412,6 +471,8 @@ def test_summarize_event_log_reports_statuses_and_context_errors(tmp_path):
     assert summary["oldest_pending"]["event_id"] == pending["event_id"]
     assert summary["failed"][0]["error"] == "wake failed"
     assert summary["context_errors"][0]["event_id"] == completed["event_id"]
+    assert summary["outcome_warnings"][0]["event_id"] == completed["event_id"]
+    assert summary["completed"][0]["outcome_warning_count"] == 2
     assert summary["completed"][0]["context_error_count"] == 1
 
 
@@ -441,10 +502,30 @@ def test_summarize_event_log_reports_stale_running(tmp_path):
 
 def test_format_event_report_includes_operational_sections(tmp_path):
     event = _event_record()
-    summary = summarize_event_log([event])
+    completed = {
+        "record_type": "event_status",
+        "event_id": event["event_id"],
+        "event_type": event["event_type"],
+        "status": "completed",
+        "completed_at": "2026-06-01T00:00:00+00:00",
+        "wake_cycle": 2,
+        "result_record_id": "00000000-0000-0000-0000-000000000002",
+        "response_text": "I revised in prose only.",
+        "outcome_observation": {
+            "state_changed": False,
+            "changed_load_bearing_fields": [],
+            "deleted_load_bearing_fields": [],
+            "deleted_load_bearing_field": False,
+            "response_state_mismatch": True,
+            "no_durable_state_change": True,
+        },
+    }
+    summary = summarize_event_log([event, completed])
 
     report = format_event_report(summary, path=tmp_path / "events.jsonl")
 
     assert "Event log:" in report
-    assert "Statuses: pending=1" in report
-    assert "Oldest pending:" in report
+    assert "Statuses: completed=1" in report
+    assert "Outcome warnings:" in report
+    assert "response/state mismatch" in report
+    assert "no durable state change" in report
