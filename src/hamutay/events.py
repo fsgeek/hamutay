@@ -441,6 +441,76 @@ def _context_error_count(history: list[dict]) -> int:
     return count
 
 
+TERMINAL_EVENT_STATUSES = {"completed", "failed", "expired"}
+
+
+def detect_lifecycle_anomalies(event_id: str, history: list[dict]) -> list[dict]:
+    """Detect suspicious event-status histories without mutating the log."""
+    statuses = [str(record.get("status", "unknown")) for record in history]
+    anomalies: list[dict] = []
+
+    def add(kind: str, message: str) -> None:
+        anomalies.append({
+            "event_id": event_id,
+            "kind": kind,
+            "message": message,
+            "statuses": statuses,
+        })
+
+    if not statuses:
+        add("empty_history", "event history has no records")
+        return anomalies
+
+    if statuses[0] != "pending":
+        add(
+            "missing_initial_pending",
+            "event history does not start with a pending record",
+        )
+    if statuses.count("pending") > 1:
+        add("duplicate_pending", "event history has multiple pending records")
+
+    terminal_indexes = [
+        i for i, status in enumerate(statuses)
+        if status in TERMINAL_EVENT_STATUSES
+    ]
+    if len(terminal_indexes) > 1:
+        add(
+            "multiple_terminal_statuses",
+            "event history has more than one terminal status",
+        )
+    if terminal_indexes and terminal_indexes[0] != len(statuses) - 1:
+        add(
+            "status_after_terminal",
+            "event history has records after its first terminal status",
+        )
+
+    for index, status in enumerate(statuses):
+        prior = statuses[:index]
+        if status == "running" and "pending" not in prior:
+            add(
+                "running_without_pending",
+                "running status appears before any pending record",
+            )
+        if status in {"completed", "failed"} and "running" not in prior:
+            add(
+                "terminal_without_running",
+                f"{status} status appears before any running record",
+            )
+        if status == "completed":
+            record = history[index]
+            missing = [
+                field for field in ("wake_cycle", "result_record_id")
+                if record.get(field) is None
+            ]
+            if missing:
+                add(
+                    "completed_missing_fields",
+                    "completed record is missing: " + ", ".join(missing),
+                )
+
+    return anomalies
+
+
 def summarize_event_history(
     event_id: str,
     history: list[dict],
@@ -454,6 +524,7 @@ def summarize_event_history(
     outcome = latest.get("outcome_observation")
     if not isinstance(outcome, dict):
         outcome = {}
+    lifecycle_anomalies = detect_lifecycle_anomalies(event_id, history)
     summary = {
         "event_id": event_id,
         "event_type": first.get("event_type", latest.get("event_type")),
@@ -493,6 +564,8 @@ def summarize_event_history(
         "no_durable_state_change": outcome.get("no_durable_state_change"),
         "changed_load_bearing_fields": outcome.get("changed_load_bearing_fields"),
         "deleted_load_bearing_fields": outcome.get("deleted_load_bearing_fields"),
+        "lifecycle_anomaly_count": len(lifecycle_anomalies),
+        "lifecycle_anomalies": lifecycle_anomalies,
         "error_type": latest.get("error_type"),
         "error": latest.get("error"),
         "response_snippet": (
@@ -578,6 +651,9 @@ def summarize_event_log(
         ),
         reverse=True,
     )
+    lifecycle_anomalies = []
+    for event in events:
+        lifecycle_anomalies.extend(event.get("lifecycle_anomalies", []) or [])
     stale_running = []
     for event in events:
         if event.get("status") != "running":
@@ -617,6 +693,7 @@ def summarize_event_log(
         "completed": completed[:limit],
         "context_errors": context_errors[:limit],
         "outcome_warnings": outcome_warnings[:limit],
+        "lifecycle_anomalies": lifecycle_anomalies[:limit],
         "events": sorted(
             events,
             key=lambda event: str(
@@ -731,6 +808,19 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
                 f"{event['event_id']} "
                 f"errors={event.get('context_error_count', 0)} "
                 f"purpose={event.get('purpose', '')}"
+            )
+
+    if report.get("lifecycle_anomalies"):
+        lines.append("")
+        lines.append("Lifecycle anomalies:")
+        for anomaly in report["lifecycle_anomalies"]:
+            statuses = ",".join(anomaly.get("statuses", []))
+            lines.append(
+                "  "
+                f"{anomaly.get('event_id', '?')} "
+                f"{anomaly.get('kind', 'anomaly')} "
+                f"statuses={statuses} "
+                f"{anomaly.get('message', '')}"
             )
 
     if report.get("outcome_warnings"):

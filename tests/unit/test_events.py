@@ -16,6 +16,7 @@ from hamutay.events import (
     build_outcome_observation,
     build_pending_event,
     default_event_log_path,
+    detect_lifecycle_anomalies,
     format_event_report,
     resolve_requested_context,
     run_next_event,
@@ -589,6 +590,58 @@ def test_summarize_event_log_classifies_pending_runnability(tmp_path):
     assert summary["oldest_expired_pending"]["event_id"] == expired["event_id"]
 
 
+def test_detect_lifecycle_anomalies_flags_invalid_history():
+    anomalies = detect_lifecycle_anomalies(
+        "event-1",
+        [{
+            "record_type": "event_status",
+            "event_id": "event-1",
+            "status": "completed",
+        }],
+    )
+
+    kinds = {anomaly["kind"] for anomaly in anomalies}
+    assert "missing_initial_pending" in kinds
+    assert "terminal_without_running" in kinds
+    assert "completed_missing_fields" in kinds
+
+
+def test_summarize_event_log_reports_lifecycle_anomalies():
+    pending = _event_record()
+    running = {
+        "record_type": "event_status",
+        "event_id": pending["event_id"],
+        "event_type": pending["event_type"],
+        "status": "running",
+        "run_id": "run-1",
+        "started_at": "2026-06-01T00:00:00+00:00",
+    }
+    completed = {
+        "record_type": "event_status",
+        "event_id": pending["event_id"],
+        "event_type": pending["event_type"],
+        "status": "completed",
+        "completed_at": "2026-06-01T00:01:00+00:00",
+        "wake_cycle": 2,
+        "result_record_id": "00000000-0000-0000-0000-000000000002",
+    }
+    failed = {
+        "record_type": "event_status",
+        "event_id": pending["event_id"],
+        "event_type": pending["event_type"],
+        "status": "failed",
+        "failed_at": "2026-06-01T00:02:00+00:00",
+        "run_id": "run-1",
+    }
+
+    summary = summarize_event_log([pending, running, completed, failed])
+
+    kinds = {anomaly["kind"] for anomaly in summary["lifecycle_anomalies"]}
+    assert "multiple_terminal_statuses" in kinds
+    assert "status_after_terminal" in kinds
+    assert summary["events"][0]["lifecycle_anomaly_count"] == 2
+
+
 def test_summarize_event_log_reports_stale_running(tmp_path):
     store = EventStore(tmp_path / "events.jsonl")
     event = _event_record()
@@ -661,3 +714,19 @@ def test_format_event_report_includes_pending_runnability(tmp_path):
     assert "Oldest runnable pending:" in report
     assert "Oldest waiting pending:" in report
     assert "Oldest expired pending:" in report
+
+
+def test_format_event_report_includes_lifecycle_anomalies(tmp_path):
+    record = {
+        "record_type": "event_status",
+        "event_id": "event-1",
+        "event_type": "self_scheduled_reflection",
+        "status": "completed",
+    }
+    summary = summarize_event_log([record])
+
+    report = format_event_report(summary, path=tmp_path / "events.jsonl")
+
+    assert "Lifecycle anomalies:" in report
+    assert "missing_initial_pending" in report
+    assert "completed_missing_fields" in report
