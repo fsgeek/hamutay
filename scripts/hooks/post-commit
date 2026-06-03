@@ -1,0 +1,51 @@
+#!/bin/bash
+# Post-commit OpenTimestamps hook.
+#
+# On every non-ots commit, write the commit hash to timestamps/<hash>,
+# stamp it with the OpenTimestamps client, and commit the resulting .ots
+# proof. This gives a cryptographic, third-party-anchorable timestamp on
+# each commit -- the pre-registration discipline: you cannot backdate an
+# experiment's design once its commit is stamped.
+#
+# Run scripts/ots-upgrade.sh a few hours later to anchor pending proofs
+# to the Bitcoin blockchain.
+set -e
+
+GIT_ROOT=$(git rev-parse --show-toplevel)
+OTS="$GIT_ROOT/.venv/bin/ots"
+
+# Guard: don't stamp the stamp commits (--no-verify skips pre-commit, not post-commit).
+COMMIT_MSG=$(git log -1 --format="%s")
+if [[ "$COMMIT_MSG" == ots:* ]]; then
+    exit 0
+fi
+
+if [ ! -x "$OTS" ]; then
+    echo "ots: client not found at $GIT_ROOT/.venv/bin/ots, skipping timestamp" >&2
+    echo "ots: run scripts/install-hooks.sh to install it" >&2
+    exit 0
+fi
+
+HASH=$(git rev-parse HEAD)
+TIMESTAMP_DIR="$GIT_ROOT/timestamps"
+mkdir -p "$TIMESTAMP_DIR"
+
+HASH_FILE="$TIMESTAMP_DIR/$HASH"
+echo "$HASH" > "$HASH_FILE"
+"$OTS" stamp "$HASH_FILE"
+
+# Commit the proof under the project's signing identity. Hamutay's history is
+# authored as hamutay@wamason.com and signed with key 01193FA2...; the author,
+# committer, and signing-key emails MUST all match or GitHub rejects the push
+# (see CLAUDE.md). The stamp commit must use the same identity, not the repo
+# default, or it diverges from the rest of history.
+OTS_EMAIL="hamutay@wamason.com"
+OTS_NAME="Tony Mason"
+OTS_SIGNINGKEY="01193FA2631C8AE8E4DF266E216D3C9B920813A1"
+
+git -C "$GIT_ROOT" add "$TIMESTAMP_DIR/"
+git -C "$GIT_ROOT" \
+    -c user.email="$OTS_EMAIL" \
+    -c user.name="$OTS_NAME" \
+    -c user.signingkey="$OTS_SIGNINGKEY" \
+    commit --no-verify -S -m "ots: stamp $HASH"
