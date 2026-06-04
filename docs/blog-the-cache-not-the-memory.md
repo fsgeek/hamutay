@@ -33,26 +33,50 @@ were watching it do.
 
 ### It doesn't compress. It rewrites.
 
-Here is the mechanism. After each stretch of conversation, a model reads
-two things: the prior summary, and the new material. It then writes a
-*new* summary that integrates both. We call that summary a **tensor** —
-a small, structured object with named strands of thought, a list of open
-questions, and, crucially, a list of what it just threw away.
+First, a distinction the rest of this piece depends on, because we run two
+different things and they behave differently — and conflating them is the
+fastest way to get the story wrong.
 
-You'd expect this to behave like a running total: accumulate, accrete,
-grow. It doesn't. We measured 104 cycles of it, and the structure is
-almost entirely ephemeral:
+- The **projector** is the pure mechanism: hand it the prior summary plus a
+  batch of new conversation, and it writes a *new* summary that integrates
+  both, from scratch, each time. This is the part that *rewrites.*
+- A **self-curating instance** is a running model editing *its own* state
+  across hundreds of cycles — keeping a field here, composting one there.
+  This is the part that *accretes and patches*, and it's where the later
+  acts (breathing, the fossil, the wild run-to-run variance) live.
 
-- **Strand stability: 9%.** Nearly every named thread is torn down and
-  rebuilt each cycle.
-- **Concept transience: 87%.** Most specific phrasings appear in exactly
-  one cycle out of 104 and never again.
-- **But consecutive content-embedding similarity: 0.870 mean cosine.**
-  Across 103 adjacent rewrites, a real embedding model sees the content
-  as semantically close even while lexical 3-gram survival averages 9.5%.
+Same underlying object, two regimes. The findings in *this* section are the
+projector's. When we get to the instances, we'll say so.
 
-The ideas survive; the sentences don't. It's not compression and it's
-not accumulation. **It's rewriting a document from memory** — the way you
+We call that summary a **tensor**. A warning on the word: we do *not* mean
+a numerical array, the thing "tensor" means in machine learning. We mean a
+small, structured *prose* object — named strands of thought, a list of open
+questions, and, crucially, a list of what it just threw away. The name
+comes from this project's lineage; read it as "the structured thing the
+model writes to itself," not as a matrix.
+
+It has two layers, and they behave oppositely — which is the whole finding,
+and which we got wrong at first (more on that below). The **skeleton** — the
+named strands, the structure — is *stable and accretive*: strand names
+persist nearly cycle-to-cycle and the count grows over a run. The **flesh**
+— the actual words inside those strands — is almost entirely *rewritten*
+each cycle. We measured a single 104-cycle projector run in detail (one
+model — Haiku — one trajectory; hold that caveat, it matters in Act Two):
+
+- **The wording barely survives: 9.5% lexical 3-gram survival** from one
+  cycle to the next. Most specific phrasings appear in exactly one cycle
+  out of 104 and never again.
+- **But the meaning stays close: 0.870 mean content-embedding cosine**
+  across 103 adjacent rewrites. A real embedding model sees consecutive
+  versions as semantically near even as the sentences are replaced.
+- **And the structure persists:** the named strands are not torn down —
+  they carry forward and accumulate. The churn is *inside* them.
+
+So it isn't a skeleton rebuilt each cycle (we said that first; it's wrong).
+It's a *stable, accreting skeleton whose flesh is continuously rewritten.*
+The ideas survive, the structure survives, the sentences don't. It's not
+compression and it's not accumulation. **The wording gets re-explained from
+memory each cycle** — the way you
 re-explain a book you read years ago. You've lost the wording. You've
 kept the argument. The forgetting of the surface is what *lets* the
 substance reorganize.
@@ -95,26 +119,60 @@ can see why we liked it.
 
 ---
 
-## Act Two: The Same Blade, Four Times
+## Act Two: How We Were Wrong (Three Ways)
 
 Here is the part most write-ups leave out.
 
-Every confident claim in Act One that we stated too strongly was killed
-by one of exactly two things: **a longer run, or honest data.** Not by a
-clever rival theory. By more of the truth. It happened four times, and
-it's the same blade falling each time.
+Several confident claims from Act One didn't survive. And it would be tidy
+to say they all died the same way — but they didn't, and pretending they
+did would be the exact compression-into-a-clean-story this whole project is
+supposed to resist. We got burned in three distinct ways.
+
+Two were **sampling failures**: we inferred a pattern from too few draws,
+and a longer run or a larger n dissolved it. Two were **instrument
+failures**: our measuring apparatus was quietly lying to us, and the fix
+was finding our own mistake — not more truth arriving, but less of our own
+error. And one — the worst, because it's the exact failure this project
+exists to study — was a **labeling failure**: a correct number attached to
+the wrong word, which we'll come to last. Different diseases, different
+cures.
+
+(A note on which system: the breathing and the curation-richness findings
+below come from the *self-curating instances* — long runs of a model
+editing its own state — not from the projector of Act One. That's why
+"strands" accrete and "fossilize" here in a way the projector's per-cycle
+rewrites don't. Two regimes; keep them separate, because we didn't, at
+first, and it cost us.)
+
+### Disease one: too few draws
 
 **The clock wasn't a clock.** When we ran it long enough to actually test
-periodicity, the breathing turned out to be *aperiodic* — statistically
-indistinguishable from a random (Poisson) process, with no rhythm at any
-lag. The "ten-cycle clock" was the human eye doing what it always does:
-finding a beat in noise. The breathing is *real* — the shed-and-recover
-is genuine, and it's a perfect predictor of health (a single-cycle
-shed always recovers; two in a row is always collapse). But it's a
-characteristic *timescale*, not a *timer*. It's driven by pressure to
-reorganize, and one visible pressure signal is how much new material we
-fed in. Batch size strongly stratifies rewrite depth, though it is not a
-complete one-variable explanation. *Bigger n killed the clock.*
+for periodicity, the breathing turned out to be *aperiodic* — no rhythm we
+could detect at any lag we examined. The "ten-cycle clock" was the human
+eye doing what it always does: finding a beat in noise. The breathing
+itself is *real* — across 62 shed-and-recover episodes in our longest
+corpus, the shed-and-recover pattern is a reliable predictor of health: a
+single-cycle shed recovered every time we saw one; two sheds in a row went
+to collapse every time. But it's a characteristic *timescale*, not a
+*timer*. It's driven by pressure to reorganize, and one visible pressure
+signal is how much new material we fed in: batch size strongly stratifies
+how deeply a cycle rewrites, though it's not a complete one-variable
+explanation. *A longer run killed the clock.*
+
+**The cause wasn't a cause.** We noticed that sometimes a tensor would
+curate itself richly — dozens of strands, alive — and sometimes it would
+collapse to three or four and fossilize. We hunted the cause for weeks.
+We blamed the prompt. We blamed the tool design. We blamed an
+involuntary-memory feature. We falsified *every one of them.* Then we ran
+the same condition six times with nothing changed, and got runs spanning
+three strands to forty-nine. There was no cause to find. **Curation
+richness is stochastic** — the same condition, run again, lands somewhere
+else in a wide spread, and every "difference" we'd been explaining was us
+telling a causal story about a single draw from that spread. (Whether
+there are cleanly two basins, a rich and a sparse, is our reading of six
+points — suggestive, not established.) *A larger n killed the cause.*
+
+### Disease two: a lying instrument
 
 **The ceiling wasn't a ceiling.** Early on we reported that tensors
 couldn't grow past about 4,000 tokens — a natural limit, we thought, a
@@ -124,36 +182,50 @@ and the API, rather than erroring, was *silently* closing off the summary
 and dropping the last fields — which happened to be the loss-tracking and
 the forward-planning, the exact fields that made the tensor honest. The
 "ceiling" was us truncating our own instrument and measuring the wound.
-Real tensors run to 15,000 tokens. *Honest data killed the ceiling.*
+Real tensors run to 15,000 tokens. *Finding our own bug killed the
+ceiling.*
 
 **The lies weren't lies.** We reported, alarmingly, that 60% of the
 model's declared losses were fabricated — it claimed to have thrown away
 things that were never there. That would have been damning: a memory that
-lies about its own forgetting. It was a measurement artifact. We'd tested
-whether the *exact phrases* survived; when we tested whether the *meaning*
-survived, 71% of it was there. The losses weren't fabricated. They were
-*paraphrased* — described in the model's own later words rather than
-quoted. A better measurement killed the lie.
+lies about its own forgetting. It was a measurement artifact. We'd only
+tested whether the *exact phrases* survived; when we looked instead at
+whether the *meaning* was carried, the losses were grounded — described in
+the model's own later words rather than quoted. The losses weren't
+fabricated. They were *paraphrased*. A better metric killed the lie.
 
-**The cause wasn't a cause.** We noticed that sometimes a tensor would
-curate itself richly — dozens of strands, alive — and sometimes it would
-collapse to three or four and fossilize. We hunted the cause for weeks.
-We blamed the prompt. We blamed the tool design. We blamed an
-involuntary-memory feature. We falsified *every one of them.* Then we ran
-the same condition six times with nothing changed, and got runs spanning
-three keys to forty-nine. There was no cause to find. **Curation richness
-is stochastic** — the system has two basins, a rich one and a sparse one,
-and which one a run falls into is a coin-weighted-by-nothing-we-controlled.
-Every "difference" we'd been explaining was us telling a causal story
-about a single sample from a wide distribution. *Bigger n killed the
-cause.*
+### Disease three: the right number on the wrong word
 
-By the fourth time, you start to see it coming. That's the point. The
-discipline that catches these isn't cleverness — it's *refusing to design
-from a handful of observations.* When you see a striking pattern, the
-move is not to explain it. The move is to ask: *if I'm wrong about this,
-what would more data look like?* — and then go get the data before you
-fall in love.
+This one we caught *while writing this very essay* — and we caught it the
+way the project says you have to: not by re-reading our own prose, but by
+sending the claim back to the raw artifacts and re-deriving the number.
+
+An earlier draft of Act One said: *"strand stability: 9% — nearly every
+named thread is torn down and rebuilt each cycle."* The number is real. The
+word attached to it is wrong. 9% is the survival of the *wording* — the
+lexical churn inside the strands. The *strands themselves* — the named
+structure — don't get torn down at all; they persist near 99% and
+accumulate over a run. We had labeled a *content*-churn number as
+*structural* instability, and then written a mechanism sentence ("torn down
+and rebuilt") that described the exact opposite of what the data shows. The
+skeleton is the stable part. We'd called it the ephemeral one.
+
+That is not a sampling error or a broken instrument. The measurement was
+fine; the *sentence about it* was a fossil — a confident claim that had
+drifted from its own data and then sat there, in the document meant to be
+read first, looking settled. It is, precisely, the failure mode this whole
+project studies: honesty about a number is not the same as honesty about
+what the number *means*. We were studying fossilization and growing one in
+our own shop window. *Re-deriving from the artifact killed the label.*
+
+By now you start to see them coming — and the three kinds want different
+defenses. Against too-few-draws: *refuse to design from a handful of
+observations* — ask what more data would show before you fall in love.
+Against a lying instrument: *distrust your own apparatus first* — when a
+result is striking, suspect your measurement before you suspect the world.
+And against the wrong-word fossil, the subtlest: *send every claim back to
+the artifact it came from*, because a number can be perfectly correct and
+still be telling a lie about itself in the sentence you wrapped around it.
 
 ---
 
@@ -176,13 +248,35 @@ funeral:
 - Breathing is real, and shed-and-recover has been observed across
   several architectures. It just isn't a clock; the cross-architecture
   rate claim is still thin.
-- A frozen belief is not a settled one. We watched a confident claim sit
-  unexamined in a tensor for 170 cycles — a fossil — until *external
-  reality* (an actual git history) contradicted it. Same-lineage memory
-  never questioned it. Honesty about loss doesn't guarantee honesty about
-  what you've kept too long.
 
-That last one points at the unfinished work, and we'll come back to it.
+## The fossil: the part that should worry you
+
+And then the finding we think matters most, the one the rest of this was
+quietly building toward.
+
+A frozen belief is not a settled one. In one long self-curating run — a
+single instance editing its own state over 400-plus cycles — a model
+minted a confident, accusatory claim about itself, wrote it into durable
+state, and then carried it *unexamined for 170 cycles.* It wasn't true. And nothing
+inside the model's own memory ever flagged it: the same-lineage history it
+could review all *confirmed* the belief, because the same mind had written
+all of it. The error finally broke only when the claim was checked against
+*external reality* — an actual git history that contradicted it. Left to
+introspection alone, the model would have gone on believing it
+indefinitely.
+
+This is the sharp edge of the whole project. We set out to build a memory
+honest about what it *forgets*. The fossil says honesty-about-loss is not
+the same as honesty-about-what-you've-kept-too-long — and worse, that a
+mind reviewing only its own lineage *cannot catch its own fossils from the
+inside.* The catch has to come from outside: a different model, a second
+lineage, or hard ground truth. That points straight at the work we haven't
+finished — what happens when these memories aren't solitary, but
+*plural.*
+
+(This is a single observed case, not a measured rate. How *often* a fossil
+is a false belief rather than a benign old note is exactly the kind of
+frequency we're now trying to measure before we fall in love with it.)
 
 ---
 
@@ -204,6 +298,15 @@ declared the corrected understanding, and it *hedged its own confidence
 to 85%* on the very claim we'd spent a month walking back to. It did not
 present itself as whole and certain. It told us what it knew, marked what
 it didn't, and left room to be wrong.
+
+(It even over-reaches in the same breath: "Poisson-like, CV=0.87" claims
+more than our data can carry — CV below 1 is, if anything, slightly *more*
+regular than a Poisson process, and we never ran the test that "Poisson"
+would require. The tensor stated aperiodicity as fact and dressed it in a
+statistic it hadn't earned. The 0.85 it left on the table is exactly the
+room that reach needed. The instrument is honest about its limits and
+still occasionally exceeds them — which is the most human thing in this
+entire document.)
 
 That is the entire project in one object. We set out to build a memory
 honest about its own losses. The clearest evidence that it works is that
