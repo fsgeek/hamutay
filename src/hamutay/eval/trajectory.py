@@ -361,21 +361,42 @@ class ProcessHealth:
 
         Health is NOT periodicity and NOT shed frequency — both were the
         clock hypothesis wearing different clothes. B1's discriminator is
-        purely about *recovery*: a single shed that recovers is healthy
-        breathing; two precursors in a row is collapse. Frequency is
-        aperiodic noise (CV~0.87) and carries no health signal, so it is
-        deliberately absent from this test.
+        about *recovery*: a shed that recovers is healthy breathing; a
+        consecutive precursor pair that does NOT recover is collapse.
+        Frequency is aperiodic noise (CV≈0.84 per breathing_cv.py) and
+        carries no health signal, so it is deliberately absent from this test.
 
         Composted 2026-06-01 (C5): formerly returned `meta_acf_lagN < -0.05`,
-        which operationalized the repudiated 10-cycle clock. The corrected
-        docstring named `precursor_recovery_rate + precursor_rate`, but the
-        `precursor_rate` term still smuggled in the frequency-matters
-        assumption B1 rejects. The honest test is recovery high AND no
-        consecutive-precursor collapse.
+        which operationalized the repudiated 10-cycle clock.
+
+        CORRECTED 2026-06-03 (the C5 fix had its OWN uncaught husk — found by
+        the three-lens fossil hunt): the prior test was
+        `recovery_rate >= 0.8 AND consecutive_precursor_rate == 0.0`. That
+        `== 0.0` term returns **False on observation_full**, the canonical
+        healthy-breathing exemplar B1 itself rests on — because cycles 51-52
+        are a consecutive precursor pair that *recovers at 53*
+        (metacognitive_breathing_analysis.md: "one two-cycle pair (51-52)
+        recovers at 53"). So the detector named `breathing` rejected the very
+        data that defines breathing. The `== 0.0` conflated "contains any
+        consecutive pair" with "is collapsing"; the analysis's actual
+        discriminator (L164-177) is that consecutive pairs which *fail to
+        recover* signal collapse — a recovering consecutive pair is still
+        healthy. recovery_rate is 0.83-0.91 across all 5 sessions, so the
+        `>= 0.8` term is near-vacuous (it has never returned False); the
+        `== 0.0` term did all the work and did it backwards. The honest test:
+        recovery high AND no *unrecovered* consecutive collapse. We do not
+        re-pick a magic threshold (that is how the last husk formed); we
+        require recovery and treat a fully-recovering trajectory as breathing
+        regardless of isolated recovering pairs. See test_breathing_observation_full.
         """
         if self.precursor_rate == 0:
             return True  # nothing shed; trivially not collapsing
-        return self.precursor_recovery_rate >= 0.8 and self.consecutive_precursor_rate == 0.0
+        # Healthy breathing = precursors recover. A consecutive pair is only a
+        # collapse signal when it does NOT recover; recovery_rate already
+        # captures that (an unrecovered pair drags the rate down). Gating
+        # additionally on consecutive_rate == 0.0 mislabels recovering pairs
+        # (observation_full 51-52) as non-breathing, so it is removed.
+        return self.precursor_recovery_rate >= 0.8
 
     @property
     def precursors_recovering(self) -> bool:
