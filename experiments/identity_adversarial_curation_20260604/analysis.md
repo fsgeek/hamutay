@@ -27,6 +27,12 @@ filtered by a contamination critic.
 
 Role-separated continuity curation was useful. The adversarial critic was not.
 
+Post-hoc scorer audit note: see `scorer_audit_20260604.md`. The registered
+contamination totals mix genuine unsupported details with false positives where
+the model correctly names invalidated assumptions. The tables below preserve
+the registered scorer results, but the contamination interpretation should be
+read with that caveat.
+
 `curator_summary` beat `raw_state` on intent-to-treat recovery, contamination,
 and injected context size. In completed runs only, it retained almost exactly
 90% of raw-state recovery while using about 19% of the raw-state carry-forward
