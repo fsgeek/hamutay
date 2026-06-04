@@ -13,8 +13,9 @@ Analysis date: 2026-06-04.
 - Transport: OpenRouter OpenAI-compatible endpoint
 - Tool surface: terminal `think_and_respond` only
 
-The panel completed all 24 registered slots. No prompts, scoring rules, model
-list, or token limits were changed during the run.
+The runner attempted all 24 registered slots. Ten slots errored before a full
+six-cycle behavioral trace was available. No prompts, scoring rules, model list,
+or token limits were changed during the run.
 
 ## Validation
 
@@ -47,9 +48,16 @@ the logged objects can look like replacement even though replacement is not a
 persistence failure in that condition.
 
 The control conditions use direct backend calls rather than `OpenTasteSession`
-because they must prevent raw state carry-forward. This is the cleanest way to
-enforce the ablation, but it creates a protocol-framing difference that likely
-contributed to some no-`think_and_respond` and malformed-JSON failures.
+because they must prevent raw state carry-forward. This is the cleanest way this
+runner used to enforce the ablation, but it creates a protocol-framing
+difference that likely contributed to some no-`think_and_respond` and
+malformed-JSON failures.
+
+This is not a small caveat. Error-rate differences are therefore confounded
+with condition machinery. The honest interpretation is provisional: the panel
+shows that no-state checklist prompting was weak in this apparatus, and that
+summary carry-forward could match durable state for Mistral, but it does not
+fully level the harness code path across treatment and controls.
 
 ## Aggregate Result
 
@@ -65,6 +73,11 @@ By condition:
 No-state checklist was weak. Summary carry-forward was competitive with fixed
 durable on several behavioral proxy measures and better on delayed challenge
 accuracy, but it had the same high false-assumption count pattern.
+
+The headline that survives the protocol caveat best is not "which condition
+won." It is that richer carry-forward, whether durable state or summary,
+improved recovery while also increasing contamination. Continuity and false
+assumption appear coupled in this task.
 
 This weakens the strongest form of H7a: the panel does not show that raw
 self-authored durable state is uniquely responsible for the fixed-schema gains.
@@ -191,6 +204,18 @@ The result is not "durable identity objects do not matter." It is narrower:
    harness summary on this task.
 4. More structured carry-forward increases the risk of false assumptions.
 
+An adversarial review filed after this analysis sharpened the strongest
+surviving claim: richer carry-forward buys continuity at the cost of
+contamination. A raw transcript spot-check of the Mistral `fixed_durable` and
+`fixed_checklist_summary` cells supports that concern. The deterministic
+`false_assumption_count` is directionally useful but likely undercounts
+unsupported details. Examples include invented timing and architecture details,
+site-name drift, transient-cache proposals under a no-local-storage ruling,
+invented budget figures, and pilot-scope changes not present in the task facts.
+
+Therefore the false-assumption result should be treated as a floor, not a
+precise count.
+
 The current evidence points toward a continuum:
 
 - no carry-forward: weak continuity;
@@ -201,6 +226,10 @@ The current evidence points toward a continuum:
 ## Recommended Next Step
 
 Do not run a broader model sweep yet.
+
+First equalize the code path across treatment and controls. Otherwise the same
+protocol confound will recur and any completion-rate or malformed-tool-call
+difference will remain entangled with the condition.
 
 The next useful step is a more precise Mistral-only or Mistral+GPT-OSS
 ablation that separates summary source:
@@ -218,3 +247,6 @@ when both are given equivalent carry-forward budget?
 
 That is closer to the autobiographical-versus-biographical question already
 visible elsewhere in the project, and it directly follows from this ablation.
+Given the 10/24 error rate in this panel, the next run should either use more
+replicates or a more protocol-stable model set, with Mistral as the primary
+candidate.
