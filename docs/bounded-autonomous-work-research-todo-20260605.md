@@ -112,7 +112,7 @@ Evidence needed:
 
 ### Step 3a: Evidence-Honoring Gate
 
-Status: not started.
+Status: complete.
 
 Purpose:
 
@@ -132,6 +132,11 @@ Evidence needed:
   - evidence ignored/fossilized;
   - evidence contradicted by artifact;
   - completion claimed without sufficient evidence.
+
+Deliverable:
+
+- live evidence-honoring gate:
+  `experiments/event_loop/bounded_autonomous_work_evidence_honoring_gate_20260605/`.
 
 Placement:
 
