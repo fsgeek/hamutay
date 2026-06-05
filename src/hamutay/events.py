@@ -176,7 +176,11 @@ def _expand_result_record_id(value: object, result_record_id: str) -> object:
         return [_expand_result_record_id(item, result_record_id) for item in value]
     if isinstance(value, dict):
         return {
-            key: _expand_result_record_id(item, result_record_id)
+            key: (
+                json.loads(json.dumps(item, default=str))
+                if key == "continuation_request"
+                else _expand_result_record_id(item, result_record_id)
+            )
             for key, item in value.items()
         }
     return value

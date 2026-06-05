@@ -491,6 +491,86 @@ def test_build_bound_continuation_event_expands_result_record_id():
     }
 
 
+def test_build_bound_continuation_event_preserves_nested_future_request():
+    first_completed = {
+        "event_id": "first-event",
+        "status": "completed",
+        "wake_cycle": 3,
+        "result_record_id": "00000000-0000-0000-0000-000000000333",
+    }
+    bridge_request = {
+        "requested": True,
+        "kind": "bridge",
+        "purpose": "Use first record <result_record_id>.",
+        "requested_context": [
+            {
+                "tool": "recall",
+                "record_id": "<result_record_id>",
+                "field": "chain_intermediate",
+            }
+        ],
+        "terminal_surface": {
+            "tool_name": "complete_bridge",
+            "input_schema": {
+                "type": "object",
+                "properties": {"response": {"type": "string"}},
+                "required": ["response"],
+            },
+            "state_update": {
+                "response_field": "response",
+                "copy": {},
+                "set": {
+                    "bound_first_record_id_used": "<result_record_id>",
+                    "continuation_request": {
+                        "requested": True,
+                        "kind": "final",
+                        "purpose": "Use bridge record <result_record_id>.",
+                        "requested_context": [
+                            {
+                                "tool": "recall",
+                                "record_id": "<result_record_id>",
+                                "field": "chain_bridge",
+                            }
+                        ],
+                    },
+                },
+            },
+        },
+    }
+
+    bridge_event = build_bound_continuation_event(
+        completed_event=first_completed,
+        continuation_request=bridge_request,
+    )
+
+    assert bridge_event["requested_context"][0]["record_id"] == (
+        first_completed["result_record_id"]
+    )
+    bridge_set = bridge_event["terminal_surface"]["state_update"]["set"]
+    assert bridge_set["bound_first_record_id_used"] == (
+        first_completed["result_record_id"]
+    )
+    nested = bridge_set["continuation_request"]
+    assert nested["requested_context"][0]["record_id"] == "<result_record_id>"
+    assert "bridge record <result_record_id>" in nested["purpose"]
+
+    bridge_completed = {
+        "event_id": "bridge-event",
+        "status": "completed",
+        "wake_cycle": 4,
+        "result_record_id": "00000000-0000-0000-0000-000000000444",
+    }
+    final_event = build_bound_continuation_event(
+        completed_event=bridge_completed,
+        continuation_request=nested,
+    )
+
+    assert final_event["requested_context"][0]["record_id"] == (
+        bridge_completed["result_record_id"]
+    )
+    assert bridge_completed["result_record_id"] in final_event["purpose"]
+
+
 def test_build_bound_continuation_event_returns_none_when_not_requested():
     event = build_bound_continuation_event(
         completed_event={
