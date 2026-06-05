@@ -1270,9 +1270,21 @@ def run_pending_events(
     stop_on_failure: bool = True,
     now: datetime | None = None,
     auto_continuations: bool = False,
+    max_auto_continuations: int | None = None,
 ) -> dict:
     """Run up to limit pending events and return a batch summary."""
+    if (
+        max_auto_continuations is not None
+        and (
+            not isinstance(max_auto_continuations, int)
+            or isinstance(max_auto_continuations, bool)
+            or max_auto_continuations < 0
+        )
+    ):
+        raise ValueError("max_auto_continuations must be a non-negative integer")
     results: list[dict] = []
+    auto_continuation_count = 0
+    auto_continuation_limit_reached = False
     for _ in range(limit):
         try:
             result = run_next_event(
@@ -1292,14 +1304,25 @@ def run_pending_events(
                 break
             continue
         results.append(result)
+        if result.get("auto_continuation_event") is not None:
+            auto_continuation_count += 1
         if result.get("status") == "none":
             break
         if result.get("status") == "failed" and stop_on_failure:
+            break
+        if (
+            max_auto_continuations is not None
+            and auto_continuation_count >= max_auto_continuations
+        ):
+            auto_continuation_limit_reached = True
             break
     return {
         "status": "completed",
         "limit": limit,
         "ran": len([r for r in results if r.get("status") != "none"]),
+        "auto_continuation_count": auto_continuation_count,
+        "max_auto_continuations": max_auto_continuations,
+        "auto_continuation_limit_reached": auto_continuation_limit_reached,
         "results": results,
     }
 
@@ -1312,6 +1335,7 @@ def step_pending_events(
     stop_on_failure: bool = True,
     now: datetime | None = None,
     auto_continuations: bool = False,
+    max_auto_continuations: int | None = None,
 ) -> dict:
     """Run one fixed-time scheduler step and report why the step stopped.
 
@@ -1326,6 +1350,7 @@ def step_pending_events(
         stop_on_failure=stop_on_failure,
         now=now,
         auto_continuations=auto_continuations,
+        max_auto_continuations=max_auto_continuations,
     )
     summary = summarize_event_log(store.read_records(), now=now)
     results = batch.get("results", [])
@@ -1343,7 +1368,9 @@ def step_pending_events(
             or summary.get("pending_expired_count", 0)
         )
     )
-    if failed and stop_on_failure:
+    if batch.get("auto_continuation_limit_reached"):
+        stop_reason = "auto_continuation_limit_reached"
+    elif failed and stop_on_failure:
         stop_reason = "failed"
     elif reached_limit:
         stop_reason = "limit_reached"

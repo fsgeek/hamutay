@@ -1278,6 +1278,69 @@ def test_run_next_event_auto_ignores_inherited_continuation(tmp_path):
     assert [r["status"] for r in records] == ["pending", "running", "completed"]
 
 
+def test_step_pending_events_stops_at_auto_continuation_budget(tmp_path):
+    log_path = tmp_path / "session.jsonl"
+    event_path = tmp_path / "session.events.jsonl"
+    session = OpenTasteSession(
+        backend=_FakeBackend(),
+        log_path=str(log_path),
+        event_log_path=str(event_path),
+        enable_tools=True,
+        project_root=tmp_path,
+    )
+    session.exchange("seed")
+    session._backend = _SequenceBackend([
+        ExchangeResult(
+            raw_output={
+                "response": "event handled",
+                "event_reflection": "revised",
+                "continuation_request": _continuation_request(),
+            },
+            stop_reason="end_turn",
+        ),
+        ExchangeResult(
+            raw_output={
+                "response": "should not run",
+                "event_reflection": "ran past budget",
+            },
+            stop_reason="end_turn",
+        ),
+    ])
+    event = build_pending_event(
+        purpose="Reflect on claim.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=session._prior_states[-1][1],
+    )
+    store = EventStore(event_path)
+    store.append(event)
+
+    result = step_pending_events(
+        session,
+        store,
+        limit=10,
+        auto_continuations=True,
+        max_auto_continuations=1,
+    )
+
+    assert result["stop_reason"] == "auto_continuation_limit_reached"
+    assert result["batch"]["auto_continuation_count"] == 1
+    assert result["batch"]["auto_continuation_limit_reached"] is True
+    assert result["wake_run_count"] == 1
+    statuses = [record["status"] for record in store.read_records()]
+    assert statuses == ["pending", "running", "completed", "pending"]
+    assert result["summary"]["pending_runnable_count"] == 1
+
+
+def test_run_pending_events_rejects_invalid_auto_continuation_budget(tmp_path):
+    with pytest.raises(ValueError, match="max_auto_continuations"):
+        run_pending_events(
+            SimpleNamespace(),
+            EventStore(tmp_path / "events.jsonl"),
+            max_auto_continuations=-1,
+        )
+
+
 def test_run_next_event_auto_continuation_failure_marks_event_failed(tmp_path):
     log_path = tmp_path / "session.jsonl"
     event_path = tmp_path / "session.events.jsonl"
