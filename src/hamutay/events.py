@@ -272,7 +272,14 @@ class EventStore:
         self.append(record)
         return record
 
-    def append_failed(self, *, event: dict, run_id: str, exc: Exception) -> dict:
+    def append_failed(
+        self,
+        *,
+        event: dict,
+        run_id: str,
+        exc: Exception,
+        context_results: list[dict] | None = None,
+    ) -> dict:
         record = {
             "record_type": "event_status",
             "event_id": event["event_id"],
@@ -283,6 +290,8 @@ class EventStore:
             "error_type": type(exc).__name__,
             "error": str(exc),
         }
+        if context_results is not None:
+            record["context_results"] = context_results
         self.append(record)
         return record
 
@@ -862,9 +871,14 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
     return "\n".join(lines)
 
 
-def run_next_event(session, store: EventStore) -> dict:
+def run_next_event(
+    session,
+    store: EventStore,
+    *,
+    now: datetime | None = None,
+) -> dict:
     """Run the oldest pending event once using an OpenTasteSession."""
-    claim = store.claim_next_pending()
+    claim = store.claim_next_pending(now=now)
     if claim is None:
         return {"status": "none", "message": "no runnable pending events"}
     event, running = claim
@@ -872,6 +886,7 @@ def run_next_event(session, store: EventStore) -> dict:
         return running
 
     run_id = running["run_id"]
+    context_results: list[dict] | None = None
     try:
         context_results = resolve_requested_context(
             event.get("requested_context", []),
@@ -897,7 +912,12 @@ def run_next_event(session, store: EventStore) -> dict:
             outcome_observation=outcome_observation,
         )
     except Exception as e:
-        store.append_failed(event=event, run_id=run_id, exc=e)
+        store.append_failed(
+            event=event,
+            run_id=run_id,
+            exc=e,
+            context_results=context_results,
+        )
         raise
 
 
@@ -907,12 +927,13 @@ def run_pending_events(
     *,
     limit: int = 10,
     stop_on_failure: bool = True,
+    now: datetime | None = None,
 ) -> dict:
     """Run up to limit pending events and return a batch summary."""
     results: list[dict] = []
     for _ in range(limit):
         try:
-            result = run_next_event(session, store)
+            result = run_next_event(session, store, now=now)
         except Exception as e:
             failure = {
                 "status": "failed",

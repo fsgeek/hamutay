@@ -231,6 +231,43 @@ def test_event_store_claim_returns_none_when_no_event_is_due(tmp_path):
     assert store.latest_by_event_id()[future["event_id"]]["status"] == "pending"
 
 
+def test_run_next_event_accepts_simulated_now(tmp_path):
+    log_path = tmp_path / "session.jsonl"
+    event_path = tmp_path / "session.events.jsonl"
+    session = OpenTasteSession(
+        backend=_FakeBackend(),
+        log_path=str(log_path),
+        event_log_path=str(event_path),
+        enable_tools=True,
+        project_root=tmp_path,
+    )
+    session.exchange("seed")
+    event = build_pending_event(
+        purpose="Run only after simulated time advances.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=session._prior_states[-1][1],
+        not_before="2026-06-01T01:00:00+00:00",
+    )
+    store = EventStore(event_path)
+    store.append(event)
+
+    too_early = run_next_event(
+        session,
+        store,
+        now=datetime(2026, 6, 1, 0, 59, tzinfo=timezone.utc),
+    )
+    assert too_early["status"] == "none"
+    assert store.latest_by_event_id()[event["event_id"]]["status"] == "pending"
+
+    due = run_next_event(
+        session,
+        store,
+        now=datetime(2026, 6, 1, 1, 0, tzinfo=timezone.utc),
+    )
+    assert due["status"] == "completed"
+
+
 def test_schedule_event_schema_exists():
     assert "schedule_event" in TOOL_SCHEMAS
     assert "purpose" in TOOL_SCHEMAS["schedule_event"]["input_schema"]["required"]
@@ -601,7 +638,9 @@ def test_run_next_event_logs_failure(tmp_path):
     with pytest.raises(RuntimeError, match="wake failed"):
         run_next_event(session, store)
 
-    assert store.read_records()[-1]["status"] == "failed"
+    failed = store.read_records()[-1]
+    assert failed["status"] == "failed"
+    assert failed["context_results"][0]["result"]["cycle"] == 1
 
 
 def test_run_pending_events_respects_limit(tmp_path):
