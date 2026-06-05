@@ -338,6 +338,9 @@ def test_schedule_event_schema_exists():
     assert "purpose" in TOOL_SCHEMAS["schedule_event"]["input_schema"]["required"]
     properties = TOOL_SCHEMAS["schedule_event"]["input_schema"]["properties"]
     assert "not_before" in properties
+    context_item = properties["requested_context"]["items"]["properties"]
+    assert context_item["tool"]["enum"] == ["recall", "compare", "walk"]
+    assert context_item["mode"]["enum"] == ["path", "adjacent"]
 
 
 def test_executor_buffers_scheduled_event(tmp_path):

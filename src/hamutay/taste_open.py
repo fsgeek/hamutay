@@ -156,7 +156,7 @@ if it's unavailable, you'll see an error.
 - schedule_event(purpose, requested_context): Schedule a future \
 self-reflection wakeup. V1 supports reflection events only. The future \
 cycle receives an explicit event envelope with your purpose and the \
-requested recall/compare context. Use this when you are not done \
+requested recall/compare/walk context. Use this when you are not done \
 thinking but know what evidence a later cycle should inspect. Scheduled \
 events are written to the session's event sidecar; if event logging is \
 unavailable, you'll see an error.

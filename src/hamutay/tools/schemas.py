@@ -462,14 +462,15 @@ SCHEDULE_EVENT_SCHEMA = {
                 "description": (
                     "Memory context to resolve before wake. Each item is "
                     "one of: recall by cycle/record_id with optional field; "
-                    "or compare by cycle_a/cycle_b with optional field/content."
+                    "compare by cycle_a/cycle_b with optional field/content; "
+                    "or walk by from_record_id with optional direction/depth/mode."
                 ),
                 "items": {
                     "type": "object",
                     "properties": {
                         "tool": {
                             "type": "string",
-                            "enum": ["recall", "compare"],
+                            "enum": ["recall", "compare", "walk"],
                         },
                         "cycle": {"type": "integer"},
                         "record_id": {"type": "string"},
@@ -477,6 +478,16 @@ SCHEDULE_EVENT_SCHEMA = {
                         "cycle_a": {"type": "integer"},
                         "cycle_b": {"type": "integer"},
                         "content": {"type": "boolean"},
+                        "from_record_id": {"type": "string"},
+                        "direction": {
+                            "type": "string",
+                            "enum": ["forward", "backward", "both"],
+                        },
+                        "depth": {"type": "integer"},
+                        "mode": {
+                            "type": "string",
+                            "enum": ["path", "adjacent"],
+                        },
                     },
                     "required": ["tool"],
                 },
