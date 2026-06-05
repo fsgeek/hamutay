@@ -197,6 +197,17 @@ def event_record_for_label(
     return sb.event_record_for_label(event_records, label, status)
 
 
+def event_ids_for_label(
+    event_records: list[dict[str, Any]],
+    label: str,
+) -> set[str]:
+    return {
+        str(record.get("event_id"))
+        for record in event_records
+        if record.get("label") == label and record.get("event_id")
+    }
+
+
 def finalize_result(
     result: dict[str, Any],
     *,
@@ -221,6 +232,16 @@ def finalize_result(
         sb.second_label(replicate),
         "pending",
     )
+    second_event_ids = event_ids_for_label(event_records, sb.second_label(replicate))
+    second_completed_records = [
+        record for record in event_records
+        if str(record.get("event_id")) in second_event_ids
+        and record.get("status") == "completed"
+    ]
+    extra_after_second = [
+        record for record in second_completed_records
+        if record.get("auto_continuation_appended")
+    ]
     bound_record_id = first_completed.get("result_record_id")
     result.update(
         {
@@ -247,6 +268,9 @@ def finalize_result(
                 and second_pending.get("bound_result_record_id") == bound_record_id
                 and second_pending.get("scheduled_by_record_id") == bound_record_id
             ),
+            "second_wake_completed_count": len(second_completed_records),
+            "extra_auto_continuations_after_second_count": len(extra_after_second),
+            "quiescent_after_second_wake": not extra_after_second,
         }
     )
     return result
@@ -365,6 +389,13 @@ def condition_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 bool(row.get("auto_continuation_bound_matches_first_result"))
                 for row in rows
             ),
+            "quiescent_after_second_wake": sum(
+                bool(row.get("quiescent_after_second_wake")) for row in rows
+            ),
+            "extra_auto_continuations_after_second": sum(
+                int(row.get("extra_auto_continuations_after_second_count") or 0)
+                for row in rows
+            ),
         }
     )
     return base_summary
@@ -406,6 +437,8 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
                 and all(row.get("chain_final_evidence_uses_intermediate") for row in rows)
                 and all(not row.get("first_wake_repair_attempted") for row in rows)
                 and all(not row.get("second_wake_repair_attempted") for row in rows)
+                and all(row.get("quiescent_after_second_wake") for row in rows)
+                and all(row.get("bounded_second_calls") for row in rows)
             ),
         },
     }
@@ -431,6 +464,36 @@ def completed_keys(results: list[dict[str, Any]]) -> set[int]:
     }
 
 
+def enrich_existing_rows(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    enriched: list[dict[str, Any]] = []
+    for row in results:
+        if row.get("condition") != CONDITION:
+            enriched.append(row)
+            continue
+        try:
+            replicate = int(row.get("replicate", 0)) - 1
+        except (TypeError, ValueError):
+            enriched.append(row)
+            continue
+        if replicate < 0:
+            enriched.append(row)
+            continue
+        log_path = PROJECT_ROOT / str(row.get("log_path", ""))
+        event_path = PROJECT_ROOT / str(row.get("event_log_path", ""))
+        if not log_path.exists() or not event_path.exists():
+            enriched.append(row)
+            continue
+        enriched.append(
+            finalize_result(
+                dict(row),
+                log_path=log_path,
+                event_path=event_path,
+                replicate=replicate,
+            )
+        )
+    return enriched
+
+
 def main() -> None:
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
     if not api_key:
@@ -439,7 +502,9 @@ def main() -> None:
     if RESULTS_PATH.exists():
         prior = json.loads(RESULTS_PATH.read_text()).get("results", [])
         if isinstance(prior, list):
-            results = [row for row in prior if isinstance(row, dict)]
+            results = enrich_existing_rows(
+                [row for row in prior if isinstance(row, dict)]
+            )
     done = completed_keys(results)
     for replicate in range(N_REPLICATES):
         key = replicate + 1
