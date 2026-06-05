@@ -1059,6 +1059,75 @@ def run_pending_events(
     }
 
 
+def step_pending_events(
+    session,
+    store: EventStore,
+    *,
+    limit: int = 10,
+    stop_on_failure: bool = True,
+    now: datetime | None = None,
+) -> dict:
+    """Run one fixed-time scheduler step and report why the step stopped.
+
+    This is the DES-facing wrapper around run_pending_events: it never advances
+    time by itself, and it reports the earliest future not_before boundary when
+    work is waiting.
+    """
+    batch = run_pending_events(
+        session,
+        store,
+        limit=limit,
+        stop_on_failure=stop_on_failure,
+        now=now,
+    )
+    summary = summarize_event_log(store.read_records(), now=now)
+    results = batch.get("results", [])
+    completed_or_failed = [
+        result for result in results
+        if result.get("status") in {"completed", "failed"}
+    ]
+    expired = [result for result in results if result.get("status") == "expired"]
+    failed = [result for result in results if result.get("status") == "failed"]
+    reached_limit = (
+        limit > 0
+        and len([r for r in results if r.get("status") != "none"]) >= limit
+        and (
+            summary.get("pending_runnable_count", 0)
+            or summary.get("pending_expired_count", 0)
+        )
+    )
+    if failed and stop_on_failure:
+        stop_reason = "failed"
+    elif reached_limit:
+        stop_reason = "limit_reached"
+    elif summary.get("pending_expired_count", 0):
+        stop_reason = "expired_pending"
+    elif summary.get("pending_runnable_count", 0):
+        stop_reason = "runnable_pending"
+    elif summary.get("pending_waiting_count", 0):
+        stop_reason = "waiting"
+    else:
+        stop_reason = "idle"
+
+    waiting = summary.get("oldest_waiting_pending") or {}
+    next_wake_at = waiting.get("not_before")
+    return {
+        "status": "completed",
+        "stop_reason": stop_reason,
+        "now": (now or datetime.now(timezone.utc)).isoformat(),
+        "limit": limit,
+        "wake_run_count": len(completed_or_failed),
+        "expired_count": len(expired),
+        "terminalized_count": len(completed_or_failed) + len(expired),
+        "next_wake_at": next_wake_at,
+        "pending_runnable_count": summary.get("pending_runnable_count", 0),
+        "pending_waiting_count": summary.get("pending_waiting_count", 0),
+        "pending_expired_count": summary.get("pending_expired_count", 0),
+        "batch": batch,
+        "summary": summary,
+    }
+
+
 def main() -> None:
     import argparse
     import os

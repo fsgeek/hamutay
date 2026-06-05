@@ -21,6 +21,7 @@ from hamutay.events import (
     resolve_requested_context,
     run_next_event,
     run_pending_events,
+    step_pending_events,
     summarize_event_log,
 )
 from hamutay.taste_open import ExchangeResult, OpenTasteSession
@@ -806,6 +807,116 @@ def test_run_pending_events_respects_limit(tmp_path):
     assert len(result["results"]) == 1
     statuses = [r["status"] for r in store.latest_by_event_id().values()]
     assert sorted(statuses) == ["completed", "pending"]
+
+
+def test_step_pending_events_reports_waiting_next_wake_at(tmp_path):
+    log_path = tmp_path / "session.jsonl"
+    event_path = tmp_path / "session.events.jsonl"
+    session = OpenTasteSession(
+        backend=_FakeBackend(),
+        log_path=str(log_path),
+        event_log_path=str(event_path),
+        enable_tools=True,
+        project_root=tmp_path,
+    )
+    session.exchange("seed")
+    store = EventStore(event_path)
+    expired = build_pending_event(
+        purpose="Expire before the simulated step.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=session._prior_states[-1][1],
+        expires_at="2026-05-31T23:59:00+00:00",
+    )
+    expired["created_at"] = "2026-06-01T00:00:00+00:00"
+    ready = build_pending_event(
+        purpose="Run at the first simulated step.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=session._prior_states[-1][1],
+    )
+    ready["created_at"] = "2026-06-01T00:00:01+00:00"
+    waiting = build_pending_event(
+        purpose="Run only after simulated time advances.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=session._prior_states[-1][1],
+        not_before="2026-06-01T01:00:00+00:00",
+    )
+    waiting["created_at"] = "2026-06-01T00:00:02+00:00"
+    store.append(expired)
+    store.append(ready)
+    store.append(waiting)
+
+    first = step_pending_events(
+        session,
+        store,
+        now=datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc),
+    )
+
+    assert first["stop_reason"] == "waiting"
+    assert first["wake_run_count"] == 1
+    assert first["expired_count"] == 1
+    assert first["next_wake_at"] == "2026-06-01T01:00:00+00:00"
+    latest = store.latest_by_event_id()
+    assert latest[expired["event_id"]]["status"] == "expired"
+    assert latest[ready["event_id"]]["status"] == "completed"
+    assert latest[waiting["event_id"]]["status"] == "pending"
+
+    second = step_pending_events(
+        session,
+        store,
+        now=datetime(2026, 6, 1, 1, 0, tzinfo=timezone.utc),
+    )
+
+    assert second["stop_reason"] == "idle"
+    assert second["wake_run_count"] == 1
+    assert second["expired_count"] == 0
+    assert second["next_wake_at"] is None
+    assert store.latest_by_event_id()[waiting["event_id"]]["status"] == (
+        "completed"
+    )
+
+
+def test_step_pending_events_respects_fixed_now_limit(tmp_path):
+    log_path = tmp_path / "session.jsonl"
+    event_path = tmp_path / "session.events.jsonl"
+    session = OpenTasteSession(
+        backend=_FakeBackend(),
+        log_path=str(log_path),
+        event_log_path=str(event_path),
+        enable_tools=True,
+        project_root=tmp_path,
+    )
+    session.exchange("seed")
+    store = EventStore(event_path)
+    ready = build_pending_event(
+        purpose="Run now.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=session._prior_states[-1][1],
+    )
+    waiting = build_pending_event(
+        purpose="Do not run under fixed now.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=session._prior_states[-1][1],
+        not_before="2026-06-01T01:00:00+00:00",
+    )
+    store.append(ready)
+    store.append(waiting)
+
+    step = step_pending_events(
+        session,
+        store,
+        limit=1,
+        now=datetime(2026, 6, 1, 0, 0, tzinfo=timezone.utc),
+    )
+
+    assert step["wake_run_count"] == 1
+    assert step["stop_reason"] == "waiting"
+    assert step["next_wake_at"] == "2026-06-01T01:00:00+00:00"
+    assert store.latest_by_event_id()[waiting["event_id"]]["status"] == "pending"
 
 
 def test_summarize_event_log_reports_statuses_and_context_errors(tmp_path):
