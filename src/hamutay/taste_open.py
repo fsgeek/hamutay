@@ -23,7 +23,7 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Iterable, Protocol, cast
 from uuid import UUID, uuid4
 
 import anthropic
@@ -1429,14 +1429,23 @@ class _Unset:
 _UNSET = _Unset()
 
 
-def _apply_updates(prior_state: dict | None, raw_output: dict, cycle: int) -> dict:
+def _apply_updates(
+    prior_state: dict | None,
+    raw_output: dict,
+    cycle: int,
+    *,
+    protected_fields: Iterable[str] | None = None,
+) -> dict:
     """Default-stable via key-presence: non-protocol keys in raw_output are
     updates, unlisted keys carry forward. Overlap between updates and deletions
     raises — the ambiguity is exactly the silent-drop failure we're removing."""
+    protected = {str(field) for field in protected_fields or ()}
     deleted = set(raw_output.get("deleted_regions", []))
     updated = set(raw_output.keys()) - _PROTOCOL_FIELDS
+    effective_deleted = deleted - protected
+    effective_updated = updated - protected
 
-    overlap = deleted & updated
+    overlap = effective_deleted & effective_updated
     if overlap:
         raise ValueError(
             f"cycle {cycle}: deleted_regions overlaps updates: {sorted(overlap)}. "
@@ -1446,10 +1455,10 @@ def _apply_updates(prior_state: dict | None, raw_output: dict, cycle: int) -> di
     state = dict(prior_state) if prior_state is not None else {}
     state["cycle"] = cycle
 
-    for key in updated:
+    for key in effective_updated:
         state[key] = raw_output[key]
 
-    for key in deleted:
+    for key in effective_deleted:
         state.pop(key, None)
 
     return state

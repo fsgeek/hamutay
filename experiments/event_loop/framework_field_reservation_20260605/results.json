@@ -1,0 +1,33 @@
+{
+  "date": "2026-06-05",
+  "experiment": "framework_field_reservation",
+  "provider_calls": 0,
+  "tests": {
+    "targeted": {
+      "command": "uv run pytest tests/test_taste_open.py::TestApplyUpdatesKeyPresence -q",
+      "passed": 9,
+      "failed": 0
+    },
+    "focused_regression": {
+      "command": "uv run pytest tests/unit tests/test_taste_open.py -q",
+      "passed": 287,
+      "failed": 0
+    },
+    "compile": {
+      "command": "uv run python -m py_compile src/hamutay/taste_open.py tests/test_taste_open.py",
+      "passed": true
+    }
+  },
+  "hypothesis_results": {
+    "H173_unprotected_merge_permits_cycle_overwrite_or_delete": true,
+    "H174_protected_merge_blocks_protected_field_overwrite_or_delete": true,
+    "H175_protected_merge_preserves_unprotected_overlap_rejection": true,
+    "H176_protected_merge_allows_ordinary_unprotected_changes": true
+  },
+  "notes": [
+    "Reservation is opt-in on _apply_updates via protected_fields.",
+    "Protected model-authored updates and deletions are ignored before overlap detection.",
+    "Unprotected update/delete overlap still raises ValueError.",
+    "No live model calls were needed for this deterministic scaffold gate."
+  ]
+}

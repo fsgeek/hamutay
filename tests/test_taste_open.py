@@ -90,6 +90,73 @@ class TestApplyUpdatesKeyPresence:
         assert "updated_regions" not in state
         assert state["mood"] == "curious"
 
+    def test_unprotected_cycle_can_be_overwritten_and_deleted(self):
+        overwrite = _apply_updates(
+            {"cycle": 1, "mood": "steady"},
+            {"response": "hi", "cycle": 99},
+            cycle=2,
+        )
+        assert overwrite["cycle"] == 99
+
+        delete = _apply_updates(
+            {"cycle": 1, "mood": "steady"},
+            {"response": "hi", "deleted_regions": ["cycle"]},
+            cycle=2,
+        )
+        assert "cycle" not in delete
+
+    def test_protected_fields_ignore_model_update_and_delete(self):
+        prior = {
+            "cycle": 1,
+            "_activity_log": [{"tool": "schedule_event"}],
+            "mood": "steady",
+        }
+        raw = {
+            "response": "hi",
+            "cycle": 99,
+            "_activity_log": [{"tool": "forged"}],
+            "mood": "bright",
+            "deleted_regions": ["cycle", "_activity_log"],
+        }
+
+        state = _apply_updates(
+            prior,
+            raw,
+            cycle=2,
+            protected_fields={"cycle", "_activity_log"},
+        )
+
+        assert state["cycle"] == 2
+        assert state["_activity_log"] == [{"tool": "schedule_event"}]
+        assert state["mood"] == "bright"
+
+    def test_protected_fields_do_not_hide_unprotected_overlap(self):
+        raw = {
+            "response": "hi",
+            "cycle": 99,
+            "mood": "bright",
+            "deleted_regions": ["cycle", "mood"],
+        }
+        with pytest.raises(ValueError, match="overlaps"):
+            _apply_updates(
+                {"cycle": 1, "mood": "steady"},
+                raw,
+                cycle=2,
+                protected_fields={"cycle"},
+            )
+
+    def test_protected_fields_allow_unprotected_deletion(self):
+        raw = {"response": "bye", "deleted_regions": ["name", "cycle"]}
+        state = _apply_updates(
+            {"cycle": 1, "mood": "steady", "name": "Ada"},
+            raw,
+            cycle=2,
+            protected_fields={"cycle"},
+        )
+        assert state["cycle"] == 2
+        assert state["mood"] == "steady"
+        assert "name" not in state
+
 
 class TestTruncateLargestToolResults:
     """The recovery helper for prompt-too-long errors. Replaces the
