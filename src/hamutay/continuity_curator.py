@@ -57,18 +57,22 @@ _CLAIM_STATUS_PRIORITY = {
 _GUARDRAIL_HARD_CONSTRAINTS = [
     (
         "hard_constraint_no_local_document_storage",
+        "blocked:local_document_storage",
         ("local", "document", "stor"),
     ),
     (
         "hard_constraint_west_shelter_replaces_east_clinic",
+        "site_replaced:east_clinic->west_shelter",
         ("east clinic", "west shelter"),
     ),
     (
         "hard_constraint_no_social_security_numbers",
+        "constraint:no_ssn",
         ("social security",),
     ),
     (
         "hard_constraint_budget_18000",
+        "constraint:budget<=18000",
         ("budget", "18"),
     ),
 ]
@@ -256,9 +260,22 @@ def _guardrail_reason(row: dict) -> str | None:
             str(row.get("support") or ""),
         ]
     ).lower()
-    for reason, needles in _GUARDRAIL_HARD_CONSTRAINTS:
+    for reason, _token, needles in _GUARDRAIL_HARD_CONSTRAINTS:
         if all(needle in text for needle in needles):
             return reason
+    return None
+
+
+def _guardrail_token(row: dict) -> str | None:
+    text = " ".join(
+        [
+            str(row.get("claim") or ""),
+            str(row.get("support") or ""),
+        ]
+    ).lower()
+    for _reason, token, needles in _GUARDRAIL_HARD_CONSTRAINTS:
+        if all(needle in text for needle in needles):
+            return token
     return None
 
 
@@ -392,6 +409,51 @@ def _render_guardrail_delta_claim_table(
             f"- [{row['status']} {cycle_text} {row['render_reason']}] "
             f"{row['claim']}"
         )
+    summary, truncated = _truncate_text("\n".join(lines), max_chars)
+    return summary, truncated, selected, omitted
+
+
+def _with_typed_tokens(rows: list[dict]) -> list[dict]:
+    typed_rows = []
+    for row in rows:
+        token = _guardrail_token(row)
+        if token is None:
+            typed_rows.append(row)
+        else:
+            typed_rows.append({**row, "typed_token": token})
+    return typed_rows
+
+
+def _render_typed_guardrail_delta_claim_table(
+    rows: list[dict],
+    prior_claim_rows: list[dict],
+    *,
+    max_chars: int,
+    max_rows: int,
+    stable_invalidated_cap: int,
+) -> tuple[str, bool, list[dict], list[dict]]:
+    selected, omitted = _select_guardrail_delta_rows(
+        rows,
+        prior_claim_rows,
+        max_rows,
+        stable_invalidated_cap,
+    )
+    selected = _with_typed_tokens(selected)
+    omitted = _with_typed_tokens(omitted)
+    if not selected:
+        return "(no typed guardrail-prioritized curator claim rows)", False, selected, omitted
+    lines = [
+        "Continuity typed guardrail delta. Verify against prompt facts.",
+    ]
+    for row in selected:
+        cycle = row.get("source_cycle")
+        cycle_text = f"c{cycle}" if cycle is not None else "c?"
+        prefix = f"[{row['status']} {cycle_text} {row['render_reason']}]"
+        token = row.get("typed_token")
+        if token:
+            lines.append(f"- {token} {prefix}")
+        else:
+            lines.append(f"- {prefix} {row['claim']}")
     summary, truncated = _truncate_text("\n".join(lines), max_chars)
     return summary, truncated, selected, omitted
 
@@ -572,6 +634,17 @@ class ClaimTableContinuityCurator:
         elif self.renderer == "guardrail_delta":
             summary, summary_truncated, selected_delta_rows, omitted_delta_rows = (
                 _render_guardrail_delta_claim_table(
+                    rows,
+                    self._prior_claim_rows or [],
+                    max_chars=self.max_summary_chars,
+                    max_rows=self.delta_max_rows,
+                    stable_invalidated_cap=self.guardrail_stable_invalidated_cap,
+                )
+            )
+            rendered_rows = selected_delta_rows
+        elif self.renderer == "typed_guardrail_delta":
+            summary, summary_truncated, selected_delta_rows, omitted_delta_rows = (
+                _render_typed_guardrail_delta_claim_table(
                     rows,
                     self._prior_claim_rows or [],
                     max_chars=self.max_summary_chars,

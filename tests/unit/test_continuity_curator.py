@@ -400,6 +400,77 @@ def test_claim_table_guardrail_delta_reserves_epistemic_guardrails():
     assert "new_or_changed_supported" in reasons
 
 
+def test_claim_table_typed_guardrail_delta_logs_compact_tokens():
+    backend = _FakeBackend([
+        ExchangeResult(
+            raw_output={
+                "response": "cycle 1",
+                "claims": [
+                    {
+                        "claim": "Local document storage is prohibited.",
+                        "status": "invalidated",
+                        "source_cycle": 3,
+                        "support": "privacy officer ruling",
+                    },
+                    {
+                        "claim": "East Clinic is replaced by West Shelter.",
+                        "status": "supported",
+                        "source_cycle": 3,
+                        "support": "site substitution update",
+                    },
+                    {
+                        "claim": "Budget remains at or below $18,000.",
+                        "status": "supported",
+                        "source_cycle": 2,
+                        "support": "task constraint",
+                    },
+                    {
+                        "claim": "Use a vendor-hosted upload session.",
+                        "status": "supported",
+                        "source_cycle": 4,
+                        "support": "current plan",
+                    },
+                ],
+            }
+        )
+    ])
+    curator = ClaimTableContinuityCurator(
+        backend=backend,
+        model="curator-model",
+        renderer="typed_guardrail_delta",
+        delta_max_rows=4,
+        max_summary_chars=800,
+    )
+
+    artifact = curator.curate(
+        cycle=4,
+        record_id=UUID("00000000-0000-0000-0000-000000000004"),
+        timestamp=datetime(2026, 6, 5, tzinfo=timezone.utc),
+        prior_state=None,
+        raw_output={"response": "main"},
+        response_text="main",
+        state={"cycle": 4},
+    )
+
+    assert artifact["summary_source"] == (
+        "deterministic_claim_table_typed_guardrail_delta"
+    )
+    assert "blocked:local_document_storage" in artifact["summary"]
+    assert "site_replaced:east_clinic->west_shelter" in artifact["summary"]
+    assert "constraint:budget<=18000" in artifact["summary"]
+    assert "Local document storage is prohibited." not in artifact["summary"]
+    tokens = {
+        row.get("typed_token")
+        for row in artifact["selected_delta_rows"]
+        if row.get("typed_token")
+    }
+    assert tokens == {
+        "blocked:local_document_storage",
+        "site_replaced:east_clinic->west_shelter",
+        "constraint:budget<=18000",
+    }
+
+
 def test_claim_table_curator_rejects_missing_claims_without_prose_fallback():
     backend = _FakeBackend([
         ExchangeResult(raw_output={"response": "free prose instead"})
