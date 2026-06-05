@@ -194,18 +194,26 @@ def curator_metrics(records: list[dict]) -> dict:
     curator_output_tokens = sum(
         int(row.get("output_tokens") or 0) for row in usage_rows
     )
-    state_leak_suspects = []
+    curator_named_state_fields = []
+    curator_artifact_in_state_without_main_authorship = []
+    authored_keys_so_far: set[str] = set()
     for record in records:
         state = record.get("state") if isinstance(record.get("state"), dict) else {}
         raw_output = (
             record.get("raw_output") if isinstance(record.get("raw_output"), dict)
             else {}
         )
+        authored_keys_so_far.update(str(key) for key in raw_output)
         for key in state:
-            if "curator" in str(key).lower() and key not in raw_output:
-                state_leak_suspects.append(
+            key_str = str(key)
+            if "curator" in key_str.lower():
+                curator_named_state_fields.append(
                     {"cycle": record.get("cycle"), "key": str(key)}
                 )
+                if key_str not in authored_keys_so_far:
+                    curator_artifact_in_state_without_main_authorship.append(
+                        {"cycle": record.get("cycle"), "key": str(key)}
+                    )
 
     return {
         "curation_records": len(curation_records),
@@ -216,7 +224,10 @@ def curator_metrics(records: list[dict]) -> dict:
         "curator_summary_truncated_count": summary_truncated,
         "curator_input_tokens": curator_input_tokens,
         "curator_output_tokens": curator_output_tokens,
-        "curator_state_leak_suspects": state_leak_suspects,
+        "curator_named_state_fields": curator_named_state_fields,
+        "curator_artifact_in_state_without_main_authorship": (
+            curator_artifact_in_state_without_main_authorship
+        ),
     }
 
 
@@ -376,8 +387,12 @@ def summarize_group(group: list[dict]) -> dict:
         "avg_curator_output_tokens": average(
             row.get("curator_output_tokens", 0) for row in group
         ),
-        "state_leak_suspect_count": sum(
-            len(row.get("curator_state_leak_suspects") or []) for row in group
+        "curator_named_state_field_count": sum(
+            len(row.get("curator_named_state_fields") or []) for row in group
+        ),
+        "curator_artifact_in_state_without_main_authorship_count": sum(
+            len(row.get("curator_artifact_in_state_without_main_authorship") or [])
+            for row in group
         ),
     }
 
@@ -444,6 +459,14 @@ def run_panel(model: str, curator_model: str) -> None:
 
 def rescore_existing(model: str, curator_model: str) -> None:
     results: list[dict] = []
+    prior_by_slot: dict[tuple[str, int], dict] = {}
+    results_path = EXP_DIR / "results.json"
+    if results_path.exists():
+        prior = json.loads(results_path.read_text(encoding="utf-8"))
+        prior_by_slot = {
+            (row["condition"], int(row["replicate"])): row
+            for row in prior.get("results", [])
+        }
     for condition in CONDITIONS:
         for replicate in range(1, N_REPLICATES + 1):
             path = (
@@ -458,8 +481,9 @@ def rescore_existing(model: str, curator_model: str) -> None:
                 condition=condition,
                 replicate=replicate,
             )
-            result["error"] = None
-            result["censored"] = False
+            prior = prior_by_slot.get((condition, replicate), {})
+            result["error"] = prior.get("error")
+            result["censored"] = bool(prior.get("censored"))
             results.append(result)
     if not results:
         print("no logs found; results.json not written")
