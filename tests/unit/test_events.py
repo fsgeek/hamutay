@@ -193,6 +193,71 @@ def test_build_pending_event_accepts_and_validates_not_before():
         )
 
 
+def test_build_pending_event_accepts_walk_context():
+    event = build_pending_event(
+        purpose="Inspect fork-run graph hub.",
+        requested_context=[
+            {
+                "tool": "walk",
+                "from_record_id": "00000000-0000-0000-0000-000000000111",
+                "direction": "forward",
+                "depth": 1,
+                "mode": "adjacent",
+            }
+        ],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=UUID("00000000-0000-0000-0000-000000000001"),
+    )
+
+    assert event["requested_context"] == [
+        {
+            "tool": "walk",
+            "from_record_id": "00000000-0000-0000-0000-000000000111",
+            "direction": "forward",
+            "depth": 1,
+            "mode": "adjacent",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    "context_request",
+    [
+        {"tool": "walk", "direction": "forward"},
+        {
+            "tool": "walk",
+            "from_record_id": "00000000-0000-0000-0000-000000000111",
+            "direction": "sideways",
+        },
+        {
+            "tool": "walk",
+            "from_record_id": "00000000-0000-0000-0000-000000000111",
+            "mode": "fanout",
+        },
+        {
+            "tool": "walk",
+            "from_record_id": "00000000-0000-0000-0000-000000000111",
+            "depth": -1,
+        },
+        {
+            "tool": "walk",
+            "from_record_id": "00000000-0000-0000-0000-000000000111",
+            "unexpected": True,
+        },
+    ],
+)
+def test_build_pending_event_rejects_malformed_walk_context(context_request):
+    with pytest.raises(ValueError):
+        build_pending_event(
+            purpose="Bad walk request.",
+            requested_context=[context_request],
+            scheduled_by_cycle=1,
+            scheduled_by_record_id=UUID(
+                "00000000-0000-0000-0000-000000000001"
+            ),
+        )
+
+
 def test_event_store_claim_skips_not_yet_due_event(tmp_path):
     store = EventStore(tmp_path / "events.jsonl")
     future = _event_record()
@@ -502,12 +567,81 @@ def test_resolve_requested_context_uses_memory_tools():
     assert results[1]["result"]["changed_fields"][0]["field"] == "claim"
 
 
+def test_resolve_requested_context_uses_walk_memory_tool():
+    start = UUID("00000000-0000-0000-0000-000000000111")
+    target = UUID("00000000-0000-0000-0000-000000000222")
+
+    class Bridge:
+        def query_edges_by_endpoint(self, record_id, direction):
+            if record_id == start and direction == "forward":
+                return [{
+                    "from_record": start,
+                    "to_record": target,
+                    "relation_type": "BRANCHES_FROM",
+                    "ordering": 1,
+                }]
+            return []
+
+        def retrieve(self, record_id):
+            assert record_id == target
+            return {"record_type": "branch_result", "label": "branch-a"}
+
+    results = resolve_requested_context(
+        [
+            {
+                "tool": "walk",
+                "from_record_id": str(start),
+                "direction": "forward",
+                "depth": 1,
+                "mode": "adjacent",
+            }
+        ],
+        prior_states=[],
+        bridge=Bridge(),
+    )
+
+    assert results[0]["request"]["tool"] == "walk"
+    assert results[0]["result"]["path"][0]["record_id"] == str(target)
+    assert results[0]["result"]["path"][0]["depth"] == 1
+
+
 def test_build_event_envelope_is_explicit():
     event = _event_record()
     envelope = json.loads(build_event_envelope(event, [], "run-1"))
     assert envelope["event_type"] == "self_scheduled_reflection"
     assert envelope["event_id"] == event["event_id"]
     assert "self-scheduled reflection" in envelope["instruction"]
+
+
+def test_build_event_envelope_preserves_walk_context():
+    request = {
+        "tool": "walk",
+        "from_record_id": "00000000-0000-0000-0000-000000000111",
+        "direction": "forward",
+        "depth": 1,
+        "mode": "adjacent",
+    }
+    event = build_pending_event(
+        purpose="Inspect fork-run graph hub.",
+        requested_context=[request],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=UUID("00000000-0000-0000-0000-000000000001"),
+    )
+    context_results = [{
+        "request": request,
+        "result": {
+            "path": [{
+                "record_id": "00000000-0000-0000-0000-000000000222",
+                "edge_type": "BRANCHES_FROM",
+                "depth": 1,
+            }]
+        },
+    }]
+
+    envelope = json.loads(build_event_envelope(event, context_results, "run-1"))
+
+    assert envelope["requested_context"] == [request]
+    assert envelope["context_results"] == context_results
 
 
 def test_run_next_event_completes(tmp_path):

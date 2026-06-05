@@ -11,7 +11,9 @@ from pathlib import Path
 from uuid import UUID, uuid4
 
 EVENT_TYPE_REFLECTION = "self_scheduled_reflection"
-VALID_CONTEXT_TOOLS = {"recall", "compare"}
+VALID_CONTEXT_TOOLS = {"recall", "compare", "walk"}
+VALID_WALK_DIRECTIONS = {"forward", "backward", "both"}
+VALID_WALK_MODES = {"path", "adjacent"}
 LOAD_BEARING_FIELDS = {
     "current_claim",
     "revision_decision",
@@ -66,10 +68,38 @@ def validate_requested_context(requests: object) -> list[dict]:
                     "recall context requires exactly one of cycle or record_id"
                 )
             allowed = {"tool", "cycle", "record_id", "field"}
-        else:
+        elif tool == "compare":
             if "cycle_a" not in request or "cycle_b" not in request:
                 raise ValueError("compare context requires cycle_a and cycle_b")
             allowed = {"tool", "cycle_a", "cycle_b", "field", "content"}
+        else:
+            if "from_record_id" not in request:
+                raise ValueError("walk context requires from_record_id")
+            direction = request.get("direction")
+            if direction is not None and direction not in VALID_WALK_DIRECTIONS:
+                raise ValueError(
+                    "walk context direction must be one of: "
+                    f"{', '.join(sorted(VALID_WALK_DIRECTIONS))}"
+                )
+            mode = request.get("mode")
+            if mode is not None and mode not in VALID_WALK_MODES:
+                raise ValueError(
+                    "walk context mode must be one of: "
+                    f"{', '.join(sorted(VALID_WALK_MODES))}"
+                )
+            depth = request.get("depth")
+            if (
+                depth is not None
+                and (
+                    not isinstance(depth, int)
+                    or isinstance(depth, bool)
+                    or depth < 0
+                )
+            ):
+                raise ValueError(
+                    "walk context depth must be a non-negative integer"
+                )
+            allowed = {"tool", "from_record_id", "direction", "depth", "mode"}
         extra = set(request) - allowed
         if extra:
             raise ValueError(
@@ -390,7 +420,7 @@ def resolve_requested_context(
     bridge=None,
 ) -> list[dict]:
     """Resolve a v1 requested_context list using existing memory tools."""
-    from hamutay.tools.memory import tool_compare, tool_recall
+    from hamutay.tools.memory import tool_compare, tool_recall, tool_walk
 
     context = validate_requested_context(requests)
     results: list[dict] = []
@@ -400,6 +430,8 @@ def resolve_requested_context(
             result = tool_recall(params, prior_states=prior_states, bridge=bridge)
         elif request["tool"] == "compare":
             result = tool_compare(params, prior_states=prior_states)
+        elif request["tool"] == "walk":
+            result = tool_walk(params, prior_states=prior_states, bridge=bridge)
         else:
             result = {"error": f"Unsupported context tool: {request['tool']}"}
         results.append({"request": request, "result": result})

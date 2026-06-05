@@ -184,6 +184,19 @@ Wake records must include:
 - source event ID;
 - wake cycle record ID when available.
 
+### Event Context Tools
+
+`requested_context` entries are validated before event persistence. Supported
+tools:
+
+- `recall`: exactly one of `cycle` or `record_id`; optional `field`.
+- `compare`: required `cycle_a` and `cycle_b`; optional `field` and `content`.
+- `walk`: required `from_record_id`; optional `direction`, `depth`, and `mode`.
+
+`walk` is the scheduler-facing graph-neighborhood affordance. Use
+`mode="adjacent"` for bounded inspection of graph-object hubs such as fork-run
+records.
+
 ### Omission Record
 
 Any renderer or context-boundary omission must preserve:
