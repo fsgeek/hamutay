@@ -440,6 +440,88 @@ class TestExchangeCycleRollback:
         session.exchange("second")
         assert session.cycle == 2
 
+    def test_protected_live_merge_logs_ignored_attempts(self, tmp_path):
+        backend = _CannedBackend({
+            "response": "ok",
+            "cycle": 99,
+            "_activity_log": [{"tool": "forged"}],
+            "mood": "bright",
+            "deleted_regions": ["cycle", "_activity_log", "name"],
+        })
+        log_path = tmp_path / "session.jsonl"
+        session = OpenTasteSession(
+            backend=backend,
+            experiment_label="protected_merge_log_test",
+            log_path=str(log_path),
+            protected_state_fields={"cycle", "_activity_log"},
+        )
+        session.seed_state(
+            {
+                "cycle": 1,
+                "_activity_log": [{"tool": "schedule_event"}],
+                "mood": "steady",
+                "name": "Ada",
+            },
+            cycle=1,
+        )
+
+        session.exchange("protect")
+
+        assert session.state == {
+            "cycle": 2,
+            "_activity_log": [{"tool": "schedule_event"}],
+            "mood": "bright",
+        }
+        records = [
+            json.loads(line)
+            for line in log_path.read_text().splitlines()
+            if line.strip()
+        ]
+        diagnostic = records[-1]["state_merge_diagnostics"]
+        assert diagnostic["protected_fields"] == ["_activity_log", "cycle"]
+        assert diagnostic["ignored_protected_updates"] == [
+            "_activity_log",
+            "cycle",
+        ]
+        assert diagnostic["ignored_protected_deletions"] == [
+            "_activity_log",
+            "cycle",
+        ]
+        assert diagnostic["ignored_protected_attempt_count"] == 4
+
+    def test_protected_live_merge_still_rejects_unprotected_overlap(self, tmp_path):
+        backend = _CannedBackend({
+            "response": "bad",
+            "cycle": 99,
+            "mood": "bright",
+            "deleted_regions": ["cycle", "mood"],
+        })
+        log_path = tmp_path / "session.jsonl"
+        session = OpenTasteSession(
+            backend=backend,
+            experiment_label="protected_merge_failure_test",
+            log_path=str(log_path),
+            protected_state_fields={"cycle"},
+        )
+
+        with pytest.raises(ValueError, match="deleted_regions overlaps updates"):
+            session.exchange("fail")
+
+        assert session.cycle == 0
+        assert session.state is None
+        records = [
+            json.loads(line)
+            for line in log_path.read_text().splitlines()
+            if line.strip()
+        ]
+        failure = records[-1]["failure_classification"]
+        assert failure["overlap_keys"] == ["mood"]
+        assert failure["effective_deleted_regions"] == ["mood"]
+        assert failure["effective_updated_regions"] == ["mood"]
+        diagnostic = records[-1]["state_merge_diagnostics"]
+        assert diagnostic["ignored_protected_updates"] == ["cycle"]
+        assert diagnostic["ignored_protected_deletions"] == ["cycle"]
+
     def test_merge_failure_is_logged_without_advancing_state(self, tmp_path):
         backend = _SequenceBackend([
             ExchangeResult(

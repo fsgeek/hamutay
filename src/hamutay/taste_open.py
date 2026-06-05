@@ -1464,6 +1464,30 @@ def _apply_updates(
     return state
 
 
+def _state_merge_diagnostics(
+    raw_output: dict,
+    *,
+    protected_fields: Iterable[str] | None = None,
+) -> dict | None:
+    protected = {str(field) for field in protected_fields or ()}
+    if not protected:
+        return None
+
+    deleted = set(raw_output.get("deleted_regions", []))
+    updated = set(raw_output.keys()) - _PROTOCOL_FIELDS
+    ignored_updates = sorted(updated & protected)
+    ignored_deletions = sorted(deleted & protected)
+    return {
+        "record_type": "state_merge_diagnostics",
+        "protected_fields": sorted(protected),
+        "ignored_protected_updates": ignored_updates,
+        "ignored_protected_deletions": ignored_deletions,
+        "ignored_protected_attempt_count": (
+            len(ignored_updates) + len(ignored_deletions)
+        ),
+    }
+
+
 def _curator_context_from_record(record: dict | None) -> dict | None:
     if not isinstance(record, dict) or record.get("status") != "success":
         return None
@@ -1499,6 +1523,7 @@ class OpenTasteSession:
         protocol_recovery_builder: ProtocolRecoveryBuilder | None = None,
         state_validator: StateValidator | None = None,
         state_repair_builder: StateRepairBuilder | None = None,
+        protected_state_fields: Iterable[str] | None = None,
     ):
         self._backend = backend or AnthropicTasteBackend(client)
         self._model = model
@@ -1531,6 +1556,9 @@ class OpenTasteSession:
         self._last_protocol_recovery: dict | None = None
         self._state_validator = state_validator
         self._state_repair_builder = state_repair_builder
+        self._protected_state_fields = frozenset(
+            str(field) for field in protected_state_fields or ()
+        )
         self._last_state_validation: dict | None = None
         self._session_start = datetime.now(timezone.utc)
         self._last_cycle_time: datetime | None = None
@@ -1755,9 +1783,18 @@ class OpenTasteSession:
         prior_state_snapshot = (
             json.loads(json.dumps(self._state)) if self._state else None
         )
+        state_merge_diagnostics = _state_merge_diagnostics(
+            raw_output,
+            protected_fields=self._protected_state_fields,
+        )
 
         try:
-            self._state = _apply_updates(self._state, raw_output, self._cycle)
+            self._state = _apply_updates(
+                self._state,
+                raw_output,
+                self._cycle,
+                protected_fields=self._protected_state_fields,
+            )
         except Exception as e:
             self._last_tool_activity = result.tool_activity
             self._last_full_activity = result.tool_activity
@@ -1768,6 +1805,9 @@ class OpenTasteSession:
             self._last_cycle_time = datetime.now(timezone.utc)
             deleted = set(raw_output.get("deleted_regions", []))
             updated = set(raw_output.keys()) - _PROTOCOL_FIELDS
+            protected = set(self._protected_state_fields)
+            effective_deleted = deleted - protected
+            effective_updated = updated - protected
             failure_classification = {
                 "record_type": "protocol_failure",
                 "failure_stage": "state_merge",
@@ -1775,7 +1815,9 @@ class OpenTasteSession:
                 "error": str(e),
                 "deleted_regions": sorted(deleted),
                 "updated_regions": sorted(updated),
-                "overlap_keys": sorted(deleted & updated),
+                "effective_deleted_regions": sorted(effective_deleted),
+                "effective_updated_regions": sorted(effective_updated),
+                "overlap_keys": sorted(effective_deleted & effective_updated),
             }
             protocol_recovery = self._run_protocol_recovery(
                 cycle=self._cycle,
@@ -1803,6 +1845,7 @@ class OpenTasteSession:
                 scheduled_events=[],
                 failure_classification=failure_classification,
                 protocol_recovery=protocol_recovery,
+                state_merge_diagnostics=state_merge_diagnostics,
             )
             raise
 
@@ -1831,6 +1874,10 @@ class OpenTasteSession:
                 raw_output=raw_output,
                 response_text=response_text,
             )
+        )
+        state_merge_diagnostics = _state_merge_diagnostics(
+            raw_output,
+            protected_fields=self._protected_state_fields,
         )
         self._last_state_validation = state_validation
         usage = {
@@ -1899,6 +1946,7 @@ class OpenTasteSession:
             ),
             continuity_curation=continuity_curation,
             state_validation=state_validation,
+            state_merge_diagnostics=state_merge_diagnostics,
         )
 
         if self._event_store is not None and tool_executor is not None:
@@ -2057,8 +2105,17 @@ class OpenTasteSession:
             repair_usage["output_tokens"] = repair_result.output_tokens
             repair_raw_output = repair_result.raw_output
             repair_response_text = repair_raw_output.get("response", "")
-            repaired_state = _apply_updates(self._state, repair_raw_output, cycle)
+            repaired_state = _apply_updates(
+                self._state,
+                repair_raw_output,
+                cycle,
+                protected_fields=self._protected_state_fields,
+            )
             self._state = repaired_state
+            repair_merge_diagnostics = _state_merge_diagnostics(
+                repair_raw_output,
+                protected_fields=self._protected_state_fields,
+            )
             repair_validation = self._run_state_validator(
                 cycle=cycle,
                 record_id=record_id,
@@ -2083,6 +2140,10 @@ class OpenTasteSession:
                 },
                 "validation": repair_validation,
             }
+            if repair_merge_diagnostics is not None:
+                validation["repair"]["state_merge_diagnostics"] = (
+                    repair_merge_diagnostics
+                )
             return validation, repair_raw_output, repair_response_text, repair_usage
         except Exception as e:  # noqa: BLE001 -- failed repair is data
             validation["status"] = "repair_failed"
@@ -2210,6 +2271,7 @@ class OpenTasteSession:
         failure_classification: dict | None = None,
         protocol_recovery: dict | None = None,
         state_validation: dict | None = None,
+        state_merge_diagnostics: dict | None = None,
     ) -> None:
         """Append full record to JSONL log. Captures everything."""
         if not self._log_path:
@@ -2272,6 +2334,8 @@ class OpenTasteSession:
             record["protocol_recovery"] = protocol_recovery
         if state_validation is not None:
             record["state_validation"] = state_validation
+        if state_merge_diagnostics is not None:
+            record["state_merge_diagnostics"] = state_merge_diagnostics
         with open(self._log_path, "a") as f:
             f.write(json.dumps(record, default=str) + "\n")
 
