@@ -1690,7 +1690,43 @@ class OpenTasteSession:
             json.loads(json.dumps(self._state)) if self._state else None
         )
 
-        self._state = _apply_updates(self._state, raw_output, self._cycle)
+        try:
+            self._state = _apply_updates(self._state, raw_output, self._cycle)
+        except Exception as e:
+            self._last_tool_activity = result.tool_activity
+            self._last_full_activity = result.tool_activity
+            self._last_usage = {
+                "input_tokens": result.input_tokens,
+                "output_tokens": result.output_tokens,
+            }
+            self._last_cycle_time = datetime.now(timezone.utc)
+            deleted = set(raw_output.get("deleted_regions", []))
+            updated = set(raw_output.keys()) - _PROTOCOL_FIELDS
+            self._log_entry(
+                user_message=user_message,
+                system_prompt=system,
+                raw_output=raw_output,
+                prior_state=prior_state_snapshot,
+                record_id=record_id,
+                usage={
+                    "input_tokens": result.input_tokens,
+                    "output_tokens": result.output_tokens,
+                    "cache_read_input_tokens": result.cache_read_tokens,
+                    "cache_creation_input_tokens": result.cache_creation_tokens,
+                    "stop_reason": result.stop_reason,
+                },
+                scheduled_events=[],
+                failure_classification={
+                    "record_type": "protocol_failure",
+                    "failure_stage": "state_merge",
+                    "error_type": type(e).__name__,
+                    "error": str(e),
+                    "deleted_regions": sorted(deleted),
+                    "updated_regions": sorted(updated),
+                    "overlap_keys": sorted(deleted & updated),
+                },
+            )
+            raise
 
         # Two channels for tool activity. The full entries (including raw
         # tool results — bash stdout/stderr, etc.) go to the durable JSONL
@@ -1839,6 +1875,7 @@ class OpenTasteSession:
         usage: dict,
         scheduled_events: list[dict] | None = None,
         continuity_curation: dict | None = None,
+        failure_classification: dict | None = None,
     ) -> None:
         """Append full record to JSONL log. Captures everything."""
         if not self._log_path:
@@ -1894,6 +1931,9 @@ class OpenTasteSession:
             )
         if continuity_curation is not None:
             record["continuity_curation"] = continuity_curation
+        if failure_classification is not None:
+            record["status"] = "failed"
+            record["failure_classification"] = failure_classification
         with open(self._log_path, "a") as f:
             f.write(json.dumps(record, default=str) + "\n")
 

@@ -226,6 +226,29 @@ class _CannedBackend:
         )
 
 
+class _SequenceBackend:
+    """Backend that returns a sequence of ExchangeResult objects."""
+
+    def __init__(self, results: list[ExchangeResult]):
+        self._results = list(results)
+        self.calls = 0
+
+    def call(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
+        extra_tools: list[dict] | None = None,
+        tool_executor=None,
+    ) -> ExchangeResult:
+        del model, system, messages, experiment_label, extra_tools, tool_executor
+        self.calls += 1
+        if not self._results:
+            raise AssertionError("sequence backend exhausted")
+        return self._results.pop(0)
+
+
 class TestExchangeCycleRollback:
     """A failed API call must not leave self._cycle ahead of state["cycle"].
     Without rollback, the next successful exchange would skip a number and
@@ -256,6 +279,67 @@ class TestExchangeCycleRollback:
         assert session.cycle == 1
         session.exchange("second")
         assert session.cycle == 2
+
+    def test_merge_failure_is_logged_without_advancing_state(self, tmp_path):
+        backend = _SequenceBackend([
+            ExchangeResult(
+                raw_output={
+                    "response": "bad",
+                    "mood": "new",
+                    "deleted_regions": ["mood"],
+                },
+                stop_reason="tool_use",
+                input_tokens=11,
+                output_tokens=22,
+            ),
+            ExchangeResult(
+                raw_output={"response": "ok", "mood": "steady"},
+                stop_reason="tool_use",
+                input_tokens=33,
+                output_tokens=44,
+            ),
+        ])
+        log_path = tmp_path / "session.jsonl"
+        session = OpenTasteSession(
+            backend=backend,
+            experiment_label="merge_failure_capture_test",
+            log_path=str(log_path),
+        )
+
+        with pytest.raises(ValueError, match="deleted_regions overlaps updates"):
+            session.exchange("fail")
+
+        assert session.cycle == 0
+        assert session.state is None
+        records = [
+            json.loads(line)
+            for line in log_path.read_text().splitlines()
+            if line.strip()
+        ]
+        assert len(records) == 1
+        failed = records[0]
+        assert failed["cycle"] == 1
+        assert failed["status"] == "failed"
+        assert failed["raw_output"]["mood"] == "new"
+        assert failed["state"] is None
+        assert failed["usage"]["input_tokens"] == 11
+        assert failed["failure_classification"]["failure_stage"] == "state_merge"
+        assert failed["failure_classification"]["overlap_keys"] == ["mood"]
+        assert "continuity_curation" not in failed
+        assert failed["scheduled_events"] == []
+
+        assert session.exchange("succeed") == "ok"
+        assert session.cycle == 1
+        assert session.state == {"cycle": 1, "mood": "steady"}
+        records = [
+            json.loads(line)
+            for line in log_path.read_text().splitlines()
+            if line.strip()
+        ]
+        assert len(records) == 2
+        assert records[1]["cycle"] == 1
+        assert "status" not in records[1]
+        assert records[1]["state"]["mood"] == "steady"
 
 
 class TestContextLimitErrorDetection:
