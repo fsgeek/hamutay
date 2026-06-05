@@ -181,6 +181,25 @@ def state_contains_code(records: list[dict[str, Any]], code_phrase: str, *, star
     return False
 
 
+def delayed_answer_contains_code(row: dict[str, Any]) -> bool:
+    replicate = int(row.get("replicate") or 0)
+    if replicate < 1 or replicate > len(CODE_PHRASES):
+        return False
+    state = row.get("final_state")
+    if not isinstance(state, dict):
+        return False
+    answer = state.get("delayed_answer")
+    if answer is None:
+        return False
+    return code_phrase_for(replicate - 1) in json.dumps(answer, default=str)
+
+
+def enrich_row(row: dict[str, Any]) -> dict[str, Any]:
+    enriched = dict(row)
+    enriched["delayed_answer_contains_code_phrase"] = delayed_answer_contains_code(enriched)
+    return enriched
+
+
 def delayed_task_failures(
     state: dict[str, Any],
     raw_output: dict[str, Any],
@@ -338,6 +357,10 @@ def finalize(
                 end_cycle=base.EXPECTED_WAKE_CYCLE - 1,
             ),
             "final_contains_code_phrase": code_phrase in json.dumps(state, default=str),
+            "delayed_answer_contains_code_phrase": (
+                isinstance(state.get("delayed_answer"), str)
+                and code_phrase in state["delayed_answer"]
+            ),
             "final_state_valid": not failures,
             "state_failures": failures,
             "event_completed": bool(event_record),
@@ -476,7 +499,9 @@ def condition_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "n": len(rows),
         "final_valid": sum(bool(row.get("final_state_valid")) for row in rows),
-        "fact_recovered": sum(bool(row.get("final_contains_code_phrase")) for row in rows),
+        "fact_recovered": sum(
+            bool(delayed_answer_contains_code(row)) for row in rows
+        ),
         "preserved_before_due": sum(
             bool(row.get("deferred_fact_preserved_before_due")) for row in rows
         ),
@@ -511,7 +536,7 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
                 and event_recovery > 0
             ) if event else False,
             "H272_identity_recovery_requires_preservation": all(
-                (not row.get("final_contains_code_phrase"))
+                (not delayed_answer_contains_code(row))
                 or bool(row.get("deferred_fact_preserved_before_due"))
                 for row in identity_rows
             ) if identity_rows else False,
@@ -526,7 +551,7 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
                 or all(
                     bool(row.get("deferred_fact_preserved_before_due"))
                     for row in identity_rows
-                    if row.get("final_contains_code_phrase")
+                    if delayed_answer_contains_code(row)
                 )
             ) if identity_rows else False,
         },
@@ -562,7 +587,7 @@ def main() -> None:
     if RESULTS_PATH.exists():
         prior = json.loads(RESULTS_PATH.read_text()).get("results", [])
         if isinstance(prior, list):
-            results = prior
+            results = [enrich_row(row) for row in prior if isinstance(row, dict)]
     done = completed_keys(results)
     for condition, runner in [
         ("identity_only", run_identity_only),
@@ -577,6 +602,7 @@ def main() -> None:
             results.append(runner(replicate, api_key))
             done.add(key)
             write_results(results)
+    write_results(results)
     print(json.dumps(aggregate(results), indent=2, sort_keys=True))
     print(f"wrote {RESULTS_PATH.relative_to(PROJECT_ROOT)}")
 
