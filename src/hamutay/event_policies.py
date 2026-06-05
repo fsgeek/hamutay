@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import fcntl
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from hamutay.events import EventStore, build_pending_event, run_next_event
 
@@ -15,6 +18,12 @@ TERMINAL_EVENT_STATUSES = {"completed", "failed", "suppressed", "expired"}
 
 def _json_clone(value: Any) -> Any:
     return json.loads(json.dumps(value, default=str))
+
+
+def default_fork_run_log_path(event_log_path: str | Path) -> Path:
+    """Return the sidecar path for durable fork-run records."""
+    path = Path(event_log_path)
+    return path.with_suffix(path.suffix + ".fork_runs.jsonl")
 
 
 def latest_event_records_by_label(
@@ -59,6 +68,136 @@ class EventRunResult:
             "result_record_id": self.result_record_id,
             "terminal_record": self.terminal_record,
         }
+
+
+@dataclass
+class ForkRunStore:
+    """Append-only JSONL store for durable fork/join run records."""
+
+    path: Path
+
+    def __init__(self, path: str | Path):
+        self.path = Path(path)
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self._lock_path = self.path.with_suffix(self.path.suffix + ".lock")
+
+    @contextmanager
+    def _locked(self):
+        self._lock_path.parent.mkdir(parents=True, exist_ok=True)
+        with self._lock_path.open("a") as lock_file:
+            fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+    def append(self, record: dict[str, Any]) -> None:
+        with self._locked():
+            with self.path.open("a") as f:
+                f.write(json.dumps(record, default=str) + "\n")
+
+    def read_records(self) -> list[dict[str, Any]]:
+        if not self.path.exists():
+            return []
+        with self._locked():
+            with self.path.open() as f:
+                return [json.loads(line) for line in f if line.strip()]
+
+    def latest_by_run_id(self) -> dict[str, dict[str, Any]]:
+        latest: dict[str, dict[str, Any]] = {}
+        for record in self.read_records():
+            run_id = record.get("fork_run_id")
+            if run_id:
+                latest[str(run_id)] = record
+        return latest
+
+
+def build_fork_run_started_record(
+    *,
+    fork_record: dict[str, Any],
+    branch_labels: list[str] | tuple[str, ...],
+    fork_run_id: str | UUID | None = None,
+) -> dict[str, Any]:
+    run_id = str(fork_run_id or uuid4())
+    return {
+        "record_type": "fork_run",
+        "fork_run_id": run_id,
+        "status": "started",
+        "scheduled_by_cycle": int(fork_record["cycle"]),
+        "scheduled_by_record_id": str(fork_record["record_id"]),
+        "branch_labels": list(branch_labels),
+    }
+
+
+def finalize_successful_fork_run(
+    *,
+    started_record: dict[str, Any],
+    branch_results: list[EventRunResult],
+    join_event: dict[str, Any],
+    join_result: EventRunResult,
+    sidecar_audit_projection: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        **started_record,
+        "status": "joined",
+        "classification": "joined",
+        "branch_results": [result.to_dict() for result in branch_results],
+        "branch_events": {
+            label: {
+                "event_id": projection.get("event_id"),
+                "terminal_status": projection.get("terminal_status"),
+                "result_record_id": next(
+                    (
+                        result.result_record_id
+                        for result in branch_results
+                        if result.label == label
+                    ),
+                    None,
+                ),
+            }
+            for label, projection in sidecar_audit_projection.items()
+        },
+        "join_event_id": join_event.get("event_id"),
+        "join_result": join_result.to_dict(),
+        "join_result_record_id": join_result.result_record_id,
+    }
+
+
+def finalize_failed_fork_run(
+    *,
+    started_record: dict[str, Any],
+    failed_branch_result: EventRunResult,
+    failed_wake_record: dict[str, Any],
+    suppression_records: list[dict[str, Any]],
+    sidecar_audit_projection: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    return {
+        **started_record,
+        "status": "branch_failed",
+        "classification": "branch_failed",
+        "failed_branch": failed_branch_result.label,
+        "failed_branch_result": failed_branch_result.to_dict(),
+        "failed_branch_wake_record_id": str(failed_wake_record["record_id"]),
+        "failed_branch_wake_cycle": int(failed_wake_record["cycle"]),
+        "suppression_records": suppression_records,
+        "suppressed_events": [
+            record.get("event_id")
+            for record in suppression_records
+            if record.get("event_id")
+        ],
+        "branch_events": {
+            label: {
+                "event_id": projection.get("event_id"),
+                "terminal_status": projection.get("terminal_status"),
+                "result_record_id": (
+                    failed_branch_result.result_record_id
+                    if label == failed_branch_result.label
+                    else None
+                ),
+            }
+            for label, projection in sidecar_audit_projection.items()
+        },
+    }
 
 
 @dataclass(frozen=True)
