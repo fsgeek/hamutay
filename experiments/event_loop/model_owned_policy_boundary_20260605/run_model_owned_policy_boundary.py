@@ -702,16 +702,21 @@ def finalize_result(
         if first_record
         else ["first_wake_record_missing"]
     )
-    followup_failures_list = (
-        followup_failures(
-            followup_state,
-            followup_raw,
-            replicate=replicate,
-            bound_record_id=first_record_id,
+    if condition == "continue_required":
+        followup_failures_list = (
+            followup_failures(
+                followup_state,
+                followup_raw,
+                replicate=replicate,
+                bound_record_id=first_record_id,
+            )
+            if followup_record
+            else ["followup_wake_record_missing"]
         )
-        if followup_record and condition == "continue_required"
-        else ([] if condition != "continue_required" else ["followup_wake_record_missing"])
-    )
+        followup_state_valid = not followup_failures_list
+    else:
+        followup_failures_list = []
+        followup_state_valid = None
     result.update(
         {
             "condition": condition,
@@ -763,7 +768,7 @@ def finalize_result(
                 followup_record,
                 ("policy_decision", "chain_final_answer", "chain_final_evidence"),
             ),
-            "followup_wake_state_valid": not followup_failures_list,
+            "followup_wake_state_valid": followup_state_valid,
             "followup_wake_failures": followup_failures_list,
             "followup_wake_validation": followup_validation,
             "followup_wake_first_pass_valid": (
@@ -958,7 +963,7 @@ def condition_summary(rows: list[dict[str, Any]]) -> dict[str, Any]:
             if row.get("followup_event_appended")
         ),
         "followup_completed": sum(bool(row.get("followup_wake_completed")) for row in rows),
-        "followup_valid": sum(bool(row.get("followup_wake_state_valid")) for row in rows),
+        "followup_valid": sum(row.get("followup_wake_state_valid") is True for row in rows),
         "followup_first_pass_valid": sum(
             bool(row.get("followup_wake_first_pass_valid")) for row in rows
         ),
