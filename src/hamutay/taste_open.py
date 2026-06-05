@@ -1962,7 +1962,7 @@ class OpenTasteSession:
                 raise RuntimeError(
                     "terminal_surface wakeups cannot enable non-terminal tools"
                 )
-            result = self._backend.call_terminal_surface(
+            result = self._call_terminal_surface_backend(
                 model=self._model,
                 system=system,
                 messages=messages,
@@ -2158,6 +2158,43 @@ class OpenTasteSession:
             self._event_store.append_many(tool_executor.pending_events)
 
         return response_text
+
+    def _call_terminal_surface_backend(
+        self,
+        *,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
+        terminal_surface: dict,
+    ) -> ExchangeResult:
+        direct = getattr(self._backend, "call_terminal_surface", None)
+        if callable(direct):
+            return direct(
+                model=model,
+                system=system,
+                messages=messages,
+                experiment_label=experiment_label,
+                terminal_surface=terminal_surface,
+            )
+
+        wrapped = getattr(self._backend, "backend", None)
+        wrapped_call = getattr(wrapped, "call_terminal_surface", None)
+        if callable(wrapped_call):
+            calls = getattr(self._backend, "calls", None)
+            if isinstance(calls, int):
+                self._backend.calls = calls + 1
+            return wrapped_call(
+                model=model,
+                system=system,
+                messages=messages,
+                experiment_label=experiment_label,
+                terminal_surface=terminal_surface,
+            )
+
+        raise RuntimeError(
+            f"{type(self._backend).__name__} does not support terminal_surface"
+        )
 
     @staticmethod
     def _state_validation_passed(validation: dict | None) -> bool:

@@ -135,6 +135,16 @@ class _TerminalBackend:
         )
 
 
+class _TerminalWrapper:
+    def __init__(self, backend):
+        self.backend = backend
+        self.calls = 0
+
+    def call(self, *args, **kwargs):
+        del args, kwargs
+        raise AssertionError("broad wrapper call should not be used")
+
+
 class _TaskStateValidator:
     def validate(
         self,
@@ -988,7 +998,8 @@ def test_run_next_event_uses_terminal_surface(tmp_path):
             "evidence": {"source": "recall"},
         }
     )
-    session._backend = terminal_backend
+    wrapper = _TerminalWrapper(terminal_backend)
+    session._backend = wrapper
     event = build_pending_event(
         purpose="Complete bounded task.",
         requested_context=[{"tool": "recall", "cycle": 1}],
@@ -1005,6 +1016,7 @@ def test_run_next_event_uses_terminal_surface(tmp_path):
     assert terminal_backend.calls[0]["terminal_surface"]["tool_name"] == (
         "complete_task"
     )
+    assert wrapper.calls == 1
     assert "Alongside think_and_respond" not in terminal_backend.calls[0]["system"]
     assert session.state["task_status"] == "done"
     assert session.state["task_answer"] == "answer-42"
