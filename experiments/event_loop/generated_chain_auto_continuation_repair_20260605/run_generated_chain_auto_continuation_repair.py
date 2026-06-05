@@ -40,6 +40,39 @@ base_runner.sb.PROJECT_ROOT = PROJECT_ROOT
 base_runner.base.EXP_DIR = EXP_DIR
 base_runner.base.PROJECT_ROOT = PROJECT_ROOT
 
+_base_aggregate = base_runner.aggregate
+
+
+def aggregate(results):
+    summary = _base_aggregate(results)
+    prior = summary.get("hypothesis_results", {})
+    summary["hypothesis_results"] = {
+        "H441_first_wake_valid_continuation": prior.get(
+            "H421_first_surface_valid_continuation"
+        ),
+        "H442_scheduler_appends_first_second_event": prior.get(
+            "H422_scheduler_auto_appends_second_event"
+        ),
+        "H443_auto_event_bound_to_generated_record": prior.get(
+            "H423_auto_event_bound_to_generated_record"
+        ),
+        "H444_second_receives_context_and_recovers": (
+            prior.get("H424_second_receives_original_and_bound_context")
+            and prior.get("H425_chain_completes_without_repair")
+        ),
+        "H445_quiescent_after_second_wake": all(
+            row.get("quiescent_after_second_wake")
+            and row.get("bounded_second_calls")
+            and int(row.get("extra_auto_continuations_after_second_count") or 0) == 0
+            for row in results
+            if row.get("condition") == base_runner.CONDITION
+        ),
+    }
+    return summary
+
+
+base_runner.aggregate = aggregate
+
 
 if __name__ == "__main__":
     base_runner.main()
