@@ -517,6 +517,22 @@ class ContinuityCurator(Protocol):
     ) -> dict: ...
 
 
+class ProtocolRecoveryBuilder(Protocol):
+    """Protocol-failure recovery artifact hook for taste_open sessions."""
+
+    def recover(
+        self,
+        *,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+        prior_state: dict | None,
+        raw_output: dict,
+        response_text: str,
+        failure_classification: dict,
+    ) -> dict: ...
+
+
 @dataclass
 class CapabilityProfile:
     """Provider/model capability hints for tool-call interoperability."""
@@ -1438,6 +1454,7 @@ class OpenTasteSession:
         project_root: Path | None = None,
         event_log_path: str | None = None,
         continuity_curator: ContinuityCurator | None = None,
+        protocol_recovery_builder: ProtocolRecoveryBuilder | None = None,
     ):
         self._backend = backend or AnthropicTasteBackend(client)
         self._model = model
@@ -1466,6 +1483,8 @@ class OpenTasteSession:
         self._continuity_curator_context: dict | None = None
         self._last_continuity_curator_context: dict | None = None
         self._last_continuity_curation: dict | None = None
+        self._protocol_recovery_builder = protocol_recovery_builder
+        self._last_protocol_recovery: dict | None = None
         self._session_start = datetime.now(timezone.utc)
         self._last_cycle_time: datetime | None = None
         # Accumulated prior states for involuntary recall and memory tools:
@@ -1702,6 +1721,25 @@ class OpenTasteSession:
             self._last_cycle_time = datetime.now(timezone.utc)
             deleted = set(raw_output.get("deleted_regions", []))
             updated = set(raw_output.keys()) - _PROTOCOL_FIELDS
+            failure_classification = {
+                "record_type": "protocol_failure",
+                "failure_stage": "state_merge",
+                "error_type": type(e).__name__,
+                "error": str(e),
+                "deleted_regions": sorted(deleted),
+                "updated_regions": sorted(updated),
+                "overlap_keys": sorted(deleted & updated),
+            }
+            protocol_recovery = self._run_protocol_recovery(
+                cycle=self._cycle,
+                record_id=record_id,
+                timestamp=self._last_cycle_time,
+                prior_state=prior_state_snapshot,
+                raw_output=raw_output,
+                response_text=response_text,
+                failure_classification=failure_classification,
+            )
+            self._last_protocol_recovery = protocol_recovery
             self._log_entry(
                 user_message=user_message,
                 system_prompt=system,
@@ -1716,15 +1754,8 @@ class OpenTasteSession:
                     "stop_reason": result.stop_reason,
                 },
                 scheduled_events=[],
-                failure_classification={
-                    "record_type": "protocol_failure",
-                    "failure_stage": "state_merge",
-                    "error_type": type(e).__name__,
-                    "error": str(e),
-                    "deleted_regions": sorted(deleted),
-                    "updated_regions": sorted(updated),
-                    "overlap_keys": sorted(deleted & updated),
-                },
+                failure_classification=failure_classification,
+                protocol_recovery=protocol_recovery,
             )
             raise
 
@@ -1865,6 +1896,56 @@ class OpenTasteSession:
                 "error": str(e),
             }
 
+    def _run_protocol_recovery(
+        self,
+        *,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+        prior_state: dict | None,
+        raw_output: dict,
+        response_text: str,
+        failure_classification: dict,
+    ) -> dict | None:
+        if self._protocol_recovery_builder is None:
+            return None
+        recovery_record_id = str(uuid4())
+        try:
+            artifact = self._protocol_recovery_builder.recover(
+                cycle=cycle,
+                record_id=record_id,
+                timestamp=timestamp,
+                prior_state=prior_state,
+                raw_output=json.loads(json.dumps(raw_output, default=str)),
+                response_text=response_text,
+                failure_classification=json.loads(
+                    json.dumps(failure_classification, default=str)
+                ),
+            )
+            if not isinstance(artifact, dict):
+                raise TypeError("protocol recovery builder must return a dict")
+            artifact = json.loads(json.dumps(artifact, default=str))
+            return {
+                "record_type": "protocol_recovery",
+                "record_id": recovery_record_id,
+                "status": "success",
+                "created_at": utc_now_iso(),
+                "source_cycle": cycle,
+                "source_record_id": str(record_id),
+                "artifact": artifact,
+            }
+        except Exception as e:  # noqa: BLE001 -- recovery failure is data
+            return {
+                "record_type": "protocol_recovery",
+                "record_id": recovery_record_id,
+                "status": "failed",
+                "created_at": utc_now_iso(),
+                "source_cycle": cycle,
+                "source_record_id": str(record_id),
+                "error_type": type(e).__name__,
+                "error": str(e),
+            }
+
     def _log_entry(
         self,
         user_message: str,
@@ -1876,6 +1957,7 @@ class OpenTasteSession:
         scheduled_events: list[dict] | None = None,
         continuity_curation: dict | None = None,
         failure_classification: dict | None = None,
+        protocol_recovery: dict | None = None,
     ) -> None:
         """Append full record to JSONL log. Captures everything."""
         if not self._log_path:
@@ -1934,6 +2016,8 @@ class OpenTasteSession:
         if failure_classification is not None:
             record["status"] = "failed"
             record["failure_classification"] = failure_classification
+        if protocol_recovery is not None:
+            record["protocol_recovery"] = protocol_recovery
         with open(self._log_path, "a") as f:
             f.write(json.dumps(record, default=str) + "\n")
 

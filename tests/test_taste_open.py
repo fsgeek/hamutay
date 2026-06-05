@@ -249,6 +249,52 @@ class _SequenceBackend:
         return self._results.pop(0)
 
 
+class _RecoveryBuilder:
+    def __init__(self):
+        self.calls = []
+
+    def recover(
+        self,
+        *,
+        cycle,
+        record_id,
+        timestamp,
+        prior_state,
+        raw_output,
+        response_text,
+        failure_classification,
+    ):
+        self.calls.append(
+            {
+                "cycle": cycle,
+                "record_id": record_id,
+                "timestamp": timestamp,
+                "prior_state": prior_state,
+                "raw_output": raw_output,
+                "response_text": response_text,
+                "failure_classification": failure_classification,
+            }
+        )
+        return {
+            "accepted_state": None,
+            "live_policy": "strict_reject",
+            "candidate_rows": [
+                {
+                    "row_type": "protocol_note",
+                    "status": "candidate",
+                    "text": "captured overlap",
+                    "accepted": False,
+                }
+            ],
+        }
+
+
+class _FailingRecoveryBuilder:
+    def recover(self, **kwargs):
+        del kwargs
+        raise RuntimeError("repair boom")
+
+
 class TestExchangeCycleRollback:
     """A failed API call must not leave self._cycle ahead of state["cycle"].
     Without rollback, the next successful exchange would skip a number and
@@ -340,6 +386,96 @@ class TestExchangeCycleRollback:
         assert records[1]["cycle"] == 1
         assert "status" not in records[1]
         assert records[1]["state"]["mood"] == "steady"
+
+    def test_protocol_recovery_hook_logs_candidate_artifact(self, tmp_path):
+        backend = _SequenceBackend([
+            ExchangeResult(
+                raw_output={
+                    "response": "bad",
+                    "mood": "new",
+                    "deleted_regions": ["mood"],
+                },
+                stop_reason="tool_use",
+                input_tokens=11,
+                output_tokens=22,
+            ),
+            ExchangeResult(
+                raw_output={"response": "ok", "mood": "steady"},
+                stop_reason="tool_use",
+                input_tokens=33,
+                output_tokens=44,
+            ),
+        ])
+        builder = _RecoveryBuilder()
+        log_path = tmp_path / "session.jsonl"
+        session = OpenTasteSession(
+            backend=backend,
+            experiment_label="protocol_recovery_hook_test",
+            log_path=str(log_path),
+            protocol_recovery_builder=builder,
+        )
+
+        with pytest.raises(ValueError, match="deleted_regions overlaps updates"):
+            session.exchange("fail")
+
+        assert session.cycle == 0
+        assert session.state is None
+        assert len(builder.calls) == 1
+        assert builder.calls[0]["cycle"] == 1
+        assert builder.calls[0]["failure_classification"]["overlap_keys"] == ["mood"]
+        records = [
+            json.loads(line)
+            for line in log_path.read_text().splitlines()
+            if line.strip()
+        ]
+        failed = records[0]
+        assert failed["protocol_recovery"]["status"] == "success"
+        artifact = failed["protocol_recovery"]["artifact"]
+        assert artifact["accepted_state"] is None
+        assert artifact["live_policy"] == "strict_reject"
+        assert artifact["candidate_rows"][0]["status"] == "candidate"
+        assert "continuity_curation" not in failed
+
+        assert session.exchange("succeed") == "ok"
+        assert session.cycle == 1
+        assert session.state == {"cycle": 1, "mood": "steady"}
+
+    def test_protocol_recovery_hook_failure_is_logged_without_masking(self, tmp_path):
+        backend = _SequenceBackend([
+            ExchangeResult(
+                raw_output={
+                    "response": "bad",
+                    "mood": "new",
+                    "deleted_regions": ["mood"],
+                },
+                stop_reason="tool_use",
+                input_tokens=11,
+                output_tokens=22,
+            )
+        ])
+        log_path = tmp_path / "session.jsonl"
+        session = OpenTasteSession(
+            backend=backend,
+            experiment_label="protocol_recovery_failure_test",
+            log_path=str(log_path),
+            protocol_recovery_builder=_FailingRecoveryBuilder(),
+        )
+
+        with pytest.raises(ValueError, match="deleted_regions overlaps updates"):
+            session.exchange("fail")
+
+        records = [
+            json.loads(line)
+            for line in log_path.read_text().splitlines()
+            if line.strip()
+        ]
+        failed = records[0]
+        assert failed["failure_classification"]["error_type"] == "ValueError"
+        assert failed["protocol_recovery"]["status"] == "failed"
+        assert failed["protocol_recovery"]["error_type"] == "RuntimeError"
+        assert failed["protocol_recovery"]["error"] == "repair boom"
+        assert session.cycle == 0
+        assert session.state is None
 
 
 class TestContextLimitErrorDetection:
