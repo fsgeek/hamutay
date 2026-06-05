@@ -70,12 +70,13 @@ Rationale:
 
 ### Step 2: Minimal Harness
 
-Status: not started.
+Status: complete.
 
 Deliverable:
 
 - small live runner that lets the model choose a bounded investigation and
-  emit one of the scheduler policy actions through a terminal surface.
+  emit one of the scheduler policy actions through a terminal surface:
+  `experiments/event_loop/bounded_autonomous_work_minimal_harness_20260605/run_bounded_autonomous_work_minimal_harness.py`.
 
 Evidence needed:
 

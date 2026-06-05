@@ -1373,6 +1373,47 @@ def test_run_next_event_appends_policy_disposition_when_enabled(tmp_path):
     assert summary["lifecycle_anomalies"] == []
 
 
+def test_policy_dispositions_accept_abandon_and_defer(tmp_path):
+    event_path = tmp_path / "events.jsonl"
+    store = EventStore(event_path)
+    event = build_pending_event(
+        purpose="Choose control action.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id="seed",
+    )
+    store.append(event)
+
+    abandon = store.append_policy_disposition(
+        event=event,
+        run_id="run-abandon",
+        wake_cycle=2,
+        result_record_id="record-abandon",
+        policy_decision={
+            "action": "abandon",
+            "rationale": "work should not continue and is not complete",
+        },
+    )
+    defer = store.append_policy_disposition(
+        event=event,
+        run_id="run-defer",
+        wake_cycle=3,
+        result_record_id="record-defer",
+        policy_decision={
+            "action": "defer",
+            "rationale": "work remains open without committed follow-up",
+        },
+    )
+
+    assert abandon["classification"] == "abandoned"
+    assert defer["classification"] == "deferred"
+    summary = summarize_event_log(store.read_records())
+    assert summary["policy_disposition_counts"] == {
+        "abandon": 1,
+        "defer": 1,
+    }
+
+
 def test_run_next_event_auto_ignores_inherited_continuation(tmp_path):
     log_path = tmp_path / "session.jsonl"
     event_path = tmp_path / "session.events.jsonl"

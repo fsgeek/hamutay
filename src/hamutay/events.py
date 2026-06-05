@@ -20,6 +20,8 @@ VALID_POLICY_ACTIONS = {
     "continue_after",
     "stop_complete",
     "ask_external_evidence",
+    "abandon",
+    "defer",
 }
 LOAD_BEARING_FIELDS = {
     "current_claim",
@@ -532,6 +534,10 @@ class EventStore:
             record["classification"] = "complete"
         elif action == "continue_after":
             record["classification"] = "continued"
+        elif action == "abandon":
+            record["classification"] = "abandoned"
+        elif action == "defer":
+            record["classification"] = "deferred"
         if auto_continuation_event is not None:
             record["continuation_event_id"] = auto_continuation_event.get(
                 "event_id"
