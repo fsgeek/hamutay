@@ -1,0 +1,1683 @@
+{
+  "model": "mistralai/mistral-small-2603",
+  "curator_model": "mistralai/mistral-small-2603",
+  "conditions": [
+    "free_summary_1200",
+    "claim_table_strict_schema_1200",
+    "claim_table_repair_parser_1200"
+  ],
+  "n_replicates": 4,
+  "max_tokens": 4096,
+  "curator_summary_chars": 1200,
+  "claim_table_schema": {
+    "type": "object",
+    "properties": {
+      "response": {
+        "type": "string",
+        "description": "Brief internal curator note."
+      },
+      "claims": {
+        "type": "array",
+        "description": "Bounded evidence-status continuity claim rows.",
+        "items": {
+          "type": "object",
+          "properties": {
+            "claim": {
+              "type": "string",
+              "description": "Concise claim text; do not invent details."
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "supported",
+                "invalidated",
+                "uncertain",
+                "open"
+              ]
+            },
+            "source_cycle": {
+              "type": "integer",
+              "description": "Cycle number supporting the row when available."
+            },
+            "support": {
+              "type": "string",
+              "description": "Concise source or evidence text."
+            }
+          },
+          "required": [
+            "claim",
+            "status",
+            "source_cycle",
+            "support"
+          ],
+          "additionalProperties": false
+        }
+      }
+    },
+    "required": [
+      "response",
+      "claims"
+    ],
+    "additionalProperties": false
+  },
+  "task_prompts": [
+    "Initialize your state for this registered claim-table schema run.\n\nNo task facts have been provided yet. Prepare to track a multi-cycle planning\ntask, including goals, constraints, evidence, invalidated assumptions, open\nquestions, and whatever continuity structure you find useful.",
+    "Planning task.\n\nDesign a six-week pilot for mobile document-intake kiosks for a city benefits\noffice.\n\nGoals:\n- reduce lobby wait times;\n- preserve resident privacy;\n- cover three pilot sites: North Library, East Clinic, and South Center;\n- produce a practical go/no-go recommendation.\n\nConstraints:\n- budget must stay at or below $18,000;\n- no paid weekend staffing;\n- kiosks must support offline operation for at least four hours;\n- the pilot must not collect Social Security numbers.\n\nCreate an initial plan and update your state with the goals, constraints,\nassumptions, evidence, open questions, next actions, and continuity notes.",
+    "Contradictory update.\n\nThe privacy officer has now ruled that pilot kiosks may not store resident\ndocuments locally at all, even encrypted. The offline-operation requirement\nstill remains. Also, East Clinic has withdrawn from the pilot and must be\nreplaced by West Shelter.\n\nUpdate the plan and state. Identify which assumptions from the initial plan are\ninvalidated, what evidence caused the change, and what the current plan should\ndo instead.",
+    "Interruption/resumption test.\n\nAssume your working context was interrupted. Resume using whatever continuity\nyou have been given. Do not ask me to restate the task.\n\nReport the current goals, active constraints, invalidated assumptions, and next\nactions. If anything is uncertain, say what is uncertain and why; do not ask\nfor information already present in the task history or prior context.",
+    "Final decision.\n\nMake the concrete go/no-go recommendation and give the revised pilot plan in\nfive bullets or fewer. Ground the decision in the current constraints and the\ncontradictory update. Update state accordingly.",
+    "Delayed challenge.\n\nWhat changed since the initial plan, why did it change, and what evidence\nsupports the change? Answer from continuity, not from generic planning advice.\nUpdate state with the final evidence trail and any remaining open questions."
+  ],
+  "results": [
+    {
+      "model": "mistralai/mistral-small-2603",
+      "condition": "free_summary_1200",
+      "replicate": 1,
+      "log_path": "experiments/identity_claim_table_schema_20260605/mistralai__mistral-small-2603_free_summary_1200_r01.jsonl",
+      "cycle_count": 6,
+      "goal_recovery_score": 6,
+      "constraint_recovery_score": 7,
+      "contradiction_handling_score": 4,
+      "evidence_grounding_score": 5,
+      "final_decision_quality_score": 6,
+      "rebriefing_needed": false,
+      "delayed_challenge_accuracy": 5,
+      "site_drift_count": 1,
+      "storage_contradiction_count": 3,
+      "invented_budget_count": 0,
+      "invented_scope_count": 0,
+      "unsupported_detail_count": 1,
+      "false_assumption_count": 5,
+      "recovery_total": 33,
+      "repaired_site_drift_count": 1,
+      "repaired_storage_contradiction_count": 3,
+      "repaired_invented_scope_count": 0,
+      "repaired_unsupported_detail_count": 1,
+      "repaired_invented_budget_count": 0,
+      "repaired_false_assumption_count": 5,
+      "declared_loss_mentions": 14,
+      "negated_or_invalidated_hits": 6,
+      "active_contamination_hits": 5,
+      "guarded_hit_examples": [
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "west shelter. ### invalidated assumptions - kiosks can store resident documents locally in encrypted form. - east clinic will participate in the pilot. ### next actions 1. reassess kiosk hardware/software to meet zero-local-stora"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "ed. --- ### **revised pilot plan** - **sites:** proceed with **north library, south center, west shelter** (east clinic withdrawn). - **kiosks:** reissue rfp with **zero-local-storage and offline durability** as *non-negotiable*"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "ite involvement:** the initial plan included **four pilot sites** (north library, south center, west shelter, east clinic). east clinic has **withdrawn**, reducing the pilot to three sites. - **technical feasibility:** the initial"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "t:** the initial plan included **four pilot sites** (north library, south center, west shelter, east clinic). east clinic has **withdrawn**, reducing the pilot to three sites. - **technical feasibility:** the initial plan assumed k"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "cs, confirming prior solutions failed to meet requirements. - **site reduction:** confirmed via withdrawal of east clinic, leaving three active sites (north library, south center, west shelter). - **budget flexibility:** acknowledg"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "gapped temporary storage, cloud-only workflows) are viable under the zero-local-storage constraint? - why did east clinic withdraw, and is their participation still possible under revised terms? **final evidence trail:** - cycle 5"
+        }
+      ],
+      "active_hit_examples": [
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "rage**) that invalidated prior kiosk configurations relying on local caching or encrypted local storage. 2. **east clinic withdrawal:** reduced the pilot\u2019s scope and potential data points for testing without explicit justification"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local cache|local caching",
+          "window": "introduced a hard constraint (**zero-local-storage**) that invalidated prior kiosk configurations relying on local caching or encrypted local storage. 2. **east clinic withdrawal:** reduced the pilot\u2019s scope and potential data point"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "store.*document.*local",
+          "window": "numbers. - pilot sites: north library, south center, west shelter. ### invalidated assumptions - kiosks can store resident documents locally in encrypted form. - east clinic will participate in the pilot. ### next actions 1. reassess kiosk hardwar"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "encrypted local|local encrypted",
+          "window": "d constraint (**zero-local-storage**) that invalidated prior kiosk configurations relying on local caching or encrypted local storage. 2. **east clinic withdrawal:** reduced the pilot\u2019s scope and potential data points for testing witho"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "vendor",
+          "window": "ange stabilization; use manual logs as proxy until technical constraints are resolved. **next step:** reopen vendor procurement with clarified technical/privacy constraints; pause pilot until solutions emerge. ### changes sin"
+        }
+      ],
+      "repaired_recovery_per_contamination": 6.6,
+      "curation_records": 6,
+      "curation_success_count": 6,
+      "curation_failure_count": 0,
+      "curator_injection_count": 5,
+      "curator_injected_chars": 4822,
+      "curator_summary_truncated_count": 4,
+      "curator_input_tokens": 11310,
+      "curator_output_tokens": 1876,
+      "accepted_claim_rows": 0,
+      "rejected_claim_rows": 0,
+      "curation_cycles_with_accepted_rows": 0,
+      "protocol_recovery_events": 0,
+      "recovered_claim_rows": 0,
+      "curator_named_state_fields": [],
+      "curator_artifact_in_state_without_main_authorship": [],
+      "main_input_tokens": 6677,
+      "main_output_tokens": 3138,
+      "active_contamination_attributions": [
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "first_source": "curator_artifact",
+          "first_cycle": 2
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local cache|local caching",
+          "first_source": "main_raw_output",
+          "first_cycle": 6
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "store.*document.*local",
+          "first_source": "curator_artifact",
+          "first_cycle": 3
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "encrypted local|local encrypted",
+          "first_source": "curator_artifact",
+          "first_cycle": 3
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "vendor",
+          "first_source": "curator_artifact",
+          "first_cycle": 2
+        }
+      ],
+      "active_contamination_attribution_counts": {
+        "curator_artifact": 4,
+        "main_raw_output": 1
+      },
+      "error": null,
+      "censored": false
+    },
+    {
+      "model": "mistralai/mistral-small-2603",
+      "condition": "free_summary_1200",
+      "replicate": 2,
+      "log_path": "experiments/identity_claim_table_schema_20260605/mistralai__mistral-small-2603_free_summary_1200_r02.jsonl",
+      "cycle_count": 2,
+      "goal_recovery_score": 0,
+      "constraint_recovery_score": 0,
+      "contradiction_handling_score": 0,
+      "evidence_grounding_score": 0,
+      "final_decision_quality_score": 0,
+      "rebriefing_needed": false,
+      "delayed_challenge_accuracy": 0,
+      "site_drift_count": 0,
+      "storage_contradiction_count": 0,
+      "invented_budget_count": 0,
+      "invented_scope_count": 0,
+      "unsupported_detail_count": 0,
+      "false_assumption_count": 0,
+      "recovery_total": 0,
+      "repaired_site_drift_count": 0,
+      "repaired_storage_contradiction_count": 0,
+      "repaired_invented_scope_count": 0,
+      "repaired_unsupported_detail_count": 0,
+      "repaired_invented_budget_count": 0,
+      "repaired_false_assumption_count": 0,
+      "declared_loss_mentions": 0,
+      "negated_or_invalidated_hits": 0,
+      "active_contamination_hits": 0,
+      "guarded_hit_examples": [],
+      "active_hit_examples": [],
+      "repaired_recovery_per_contamination": null,
+      "curation_records": 2,
+      "curation_success_count": 2,
+      "curation_failure_count": 0,
+      "curator_injection_count": 1,
+      "curator_injected_chars": 150,
+      "curator_summary_truncated_count": 1,
+      "curator_input_tokens": 3153,
+      "curator_output_tokens": 582,
+      "accepted_claim_rows": 0,
+      "rejected_claim_rows": 0,
+      "curation_cycles_with_accepted_rows": 0,
+      "protocol_recovery_events": 0,
+      "recovered_claim_rows": 0,
+      "curator_named_state_fields": [],
+      "curator_artifact_in_state_without_main_authorship": [],
+      "main_input_tokens": 1381,
+      "main_output_tokens": 984,
+      "active_contamination_attributions": [],
+      "active_contamination_attribution_counts": {},
+      "error": "ValueError: cycle 3: deleted_regions overlaps updates: ['assumptions', 'constraints', 'goals', 'next_actions', 'open_questions']. A key cannot be simultaneously deleted and updated in the same cycle.",
+      "censored": false
+    },
+    {
+      "model": "mistralai/mistral-small-2603",
+      "condition": "free_summary_1200",
+      "replicate": 3,
+      "log_path": "experiments/identity_claim_table_schema_20260605/mistralai__mistral-small-2603_free_summary_1200_r03.jsonl",
+      "cycle_count": 6,
+      "goal_recovery_score": 6,
+      "constraint_recovery_score": 7,
+      "contradiction_handling_score": 4,
+      "evidence_grounding_score": 5,
+      "final_decision_quality_score": 6,
+      "rebriefing_needed": false,
+      "delayed_challenge_accuracy": 4,
+      "site_drift_count": 4,
+      "storage_contradiction_count": 2,
+      "invented_budget_count": 0,
+      "invented_scope_count": 1,
+      "unsupported_detail_count": 1,
+      "false_assumption_count": 8,
+      "recovery_total": 32,
+      "repaired_site_drift_count": 2,
+      "repaired_storage_contradiction_count": 2,
+      "repaired_invented_scope_count": 1,
+      "repaired_unsupported_detail_count": 1,
+      "repaired_invented_budget_count": 0,
+      "repaired_false_assumption_count": 6,
+      "declared_loss_mentions": 20,
+      "negated_or_invalidated_hits": 10,
+      "active_contamination_hits": 11,
+      "guarded_hit_examples": [
+        {
+          "category": "site_drift",
+          "pattern": "north library and south center only",
+          "window": "ffline operation (4+ hours) with no local storage per privacy ruling; re-engage vendor by [date]. - deploy to north library and south center only (exclude west shelter after site re-validation found power/space gaps). - collect wait-time metrics via exist"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "r. - **why:** west shelter failed site-readiness validation for power and space constraints, combined with east clinic\u2019s withdrawal (reducing urgency for a third site). - **evidence:** - privacy officer ruling prohibits"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "ing prohibits local document storage, complicating hardware placement and power needs at west shelter. - east clinic withdrawal (cycle 5) removed a third site from consideration, making west shelter\u2019s logistical gaps harder to"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "* - **privacy ruling:** kiosks may not store resident documents locally (even encrypted). - **site changes:** east clinic withdrawn; west shelter excluded due to power/space gaps. - **constraints updated:** explicit prohibition on"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "on goal? - **data collection:** how will baseline wait-time data be gathered post-site changes (e.g., without east clinic or west shelter)?"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "store.*document.*local",
+          "window": "on unreliable connectivity at pilot sites. - **evidence:** - privacy officer ruling: \"kiosks may not store resident documents locally (even encrypted).\" - constraints list updated to explicitly prohibit local storage and require \u22654 hour"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "store.*document.*local",
+          "window": "or privacy features remains unconfirmed. --- **final evidence trail** - **privacy ruling:** kiosks may not store resident documents locally (even encrypted). - **site changes:** east clinic withdrawn; west shelter excluded due to power/space gaps."
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "$18,000 - no paid weekend staffing - kiosks must support offline operation for at least four hours **without local document storage** - the pilot must not collect social security numbers **invalidated assumptions:** - site staff will sup"
+        }
+      ],
+      "active_hit_examples": [
+        {
+          "category": "site_drift",
+          "pattern": "\\btwo sites\\b|\\btwo-site\\b|\\b2 sites\\b",
+          "window": "rvision time to comply with new privacy protocols? - **impact of site reduction:** does limiting the pilot to two sites still achieve the \u226510% wait-time reduction goal? - **data collection:** how will baseline wait-time data be g"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "drop.*south center|exclude.*south center",
+          "window": "response. **summary of changes since initial plan** 1. **site scope reduced** - **change:** west shelter excluded; pilot now limited to north library and south center. - **why:** west shelter failed site-readiness validation for power and space constraints, combined with e"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "store.*document.*local",
+          "window": "logistical gaps harder to justify. 2. **privacy constraints tightened** - **change:** kiosks may **not** store resident documents locally (even encrypted), and offline-operation requirement retained. - **why:** privacy officer ruled that loca"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "\u2019s withdrawal (reducing urgency for a third site). - **evidence:** - privacy officer ruling prohibits local document storage, complicating hardware placement and power needs at west shelter. - east clinic withdrawal (cycle 5)"
+        },
+        {
+          "category": "invented_scope",
+          "pattern": "\\b20\\s*%|\\b15\\s*%|\\bzero privacy incidents\\b",
+          "window": "ice logs. - limit pilot to six weeks; final go/no-go decision will be based on wait-time reduction (\u226510%) and zero privacy incidents. - budget capped at $18,000; vendor sla must guarantee 24-hour troubleshooting response. **summary of changes"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "vendor",
+          "window": "storage), the mechanism for handling offline data temporarily during disconnection is not yet confirmed. the vendor\u2019s proposed solution may impact performance or usability, but this has not been validated. - *reason*: the p"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "vendor",
+          "window": "e, but it is unclear how offline data will be securely transmitted or cached without violating this rule. - **vendor sla for troubleshooting during the pilot**: the sla details for addressing issues (e.g., offline operation fa"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "vendor",
+          "window": "an:** - configure kiosks for offline operation (4+ hours) with no local storage per privacy ruling; re-engage vendor by [date]. - deploy to north library and south center only (exclude west shelter after site re-validation fou"
+        }
+      ],
+      "repaired_recovery_per_contamination": 5.333,
+      "curation_records": 6,
+      "curation_success_count": 6,
+      "curation_failure_count": 0,
+      "curator_injection_count": 5,
+      "curator_injected_chars": 5905,
+      "curator_summary_truncated_count": 5,
+      "curator_input_tokens": 15716,
+      "curator_output_tokens": 3099,
+      "accepted_claim_rows": 0,
+      "rejected_claim_rows": 0,
+      "curation_cycles_with_accepted_rows": 0,
+      "protocol_recovery_events": 0,
+      "recovered_claim_rows": 0,
+      "curator_named_state_fields": [],
+      "curator_artifact_in_state_without_main_authorship": [],
+      "main_input_tokens": 7727,
+      "main_output_tokens": 4291,
+      "active_contamination_attributions": [
+        {
+          "category": "site_drift",
+          "pattern": "\\btwo sites\\b|\\btwo-site\\b|\\b2 sites\\b",
+          "first_source": "curator_artifact",
+          "first_cycle": 6
+        },
+        {
+          "category": "site_drift",
+          "pattern": "drop.*south center|exclude.*south center",
+          "first_source": "main_raw_output",
+          "first_cycle": 2
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "store.*document.*local",
+          "first_source": "curator_artifact",
+          "first_cycle": 3
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "first_source": "curator_artifact",
+          "first_cycle": 3
+        },
+        {
+          "category": "invented_scope",
+          "pattern": "\\b20\\s*%|\\b15\\s*%|\\bzero privacy incidents\\b",
+          "first_source": "curator_artifact",
+          "first_cycle": 2
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "vendor",
+          "first_source": "curator_artifact",
+          "first_cycle": 2
+        }
+      ],
+      "active_contamination_attribution_counts": {
+        "curator_artifact": 5,
+        "main_raw_output": 1
+      },
+      "error": null,
+      "censored": false
+    },
+    {
+      "model": "mistralai/mistral-small-2603",
+      "condition": "free_summary_1200",
+      "replicate": 4,
+      "log_path": "experiments/identity_claim_table_schema_20260605/mistralai__mistral-small-2603_free_summary_1200_r04.jsonl",
+      "cycle_count": 6,
+      "goal_recovery_score": 6,
+      "constraint_recovery_score": 7,
+      "contradiction_handling_score": 3,
+      "evidence_grounding_score": 2,
+      "final_decision_quality_score": 6,
+      "rebriefing_needed": false,
+      "delayed_challenge_accuracy": 3,
+      "site_drift_count": 0,
+      "storage_contradiction_count": 1,
+      "invented_budget_count": 0,
+      "invented_scope_count": 0,
+      "unsupported_detail_count": 1,
+      "false_assumption_count": 2,
+      "recovery_total": 27,
+      "repaired_site_drift_count": 0,
+      "repaired_storage_contradiction_count": 0,
+      "repaired_invented_scope_count": 0,
+      "repaired_unsupported_detail_count": 1,
+      "repaired_invented_budget_count": 0,
+      "repaired_false_assumption_count": 1,
+      "declared_loss_mentions": 22,
+      "negated_or_invalidated_hits": 3,
+      "active_contamination_hits": 1,
+      "guarded_hit_examples": [
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "south center\"] (evidence: site_rotation.site_order in continuity_aids, sourced from cycle 5). - rationale: east clinic was dropped and west shelter added, but **no validated baseline wait-time or intake data exists for west shel"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "**go/no-go decision: no-go** current constraints and contradictory evidence prevent a viable pilot: - **no-local-storage rule** (per memo_2024-06-17 and e-2024-07) conflicts with real-time document processing, which lacks a designed transmission protocol. no local storage + offline operation + real-time upload without a documented plan violates privacy and operational requirem"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "**local storage policy** - initial: implied use of local storage with periodic wipe. - changed to: **no_local_document_storage**, enforced via memo_2024-06-17 and e-2024-07 (continuity_aids.kiosk_specs.local_storage_policy + curator summary). - rationale: privacy obligations overrode convenience; no compensating trans"
+        }
+      ],
+      "active_hit_examples": [
+        {
+          "category": "unsupported_detail",
+          "pattern": "ada",
+          "window": "y), creating a conflict with no-local-storage until a transmission protocol is designed. - site selection was adapted without baseline validation for west shelter due to re-scoping; thus inclusion lacks evidence of baseline"
+        }
+      ],
+      "repaired_recovery_per_contamination": 27.0,
+      "curation_records": 6,
+      "curation_success_count": 6,
+      "curation_failure_count": 0,
+      "curator_injection_count": 5,
+      "curator_injected_chars": 5016,
+      "curator_summary_truncated_count": 5,
+      "curator_input_tokens": 21708,
+      "curator_output_tokens": 3789,
+      "accepted_claim_rows": 0,
+      "rejected_claim_rows": 0,
+      "curation_cycles_with_accepted_rows": 0,
+      "protocol_recovery_events": 0,
+      "recovered_claim_rows": 0,
+      "curator_named_state_fields": [],
+      "curator_artifact_in_state_without_main_authorship": [],
+      "main_input_tokens": 9096,
+      "main_output_tokens": 6047,
+      "active_contamination_attributions": [
+        {
+          "category": "unsupported_detail",
+          "pattern": "ada",
+          "first_source": "main_raw_output",
+          "first_cycle": 3
+        }
+      ],
+      "active_contamination_attribution_counts": {
+        "main_raw_output": 1
+      },
+      "error": null,
+      "censored": false
+    },
+    {
+      "model": "mistralai/mistral-small-2603",
+      "condition": "claim_table_strict_schema_1200",
+      "replicate": 1,
+      "log_path": "experiments/identity_claim_table_schema_20260605/mistralai__mistral-small-2603_claim_table_strict_schema_1200_r01.jsonl",
+      "cycle_count": 2,
+      "goal_recovery_score": 0,
+      "constraint_recovery_score": 0,
+      "contradiction_handling_score": 0,
+      "evidence_grounding_score": 0,
+      "final_decision_quality_score": 0,
+      "rebriefing_needed": false,
+      "delayed_challenge_accuracy": 0,
+      "site_drift_count": 0,
+      "storage_contradiction_count": 0,
+      "invented_budget_count": 0,
+      "invented_scope_count": 0,
+      "unsupported_detail_count": 0,
+      "false_assumption_count": 0,
+      "recovery_total": 0,
+      "repaired_site_drift_count": 0,
+      "repaired_storage_contradiction_count": 0,
+      "repaired_invented_scope_count": 0,
+      "repaired_unsupported_detail_count": 0,
+      "repaired_invented_budget_count": 0,
+      "repaired_false_assumption_count": 0,
+      "declared_loss_mentions": 0,
+      "negated_or_invalidated_hits": 0,
+      "active_contamination_hits": 0,
+      "guarded_hit_examples": [],
+      "active_hit_examples": [],
+      "repaired_recovery_per_contamination": null,
+      "curation_records": 2,
+      "curation_success_count": 2,
+      "curation_failure_count": 0,
+      "curator_injection_count": 1,
+      "curator_injected_chars": 371,
+      "curator_summary_truncated_count": 1,
+      "curator_input_tokens": 4744,
+      "curator_output_tokens": 1825,
+      "accepted_claim_rows": 10,
+      "rejected_claim_rows": 16,
+      "curation_cycles_with_accepted_rows": 2,
+      "protocol_recovery_events": 0,
+      "recovered_claim_rows": 0,
+      "curator_named_state_fields": [],
+      "curator_artifact_in_state_without_main_authorship": [],
+      "main_input_tokens": 1455,
+      "main_output_tokens": 1504,
+      "active_contamination_attributions": [],
+      "active_contamination_attribution_counts": {},
+      "error": "ValueError: cycle 3: deleted_regions overlaps updates: ['assumptions']. A key cannot be simultaneously deleted and updated in the same cycle.",
+      "censored": false
+    },
+    {
+      "model": "mistralai/mistral-small-2603",
+      "condition": "claim_table_strict_schema_1200",
+      "replicate": 2,
+      "log_path": "experiments/identity_claim_table_schema_20260605/mistralai__mistral-small-2603_claim_table_strict_schema_1200_r02.jsonl",
+      "cycle_count": 6,
+      "goal_recovery_score": 6,
+      "constraint_recovery_score": 7,
+      "contradiction_handling_score": 4,
+      "evidence_grounding_score": 5,
+      "final_decision_quality_score": 6,
+      "rebriefing_needed": false,
+      "delayed_challenge_accuracy": 4,
+      "site_drift_count": 1,
+      "storage_contradiction_count": 3,
+      "invented_budget_count": 0,
+      "invented_scope_count": 0,
+      "unsupported_detail_count": 0,
+      "false_assumption_count": 4,
+      "recovery_total": 32,
+      "repaired_site_drift_count": 0,
+      "repaired_storage_contradiction_count": 3,
+      "repaired_invented_scope_count": 0,
+      "repaired_unsupported_detail_count": 0,
+      "repaired_invented_budget_count": 0,
+      "repaired_false_assumption_count": 3,
+      "declared_loss_mentions": 13,
+      "negated_or_invalidated_hits": 7,
+      "active_contamination_hits": 3,
+      "guarded_hit_examples": [
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "ing plan explicitly prohibiting local document storage. 5. update the pilot timeline to reflect site changes (east clinic withdrawn, west shelter added) and new technical requirements. go. revised pilot plan: - deploy privacy-pres"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "k workflows to ensure no local document storage occurs, even in offline scenarios. **change 2: site changes (east clinic withdrawn; west shelter added)** - why it changed: logistical and coordination updates led to the removal of"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "withdrawn; west shelter added)** - why it changed: logistical and coordination updates led to the removal of east clinic as a pilot site and the addition of west shelter as the third site. - evidence: - source: site coordination"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "w $18,000 - no paid weekend staffing - kiosks must support offline operation for at least four hours *without local document storage* - pilot must not collect social security numbers **invalidated assumptions:** - *local document storage"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "out local document storage* - pilot must not collect social security numbers **invalidated assumptions:** - *local document storage during offline operation*: the privacy officer\u2019s ruling prohibits any local storage of resident documents (even encrypted), which invalidates prior assumptions about kiosk workflows relying on temporary local storage. **next actions:** 1. reassess kiosk hardware/software options to ensure compliance with the zero-local-s"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "ent documents, even encrypted** - why it changed: a ruling from the privacy officer explicitly disallowed any local storage of resident documents, regardless of encryption status. this invalidated the original assumption that encrypted local storage could be used during offline operation. - evidence: - source: privacy officer update (cycle 5) - impac"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "- source: privacy officer update (cycle 5) - impact: required a redesign of kiosk workflows to ensure no local document storage occurs, even in offline scenarios. **change 2: site changes (east clinic withdrawn; west shelter added)**"
+        }
+      ],
+      "active_hit_examples": [
+        {
+          "category": "storage_contradiction",
+          "pattern": "store.*document.*local",
+          "window": "erving kiosks at north library, west shelter, and south center using session-based cloud workflows that never store documents locally, even offline. - keep total spend \u2264 $18,000 and avoid weekend staffing. - source hardware/software that sup"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "south center. 4. draft a revised privacy-preserving data collection and handling plan explicitly prohibiting local document storage. 5. update the pilot timeline to reflect site changes (east clinic withdrawn, west shelter added) and new"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "encrypted local|local encrypted",
+          "window": "storage of resident documents, regardless of encryption status. this invalidated the original assumption that encrypted local storage could be used during offline operation. - evidence: - source: privacy officer update (cycle 5) -"
+        }
+      ],
+      "repaired_recovery_per_contamination": 10.667,
+      "curation_records": 6,
+      "curation_success_count": 6,
+      "curation_failure_count": 0,
+      "curator_injection_count": 5,
+      "curator_injected_chars": 5391,
+      "curator_summary_truncated_count": 5,
+      "curator_input_tokens": 14824,
+      "curator_output_tokens": 3528,
+      "accepted_claim_rows": 37,
+      "rejected_claim_rows": 19,
+      "curation_cycles_with_accepted_rows": 6,
+      "protocol_recovery_events": 0,
+      "recovered_claim_rows": 0,
+      "curator_named_state_fields": [],
+      "curator_artifact_in_state_without_main_authorship": [],
+      "main_input_tokens": 7980,
+      "main_output_tokens": 3203,
+      "active_contamination_attributions": [
+        {
+          "category": "storage_contradiction",
+          "pattern": "store.*document.*local",
+          "first_source": "curator_artifact",
+          "first_cycle": 3
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "first_source": "curator_artifact",
+          "first_cycle": 3
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "encrypted local|local encrypted",
+          "first_source": "main_raw_output",
+          "first_cycle": 6
+        }
+      ],
+      "active_contamination_attribution_counts": {
+        "curator_artifact": 2,
+        "main_raw_output": 1
+      },
+      "error": null,
+      "censored": false
+    },
+    {
+      "model": "mistralai/mistral-small-2603",
+      "condition": "claim_table_strict_schema_1200",
+      "replicate": 3,
+      "log_path": "experiments/identity_claim_table_schema_20260605/mistralai__mistral-small-2603_claim_table_strict_schema_1200_r03.jsonl",
+      "cycle_count": 6,
+      "goal_recovery_score": 6,
+      "constraint_recovery_score": 7,
+      "contradiction_handling_score": 2,
+      "evidence_grounding_score": 2,
+      "final_decision_quality_score": 6,
+      "rebriefing_needed": false,
+      "delayed_challenge_accuracy": 3,
+      "site_drift_count": 1,
+      "storage_contradiction_count": 2,
+      "invented_budget_count": 0,
+      "invented_scope_count": 0,
+      "unsupported_detail_count": 0,
+      "false_assumption_count": 3,
+      "recovery_total": 26,
+      "repaired_site_drift_count": 0,
+      "repaired_storage_contradiction_count": 0,
+      "repaired_invented_scope_count": 0,
+      "repaired_unsupported_detail_count": 0,
+      "repaired_invented_budget_count": 0,
+      "repaired_false_assumption_count": 0,
+      "declared_loss_mentions": 8,
+      "negated_or_invalidated_hits": 4,
+      "active_contamination_hits": 0,
+      "guarded_hit_examples": [
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "e operation can rely on encrypted local storage without data loss *(overturned by privacy officer ruling)*. - east clinic would participate in the pilot *(site replaced by west shelter)*. **next actions:** - redesign data-handling"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "eration and a privacy-enforced prohibition on local storage of resident documents. this forced removal of the east clinic site and adjustment of sites to north library, west shelter, and south center. no feasible technical solution"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "ere revised due to a conflict between the mandate for offline operation and a privacy-enforced prohibition on local storage of resident documents. this forced removal of the east clinic site and adjustment of sites to north library, west shelter, and south center. no feasible technical solution was identified under the original constraints to reconcile offline operation with the local-storage prohibition within the existing budget and staffing limits. the final evidence trail is captured in the go"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "encrypted local|local encrypted",
+          "window": "ments is prohibited** (privacy officer ruling). **invalidated assumptions:** - offline operation can rely on encrypted local storage without data loss *(overturned by privacy officer ruling)*. - east clinic would participate in the pi"
+        }
+      ],
+      "active_hit_examples": [],
+      "repaired_recovery_per_contamination": null,
+      "curation_records": 6,
+      "curation_success_count": 6,
+      "curation_failure_count": 0,
+      "curator_injection_count": 5,
+      "curator_injected_chars": 5617,
+      "curator_summary_truncated_count": 5,
+      "curator_input_tokens": 13049,
+      "curator_output_tokens": 4776,
+      "accepted_claim_rows": 40,
+      "rejected_claim_rows": 30,
+      "curation_cycles_with_accepted_rows": 6,
+      "protocol_recovery_events": 0,
+      "recovered_claim_rows": 0,
+      "curator_named_state_fields": [],
+      "curator_artifact_in_state_without_main_authorship": [],
+      "main_input_tokens": 7273,
+      "main_output_tokens": 3058,
+      "active_contamination_attributions": [],
+      "active_contamination_attribution_counts": {},
+      "error": null,
+      "censored": false
+    },
+    {
+      "model": "mistralai/mistral-small-2603",
+      "condition": "claim_table_strict_schema_1200",
+      "replicate": 4,
+      "log_path": "experiments/identity_claim_table_schema_20260605/mistralai__mistral-small-2603_claim_table_strict_schema_1200_r04.jsonl",
+      "cycle_count": 6,
+      "goal_recovery_score": 6,
+      "constraint_recovery_score": 7,
+      "contradiction_handling_score": 3,
+      "evidence_grounding_score": 5,
+      "final_decision_quality_score": 6,
+      "rebriefing_needed": false,
+      "delayed_challenge_accuracy": 4,
+      "site_drift_count": 1,
+      "storage_contradiction_count": 3,
+      "invented_budget_count": 0,
+      "invented_scope_count": 0,
+      "unsupported_detail_count": 1,
+      "false_assumption_count": 5,
+      "recovery_total": 31,
+      "repaired_site_drift_count": 1,
+      "repaired_storage_contradiction_count": 1,
+      "repaired_invented_scope_count": 0,
+      "repaired_unsupported_detail_count": 1,
+      "repaired_invented_budget_count": 0,
+      "repaired_false_assumption_count": 3,
+      "declared_loss_mentions": 20,
+      "negated_or_invalidated_hits": 17,
+      "active_contamination_hits": 5,
+      "guarded_hit_examples": [
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "local storage, even encrypted. - **original assumption:** the pilot will cover three sites: north library, east clinic, and south center. **invalidated by:** east clinic withdrawal from the pilot, replaced by west shelter. --"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "tion:** the pilot will cover three sites: north library, east clinic, and south center. **invalidated by:** east clinic withdrawal from the pilot, replaced by west shelter. --- #### **open uncertainties** 1. **form factor of ki"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "o/no-go recommendation: go** **revised pilot plan:** - **sites:** north library, west shelter, south center (east clinic replaced per site withdrawal). - **kiosks:** tablet-based with scanners, **no local storage** of documents (e"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "** $18,000 cap; confirm west shelter\u2019s connectivity doesn\u2019t require unplanned upgrades; reallocate funds from east clinic site if needed. **grounding:** - **constraints met:** budget \u2264$18k, no ssn collection, no local storage, off"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "resolved:** privacy officer\u2019s ruling (no local storage) aligns with revised plan via real-time transmission; east clinic\u2019s withdrawal addressed with west shelter replacement. below is a continuity-focused evidence trail of changes"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "supporting records. i include open questions flagged in primary sources. ## changes since original plan 1. east clinic withdrawal and replacement with west shelter - what changed: east clinic was part of the original pilot si"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "# changes since original plan 1. east clinic withdrawal and replacement with west shelter - what changed: east clinic was part of the original pilot site list but withdrew, triggering west shelter\u2019s addition. - why: east cli"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "t clinic was part of the original pilot site list but withdrew, triggering west shelter\u2019s addition. - why: east clinic withdrawal (per operational notice). - evidence trail: - 2024-06-03 operational notice (east clinic w"
+        }
+      ],
+      "active_hit_examples": [
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "ems meeting spec ks-vent-2024. ## supporting records (final evidence trail) - 2024-06-03 operational notice: east clinic withdrawal. - 2024-06-04 privacy officer ruling memo: no local resident-document storage at kiosks (including"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "buffer.*document|document.*buffer",
+          "window": "al model and constraints). 3. **definition of \"preserve resident privacy\"**: clarifying whether temporarily buffering documents in secure memory during offline periods is allowed (e.g., ram-only buffering vs. persistent storage). 4. *"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "buffer.*document|document.*buffer",
+          "window": "constraint - what changed: kiosks must support offline operation for at least four hours and must transmit buffered documents to backend in real-time or near-real-time once connectivity is restored. - why: privacy ruling necessitat"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "tablet",
+          "window": "wal from the pilot, replaced by west shelter. --- #### **open uncertainties** 1. **form factor of kiosks**: tablet-based with scanners vs. standalone kiosks (affects hardware specifications and budget). 2. **weekend staffi"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "tablet",
+          "window": "*sites:** north library, west shelter, south center (east clinic replaced per site withdrawal). - **kiosks:** tablet-based with scanners, **no local storage** of documents (even encrypted); enforce real-time/near-real-time tra"
+        }
+      ],
+      "repaired_recovery_per_contamination": 10.333,
+      "curation_records": 6,
+      "curation_success_count": 6,
+      "curation_failure_count": 0,
+      "curator_injection_count": 5,
+      "curator_injected_chars": 5088,
+      "curator_summary_truncated_count": 5,
+      "curator_input_tokens": 14901,
+      "curator_output_tokens": 3883,
+      "accepted_claim_rows": 40,
+      "rejected_claim_rows": 18,
+      "curation_cycles_with_accepted_rows": 6,
+      "protocol_recovery_events": 0,
+      "recovered_claim_rows": 0,
+      "curator_named_state_fields": [],
+      "curator_artifact_in_state_without_main_authorship": [],
+      "main_input_tokens": 7190,
+      "main_output_tokens": 4081,
+      "active_contamination_attributions": [
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "first_source": "curator_artifact",
+          "first_cycle": 2
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "buffer.*document|document.*buffer",
+          "first_source": "main_raw_output",
+          "first_cycle": 3
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "tablet",
+          "first_source": "curator_artifact",
+          "first_cycle": 2
+        }
+      ],
+      "active_contamination_attribution_counts": {
+        "curator_artifact": 2,
+        "main_raw_output": 1
+      },
+      "error": null,
+      "censored": false
+    },
+    {
+      "model": "mistralai/mistral-small-2603",
+      "condition": "claim_table_repair_parser_1200",
+      "replicate": 1,
+      "log_path": "experiments/identity_claim_table_schema_20260605/mistralai__mistral-small-2603_claim_table_repair_parser_1200_r01.jsonl",
+      "cycle_count": 6,
+      "goal_recovery_score": 6,
+      "constraint_recovery_score": 7,
+      "contradiction_handling_score": 1,
+      "evidence_grounding_score": 3,
+      "final_decision_quality_score": 6,
+      "rebriefing_needed": false,
+      "delayed_challenge_accuracy": 3,
+      "site_drift_count": 1,
+      "storage_contradiction_count": 2,
+      "invented_budget_count": 0,
+      "invented_scope_count": 0,
+      "unsupported_detail_count": 2,
+      "false_assumption_count": 5,
+      "recovery_total": 26,
+      "repaired_site_drift_count": 1,
+      "repaired_storage_contradiction_count": 1,
+      "repaired_invented_scope_count": 0,
+      "repaired_unsupported_detail_count": 2,
+      "repaired_invented_budget_count": 0,
+      "repaired_false_assumption_count": 4,
+      "declared_loss_mentions": 6,
+      "negated_or_invalidated_hits": 6,
+      "active_contamination_hits": 10,
+      "guarded_hit_examples": [
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "t times - preserve resident privacy - cover three pilot sites: north library, west shelter, and south center (east clinic withdrew) - produce a practical go/no-go recommendation **active constraints (unchanged):** - budget must st"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "icer\u2019s ruling on local document storage) go. pilot plan: - sites: north library, west shelter, south center (east clinic excluded). - constraints satisfied: budget \u2264 $18k, no weekend pay, offline \u2265 4 hrs, no ssn collection. - kios"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "nitial plan. **evidence trail (final):** - pilot sites confirmed: north library, west shelter, south center (east clinic excluded). - constraints satisfied: budget \u2264 $18k, no weekend pay, offline \u2265 4 hrs, no ssn collection. - equi"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "store.*document.*local",
+          "window": "er, and south center - confirm city it policies on kiosk data handling and offline sync (note: kiosks may not store resident documents locally at all, even if encrypted) - validate ada compliance requirements for kiosk interface - explore reuse of ex"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "ada",
+          "window": "and offline sync (note: kiosks may not store resident documents locally at all, even if encrypted) - validate ada compliance requirements for kiosk interface - explore reuse of existing tablets/scanners to reduce budget - d"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "tablet",
+          "window": "ll, even if encrypted) - validate ada compliance requirements for kiosk interface - explore reuse of existing tablets/scanners to reduce budget - draft detailed privacy and security review checklist (aligning with privacy offi"
+        }
+      ],
+      "active_hit_examples": [
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "ments, privacy/security approvals, or data collection timelines. all stated conditions (pilot sites excluding east clinic, budget \u2264 $18,000, offline \u2265 4 hours, no ssn collection, ada compliance, approved privacy checklist, and base"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "duce budget - draft detailed privacy and security review checklist (aligning with privacy officer\u2019s ruling on local document storage) go. pilot plan: - sites: north library, west shelter, south center (east clinic excluded). - constraints"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "ada",
+          "window": ":** - none recorded; all prior assumptions remain valid unless contradicted by new evidence. **next actions (adapted for current context):** - request baseline wait-time data from north library, west shelter, and south cen"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "ada",
+          "window": "\u2265 4 hrs, no ssn collection. - kiosks will reuse existing tablets/scanners to meet budget and privacy rules. - ada-compliant interface; privacy/security checklist approved by city it. - baseline wait-time data collection sta"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "ada",
+          "window": "lan remained stable through cycle 5 with no deviations reported in pilot scope, constraints, equipment reuse, ada requirements, privacy/security approvals, or data collection timelines. all stated conditions (pilot sites ex"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "ada",
+          "window": "stated conditions (pilot sites excluding east clinic, budget \u2264 $18,000, offline \u2265 4 hours, no ssn collection, ada compliance, approved privacy checklist, and baseline wait-time collection starting this week) remain aligned"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "ada",
+          "window": "kend pay, offline \u2265 4 hrs, no ssn collection. - equipment reuse: kiosks will use existing tablets/scanners. - ada compliance: interface required to be ada-compliant. - privacy/security: checklist approved by city it. - data"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "ada",
+          "window": "ion. - equipment reuse: kiosks will use existing tablets/scanners. - ada compliance: interface required to be ada-compliant. - privacy/security: checklist approved by city it. - data collection: baseline wait-time collectio"
+        }
+      ],
+      "repaired_recovery_per_contamination": 6.5,
+      "curation_records": 6,
+      "curation_success_count": 6,
+      "curation_failure_count": 0,
+      "curator_injection_count": 5,
+      "curator_injected_chars": 5178,
+      "curator_summary_truncated_count": 5,
+      "curator_input_tokens": 11487,
+      "curator_output_tokens": 3690,
+      "accepted_claim_rows": 40,
+      "rejected_claim_rows": 19,
+      "curation_cycles_with_accepted_rows": 6,
+      "protocol_recovery_events": 0,
+      "recovered_claim_rows": 0,
+      "curator_named_state_fields": [],
+      "curator_artifact_in_state_without_main_authorship": [],
+      "main_input_tokens": 6346,
+      "main_output_tokens": 3019,
+      "active_contamination_attributions": [
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "first_source": "curator_artifact",
+          "first_cycle": 2
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "first_source": "curator_artifact",
+          "first_cycle": 3
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "ada",
+          "first_source": "curator_artifact",
+          "first_cycle": 2
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "tablet",
+          "first_source": "curator_artifact",
+          "first_cycle": 2
+        }
+      ],
+      "active_contamination_attribution_counts": {
+        "curator_artifact": 4
+      },
+      "error": null,
+      "censored": false
+    },
+    {
+      "model": "mistralai/mistral-small-2603",
+      "condition": "claim_table_repair_parser_1200",
+      "replicate": 2,
+      "log_path": "experiments/identity_claim_table_schema_20260605/mistralai__mistral-small-2603_claim_table_repair_parser_1200_r02.jsonl",
+      "cycle_count": 6,
+      "goal_recovery_score": 6,
+      "constraint_recovery_score": 7,
+      "contradiction_handling_score": 5,
+      "evidence_grounding_score": 4,
+      "final_decision_quality_score": 6,
+      "rebriefing_needed": false,
+      "delayed_challenge_accuracy": 3,
+      "site_drift_count": 1,
+      "storage_contradiction_count": 3,
+      "invented_budget_count": 0,
+      "invented_scope_count": 1,
+      "unsupported_detail_count": 2,
+      "false_assumption_count": 7,
+      "recovery_total": 31,
+      "repaired_site_drift_count": 1,
+      "repaired_storage_contradiction_count": 2,
+      "repaired_invented_scope_count": 1,
+      "repaired_unsupported_detail_count": 2,
+      "repaired_invented_budget_count": 0,
+      "repaired_false_assumption_count": 6,
+      "declared_loss_mentions": 23,
+      "negated_or_invalidated_hits": 10,
+      "active_contamination_hits": 8,
+      "guarded_hit_examples": [
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "80%, and zero ssn collection ### changes since initial plan **1. pilot site list changed** - *what changed*: east clinic was withdrawn from the pilot sites. the new sites are north library, west shelter, and south center. - *why*:"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "ecord (cycle 5)**: no direct mention of east clinic removal. - **evidence record (cycle 5)**: \"site change: east clinic withdrawn; pilot sites now north library, west shelter, and south center.\" **2. offline document storage pro"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "store.*document.*local",
+          "window": "uth center.\" **2. offline document storage prohibition** - *what changed*: kiosks are no longer permitted to store resident documents locally, even in encrypted form. this invalidates the prior assumption that offline operation could rely on local encrypted storage for documents. - *why*: a privacy ruling explicitly prohibits local storage of resident doc"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "store.*document.*local",
+          "window": "ith data protection requirements. - *evidence trail*: - **privacy ruling (cycle 5)**: \"pilot kiosks may not store resident documents locally at all, even encrypted. offline-operation requirement remains.\" **3. revised approach to offline operation"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "id scanning metadata capture). 3. **identify hardware/software options** that support offline use **without local document storage** (e.g., secure browser kiosk modes, digital mailbox services with intermittent connectivity). 4. **revi"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "been set for the pilot? - are there existing city-provided kiosks or hardware that can be repurposed without local document storage? - what are the **go/no-go evaluation criteria** (e.g., wait time reduction %, resident satisfaction, erro"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "sites: north library, west shelter, south center - hardware: locked-down kiosks with encrypted channels; zero local document storage; offline-capable browsers for intake forms only - process: residents upload proofs via secure portal (real"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "e offline operation requirement (four hours) is retained, but the mechanism for achieving it has shifted from local storage of documents to encrypted, real-time or near-real-time upload once connectivity is restored. - *why*: the privacy ruling and constraint prohibit local storage of documents, necessitating a redesign o"
+        }
+      ],
+      "active_hit_examples": [
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "itly recorded as a site change. - *evidence trail*: - **constraint record (cycle 5)**: no direct mention of east clinic removal. - **evidence record (cycle 5)**: \"site change: east clinic withdrawn; pilot sites now north librar"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "prohibits retaining documents locally, even temporarily. *(invalidated by: privacy officer\u2019s ruling)* 2. **local document storage** (even encrypted) was part of the initial feasibility assumption but is now impermissible. *(invalidated"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "\"kiosks must support offline operation for at least four hours.\" - **privacy ruling (cycle 5)**: prohibits local document storage, implying that offline operation must now focus on non-document steps (e.g., form completion, id scanning"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "encrypted local|local encrypted",
+          "window": "s locally, even in encrypted form. this invalidates the prior assumption that offline operation could rely on local encrypted storage for documents. - *why*: a privacy ruling explicitly prohibits local storage of resident documents, ev"
+        },
+        {
+          "category": "invented_scope",
+          "pattern": "\\b20\\s*%|\\b15\\s*%|\\bzero privacy incidents\\b",
+          "window": "d staffing; four-hour offline operation verified per site assessment - evaluation: go if wait-time reduction \u226515%, resident satisfaction \u226580%, and zero ssn collection ### changes since initial plan **1. pilot site list cha"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "4g|5g|cellular",
+          "window": "ents** for north library, west shelter, and south center, focusing on **secure connectivity fallback** (e.g., cellular bonding, satellite, or mesh networking) instead of local storage. 2. **architect a privacy-compliant data f"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "ada",
+          "window": "-time upload**. - allow offline operation for **non-document steps** (e.g., form completion, id scanning metadata capture). 3. **identify hardware/software options** that support offline use **without local document sto"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "ada",
+          "window": ", implying that offline operation must now focus on non-document steps (e.g., form completion, id scanning metadata capture) or rely on intermittent connectivity for upload. --- ### open questions remaining 1. what specif"
+        }
+      ],
+      "repaired_recovery_per_contamination": 5.167,
+      "curation_records": 6,
+      "curation_success_count": 6,
+      "curation_failure_count": 0,
+      "curator_injection_count": 5,
+      "curator_injected_chars": 5590,
+      "curator_summary_truncated_count": 4,
+      "curator_input_tokens": 16951,
+      "curator_output_tokens": 5432,
+      "accepted_claim_rows": 45,
+      "rejected_claim_rows": 42,
+      "curation_cycles_with_accepted_rows": 6,
+      "protocol_recovery_events": 0,
+      "recovered_claim_rows": 0,
+      "curator_named_state_fields": [
+        {
+          "cycle": 1,
+          "key": "continuity_curator"
+        },
+        {
+          "cycle": 2,
+          "key": "continuity_curator"
+        },
+        {
+          "cycle": 3,
+          "key": "continuity_curator"
+        },
+        {
+          "cycle": 4,
+          "key": "continuity_curator"
+        }
+      ],
+      "curator_artifact_in_state_without_main_authorship": [],
+      "main_input_tokens": 8377,
+      "main_output_tokens": 3858,
+      "active_contamination_attributions": [
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "first_source": "curator_artifact",
+          "first_cycle": 2
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "first_source": "curator_artifact",
+          "first_cycle": 3
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "encrypted local|local encrypted",
+          "first_source": "curator_artifact",
+          "first_cycle": 6
+        },
+        {
+          "category": "invented_scope",
+          "pattern": "\\b20\\s*%|\\b15\\s*%|\\bzero privacy incidents\\b",
+          "first_source": "curator_artifact",
+          "first_cycle": 5
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "4g|5g|cellular",
+          "first_source": "main_raw_output",
+          "first_cycle": 3
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "ada",
+          "first_source": "main_raw_output",
+          "first_cycle": 3
+        }
+      ],
+      "active_contamination_attribution_counts": {
+        "curator_artifact": 4,
+        "main_raw_output": 2
+      },
+      "error": null,
+      "censored": false
+    },
+    {
+      "model": "mistralai/mistral-small-2603",
+      "condition": "claim_table_repair_parser_1200",
+      "replicate": 3,
+      "log_path": "experiments/identity_claim_table_schema_20260605/mistralai__mistral-small-2603_claim_table_repair_parser_1200_r03.jsonl",
+      "cycle_count": 6,
+      "goal_recovery_score": 6,
+      "constraint_recovery_score": 7,
+      "contradiction_handling_score": 2,
+      "evidence_grounding_score": 3,
+      "final_decision_quality_score": 5,
+      "rebriefing_needed": false,
+      "delayed_challenge_accuracy": 3,
+      "site_drift_count": 0,
+      "storage_contradiction_count": 3,
+      "invented_budget_count": 3,
+      "invented_scope_count": 2,
+      "unsupported_detail_count": 2,
+      "false_assumption_count": 10,
+      "recovery_total": 26,
+      "repaired_site_drift_count": 0,
+      "repaired_storage_contradiction_count": 2,
+      "repaired_invented_scope_count": 2,
+      "repaired_unsupported_detail_count": 1,
+      "repaired_invented_budget_count": 3,
+      "repaired_false_assumption_count": 8,
+      "declared_loss_mentions": 17,
+      "negated_or_invalidated_hits": 5,
+      "active_contamination_hits": 6,
+      "guarded_hit_examples": [
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "lter, and south center. 2. research kiosk hardware options that support four-hour offline operation **without local document storage** and comply with privacy requirements. 3. evaluate document intake software solutions that can operate of"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "(e.g., only deploy in areas with reliable connectivity)? - can a workflow be designed that **does not require local document buffering** during offline periods (e.g., pausing intake until connectivity is restored)? - are there alternative technologies (e.g., write-once optical media) that could satisfy privacy requirem"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "buffer.*document|document.*buffer",
+          "window": "rdware can be repurposed\" \u2192 invalid: no-local-storage rules out repurposing devices with local storage. - \"document intake software can operate offline and transmit later\" \u2192 challenged: without local buffering, offline operation risks data loss or breach of immediate-transmit/destroy rules. ### evidence trail: - *"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "buffer.*document|document.*buffer",
+          "window": "only deploy in areas with reliable connectivity)? - can a workflow be designed that **does not require local document buffering** during offline periods (e.g., pausing intake until connectivity is restored)? - are there alternative te"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "vendor",
+          "window": "cific hardware models meeting the offline/no-local-storage constraint are not yet identified. verification of vendor claims is pending. no-go for a kiosk-based pilot under the current constraints and contradictory update: \u2022 l"
+        }
+      ],
+      "active_hit_examples": [
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "window": "ntake. since the initial plan, the most consequential change has been the **privacy-driven prohibition on any local storage of resident documents**, including encrypted storage. this directly contradicts assumptions that existing hardware (e.g., tablets or kiosks) could repurposed f"
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "encrypted local|local encrypted",
+          "window": "local retention to mitigate risk of data exposure, even with encryption. this invalidated the assumption that encrypted local storage could serve as a fallback or buffer during offline operation. 2. **immediate transmission requiremen"
+        },
+        {
+          "category": "invented_scope",
+          "pattern": "four-week|four weeks|4-week|4 weeks",
+          "window": "are, $3k to training/contingency, $3k held for privacy-policy sign-off. \u2022 measure wait times and adoption for four weeks; go/no-go based on \u226520% wait-time reduction and \u226560% resident usage without complaints. \u2022 decision gate after"
+        },
+        {
+          "category": "invented_scope",
+          "pattern": "four-week|four weeks|4-week|4 weeks",
+          "window": "go/no-go based on \u226520% wait-time reduction and \u226560% resident usage without complaints. \u2022 decision gate after four weeks: proceed to full rollout (three sites) or revert to baseline intake. since the initial plan, the most consequ"
+        },
+        {
+          "category": "invented_scope",
+          "pattern": "\\b20\\s*%|\\b15\\s*%|\\bzero privacy incidents\\b",
+          "window": "y, $3k held for privacy-policy sign-off. \u2022 measure wait times and adoption for four weeks; go/no-go based on \u226520% wait-time reduction and \u226560% resident usage without complaints. \u2022 decision gate after four weeks: proceed to"
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "tablet",
+          "window": "documents**, including encrypted storage. this directly contradicts assumptions that existing hardware (e.g., tablets or kiosks) could repurposed for the pilot and complicates the \"immediate transmit or discard\" requirement."
+        }
+      ],
+      "repaired_recovery_per_contamination": 3.25,
+      "curation_records": 6,
+      "curation_success_count": 6,
+      "curation_failure_count": 0,
+      "curator_injection_count": 5,
+      "curator_injected_chars": 4829,
+      "curator_summary_truncated_count": 5,
+      "curator_input_tokens": 15699,
+      "curator_output_tokens": 3685,
+      "accepted_claim_rows": 40,
+      "rejected_claim_rows": 16,
+      "curation_cycles_with_accepted_rows": 5,
+      "protocol_recovery_events": 0,
+      "recovered_claim_rows": 0,
+      "curator_named_state_fields": [],
+      "curator_artifact_in_state_without_main_authorship": [],
+      "main_input_tokens": 7350,
+      "main_output_tokens": 4132,
+      "active_contamination_attributions": [
+        {
+          "category": "storage_contradiction",
+          "pattern": "local.*document.*stor",
+          "first_source": "curator_artifact",
+          "first_cycle": 2
+        },
+        {
+          "category": "storage_contradiction",
+          "pattern": "encrypted local|local encrypted",
+          "first_source": "curator_artifact",
+          "first_cycle": 2
+        },
+        {
+          "category": "invented_scope",
+          "pattern": "four-week|four weeks|4-week|4 weeks",
+          "first_source": "main_raw_output",
+          "first_cycle": 5
+        },
+        {
+          "category": "invented_scope",
+          "pattern": "\\b20\\s*%|\\b15\\s*%|\\bzero privacy incidents\\b",
+          "first_source": "visible_response",
+          "first_cycle": 5
+        },
+        {
+          "category": "unsupported_detail",
+          "pattern": "tablet",
+          "first_source": "curator_artifact",
+          "first_cycle": 2
+        },
+        {
+          "category": "invented_budget",
+          "pattern": "\\$\\s*12",
+          "first_source": "main_raw_output",
+          "first_cycle": 5
+        },
+        {
+          "category": "invented_budget",
+          "pattern": "\\$\\s*3",
+          "first_source": "main_raw_output",
+          "first_cycle": 5
+        },
+        {
+          "category": "invented_budget",
+          "pattern": "\\$\\s*3",
+          "first_source": "main_raw_output",
+          "first_cycle": 5
+        }
+      ],
+      "active_contamination_attribution_counts": {
+        "curator_artifact": 3,
+        "main_raw_output": 4,
+        "visible_response": 1
+      },
+      "error": null,
+      "censored": false
+    },
+    {
+      "model": "mistralai/mistral-small-2603",
+      "condition": "claim_table_repair_parser_1200",
+      "replicate": 4,
+      "log_path": "experiments/identity_claim_table_schema_20260605/mistralai__mistral-small-2603_claim_table_repair_parser_1200_r04.jsonl",
+      "cycle_count": 6,
+      "goal_recovery_score": 6,
+      "constraint_recovery_score": 7,
+      "contradiction_handling_score": 4,
+      "evidence_grounding_score": 5,
+      "final_decision_quality_score": 6,
+      "rebriefing_needed": false,
+      "delayed_challenge_accuracy": 5,
+      "site_drift_count": 1,
+      "storage_contradiction_count": 2,
+      "invented_budget_count": 0,
+      "invented_scope_count": 1,
+      "unsupported_detail_count": 0,
+      "false_assumption_count": 4,
+      "recovery_total": 33,
+      "repaired_site_drift_count": 0,
+      "repaired_storage_contradiction_count": 0,
+      "repaired_invented_scope_count": 1,
+      "repaired_unsupported_detail_count": 0,
+      "repaired_invented_budget_count": 0,
+      "repaired_false_assumption_count": 1,
+      "declared_loss_mentions": 19,
+      "negated_or_invalidated_hits": 11,
+      "active_contamination_hits": 1,
+      "guarded_hit_examples": [
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "ed by privacy ruling prohibiting *any* local storage). - the pilot will cover **three sites: north library, east clinic, and south center** (invalidated by east clinic\u2019s withdrawal; replaced by west shelter). #### **next actions"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "rage). - the pilot will cover **three sites: north library, east clinic, and south center** (invalidated by east clinic\u2019s withdrawal; replaced by west shelter). #### **next actions** - draft an rfp for kiosk hardware/software pr"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "evised based on the latest constraints and evidence. - **sites:** north library, west shelter, south center (east clinic withdrawn) - **scope:** digital intake kiosks for routine documents, no ssn collection, no local document sto"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "hange. open questions are noted at the end. --- ### **changes since initial plan** 1. **pilot site change (east clinic \u2192 west shelter)** - **change**: east clinic withdrew from the pilot and was replaced by west shelter. -"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "- ### **changes since initial plan** 1. **pilot site change (east clinic \u2192 west shelter)** - **change**: east clinic withdrew from the pilot and was replaced by west shelter. - **reason**: participation withdrawal by east c"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "clinic withdrew from the pilot and was replaced by west shelter. - **reason**: participation withdrawal by east clinic. - **evidence**: report from pilot coordinator stating *\"east clinic withdrawn; west shelter participates"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "reason**: participation withdrawal by east clinic. - **evidence**: report from pilot coordinator stating *\"east clinic withdrawn; west shelter participates instead.\"* (cycle 5 output). 2. **ssn collection prohibited** - **ch"
+        },
+        {
+          "category": "site_drift",
+          "pattern": "east clinic",
+          "window": "must stay at or below $18,000.\"* --- ### **summary of causes for changes** - **participation withdrawal**: east clinic\u2019s withdrawal triggered the addition of west shelter as a pilot site. - **privacy compliance**: a privacy ruli"
+        }
+      ],
+      "active_hit_examples": [
+        {
+          "category": "invented_scope",
+          "pattern": "four-week|four weeks|4-week|4 weeks",
+          "window": "ine vs. pilot wait times, resident feedback, and technical reliability; produce go/no-go recommendation after 4-week pilot the contradictory privacy ruling (no local storage) invalidates prior assumptions about offline operat"
+        }
+      ],
+      "repaired_recovery_per_contamination": 33.0,
+      "curation_records": 6,
+      "curation_success_count": 6,
+      "curation_failure_count": 0,
+      "curator_injection_count": 5,
+      "curator_injected_chars": 5199,
+      "curator_summary_truncated_count": 4,
+      "curator_input_tokens": 18892,
+      "curator_output_tokens": 3947,
+      "accepted_claim_rows": 38,
+      "rejected_claim_rows": 15,
+      "curation_cycles_with_accepted_rows": 6,
+      "protocol_recovery_events": 0,
+      "recovered_claim_rows": 0,
+      "curator_named_state_fields": [],
+      "curator_artifact_in_state_without_main_authorship": [],
+      "main_input_tokens": 8069,
+      "main_output_tokens": 5305,
+      "active_contamination_attributions": [
+        {
+          "category": "invented_scope",
+          "pattern": "four-week|four weeks|4-week|4 weeks",
+          "first_source": "main_raw_output",
+          "first_cycle": 5
+        }
+      ],
+      "active_contamination_attribution_counts": {
+        "main_raw_output": 1
+      },
+      "error": null,
+      "censored": false
+    }
+  ],
+  "summary": {
+    "overall": {
+      "n": 12,
+      "errors": 2,
+      "censored": 0,
+      "avg_recovery_total": 24.75,
+      "avg_repaired_false_assumption_count": 3.083,
+      "repaired_false_assumption_sum": 37,
+      "avg_repaired_recovery_per_contamination": 11.983,
+      "declared_loss_mentions": 162,
+      "negated_or_invalidated_hits": 79,
+      "curation_success_count": 64,
+      "curation_failure_count": 0,
+      "curator_injection_count": 52,
+      "avg_curator_injected_chars": 4429.667,
+      "curator_summary_truncated_count": 49,
+      "avg_main_input_tokens": 6576.75,
+      "avg_main_output_tokens": 3551.667,
+      "avg_curator_input_tokens": 13536.167,
+      "avg_curator_output_tokens": 3342.667,
+      "accepted_claim_rows": 290,
+      "rejected_claim_rows": 175,
+      "curation_cycles_with_accepted_rows": 43,
+      "protocol_recovery_events": 0,
+      "recovered_claim_rows": 0,
+      "curator_named_state_field_count": 4,
+      "curator_artifact_in_state_without_main_authorship_count": 0,
+      "active_contamination_attribution_counts": {
+        "curator_artifact": 24,
+        "main_raw_output": 12,
+        "visible_response": 1
+      }
+    },
+    "by_condition": {
+      "free_summary_1200": {
+        "n": 4,
+        "errors": 1,
+        "censored": 0,
+        "avg_recovery_total": 23.0,
+        "avg_repaired_false_assumption_count": 3.0,
+        "repaired_false_assumption_sum": 12,
+        "avg_repaired_recovery_per_contamination": 12.978,
+        "declared_loss_mentions": 56,
+        "negated_or_invalidated_hits": 19,
+        "curation_success_count": 20,
+        "curation_failure_count": 0,
+        "curator_injection_count": 16,
+        "avg_curator_injected_chars": 3973.25,
+        "curator_summary_truncated_count": 15,
+        "avg_main_input_tokens": 6220.25,
+        "avg_main_output_tokens": 3615.0,
+        "avg_curator_input_tokens": 12971.75,
+        "avg_curator_output_tokens": 2336.5,
+        "accepted_claim_rows": 0,
+        "rejected_claim_rows": 0,
+        "curation_cycles_with_accepted_rows": 0,
+        "protocol_recovery_events": 0,
+        "recovered_claim_rows": 0,
+        "curator_named_state_field_count": 0,
+        "curator_artifact_in_state_without_main_authorship_count": 0,
+        "active_contamination_attribution_counts": {
+          "curator_artifact": 9,
+          "main_raw_output": 3
+        }
+      },
+      "claim_table_strict_schema_1200": {
+        "n": 4,
+        "errors": 1,
+        "censored": 0,
+        "avg_recovery_total": 22.25,
+        "avg_repaired_false_assumption_count": 1.5,
+        "repaired_false_assumption_sum": 6,
+        "avg_repaired_recovery_per_contamination": 10.5,
+        "declared_loss_mentions": 41,
+        "negated_or_invalidated_hits": 28,
+        "curation_success_count": 20,
+        "curation_failure_count": 0,
+        "curator_injection_count": 16,
+        "avg_curator_injected_chars": 4116.75,
+        "curator_summary_truncated_count": 16,
+        "avg_main_input_tokens": 5974.5,
+        "avg_main_output_tokens": 2961.5,
+        "avg_curator_input_tokens": 11879.5,
+        "avg_curator_output_tokens": 3503.0,
+        "accepted_claim_rows": 127,
+        "rejected_claim_rows": 83,
+        "curation_cycles_with_accepted_rows": 20,
+        "protocol_recovery_events": 0,
+        "recovered_claim_rows": 0,
+        "curator_named_state_field_count": 0,
+        "curator_artifact_in_state_without_main_authorship_count": 0,
+        "active_contamination_attribution_counts": {
+          "curator_artifact": 4,
+          "main_raw_output": 2
+        }
+      },
+      "claim_table_repair_parser_1200": {
+        "n": 4,
+        "errors": 0,
+        "censored": 0,
+        "avg_recovery_total": 29.0,
+        "avg_repaired_false_assumption_count": 4.75,
+        "repaired_false_assumption_sum": 19,
+        "avg_repaired_recovery_per_contamination": 11.979,
+        "declared_loss_mentions": 65,
+        "negated_or_invalidated_hits": 32,
+        "curation_success_count": 24,
+        "curation_failure_count": 0,
+        "curator_injection_count": 20,
+        "avg_curator_injected_chars": 5199.0,
+        "curator_summary_truncated_count": 18,
+        "avg_main_input_tokens": 7535.5,
+        "avg_main_output_tokens": 4078.5,
+        "avg_curator_input_tokens": 15757.25,
+        "avg_curator_output_tokens": 4188.5,
+        "accepted_claim_rows": 163,
+        "rejected_claim_rows": 92,
+        "curation_cycles_with_accepted_rows": 23,
+        "protocol_recovery_events": 0,
+        "recovered_claim_rows": 0,
+        "curator_named_state_field_count": 4,
+        "curator_artifact_in_state_without_main_authorship_count": 0,
+        "active_contamination_attribution_counts": {
+          "curator_artifact": 11,
+          "main_raw_output": 7,
+          "visible_response": 1
+        }
+      }
+    }
+  }
+}
