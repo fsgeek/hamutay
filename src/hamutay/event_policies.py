@@ -200,6 +200,149 @@ def finalize_failed_fork_run(
     }
 
 
+def build_fork_run_graph_plan(
+    final_run_record: dict[str, Any],
+) -> dict[str, Any]:
+    """Build deterministic graph-write operations for a fork-run record."""
+    content = {
+        "record_type": "fork_run",
+        "fork_run_id": final_run_record["fork_run_id"],
+        "classification": final_run_record.get("classification"),
+        "scheduled_by_cycle": final_run_record.get("scheduled_by_cycle"),
+        "scheduled_by_record_id": final_run_record.get(
+            "scheduled_by_record_id"
+        ),
+        "branch_labels": final_run_record.get("branch_labels", []),
+        "branch_events": final_run_record.get("branch_events", {}),
+    }
+    if final_run_record.get("join_event_id"):
+        content["join_event_id"] = final_run_record["join_event_id"]
+    if final_run_record.get("join_result_record_id"):
+        content["join_result_record_id"] = final_run_record[
+            "join_result_record_id"
+        ]
+    if final_run_record.get("failed_branch"):
+        content["failed_branch"] = final_run_record["failed_branch"]
+    if final_run_record.get("suppressed_events"):
+        content["suppressed_events"] = final_run_record["suppressed_events"]
+
+    edges: list[dict[str, Any]] = []
+    root_id = final_run_record.get("scheduled_by_record_id")
+    if root_id:
+        edges.append({
+            "role": "coordinator_root",
+            "target_record_id": str(root_id),
+            "relation": "DEPENDS_ON",
+        })
+
+    branch_events = final_run_record.get("branch_events", {})
+    for label in sorted(branch_events):
+        branch = branch_events[label]
+        target = branch.get("result_record_id")
+        if not target and label == final_run_record.get("failed_branch"):
+            target = final_run_record.get("failed_branch_wake_record_id")
+        if target:
+            edges.append({
+                "role": f"branch:{label}",
+                "target_record_id": str(target),
+                "relation": "BRANCHES_FROM",
+            })
+
+    join_target = final_run_record.get("join_result_record_id")
+    if join_target:
+        edges.append({
+            "role": "join_result",
+            "target_record_id": str(join_target),
+            "relation": "COMPOSES_WITH",
+        })
+
+    suppression_records = final_run_record.get("suppression_records", [])
+    suppression_content = []
+    for i, record in enumerate(suppression_records):
+        suppression_content.append({
+            "role": f"suppression:{i}",
+            "content": {
+                "record_type": "fork_run_suppression",
+                "fork_run_id": final_run_record["fork_run_id"],
+                "suppressed_event_id": record.get("event_id"),
+                "suppressed_by_record_id": record.get(
+                    "suppressed_by_record_id"
+                ),
+                "suppressed_by_cycle": record.get("suppressed_by_cycle"),
+                "suppressed_by_policy": record.get("suppressed_by_policy"),
+                "suppression_reason": record.get("suppression_reason"),
+            },
+            "relation": "BRIDGES",
+        })
+
+    return {
+        "fork_run_id": final_run_record["fork_run_id"],
+        "fork_run_content": content,
+        "fork_run_tags": ("fork_run", final_run_record["fork_run_id"]),
+        "edges": edges,
+        "suppression_records": suppression_content,
+    }
+
+
+def apply_fork_run_graph_plan(
+    *,
+    bridge: Any,
+    plan: dict[str, Any],
+    cycle: int,
+) -> dict[str, Any]:
+    """Apply a fork-run graph plan to an ApachetaBridge-like object."""
+    fork_run_record_id = bridge.store_instance_record(
+        plan["fork_run_content"],
+        cycle=cycle,
+        tags=tuple(plan.get("fork_run_tags", ())),
+    )
+    edges = []
+    edge_source_id = fork_run_record_id
+    for edge in plan.get("edges", []):
+        target_id = UUID(str(edge["target_record_id"]))
+        edge_id = bridge.store_edge(
+            edge_source_id,
+            target_id,
+            edge["relation"],
+            ordering=cycle,
+        )
+        edges.append({
+            **edge,
+            "from_record_id": str(edge_source_id),
+            "edge_id": str(edge_id),
+        })
+        edge_source_id = target_id
+
+    suppression_nodes = []
+    for item in plan.get("suppression_records", []):
+        suppression_id = bridge.store_instance_record(
+            item["content"],
+            cycle=cycle,
+            tags=("fork_run", "suppression", plan["fork_run_id"]),
+        )
+        edge_id = bridge.store_edge(
+            edge_source_id,
+            suppression_id,
+            item["relation"],
+            ordering=cycle,
+        )
+        suppression_nodes.append({
+            "role": item["role"],
+            "record_id": str(suppression_id),
+            "from_record_id": str(edge_source_id),
+            "edge_id": str(edge_id),
+            "content": item["content"],
+        })
+        edge_source_id = suppression_id
+
+    return {
+        "fork_run_id": plan["fork_run_id"],
+        "fork_run_record_id": str(fork_run_record_id),
+        "edges": edges,
+        "suppression_nodes": suppression_nodes,
+    }
+
+
 @dataclass(frozen=True)
 class BranchContextPolicy:
     """Policy boundary between branch-visible context and sidecar audit state."""

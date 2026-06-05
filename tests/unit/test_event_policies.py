@@ -9,7 +9,9 @@ from hamutay.event_policies import (
     EventRunResult,
     ForkRunStore,
     ForkJoinPolicyRunner,
+    apply_fork_run_graph_plan,
     build_fork_run_started_record,
+    build_fork_run_graph_plan,
     default_fork_run_log_path,
     finalize_failed_fork_run,
     finalize_successful_fork_run,
@@ -314,3 +316,105 @@ def test_finalize_failed_fork_run_binds_failure_and_suppression():
     )
     assert record["suppressed_events"] == ["event-b"]
     assert record["branch_events"]["branch-b"]["terminal_status"] == "suppressed"
+
+
+def test_build_fork_run_graph_plan_is_deterministic():
+    record = {
+        "fork_run_id": "run-1",
+        "classification": "joined",
+        "scheduled_by_cycle": 2,
+        "scheduled_by_record_id": "00000000-0000-0000-0000-000000000002",
+        "branch_labels": ["branch-a", "branch-b"],
+        "branch_events": {
+            "branch-b": {
+                "result_record_id": "00000000-0000-0000-0000-0000000000bb"
+            },
+            "branch-a": {
+                "result_record_id": "00000000-0000-0000-0000-0000000000aa"
+            },
+        },
+        "join_result_record_id": "00000000-0000-0000-0000-0000000000cc",
+    }
+
+    first = build_fork_run_graph_plan(record)
+    second = build_fork_run_graph_plan(record)
+
+    assert first == second
+    assert first["fork_run_content"]["fork_run_id"] == "run-1"
+    assert [edge["role"] for edge in first["edges"]] == [
+        "coordinator_root",
+        "branch:branch-a",
+        "branch:branch-b",
+        "join_result",
+    ]
+
+
+def test_apply_fork_run_graph_plan_to_memory_bridge_is_walkable():
+    from datetime import datetime, timezone
+
+    from hamutay.apacheta_bridge import ApachetaBridge
+    from hamutay.tools.memory import tool_walk
+
+    bridge = ApachetaBridge.from_memory(session_id="graph-test", model="haiku")
+    root_id = UUID("00000000-0000-0000-0000-000000000002")
+    branch_id = UUID("00000000-0000-0000-0000-0000000000aa")
+    bridge.store_open_state(
+        {"cycle": 2, "role": "root"},
+        cycle=2,
+        record_id=root_id,
+        timestamp=datetime.now(timezone.utc),
+    )
+    bridge._prior_id = None
+    bridge.store_open_state(
+        {"cycle": 3, "role": "branch-a"},
+        cycle=3,
+        record_id=branch_id,
+        timestamp=datetime.now(timezone.utc),
+    )
+
+    plan = build_fork_run_graph_plan({
+        "fork_run_id": "run-1",
+        "classification": "branch_failed",
+        "scheduled_by_cycle": 2,
+        "scheduled_by_record_id": str(root_id),
+        "branch_labels": ["branch-a"],
+        "failed_branch": "branch-a",
+        "failed_branch_wake_record_id": str(branch_id),
+        "branch_events": {
+            "branch-a": {
+                "event_id": "event-a",
+                "terminal_status": "failed",
+            }
+        },
+        "suppressed_events": ["event-b"],
+        "suppression_records": [
+            {
+                "event_id": "event-b",
+                "suppressed_by_record_id": str(branch_id),
+                "suppressed_by_cycle": 3,
+                "suppressed_by_policy": "fork_join_policy_runner",
+                "suppression_reason": "branch failure",
+            }
+        ],
+    })
+
+    applied = apply_fork_run_graph_plan(
+        bridge=bridge,
+        plan=plan,
+        cycle=4,
+    )
+    walked = tool_walk(
+        {
+            "from_record_id": applied["fork_run_record_id"],
+            "direction": "forward",
+            "depth": 3,
+        },
+        prior_states=[],
+        bridge=bridge,
+    )
+
+    assert len(applied["suppression_nodes"]) == 1
+    reached = {step["record_id"] for step in walked["path"]}
+    assert str(root_id) in reached
+    assert str(branch_id) in reached
+    assert applied["suppression_nodes"][0]["record_id"] in reached
