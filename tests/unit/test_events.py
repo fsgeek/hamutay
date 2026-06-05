@@ -13,6 +13,7 @@ import pytest
 from hamutay.events import (
     EventStore,
     build_bound_continuation_event,
+    build_evidence_resume_event,
     build_event_envelope,
     build_outcome_observation,
     build_pending_event,
@@ -2075,6 +2076,83 @@ def test_policy_dispositions_are_lifecycle_neutral_and_summarized(tmp_path):
     report = format_event_report(summary)
     assert "Policy dispositions: ask_external_evidence=1, stop_complete=1" in report
     assert "classification=evidence_blocked missing=external source" in report
+
+
+def test_evidence_request_fulfillment_and_resume_event_are_summarized(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    event = _event_record()
+    store.append(event)
+    store.append_running(
+        event,
+        run_id=UUID("00000000-0000-0000-0000-000000000111"),
+    )
+    store.append_completed(
+        event=event,
+        run_id="00000000-0000-0000-0000-000000000111",
+        wake_cycle=2,
+        result_record_id=UUID("00000000-0000-0000-0000-000000000002"),
+        response_text="blocked",
+    )
+    disposition = store.append_policy_disposition(
+        event=event,
+        run_id="00000000-0000-0000-0000-000000000111",
+        wake_cycle=2,
+        result_record_id=UUID("00000000-0000-0000-0000-000000000002"),
+        policy_decision={
+            "action": "ask_external_evidence",
+            "rationale": "missing source",
+        },
+        policy_result={
+            "task_assessment": "blocked",
+            "missing_evidence": ["external source"],
+        },
+    )
+    request = store.append_evidence_request(policy_disposition=disposition)
+
+    before = summarize_event_log(store.read_records())
+    assert before["evidence_request_count"] == 1
+    assert before["open_evidence_request_count"] == 1
+    assert before["fulfilled_evidence_request_count"] == 0
+    assert before["evidence_requests"][0]["missing_evidence"] == [
+        "external source"
+    ]
+
+    fulfillment = store.append_evidence_fulfillment(
+        evidence_request=request,
+        evidence={
+            "source_name": "external source",
+            "finding": "completed successfully",
+        },
+        source="unit-test",
+    )
+    resume = build_evidence_resume_event(
+        evidence_request=request,
+        evidence_fulfillment=fulfillment,
+        purpose="Resume now that external evidence arrived.",
+        label="resume-evidence-block",
+    )
+    store.append(resume)
+
+    after = summarize_event_log(store.read_records())
+    assert after["status_counts"] == {"completed": 1, "pending": 1}
+    assert after["open_evidence_request_count"] == 0
+    assert after["fulfilled_evidence_request_count"] == 1
+    assert after["evidence_fulfillment_count"] == 1
+    assert after["oldest_runnable_pending"]["event_id"] == resume["event_id"]
+    assert resume["resumes_evidence_request_id"] == request["request_id"]
+    assert resume["resumes_evidence_fulfillment_id"] == (
+        fulfillment["fulfillment_id"]
+    )
+    assert resume["requested_context"] == [{
+        "tool": "recall",
+        "record_id": "00000000-0000-0000-0000-000000000002",
+    }]
+    envelope = build_event_envelope(resume, [], "run-resume")
+    assert "evidence_context" in envelope
+    assert fulfillment["fulfillment_id"] in envelope
+    report = format_event_report(after)
+    assert "Evidence requests: open=0, fulfilled=1" in report
+    assert "Evidence fulfillments:" in report
 
 
 def test_suppress_pending_marks_pending_events_terminal(tmp_path):

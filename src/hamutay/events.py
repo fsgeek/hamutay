@@ -174,6 +174,55 @@ def build_pending_event(
     return record
 
 
+def build_evidence_resume_event(
+    *,
+    evidence_request: dict,
+    evidence_fulfillment: dict,
+    purpose: str,
+    label: str | None = None,
+    not_before: str | None = None,
+    terminal_surface: dict | None = None,
+) -> dict:
+    """Build a pending event that resumes work after evidence fulfillment."""
+    if not isinstance(evidence_request, dict):
+        raise ValueError("evidence_request must be an object")
+    if not isinstance(evidence_fulfillment, dict):
+        raise ValueError("evidence_fulfillment must be an object")
+    if evidence_fulfillment.get("request_id") != evidence_request.get("request_id"):
+        raise ValueError("evidence_fulfillment.request_id must match request")
+    result_record_id = evidence_request.get("result_record_id")
+    if not result_record_id:
+        raise ValueError("evidence_request.result_record_id is required")
+    wake_cycle = evidence_request.get("wake_cycle")
+    if not isinstance(wake_cycle, int) or isinstance(wake_cycle, bool):
+        raise ValueError("evidence_request.wake_cycle must be an integer")
+    event = build_pending_event(
+        purpose=purpose,
+        requested_context=[
+            {
+                "tool": "recall",
+                "record_id": str(UUID(str(result_record_id))),
+            }
+        ],
+        scheduled_by_cycle=wake_cycle,
+        scheduled_by_record_id=UUID(str(result_record_id)),
+        label=label,
+        not_before=not_before,
+        terminal_surface=terminal_surface,
+    )
+    event["resumes_evidence_request_id"] = evidence_request.get("request_id")
+    event["resumes_evidence_fulfillment_id"] = (
+        evidence_fulfillment.get("fulfillment_id")
+    )
+    event["evidence_context"] = {
+        "evidence_request": json.loads(json.dumps(evidence_request, default=str)),
+        "evidence_fulfillment": json.loads(
+            json.dumps(evidence_fulfillment, default=str)
+        ),
+    }
+    return event
+
+
 def _expand_result_record_id(value: object, result_record_id: str) -> object:
     if isinstance(value, str):
         return value.replace("<result_record_id>", result_record_id)
@@ -494,6 +543,62 @@ class EventStore:
         self.append(record)
         return record
 
+    def append_evidence_request(
+        self,
+        *,
+        policy_disposition: dict,
+    ) -> dict:
+        """Append an open evidence request from an evidence-block disposition."""
+        if not isinstance(policy_disposition, dict):
+            raise ValueError("policy_disposition must be an object")
+        if policy_disposition.get("policy_action") != "ask_external_evidence":
+            raise ValueError(
+                "policy_disposition.policy_action must be ask_external_evidence"
+            )
+        missing = policy_disposition.get("missing_evidence")
+        if not isinstance(missing, list) or not missing:
+            raise ValueError("policy_disposition.missing_evidence is required")
+        record = {
+            "record_type": "evidence_request",
+            "request_id": str(uuid4()),
+            "source_event_id": policy_disposition.get("source_event_id"),
+            "source_disposition_id": policy_disposition.get("disposition_id"),
+            "run_id": policy_disposition.get("run_id"),
+            "wake_cycle": policy_disposition.get("wake_cycle"),
+            "result_record_id": policy_disposition.get("result_record_id"),
+            "status": "open",
+            "created_at": utc_now_iso(),
+            "missing_evidence": json.loads(json.dumps(missing, default=str)),
+            "policy_rationale": policy_disposition.get("policy_rationale"),
+        }
+        self.append(record)
+        return record
+
+    def append_evidence_fulfillment(
+        self,
+        *,
+        evidence_request: dict,
+        evidence: dict,
+        source: str | None = None,
+    ) -> dict:
+        """Append evidence satisfying an evidence request."""
+        if not isinstance(evidence_request, dict):
+            raise ValueError("evidence_request must be an object")
+        if evidence_request.get("record_type") != "evidence_request":
+            raise ValueError("evidence_request.record_type must be evidence_request")
+        if not isinstance(evidence, dict) or not evidence:
+            raise ValueError("evidence must be a non-empty object")
+        record = {
+            "record_type": "evidence_fulfillment",
+            "fulfillment_id": str(uuid4()),
+            "request_id": evidence_request.get("request_id"),
+            "fulfilled_at": utc_now_iso(),
+            "source": source,
+            "evidence": json.loads(json.dumps(evidence, default=str)),
+        }
+        self.append(record)
+        return record
+
     def append_failed(
         self,
         *,
@@ -643,6 +748,7 @@ def build_event_envelope(event: dict, context_results: list[dict], run_id: str) 
         "durable_update_contract": event.get("durable_update_contract"),
         "durable_update_example": event.get("durable_update_example"),
         "terminal_surface": event.get("terminal_surface"),
+        "evidence_context": event.get("evidence_context"),
         "context_results": context_results,
         "instruction": (
             "This is a self-scheduled reflection event. Use the provided "
@@ -967,6 +1073,45 @@ def summarize_event_log(
             policy_disposition_counts.get(action, 0) + 1
         )
 
+    evidence_requests = [
+        record for record in records
+        if record.get("record_type") == "evidence_request"
+    ]
+    evidence_requests.sort(
+        key=lambda record: str(record.get("created_at", "")),
+        reverse=True,
+    )
+    evidence_fulfillments = [
+        record for record in records
+        if record.get("record_type") == "evidence_fulfillment"
+    ]
+    evidence_fulfillments.sort(
+        key=lambda record: str(record.get("fulfilled_at", "")),
+        reverse=True,
+    )
+    fulfilled_request_ids = {
+        str(record.get("request_id"))
+        for record in evidence_fulfillments
+        if record.get("request_id")
+    }
+    evidence_request_summaries = []
+    for record in evidence_requests:
+        request = dict(record)
+        request["status"] = (
+            "fulfilled"
+            if str(record.get("request_id")) in fulfilled_request_ids
+            else "open"
+        )
+        evidence_request_summaries.append(request)
+    open_evidence_requests = [
+        record for record in evidence_request_summaries
+        if record.get("status") == "open"
+    ]
+    fulfilled_evidence_requests = [
+        record for record in evidence_request_summaries
+        if record.get("status") == "fulfilled"
+    ]
+
     events = [
         summarize_event_history(
             event_id,
@@ -1062,6 +1207,12 @@ def summarize_event_log(
             sorted(policy_disposition_counts.items())
         ),
         "policy_dispositions": policy_dispositions[:limit],
+        "evidence_request_count": len(evidence_requests),
+        "open_evidence_request_count": len(open_evidence_requests),
+        "fulfilled_evidence_request_count": len(fulfilled_evidence_requests),
+        "evidence_requests": evidence_request_summaries[:limit],
+        "evidence_fulfillment_count": len(evidence_fulfillments),
+        "evidence_fulfillments": evidence_fulfillments[:limit],
         "pending_runnable_count": len(pending_runnable),
         "pending_waiting_count": len(pending_waiting),
         "pending_expired_count": len(pending_expired),
@@ -1114,6 +1265,12 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
             for action, count in disposition_counts.items()
         )
         lines.append(f"Policy dispositions: {disposition_text}")
+    if report.get("evidence_request_count"):
+        lines.append(
+            "Evidence requests: "
+            f"open={report.get('open_evidence_request_count', 0)}, "
+            f"fulfilled={report.get('fulfilled_evidence_request_count', 0)}"
+        )
     pending_counts = (
         report.get("pending_runnable_count", 0),
         report.get("pending_waiting_count", 0),
@@ -1211,6 +1368,32 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
                 f"action={record.get('policy_action', '?')} "
                 f"classification={record.get('classification', '?')}"
                 f"{extra}"
+            )
+
+    if report.get("evidence_requests"):
+        lines.append("")
+        lines.append("Evidence requests:")
+        for record in report["evidence_requests"]:
+            missing = ", ".join(
+                str(item) for item in record.get("missing_evidence", []) or []
+            )
+            lines.append(
+                "  "
+                f"{record.get('request_id', '?')} "
+                f"status={record.get('status', '?')} "
+                f"source_event={record.get('source_event_id', '?')} "
+                f"missing={missing}"
+            )
+
+    if report.get("evidence_fulfillments"):
+        lines.append("")
+        lines.append("Evidence fulfillments:")
+        for record in report["evidence_fulfillments"]:
+            lines.append(
+                "  "
+                f"{record.get('fulfillment_id', '?')} "
+                f"request={record.get('request_id', '?')} "
+                f"source={record.get('source', '?')}"
             )
 
     if report.get("stale_running"):
