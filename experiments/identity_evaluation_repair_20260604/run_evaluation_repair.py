@@ -248,9 +248,15 @@ def legacy_metrics(result: dict) -> dict:
         "invented_scope_count",
         "unsupported_detail_count",
         "false_assumption_count",
-        "recovery_per_contamination",
     ]:
         legacy[f"legacy_{key}"] = result.get(key)
+    legacy_ratio = result.get("recovery_per_contamination")
+    if legacy_ratio is None:
+        legacy_ratio = repaired_tradeoff(
+            result.get("recovery_total", 0),
+            int(result.get("false_assumption_count") or 0),
+        )
+    legacy["legacy_recovery_per_contamination"] = legacy_ratio
     return legacy
 
 
