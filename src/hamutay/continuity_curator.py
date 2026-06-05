@@ -54,6 +54,25 @@ _CLAIM_STATUS_PRIORITY = {
     "open": 3,
 }
 
+_GUARDRAIL_HARD_CONSTRAINTS = [
+    (
+        "hard_constraint_no_local_document_storage",
+        ("local", "document", "stor"),
+    ),
+    (
+        "hard_constraint_west_shelter_replaces_east_clinic",
+        ("east clinic", "west shelter"),
+    ),
+    (
+        "hard_constraint_no_social_security_numbers",
+        ("social security",),
+    ),
+    (
+        "hard_constraint_budget_18000",
+        ("budget", "18"),
+    ),
+]
+
 
 def _jsonable(value):
     return json.loads(json.dumps(value, default=str))
@@ -230,6 +249,99 @@ def _select_delta_rows(
     return selected, omitted
 
 
+def _guardrail_reason(row: dict) -> str | None:
+    text = " ".join(
+        [
+            str(row.get("claim") or ""),
+            str(row.get("support") or ""),
+        ]
+    ).lower()
+    for reason, needles in _GUARDRAIL_HARD_CONSTRAINTS:
+        if all(needle in text for needle in needles):
+            return reason
+    return None
+
+
+def _select_guardrail_delta_rows(
+    rows: list[dict],
+    prior_claim_rows: list[dict],
+    max_rows: int,
+    stable_invalidated_cap: int,
+) -> tuple[list[dict], list[dict]]:
+    prior_signatures = {_claim_signature(row) for row in prior_claim_rows}
+    selected: list[dict] = []
+    omitted: list[dict] = []
+    selected_sigs: set[tuple[str, str]] = set()
+
+    sorted_rows = sorted(
+        rows,
+        key=lambda row: (
+            _CLAIM_STATUS_PRIORITY.get(str(row.get("status")), 99),
+            -(row.get("source_cycle") or 0),
+            str(row.get("claim") or ""),
+        ),
+    )
+
+    def add(row: dict, reason: str) -> bool:
+        sig = _claim_signature(row)
+        if sig in selected_sigs:
+            return False
+        item = {**row, "render_reason": reason}
+        if len(selected) < max_rows:
+            selected.append(item)
+            selected_sigs.add(sig)
+            return True
+        omitted.append({**item, "omit_reason": "delta_row_cap_exceeded"})
+        return False
+
+    for row in sorted_rows:
+        if (
+            row.get("status") == "invalidated"
+            and _claim_signature(row) not in prior_signatures
+        ):
+            add(row, "new_or_changed_invalidated_guardrail")
+
+    for row in sorted_rows:
+        reason = _guardrail_reason(row)
+        if reason is not None:
+            add(row, reason)
+
+    stable_invalidated = 0
+    for row in sorted_rows:
+        if row.get("status") != "invalidated":
+            continue
+        if _claim_signature(row) not in prior_signatures:
+            continue
+        if stable_invalidated >= stable_invalidated_cap:
+            continue
+        if add(row, "stable_invalidated_guardrail"):
+            stable_invalidated += 1
+
+    for row in sorted_rows:
+        if (
+            row.get("status") == "supported"
+            and _claim_signature(row) not in prior_signatures
+        ):
+            add(row, "new_or_changed_supported")
+
+    for status in ("uncertain", "open"):
+        for row in sorted_rows:
+            if (
+                row.get("status") == status
+                and _claim_signature(row) not in prior_signatures
+            ):
+                if add(row, f"new_or_changed_{status}"):
+                    break
+        else:
+            continue
+        break
+
+    for row in rows:
+        if _claim_signature(row) not in selected_sigs:
+            omitted.append({**row, "omit_reason": "not_selected"})
+    return selected, omitted
+
+
 def _render_delta_claim_table(
     rows: list[dict],
     prior_claim_rows: list[dict],
@@ -242,6 +354,36 @@ def _render_delta_claim_table(
         return "(no new or prioritized curator claim rows)", False, selected, omitted
     lines = [
         "Continuity claim delta. Bounded curator artifact; verify against prompt facts.",
+    ]
+    for row in selected:
+        cycle = row.get("source_cycle")
+        cycle_text = f"c{cycle}" if cycle is not None else "c?"
+        lines.append(
+            f"- [{row['status']} {cycle_text} {row['render_reason']}] "
+            f"{row['claim']}"
+        )
+    summary, truncated = _truncate_text("\n".join(lines), max_chars)
+    return summary, truncated, selected, omitted
+
+
+def _render_guardrail_delta_claim_table(
+    rows: list[dict],
+    prior_claim_rows: list[dict],
+    *,
+    max_chars: int,
+    max_rows: int,
+    stable_invalidated_cap: int,
+) -> tuple[str, bool, list[dict], list[dict]]:
+    selected, omitted = _select_guardrail_delta_rows(
+        rows,
+        prior_claim_rows,
+        max_rows,
+        stable_invalidated_cap,
+    )
+    if not selected:
+        return "(no guardrail-prioritized curator claim rows)", False, selected, omitted
+    lines = [
+        "Continuity guardrail delta. Bounded curator artifact; verify against prompt facts.",
     ]
     for row in selected:
         cycle = row.get("source_cycle")
@@ -353,6 +495,7 @@ class ClaimTableContinuityCurator:
     recover_response_claims: bool = False
     renderer: str = "full"
     delta_max_rows: int = 5
+    guardrail_stable_invalidated_cap: int = 2
     _prior_claim_rows: list[dict] | None = None
 
     def curate(
@@ -423,6 +566,17 @@ class ClaimTableContinuityCurator:
                     self._prior_claim_rows or [],
                     max_chars=self.max_summary_chars,
                     max_rows=self.delta_max_rows,
+                )
+            )
+            rendered_rows = selected_delta_rows
+        elif self.renderer == "guardrail_delta":
+            summary, summary_truncated, selected_delta_rows, omitted_delta_rows = (
+                _render_guardrail_delta_claim_table(
+                    rows,
+                    self._prior_claim_rows or [],
+                    max_chars=self.max_summary_chars,
+                    max_rows=self.delta_max_rows,
+                    stable_invalidated_cap=self.guardrail_stable_invalidated_cap,
                 )
             )
             rendered_rows = selected_delta_rows

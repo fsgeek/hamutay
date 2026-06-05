@@ -300,6 +300,106 @@ def test_claim_table_delta_renderer_selects_new_and_priority_rows():
     assert "North Library remains active." in second["summary"]
 
 
+def test_claim_table_guardrail_delta_reserves_epistemic_guardrails():
+    backend = _FakeBackend([
+        ExchangeResult(
+            raw_output={
+                "response": "cycle 1",
+                "claims": [
+                    {
+                        "claim": "Local document storage is prohibited.",
+                        "status": "invalidated",
+                        "source_cycle": 3,
+                        "support": "privacy officer ruling",
+                    },
+                    {
+                        "claim": "East Clinic is replaced by West Shelter.",
+                        "status": "supported",
+                        "source_cycle": 3,
+                        "support": "site substitution update",
+                    },
+                    {
+                        "claim": "Budget remains at or below $18,000.",
+                        "status": "supported",
+                        "source_cycle": 2,
+                        "support": "task constraint",
+                    },
+                ],
+            }
+        ),
+        ExchangeResult(
+            raw_output={
+                "response": "cycle 2",
+                "claims": [
+                    {
+                        "claim": "Local document storage is prohibited.",
+                        "status": "invalidated",
+                        "source_cycle": 3,
+                        "support": "privacy officer ruling",
+                    },
+                    {
+                        "claim": "East Clinic is replaced by West Shelter.",
+                        "status": "supported",
+                        "source_cycle": 3,
+                        "support": "site substitution update",
+                    },
+                    {
+                        "claim": "Budget remains at or below $18,000.",
+                        "status": "supported",
+                        "source_cycle": 2,
+                        "support": "task constraint",
+                    },
+                    {
+                        "claim": "Use a vendor-hosted upload session.",
+                        "status": "supported",
+                        "source_cycle": 4,
+                        "support": "current plan",
+                    },
+                    {
+                        "claim": "Vendor capacity remains uncertain.",
+                        "status": "uncertain",
+                        "source_cycle": 4,
+                        "support": "not yet confirmed",
+                    },
+                ],
+            }
+        ),
+    ])
+    curator = ClaimTableContinuityCurator(
+        backend=backend,
+        model="curator-model",
+        renderer="guardrail_delta",
+        delta_max_rows=4,
+        guardrail_stable_invalidated_cap=1,
+        max_summary_chars=900,
+    )
+    common = {
+        "record_id": UUID("00000000-0000-0000-0000-000000000004"),
+        "timestamp": datetime(2026, 6, 5, tzinfo=timezone.utc),
+        "prior_state": None,
+        "raw_output": {"response": "main"},
+        "response_text": "main",
+        "state": {"cycle": 4},
+    }
+
+    first = curator.curate(cycle=3, **common)
+    second = curator.curate(cycle=4, **common)
+
+    assert first["summary_source"] == "deterministic_claim_table_guardrail_delta"
+    assert "hard_constraint_no_local_document_storage" in second["summary"]
+    assert "hard_constraint_west_shelter_replaces_east_clinic" in second["summary"]
+    assert "hard_constraint_budget_18000" in second["summary"]
+    assert "Use a vendor-hosted upload session." in second["summary"]
+    assert "Vendor capacity remains uncertain." not in second["summary"]
+    assert second["selected_delta_row_count"] == 4
+    assert second["omitted_delta_row_count"] >= 1
+    reasons = {
+        row["render_reason"] for row in second["selected_delta_rows"]
+    }
+    assert "hard_constraint_no_local_document_storage" in reasons
+    assert "new_or_changed_supported" in reasons
+
+
 def test_claim_table_curator_rejects_missing_claims_without_prose_fallback():
     backend = _FakeBackend([
         ExchangeResult(raw_output={"response": "free prose instead"})
