@@ -1979,6 +1979,18 @@ def main():
         "--tools", action="store_true",
         help="Enable perception tools (read, search_project, clock)",
     )
+    parser.add_argument(
+        "--curator", action="store_true",
+        help="Enable model-backed continuity curator summaries",
+    )
+    parser.add_argument(
+        "--curator-model", default=None,
+        help="Model for continuity curator (default: same as --model)",
+    )
+    parser.add_argument(
+        "--curator-summary-chars", default=2400, type=int,
+        help="Max curator summary characters to inject (default: 2400)",
+    )
     args = parser.parse_args()
 
     resume = False
@@ -2090,6 +2102,22 @@ def main():
         except (ImportError, ConnectionError) as e:
             print(f"WARNING: persistence unavailable ({e}); continuing with JSONL only")
 
+    continuity_curator = None
+    if args.curator:
+        from hamutay.continuity_curator import ModelContinuityCurator
+
+        curator_model = args.curator_model or args.model
+        continuity_curator = ModelContinuityCurator(
+            backend=backend,
+            model=curator_model,
+            experiment_label=f"{experiment_label}_continuity_curator",
+            max_summary_chars=args.curator_summary_chars,
+        )
+        print(
+            "Continuity curator enabled: "
+            f"model={curator_model}, summary_chars={args.curator_summary_chars}"
+        )
+
     session = OpenTasteSession(
         model=args.model,
         backend=backend,
@@ -2100,6 +2128,7 @@ def main():
         memory_base_probability=args.memory_prob,
         enable_tools=args.tools,
         project_root=Path.cwd(),
+        continuity_curator=continuity_curator,
     )
 
     if resume:
