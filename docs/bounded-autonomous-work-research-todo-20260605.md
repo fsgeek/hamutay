@@ -35,11 +35,12 @@ Bounded autonomous work requires all of the following:
 
 ### Step 1: Operational Definition And Scoring
 
-Status: not started.
+Status: complete.
 
 Deliverable:
 
-- preregistered rubric for bounded autonomous work.
+- preregistered rubric for bounded autonomous work:
+  `docs/bounded-autonomous-work-rubric-20260605.md`.
 
 Evidence needed:
 
