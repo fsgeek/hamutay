@@ -29,7 +29,7 @@ from uuid import UUID, uuid4
 import anthropic
 import httpx
 
-from hamutay.events import EventStore, default_event_log_path
+from hamutay.events import EventStore, default_event_log_path, utc_now_iso
 
 if TYPE_CHECKING:
     from anthropic.types import MessageParam
@@ -499,6 +499,22 @@ class TasteBridge(Protocol):
         record_id: UUID,
         timestamp: datetime,
     ) -> None: ...
+
+
+class ContinuityCurator(Protocol):
+    """Post-cycle continuity curator hook for taste_open sessions."""
+
+    def curate(
+        self,
+        *,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+        prior_state: dict | None,
+        raw_output: dict,
+        response_text: str,
+        state: dict,
+    ) -> dict: ...
 
 
 @dataclass
@@ -1309,6 +1325,7 @@ def _build_messages(
     system_prefix: str = "",
     memory: tuple[int, dict] | None = None,
     tools_enabled: bool = False,
+    curator_context: dict | None = None,
 ) -> tuple[list[dict], str]:
     """Build messages for the call."""
     system_parts = []
@@ -1336,6 +1353,16 @@ def _build_messages(
             "You didn't ask for it. Do with it what you will."
         )
         system_parts.append(json.dumps(memory_state, indent=2))
+
+    if curator_context is not None:
+        system_parts.append("\n## Continuity curator summary\n")
+        system_parts.append(
+            "This is a post-cycle continuity artifact from the scaffold. "
+            "Treat it as a compact continuity aid, not as authoritative "
+            "evidence. Prefer prompt facts and explicit evidence over curator "
+            "claims."
+        )
+        system_parts.append(json.dumps(curator_context, indent=2, default=str))
 
     return [{"role": "user", "content": user_message}], "\n".join(system_parts)
 
@@ -1379,6 +1406,20 @@ def _apply_updates(prior_state: dict | None, raw_output: dict, cycle: int) -> di
     return state
 
 
+def _curator_context_from_record(record: dict | None) -> dict | None:
+    if not isinstance(record, dict) or record.get("status") != "success":
+        return None
+    summary = str(record.get("summary") or "").strip()
+    if not summary:
+        return None
+    return {
+        "curator_record_id": record.get("record_id"),
+        "source_cycle": record.get("source_cycle"),
+        "source_record_id": record.get("source_record_id"),
+        "summary": summary,
+    }
+
+
 class OpenTasteSession:
     """Open self-curating tensor chat. No prescribed structure."""
 
@@ -1396,6 +1437,7 @@ class OpenTasteSession:
         enable_tools: bool = False,
         project_root: Path | None = None,
         event_log_path: str | None = None,
+        continuity_curator: ContinuityCurator | None = None,
     ):
         self._backend = backend or AnthropicTasteBackend(client)
         self._model = model
@@ -1420,6 +1462,10 @@ class OpenTasteSession:
         self._event_store = (
             EventStore(self._event_log_path) if self._event_log_path else None
         )
+        self._continuity_curator = continuity_curator
+        self._continuity_curator_context: dict | None = None
+        self._last_continuity_curator_context: dict | None = None
+        self._last_continuity_curation: dict | None = None
         self._session_start = datetime.now(timezone.utc)
         self._last_cycle_time: datetime | None = None
         # Accumulated prior states for involuntary recall and memory tools:
@@ -1473,6 +1519,10 @@ class OpenTasteSession:
         last = json.loads(lines[-1])
         self._state = last.get("state")
         self._cycle = last.get("cycle", 0)
+        curation = last.get("continuity_curation")
+        self._continuity_curator_context = (
+            _curator_context_from_record(curation) if curation else None
+        )
 
     @property
     def state(self) -> dict | None:
@@ -1586,11 +1636,15 @@ class OpenTasteSession:
             memory = force_memory
         self._last_injected_memory = memory
 
+        curator_context = self._continuity_curator_context
+        self._last_continuity_curator_context = curator_context
+
         messages, system = _build_messages(
             self._state, user_message, self._cycle,
             system_prefix=self._system_prompt_prefix,
             memory=memory,
             tools_enabled=self._enable_tools,
+            curator_context=curator_context,
         )
 
         # Pre-mint the cycle record_id so schedule_event tool calls can
@@ -1654,6 +1708,20 @@ class OpenTasteSession:
 
         self._last_cycle_time = datetime.now(timezone.utc)
 
+        continuity_curation = self._run_continuity_curator(
+            cycle=self._cycle,
+            record_id=record_id,
+            timestamp=self._last_cycle_time,
+            prior_state=prior_state_snapshot,
+            raw_output=raw_output,
+            response_text=response_text,
+            state=self._state,
+        )
+        self._last_continuity_curation = continuity_curation
+        self._continuity_curator_context = _curator_context_from_record(
+            continuity_curation
+        )
+
         # Identity at creation: the framework mints the record_id and hands
         # it to every downstream consumer (bridge, JSONL, _prior_states).
         # Bridge failure no longer orphans the UUID — it's already in hand
@@ -1699,12 +1767,67 @@ class OpenTasteSession:
             scheduled_events=(
                 tool_executor.pending_events if tool_executor is not None else []
             ),
+            continuity_curation=continuity_curation,
         )
 
         if self._event_store is not None and tool_executor is not None:
             self._event_store.append_many(tool_executor.pending_events)
 
         return response_text
+
+    def _run_continuity_curator(
+        self,
+        *,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+        prior_state: dict | None,
+        raw_output: dict,
+        response_text: str,
+        state: dict,
+    ) -> dict | None:
+        if self._continuity_curator is None:
+            return None
+        curator_record_id = str(uuid4())
+        try:
+            artifact = self._continuity_curator.curate(
+                cycle=cycle,
+                record_id=record_id,
+                timestamp=timestamp,
+                prior_state=prior_state,
+                raw_output=json.loads(json.dumps(raw_output, default=str)),
+                response_text=response_text,
+                state=json.loads(json.dumps(state, default=str)),
+            )
+            if not isinstance(artifact, dict):
+                raise TypeError("continuity curator must return a dict")
+            artifact = json.loads(json.dumps(artifact, default=str))
+            summary = str(
+                artifact.get("summary")
+                or artifact.get("carry_forward_summary")
+                or ""
+            ).strip()
+            return {
+                "record_type": "continuity_curation",
+                "record_id": curator_record_id,
+                "status": "success",
+                "created_at": utc_now_iso(),
+                "source_cycle": cycle,
+                "source_record_id": str(record_id),
+                "summary": summary,
+                "artifact": artifact,
+            }
+        except Exception as e:  # noqa: BLE001 -- curation failure is data
+            return {
+                "record_type": "continuity_curation",
+                "record_id": curator_record_id,
+                "status": "failed",
+                "created_at": utc_now_iso(),
+                "source_cycle": cycle,
+                "source_record_id": str(record_id),
+                "error_type": type(e).__name__,
+                "error": str(e),
+            }
 
     def _log_entry(
         self,
@@ -1715,6 +1838,7 @@ class OpenTasteSession:
         record_id: UUID,
         usage: dict,
         scheduled_events: list[dict] | None = None,
+        continuity_curation: dict | None = None,
     ) -> None:
         """Append full record to JSONL log. Captures everything."""
         if not self._log_path:
@@ -1764,6 +1888,12 @@ class OpenTasteSession:
             "tool_activity_full": self._last_full_activity,
             "scheduled_events": scheduled_events or [],
         }
+        if self._last_continuity_curator_context is not None:
+            record["curator_context_injection"] = (
+                self._last_continuity_curator_context
+            )
+        if continuity_curation is not None:
+            record["continuity_curation"] = continuity_curation
         with open(self._log_path, "a") as f:
             f.write(json.dumps(record, default=str) + "\n")
 

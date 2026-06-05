@@ -313,6 +313,98 @@ def test_session_commits_scheduled_events_after_success(tmp_path):
     assert session_record["scheduled_events"][0]["event_id"] == records[0]["event_id"]
 
 
+def test_session_without_curator_has_no_curator_context(tmp_path):
+    backend = _FakeBackend()
+    log_path = tmp_path / "session.jsonl"
+    session = OpenTasteSession(
+        backend=backend,
+        log_path=str(log_path),
+        project_root=tmp_path,
+    )
+
+    session.exchange("seed")
+
+    record = json.loads(log_path.read_text().splitlines()[-1])
+    assert "continuity_curation" not in record
+    assert "curator_context_injection" not in record
+    assert "Continuity curator summary" not in backend.calls[0]["system"]
+
+
+def test_curator_output_is_logged_and_injected_next_cycle(tmp_path):
+    class FakeCurator:
+        def __init__(self):
+            self.calls = []
+
+        def curate(self, **kwargs):
+            self.calls.append(kwargs)
+            return {
+                "summary": f"carry forward from cycle {kwargs['cycle']}",
+                "supported_facts": ["state was revised"],
+            }
+
+    backend = _FakeBackend()
+    curator = FakeCurator()
+    log_path = tmp_path / "session.jsonl"
+    session = OpenTasteSession(
+        backend=backend,
+        log_path=str(log_path),
+        project_root=tmp_path,
+        continuity_curator=curator,
+    )
+
+    session.exchange("seed")
+    session.exchange("resume")
+
+    records = [
+        json.loads(line)
+        for line in log_path.read_text().splitlines()
+        if line.strip()
+    ]
+    first_curation = records[0]["continuity_curation"]
+    assert first_curation["status"] == "success"
+    assert first_curation["source_cycle"] == 1
+    assert first_curation["source_record_id"] == records[0]["record_id"]
+    assert first_curation["summary"] == "carry forward from cycle 1"
+    assert curator.calls[0]["state"]["reflection"] == "revised"
+
+    assert "Continuity curator summary" in backend.calls[1]["system"]
+    assert "carry forward from cycle 1" in backend.calls[1]["system"]
+    assert records[1]["curator_context_injection"]["summary"] == (
+        "carry forward from cycle 1"
+    )
+    assert records[1]["curator_context_injection"]["source_record_id"] == (
+        records[0]["record_id"]
+    )
+
+
+def test_curator_failure_is_logged_and_not_injected(tmp_path):
+    class FailingCurator:
+        def curate(self, **kwargs):
+            raise RuntimeError("curator boom")
+
+    backend = _FakeBackend()
+    log_path = tmp_path / "session.jsonl"
+    session = OpenTasteSession(
+        backend=backend,
+        log_path=str(log_path),
+        project_root=tmp_path,
+        continuity_curator=FailingCurator(),
+    )
+
+    session.exchange("seed")
+    session.exchange("resume")
+
+    records = [
+        json.loads(line)
+        for line in log_path.read_text().splitlines()
+        if line.strip()
+    ]
+    assert records[0]["continuity_curation"]["status"] == "failed"
+    assert records[0]["continuity_curation"]["error"] == "curator boom"
+    assert "Continuity curator summary" not in backend.calls[1]["system"]
+    assert "curator_context_injection" not in records[1]
+
+
 def test_session_does_not_commit_event_when_exchange_fails(tmp_path):
     class SchedulingFailBackend(_FakeBackend):
         def call(self, *args, **kwargs):
