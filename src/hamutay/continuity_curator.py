@@ -47,6 +47,13 @@ _ALLOWED_CLAIM_STATUSES = {
     "open",
 }
 
+_CLAIM_STATUS_PRIORITY = {
+    "invalidated": 0,
+    "supported": 1,
+    "uncertain": 2,
+    "open": 3,
+}
+
 
 def _jsonable(value):
     return json.loads(json.dumps(value, default=str))
@@ -165,6 +172,88 @@ def _render_claim_table(rows: list[dict], max_chars: int) -> tuple[str, bool]:
     return _truncate_text("\n".join(lines), max_chars)
 
 
+def _claim_signature(row: dict) -> tuple[str, str]:
+    return (
+        str(row.get("status") or "").lower(),
+        " ".join(str(row.get("claim") or "").lower().split()),
+    )
+
+
+def _select_delta_rows(
+    rows: list[dict],
+    prior_claim_rows: list[dict],
+    max_rows: int,
+) -> tuple[list[dict], list[dict]]:
+    prior_signatures = {_claim_signature(row) for row in prior_claim_rows}
+    selected: list[dict] = []
+    omitted: list[dict] = []
+
+    def add(row: dict, reason: str) -> None:
+        item = {**row, "render_reason": reason}
+        if len(selected) < max_rows:
+            selected.append(item)
+        else:
+            omitted.append({**item, "omit_reason": "delta_row_cap_exceeded"})
+
+    sorted_rows = sorted(
+        rows,
+        key=lambda row: (
+            _CLAIM_STATUS_PRIORITY.get(str(row.get("status")), 99),
+            -(row.get("source_cycle") or 0),
+            str(row.get("claim") or ""),
+        ),
+    )
+    for row in sorted_rows:
+        if (
+            _claim_signature(row) not in prior_signatures
+            and str(row.get("status")) in {"invalidated", "supported"}
+        ):
+            add(row, "new_or_changed")
+    for row in sorted_rows:
+        if str(row.get("status")) in {"invalidated", "supported"}:
+            sig = _claim_signature(row)
+            if any(_claim_signature(selected_row) == sig for selected_row in selected):
+                continue
+            reason = "stable_invalidated" if row.get("status") == "invalidated" else "stable_supported"
+            add(row, reason)
+    for row in sorted_rows:
+        if _claim_signature(row) not in prior_signatures:
+            sig = _claim_signature(row)
+            if any(_claim_signature(selected_row) == sig for selected_row in selected):
+                continue
+            add(row, "new_or_changed")
+
+    selected_sigs = {_claim_signature(row) for row in selected}
+    for row in rows:
+        if _claim_signature(row) not in selected_sigs:
+            omitted.append({**row, "omit_reason": "not_selected"})
+    return selected, omitted
+
+
+def _render_delta_claim_table(
+    rows: list[dict],
+    prior_claim_rows: list[dict],
+    *,
+    max_chars: int,
+    max_rows: int,
+) -> tuple[str, bool, list[dict], list[dict]]:
+    selected, omitted = _select_delta_rows(rows, prior_claim_rows, max_rows)
+    if not selected:
+        return "(no new or prioritized curator claim rows)", False, selected, omitted
+    lines = [
+        "Continuity claim delta. Bounded curator artifact; verify against prompt facts.",
+    ]
+    for row in selected:
+        cycle = row.get("source_cycle")
+        cycle_text = f"c{cycle}" if cycle is not None else "c?"
+        lines.append(
+            f"- [{row['status']} {cycle_text} {row['render_reason']}] "
+            f"{row['claim']}"
+        )
+    summary, truncated = _truncate_text("\n".join(lines), max_chars)
+    return summary, truncated, selected, omitted
+
+
 @dataclass
 class ModelContinuityCurator:
     """Model-backed continuity curator for the first-class scaffold hook."""
@@ -262,6 +351,9 @@ class ClaimTableContinuityCurator:
     max_claim_chars: int = 180
     max_support_chars: int = 120
     recover_response_claims: bool = False
+    renderer: str = "full"
+    delta_max_rows: int = 5
+    _prior_claim_rows: list[dict] | None = None
 
     def curate(
         self,
@@ -316,19 +408,42 @@ class ClaimTableContinuityCurator:
             max_claim_chars=self.max_claim_chars,
             max_support_chars=self.max_support_chars,
         )
-        summary, summary_truncated = _render_claim_table(
-            rows,
-            self.max_summary_chars,
-        )
+        selected_delta_rows: list[dict] = []
+        omitted_delta_rows: list[dict] = []
+        if self.renderer == "full":
+            summary, summary_truncated = _render_claim_table(
+                rows,
+                self.max_summary_chars,
+            )
+            rendered_rows = rows
+        elif self.renderer == "delta":
+            summary, summary_truncated, selected_delta_rows, omitted_delta_rows = (
+                _render_delta_claim_table(
+                    rows,
+                    self._prior_claim_rows or [],
+                    max_chars=self.max_summary_chars,
+                    max_rows=self.delta_max_rows,
+                )
+            )
+            rendered_rows = selected_delta_rows
+        else:
+            raise ValueError(f"unknown claim-table renderer: {self.renderer}")
+        self._prior_claim_rows = list(rows)
 
         return {
             "curator_type": "claim_table_model",
             "model": self.model,
             "summary": summary,
-            "summary_source": "deterministic_claim_table",
+            "summary_source": f"deterministic_claim_table_{self.renderer}",
             "summary_chars": len(summary),
             "summary_truncated": summary_truncated,
+            "renderer": self.renderer,
             "claim_rows": rows,
+            "rendered_claim_rows": rendered_rows,
+            "selected_delta_rows": selected_delta_rows,
+            "omitted_delta_rows": omitted_delta_rows,
+            "selected_delta_row_count": len(selected_delta_rows),
+            "omitted_delta_row_count": len(omitted_delta_rows),
             "accepted_claim_rows": len(rows),
             "rejected_claim_rows": len(rejected),
             "rejected_claim_row_examples": rejected[:8],

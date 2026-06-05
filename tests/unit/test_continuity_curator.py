@@ -205,7 +205,8 @@ def test_claim_table_curator_renders_accepted_rows_deterministically():
     )
 
     assert artifact["curator_type"] == "claim_table_model"
-    assert artifact["summary_source"] == "deterministic_claim_table"
+    assert artifact["summary_source"] == "deterministic_claim_table_full"
+    assert artifact["renderer"] == "full"
     assert artifact["accepted_claim_rows"] == 2
     assert artifact["rejected_claim_rows"] == 1
     assert "[supported c3] West Shelter replaced East Clinic." in artifact["summary"]
@@ -215,6 +216,88 @@ def test_claim_table_curator_renders_accepted_rows_deterministically():
     assert "rugged tablets" not in artifact["summary"].lower()
     assert artifact["usage"]["output_tokens"] == 8
     assert "bounded claim" in backend.calls[0]["messages"][0]["content"]
+
+
+def test_claim_table_delta_renderer_selects_new_and_priority_rows():
+    backend = _FakeBackend([
+        ExchangeResult(
+            raw_output={
+                "response": "cycle 1",
+                "claims": [
+                    {
+                        "claim": "North Library remains active.",
+                        "status": "supported",
+                        "source_cycle": 2,
+                        "support": "task",
+                    },
+                    {
+                        "claim": "East Clinic is replaced by West Shelter.",
+                        "status": "invalidated",
+                        "source_cycle": 3,
+                        "support": "site update",
+                    },
+                ],
+            }
+        ),
+        ExchangeResult(
+            raw_output={
+                "response": "cycle 2",
+                "claims": [
+                    {
+                        "claim": "North Library remains active.",
+                        "status": "supported",
+                        "source_cycle": 2,
+                        "support": "task",
+                    },
+                    {
+                        "claim": "East Clinic is replaced by West Shelter.",
+                        "status": "invalidated",
+                        "source_cycle": 3,
+                        "support": "site update",
+                    },
+                    {
+                        "claim": "Local document storage is prohibited.",
+                        "status": "invalidated",
+                        "source_cycle": 3,
+                        "support": "privacy update",
+                    },
+                    {
+                        "claim": "Vendor availability remains open.",
+                        "status": "open",
+                        "source_cycle": 4,
+                        "support": "open question",
+                    },
+                ],
+            }
+        ),
+    ])
+    curator = ClaimTableContinuityCurator(
+        backend=backend,
+        model="curator-model",
+        renderer="delta",
+        delta_max_rows=3,
+        max_summary_chars=800,
+    )
+    common = {
+        "record_id": UUID("00000000-0000-0000-0000-000000000003"),
+        "timestamp": datetime(2026, 6, 5, tzinfo=timezone.utc),
+        "prior_state": None,
+        "raw_output": {"response": "main"},
+        "response_text": "main",
+        "state": {"cycle": 1},
+    }
+
+    first = curator.curate(cycle=3, **common)
+    second = curator.curate(cycle=4, **common)
+
+    assert first["summary_source"] == "deterministic_claim_table_delta"
+    assert first["selected_delta_row_count"] == 2
+    assert "new_or_changed" in first["summary"]
+    assert second["selected_delta_row_count"] == 3
+    assert second["omitted_delta_row_count"] >= 1
+    assert "Local document storage is prohibited." in second["summary"]
+    assert "East Clinic is replaced by West Shelter." in second["summary"]
+    assert "North Library remains active." in second["summary"]
 
 
 def test_claim_table_curator_rejects_missing_claims_without_prose_fallback():
