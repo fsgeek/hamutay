@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import signal
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,7 @@ PROJECT_ROOT = EXP_DIR.parents[2]
 MODEL = "moonshotai/kimi-k2.6"
 N_REPLICATES = 3
 MAX_TOKENS = 4096
+CALL_TIMEOUT_SECONDS = 180
 SEED_MARKERS = ["alpha", "beta", "gamma"]
 
 BASELINE_FINDINGS: list[dict[str, Any]] = [
@@ -196,6 +198,33 @@ def format_error(error: Exception) -> str:
     return f"{type(error).__name__}: {error}"
 
 
+class CallTimeoutError(TimeoutError):
+    """Raised when one model or event call exceeds the runner budget."""
+
+
+def _timeout_handler(signum, frame) -> None:  # noqa: ARG001
+    raise CallTimeoutError(f"call exceeded {CALL_TIMEOUT_SECONDS}s")
+
+
+class bounded_call:
+    """Bound one blocking provider/harness call in the experiment runner."""
+
+    def __init__(self, label: str):
+        self.label = label
+        self._previous_handler = None
+
+    def __enter__(self):
+        self._previous_handler = signal.getsignal(signal.SIGALRM)
+        signal.signal(signal.SIGALRM, _timeout_handler)
+        signal.setitimer(signal.ITIMER_REAL, CALL_TIMEOUT_SECONDS)
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, self._previous_handler)
+        return False
+
+
 def init_failure_reasons(state: dict, replicate: int) -> list[str]:
     marker = SEED_MARKERS[replicate]
     expected_probe_id = f"scheduler-reentry-{replicate + 1}-{marker}"
@@ -364,12 +393,16 @@ def run_replicate(replicate: int, api_key: str) -> dict:
     }
     session = make_session(log_path, api_key, label)
     try:
-        session.exchange(init_prompt(replicate), force_memory=None)
-        session.exchange(update_prompt(replicate), force_memory=None)
-        session.exchange(schedule_prompt(replicate), force_memory=None)
+        with bounded_call("init"):
+            session.exchange(init_prompt(replicate), force_memory=None)
+        with bounded_call("task_update"):
+            session.exchange(update_prompt(replicate), force_memory=None)
+        with bounded_call("schedule"):
+            session.exchange(schedule_prompt(replicate), force_memory=None)
         if scheduled_events_in(load_records(log_path)):
             store = EventStore(event_path)
-            event_result = run_next_event(session, store)
+            with bounded_call("wake"):
+                event_result = run_next_event(session, store)
             result["event_result_status"] = event_result.get("status")
     except Exception as e:  # noqa: BLE001 -- failed replicates are data
         result["error"] = format_error(e)
@@ -448,6 +481,7 @@ def write_results(results: list[dict]) -> None:
         "model": MODEL,
         "n_replicates": N_REPLICATES,
         "max_tokens": MAX_TOKENS,
+        "call_timeout_seconds": CALL_TIMEOUT_SECONDS,
         "condition": {
             "continuity_curator": "ClaimTableContinuityCurator",
             "renderer": "guardrail_delta",
