@@ -1233,6 +1233,51 @@ def test_run_next_event_auto_appends_bound_continuation(tmp_path):
     assert records[2]["auto_continuation_event_id"] == continuation["event_id"]
 
 
+def test_run_next_event_auto_ignores_inherited_continuation(tmp_path):
+    log_path = tmp_path / "session.jsonl"
+    event_path = tmp_path / "session.events.jsonl"
+    session = OpenTasteSession(
+        backend=_FakeBackend(),
+        log_path=str(log_path),
+        event_log_path=str(event_path),
+        enable_tools=True,
+        project_root=tmp_path,
+    )
+    session.exchange("seed")
+    session._state["continuation_request"] = _continuation_request()
+    session._prior_states[-1] = (
+        session._prior_states[-1][0],
+        session._prior_states[-1][1],
+        dict(session._state),
+        session._prior_states[-1][3],
+    )
+    session._backend = _FakeBackend(
+        ExchangeResult(
+            raw_output={
+                "response": "event handled",
+                "event_reflection": "revised",
+            },
+            stop_reason="end_turn",
+        )
+    )
+    event = build_pending_event(
+        purpose="Reflect on claim.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=session._prior_states[-1][1],
+    )
+    store = EventStore(event_path)
+    store.append(event)
+
+    result = run_next_event(session, store, auto_continuations=True)
+
+    assert result["status"] == "completed"
+    assert "auto_continuation_event" not in result
+    assert "continuation_request" in session._state
+    records = store.read_records()
+    assert [r["status"] for r in records] == ["pending", "running", "completed"]
+
+
 def test_run_next_event_auto_continuation_failure_marks_event_failed(tmp_path):
     log_path = tmp_path / "session.jsonl"
     event_path = tmp_path / "session.events.jsonl"

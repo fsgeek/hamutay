@@ -1717,6 +1717,7 @@ class OpenTasteSession:
         self._state: dict | None = None
         self._log_path = log_path
         self._last_usage: dict | None = None
+        self._last_raw_output: dict | None = None
         self._last_tool_activity: list[dict] | None = None
         self._last_full_activity: list[dict] | None = None
         self._experiment_label = experiment_label or "taste_open"
@@ -2085,6 +2086,7 @@ class OpenTasteSession:
             protected_fields=self._protected_state_fields,
         )
         self._last_state_validation = state_validation
+        self._last_raw_output = json.loads(json.dumps(raw_output, default=str))
         usage = {
             "input_tokens": result.input_tokens + repair_usage["input_tokens"],
             "output_tokens": result.output_tokens + repair_usage["output_tokens"],

@@ -1223,7 +1223,9 @@ def run_next_event(
         wake_cycle = session.cycle
         auto_continuation_event = None
         if auto_continuations:
-            continuation_request = after_state.get("continuation_request")
+            raw_output = getattr(session, "_last_raw_output", None)
+            raw_output = raw_output if isinstance(raw_output, dict) else {}
+            continuation_request = raw_output.get("continuation_request")
             if isinstance(continuation_request, dict):
                 auto_continuation_event = build_bound_continuation_event(
                     completed_event={
