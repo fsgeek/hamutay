@@ -169,7 +169,7 @@ Deliverable:
 
 ### Step 5: Controls
 
-Status: not started.
+Status: complete.
 
 Candidate controls:
 
@@ -183,6 +183,11 @@ Evidence needed:
 - artifact quality comparison;
 - control-loop trace comparison;
 - contamination/unsupported-claim scoring where relevant.
+
+Deliverable:
+
+- live controls panel:
+  `experiments/event_loop/bounded_autonomous_work_controls_20260605/`.
 
 ### Step 6: Evidence Boundary Stressors
 
