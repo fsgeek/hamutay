@@ -15,6 +15,7 @@ from hamutay.events import (
     build_event_envelope,
     build_outcome_observation,
     build_pending_event,
+    build_wake_validation_summary,
     default_event_log_path,
     detect_lifecycle_anomalies,
     format_event_report,
@@ -63,6 +64,65 @@ class _FakeBackend:
         if self._exc is not None:
             raise self._exc
         return self._result
+
+
+class _SequenceBackend:
+    def __init__(self, results: list[ExchangeResult]):
+        self._results = list(results)
+        self.calls: list[dict] = []
+
+    def call(
+        self,
+        model,
+        system,
+        messages,
+        experiment_label,
+        extra_tools=None,
+        tool_executor=None,
+    ):
+        self.calls.append(
+            {
+                "model": model,
+                "system": system,
+                "messages": messages,
+                "extra_tools": extra_tools,
+                "tool_executor": tool_executor,
+            }
+        )
+        if not self._results:
+            raise RuntimeError("no fake backend result remaining")
+        return self._results.pop(0)
+
+
+class _TaskStateValidator:
+    def validate(
+        self,
+        *,
+        cycle,
+        record_id,
+        timestamp,
+        prior_state,
+        raw_output,
+        response_text,
+        state,
+    ):
+        del cycle, record_id, timestamp, prior_state, raw_output, response_text
+        missing = []
+        if state.get("task_status") != "done":
+            missing.append("task_status")
+        if state.get("evidence_count") != 4:
+            missing.append("evidence_count")
+        return {
+            "valid": not missing,
+            "status": "valid" if not missing else "invalid",
+            "missing_fields": missing,
+        }
+
+
+class _StaticRepairBuilder:
+    def build_repair_prompt(self, **kwargs):
+        del kwargs
+        return "Repair durable state now."
 
 
 def _event_record(cycle: int = 1) -> dict:
@@ -785,6 +845,124 @@ def test_run_next_event_completes(tmp_path):
     assert observation["state_changed"] is True
     assert observation["added_top_level_keys"] == ["event_reflection"]
     assert observation["no_durable_state_change"] is False
+    assert "wake_validation" not in records[-1]
+
+
+def test_run_next_event_records_first_pass_wake_validation(tmp_path):
+    log_path = tmp_path / "session.jsonl"
+    event_path = tmp_path / "session.events.jsonl"
+    session = OpenTasteSession(
+        backend=_FakeBackend(),
+        log_path=str(log_path),
+        event_log_path=str(event_path),
+        enable_tools=True,
+        project_root=tmp_path,
+    )
+    session.exchange("seed")
+    session._state_validator = _TaskStateValidator()
+    session._state_repair_builder = _StaticRepairBuilder()
+    session._backend = _FakeBackend(
+        ExchangeResult(
+            raw_output={
+                "response": "event handled",
+                "task_status": "done",
+                "evidence_count": 4,
+            },
+            stop_reason="end_turn",
+        )
+    )
+    event = build_pending_event(
+        purpose="Validate wake.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=session._prior_states[-1][1],
+    )
+    store = EventStore(event_path)
+    store.append(event)
+
+    result = run_next_event(session, store)
+
+    assert result["status"] == "completed"
+    assert result["wake_validation"]["status"] == "valid"
+    assert result["wake_validation"]["first_pass_status"] == "valid"
+    assert result["wake_validation"]["repair_attempted"] is False
+    assert result["wake_validation"]["repaired"] is False
+    summary = summarize_event_log(store.read_records())
+    completed = summary["completed"][0]
+    assert completed["wake_validation_status"] == "valid"
+    assert completed["wake_first_pass_status"] == "valid"
+    report = format_event_report(summary)
+    assert "validation=valid first_pass=valid" in report
+
+
+def test_run_next_event_records_repaired_wake_validation(tmp_path):
+    log_path = tmp_path / "session.jsonl"
+    event_path = tmp_path / "session.events.jsonl"
+    session = OpenTasteSession(
+        backend=_FakeBackend(),
+        log_path=str(log_path),
+        event_log_path=str(event_path),
+        enable_tools=True,
+        project_root=tmp_path,
+        protected_state_fields=["cycle"],
+    )
+    session.exchange("seed")
+    session._state_validator = _TaskStateValidator()
+    session._state_repair_builder = _StaticRepairBuilder()
+    session._backend = _SequenceBackend([
+        ExchangeResult(
+            raw_output={"response": "I recorded it."},
+            stop_reason="end_turn",
+            input_tokens=11,
+            output_tokens=22,
+        ),
+        ExchangeResult(
+            raw_output={
+                "response": "Repaired.",
+                "cycle": 99,
+                "task_status": "done",
+                "evidence_count": 4,
+            },
+            stop_reason="end_turn",
+            input_tokens=33,
+            output_tokens=44,
+        ),
+    ])
+    event = build_pending_event(
+        purpose="Validate repaired wake.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=session._prior_states[-1][1],
+    )
+    store = EventStore(event_path)
+    store.append(event)
+
+    result = run_next_event(session, store)
+
+    assert result["status"] == "completed"
+    wake_validation = result["wake_validation"]
+    assert wake_validation["status"] == "repaired"
+    assert wake_validation["first_pass_status"] == "invalid"
+    assert wake_validation["repair_attempted"] is True
+    assert wake_validation["repair_status"] == "valid"
+    assert wake_validation["has_repair_raw_output"] is True
+    assert wake_validation["has_repair_validation"] is True
+    assert wake_validation["repair_ignored_protected_attempt_count"] == 1
+    assert wake_validation["repair_ignored_protected_updates"] == ["cycle"]
+    assert session.state["cycle"] == 2
+    assert session.state["task_status"] == "done"
+    summary = summarize_event_log(store.read_records())
+    completed = summary["completed"][0]
+    assert completed["wake_validation_status"] == "repaired"
+    assert completed["wake_repair_status"] == "valid"
+    assert completed["wake_repaired"] is True
+    assert completed["wake_repair_ignored_protected_attempt_count"] == 1
+    report = format_event_report(summary)
+    assert "validation=repaired first_pass=invalid repair=valid" in report
+
+
+def test_build_wake_validation_summary_ignores_absent_validation():
+    assert build_wake_validation_summary(None) is None
 
 
 def test_build_outcome_observation_detects_prose_only_decision():

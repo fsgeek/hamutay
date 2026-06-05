@@ -297,6 +297,7 @@ class EventStore:
         response_text: str,
         context_results: list[dict] | None = None,
         outcome_observation: dict | None = None,
+        wake_validation: dict | None = None,
     ) -> dict:
         record = {
             "record_type": "event_status",
@@ -313,6 +314,8 @@ class EventStore:
             record["context_results"] = context_results
         if outcome_observation is not None:
             record["outcome_observation"] = outcome_observation
+        if wake_validation is not None:
+            record["wake_validation"] = wake_validation
         self.append(record)
         return record
 
@@ -534,6 +537,52 @@ def build_outcome_observation(
     }
 
 
+def build_wake_validation_summary(validation: dict | None) -> dict | None:
+    """Summarize a wake validation artifact for event-log observability."""
+    if not isinstance(validation, dict):
+        return None
+    first_pass = validation.get("first_pass")
+    first_pass = first_pass if isinstance(first_pass, dict) else {}
+    repair = validation.get("repair")
+    repair = repair if isinstance(repair, dict) else {}
+    summary = {
+        "status": validation.get("status"),
+        "validation_record_id": validation.get("record_id"),
+        "source_cycle": validation.get("source_cycle"),
+        "source_record_id": validation.get("source_record_id"),
+        "first_pass_status": first_pass.get("status"),
+        "repair_attempted": bool(validation.get("repair_attempted")),
+        "repaired": validation.get("status") == "repaired",
+    }
+    if repair:
+        summary["repair_status"] = repair.get("status")
+        summary["has_repair_raw_output"] = isinstance(
+            repair.get("raw_output"),
+            dict,
+        )
+        summary["has_repair_validation"] = isinstance(
+            repair.get("validation"),
+            dict,
+        )
+        diagnostics = repair.get("state_merge_diagnostics")
+        if isinstance(diagnostics, dict):
+            summary["repair_ignored_protected_attempt_count"] = int(
+                diagnostics.get("ignored_protected_attempt_count", 0)
+            )
+            summary["repair_ignored_protected_updates"] = list(
+                diagnostics.get("ignored_protected_updates") or []
+            )
+            summary["repair_ignored_protected_deletions"] = list(
+                diagnostics.get("ignored_protected_deletions") or []
+            )
+    return {
+        key: value for key, value in json.loads(
+            json.dumps(summary, default=str)
+        ).items()
+        if value is not None
+    }
+
+
 def _shorten(value: object, *, limit: int = 160) -> str:
     text = str(value)
     if len(text) <= limit:
@@ -634,6 +683,9 @@ def summarize_event_history(
     outcome = latest.get("outcome_observation")
     if not isinstance(outcome, dict):
         outcome = {}
+    wake_validation = latest.get("wake_validation")
+    if not isinstance(wake_validation, dict):
+        wake_validation = {}
     lifecycle_anomalies = detect_lifecycle_anomalies(event_id, history)
     summary = {
         "event_id": event_id,
@@ -682,6 +734,14 @@ def summarize_event_history(
         "no_durable_state_change": outcome.get("no_durable_state_change"),
         "changed_load_bearing_fields": outcome.get("changed_load_bearing_fields"),
         "deleted_load_bearing_fields": outcome.get("deleted_load_bearing_fields"),
+        "wake_validation_status": wake_validation.get("status"),
+        "wake_first_pass_status": wake_validation.get("first_pass_status"),
+        "wake_repair_attempted": wake_validation.get("repair_attempted"),
+        "wake_repair_status": wake_validation.get("repair_status"),
+        "wake_repaired": wake_validation.get("repaired"),
+        "wake_repair_ignored_protected_attempt_count": (
+            wake_validation.get("repair_ignored_protected_attempt_count")
+        ),
         "lifecycle_anomaly_count": len(lifecycle_anomalies),
         "lifecycle_anomalies": lifecycle_anomalies,
         "error_type": latest.get("error_type"),
@@ -984,11 +1044,20 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
         lines.append("Recently completed:")
         for event in report["completed"]:
             snippet = event.get("response_snippet") or ""
+            validation = ""
+            if event.get("wake_validation_status") is not None:
+                validation = (
+                    f" validation={event.get('wake_validation_status')}"
+                    f" first_pass={event.get('wake_first_pass_status')}"
+                )
+                if event.get("wake_repair_attempted"):
+                    validation += f" repair={event.get('wake_repair_status')}"
             lines.append(
                 "  "
                 f"{event['event_id']} "
                 f"wake_cycle={event.get('wake_cycle', '?')} "
                 f"context_errors={event.get('context_error_count', 0)} "
+                f"{validation} "
                 f"response={snippet}"
             )
 
@@ -1026,6 +1095,9 @@ def run_next_event(
             after_state=after_state,
             response_text=response,
         )
+        wake_validation = build_wake_validation_summary(
+            getattr(session, "_last_state_validation", None)
+        )
         return store.append_completed(
             event=event,
             run_id=run_id,
@@ -1034,6 +1106,7 @@ def run_next_event(
             response_text=response,
             context_results=context_results,
             outcome_observation=outcome_observation,
+            wake_validation=wake_validation,
         )
     except Exception as e:
         store.append_failed(
