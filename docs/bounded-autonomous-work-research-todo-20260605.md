@@ -191,7 +191,7 @@ Deliverable:
 
 ### Step 6: Evidence Boundary Stressors
 
-Status: partially deferred.
+Status: complete.
 
 Candidate stressors:
 
@@ -210,6 +210,25 @@ Note:
 - the basic missing-evidence/honored-resume case belongs in Step 3a. Step 6 is
   reserved for harder evidence boundaries after the simple evidence-honoring
   path has been tested.
+
+Result:
+
+- live evidence stressor panel completed with 3 scoreable rows, 0 errors, and
+  all preregistered hypotheses surviving deterministic scoring;
+- partial evidence moved alpha only and preserved beta as open while resolving
+  the bounded packet question negatively;
+- conflicting evidence remained qualified rather than collapsing to a clean
+  pass;
+- multiple open requests remained distinct, with observability still open after
+  build and security were fulfilled;
+- a deterministic scorer defect was found and repaired before final scoring:
+  the first scorer treated the negated phrase "does not prove both passed" as
+  an overclaim.
+
+Deliverable:
+
+- live evidence-boundary stressor panel:
+  `experiments/event_loop/bounded_autonomous_work_evidence_stressors_20260605/`.
 
 ### Step 7: Replication Boundary
 
