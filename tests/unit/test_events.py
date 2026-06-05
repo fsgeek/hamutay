@@ -228,6 +228,36 @@ def test_build_pending_event_accepts_durable_update_contract():
         )
 
 
+def test_build_pending_event_accepts_durable_update_example():
+    example = {
+        "response": "Delayed thinking complete.",
+        "thinking_status": "completed",
+        "delayed_thought": "Carry the result forward.",
+    }
+    event = build_pending_event(
+        purpose="Complete delayed thinking.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=UUID("00000000-0000-0000-0000-000000000001"),
+        durable_update_example=example,
+    )
+
+    assert event["durable_update_example"] == example
+    example["thinking_status"] = "changed"
+    assert event["durable_update_example"]["thinking_status"] == "completed"
+
+    with pytest.raises(ValueError, match="durable_update_example"):
+        build_pending_event(
+            purpose="Bad example.",
+            requested_context=[{"tool": "recall", "cycle": 1}],
+            scheduled_by_cycle=1,
+            scheduled_by_record_id=UUID(
+                "00000000-0000-0000-0000-000000000001"
+            ),
+            durable_update_example=["not", "an", "object"],
+        )
+
+
 def test_build_pending_event_accepts_walk_context():
     event = build_pending_event(
         purpose="Inspect fork-run graph hub.",
@@ -374,6 +404,7 @@ def test_schedule_event_schema_exists():
     properties = TOOL_SCHEMAS["schedule_event"]["input_schema"]["properties"]
     assert "not_before" in properties
     assert "durable_update_contract" in properties
+    assert "durable_update_example" in properties
     context_item = properties["requested_context"]["items"]["properties"]
     assert context_item["tool"]["enum"] == ["recall", "compare", "walk"]
     assert context_item["mode"]["enum"] == ["path", "adjacent"]
@@ -396,6 +427,10 @@ def test_executor_buffers_scheduled_event(tmp_path):
                     "revision_decision": {"type": "non_empty_string"}
                 }
             },
+            "durable_update_example": {
+                "response": "The claim still holds.",
+                "revision_decision": "preserve",
+            },
             "reason": "future self needs evidence",
         },
     )
@@ -406,6 +441,7 @@ def test_executor_buffers_scheduled_event(tmp_path):
     assert result["durable_update_contract"]["required_top_level"] == {
         "revision_decision": {"type": "non_empty_string"}
     }
+    assert result["durable_update_example"]["revision_decision"] == "preserve"
     assert len(executor.pending_events) == 1
     assert executor.pending_events[0]["scheduled_by_cycle"] == 4
     assert executor.pending_events[0]["not_before"] == (
@@ -413,6 +449,9 @@ def test_executor_buffers_scheduled_event(tmp_path):
     )
     assert executor.pending_events[0]["durable_update_contract"] == (
         result["durable_update_contract"]
+    )
+    assert executor.pending_events[0]["durable_update_example"] == (
+        result["durable_update_example"]
     )
     assert executor.activity_log[-1]["tool"] == "schedule_event"
     assert executor.activity_log[-1]["reason"] == "future self needs evidence"
@@ -660,10 +699,15 @@ def test_build_event_envelope_is_explicit():
     event["durable_update_contract"] = {
         "required_top_level": {"thinking_status": {"equals": "completed"}}
     }
+    event["durable_update_example"] = {
+        "response": "Delayed thinking complete.",
+        "thinking_status": "completed",
+    }
     envelope = json.loads(build_event_envelope(event, [], "run-1"))
     assert envelope["event_type"] == "self_scheduled_reflection"
     assert envelope["event_id"] == event["event_id"]
     assert envelope["durable_update_contract"] == event["durable_update_contract"]
+    assert envelope["durable_update_example"] == event["durable_update_example"]
     assert "self-scheduled reflection" in envelope["instruction"]
     assert "top-level fields" in envelope["instruction"]
     assert "Visible prose is not enough" in envelope["instruction"]

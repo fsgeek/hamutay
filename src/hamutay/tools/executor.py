@@ -202,6 +202,7 @@ class ToolExecutor:
                 not_before=tool_input.get("not_before"),
                 expires_at=tool_input.get("expires_at"),
                 durable_update_contract=tool_input.get("durable_update_contract"),
+                durable_update_example=tool_input.get("durable_update_example"),
             )
         except (TypeError, ValueError) as e:
             return {"error": str(e)}
@@ -214,6 +215,10 @@ class ToolExecutor:
             **(
                 {"durable_update_contract": record["durable_update_contract"]}
                 if "durable_update_contract" in record else {}
+            ),
+            **(
+                {"durable_update_example": record["durable_update_example"]}
+                if "durable_update_example" in record else {}
             ),
         }
 

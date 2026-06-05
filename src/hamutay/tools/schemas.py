@@ -505,6 +505,15 @@ SCHEDULE_EVENT_SCHEMA = {
                 ),
                 "additionalProperties": True,
             },
+            "durable_update_example": {
+                "type": "object",
+                "description": (
+                    "Optional example of the future think_and_respond object "
+                    "shape. Use this to show the wake a valid durable update "
+                    "pattern."
+                ),
+                "additionalProperties": True,
+            },
             "not_before": {
                 "type": "string",
                 "description": (
