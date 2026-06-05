@@ -768,6 +768,8 @@ def test_suppress_pending_marks_pending_events_terminal(tmp_path):
         policy="bounded_autonomy",
         reason="stasis cutoff",
         suppressed_by_record_id="record-1",
+        suppressed_by_cycle=3,
+        suppressed_by_classification="stasis",
     )
 
     assert len(suppressed) == 2
@@ -778,6 +780,8 @@ def test_suppress_pending_marks_pending_events_terminal(tmp_path):
     )
     assert latest[first["event_id"]]["suppression_reason"] == "stasis cutoff"
     assert latest[first["event_id"]]["suppressed_by_record_id"] == "record-1"
+    assert latest[first["event_id"]]["suppressed_by_cycle"] == 3
+    assert latest[first["event_id"]]["suppressed_by_classification"] == "stasis"
 
 
 def test_suppressed_events_summarize_without_lifecycle_anomaly(tmp_path):

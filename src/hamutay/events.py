@@ -312,6 +312,8 @@ class EventStore:
         reason: str,
         policy: str,
         suppressed_by_record_id: str | UUID | None = None,
+        suppressed_by_cycle: int | None = None,
+        suppressed_by_classification: str | None = None,
     ) -> list[dict]:
         """Mark all currently pending events as suppressed by scheduler policy."""
         suppressed: list[dict] = []
@@ -337,6 +339,12 @@ class EventStore:
                 if suppressed_by_record_id is not None:
                     record["suppressed_by_record_id"] = str(
                         suppressed_by_record_id
+                    )
+                if suppressed_by_cycle is not None:
+                    record["suppressed_by_cycle"] = int(suppressed_by_cycle)
+                if suppressed_by_classification is not None:
+                    record["suppressed_by_classification"] = (
+                        suppressed_by_classification
                     )
                 self._append_unlocked(record)
                 suppressed.append(record)
@@ -590,6 +598,10 @@ def summarize_event_history(
         "suppressed_by_policy": latest.get("suppressed_by_policy"),
         "suppression_reason": latest.get("suppression_reason"),
         "suppressed_by_record_id": latest.get("suppressed_by_record_id"),
+        "suppressed_by_cycle": latest.get("suppressed_by_cycle"),
+        "suppressed_by_classification": latest.get(
+            "suppressed_by_classification"
+        ),
         "not_before": first.get("not_before"),
         "expires_at": first.get("expires_at"),
         "scheduled_by_cycle": first.get("scheduled_by_cycle"),
