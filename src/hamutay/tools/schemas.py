@@ -283,6 +283,15 @@ WALK_SCHEMA = {
                     "Number of steps in the chosen direction(s). Default: 1."
                 ),
             },
+            "mode": {
+                "type": "string",
+                "enum": ["path", "adjacent"],
+                "description": (
+                    "Traversal mode for from_record_id. path preserves the "
+                    "existing single-path walk. adjacent walks all adjacent "
+                    "edges up to depth. Default: path."
+                ),
+            },
             "reason": _REASON_FIELD,
         },
         "required": [],

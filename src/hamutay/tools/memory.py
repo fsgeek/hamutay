@@ -480,6 +480,7 @@ def tool_walk(
     from_record_id_str = params.get("from_record_id")
     direction = params.get("direction", "both")
     depth = params.get("depth", 1)
+    mode = params.get("mode", "path")
 
     if from_record_id_str is not None:
         if bridge is None:
@@ -492,6 +493,15 @@ def tool_walk(
             return {
                 "error": f"from_record_id is not a valid UUID: {from_record_id_str!r}"
             }
+        if mode == "adjacent":
+            return _walk_by_record_id_adjacent(
+                from_record_id,
+                direction,
+                depth,
+                bridge,
+            )
+        if mode != "path":
+            return {"error": "walk mode must be one of: path, adjacent"}
         return _walk_by_record_id(from_record_id, direction, depth, bridge)
 
     if from_cycle is None:
@@ -584,6 +594,80 @@ def _walk_by_record_id(
         extend(from_record_id, "backward")
     if direction in ("forward", "both"):
         extend(from_record_id, "forward")
+
+    return {"path": path}
+
+
+def _walk_content_step(
+    *,
+    record_id: UUID,
+    chosen_edge: dict,
+    content: dict,
+    depth: int | None = None,
+) -> dict:
+    view = {
+        k: v for k, v in content.items()
+        if k not in ("provenance", "lineage_tags")
+    }
+    session = None
+    prov = content.get("provenance")
+    if isinstance(prov, dict):
+        session = prov.get("author_instance_id")
+    step = {
+        "record_id": str(record_id),
+        "session": session,
+        "edge_type": chosen_edge["relation_type"],
+        "edge_source": "composition_graph",
+        "field_names": sorted(view.keys()),
+        "summary": _step_summary(view),
+    }
+    if depth is not None:
+        step["depth"] = depth
+    return step
+
+
+def _walk_by_record_id_adjacent(
+    from_record_id: UUID, direction: str, depth: int, bridge
+) -> dict:
+    """Bounded adjacency traversal over composition graph edges."""
+    path: list[dict] = []
+    visited: set[UUID] = {from_record_id}
+    frontier: list[tuple[UUID, int]] = [(from_record_id, 0)]
+
+    while frontier:
+        current, current_depth = frontier.pop(0)
+        if current_depth >= depth:
+            continue
+        edge_directions = []
+        if direction in ("backward", "both"):
+            edge_directions.append("backward")
+        if direction in ("forward", "both"):
+            edge_directions.append("forward")
+        for edge_direction in edge_directions:
+            edges = bridge.query_edges_by_endpoint(current, edge_direction)
+            for edge in edges:
+                candidate = (
+                    edge["to_record"]
+                    if edge_direction == "forward"
+                    else edge["from_record"]
+                )
+                if candidate in visited:
+                    continue
+                visited.add(candidate)
+                try:
+                    content = bridge.retrieve(candidate)
+                except Exception:
+                    continue
+                next_depth = current_depth + 1
+                path.append(
+                    _walk_content_step(
+                        record_id=candidate,
+                        chosen_edge=edge,
+                        content=content,
+                        depth=next_depth,
+                    )
+                )
+                frontier.append((candidate, next_depth))
 
     return {"path": path}
 
