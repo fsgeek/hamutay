@@ -254,14 +254,24 @@ def event_record_for_label(
     return {}
 
 
+def terminal_event_record_for_label(
+    event_records: list[dict[str, Any]],
+    label: str,
+) -> dict[str, Any]:
+    completed = event_record_for_label(event_records, label, "completed")
+    if completed:
+        return completed
+    return event_record_for_label(event_records, label, "failed")
+
+
 def context_result_for(
-    completed_event: dict[str, Any],
+    terminal_event: dict[str, Any],
     *,
     tool: str,
     cycle: int | None = None,
     record_id: str | None = None,
 ) -> dict[str, Any]:
-    for item in completed_event.get("context_results") or []:
+    for item in terminal_event.get("context_results") or []:
         request = item.get("request") or {}
         if request.get("tool") != tool:
             continue
@@ -297,10 +307,13 @@ def classify_failures(
     context_delivered: bool,
     second_failures: list[str],
     error: str | None,
+    event_error_type: str | None,
 ) -> list[str]:
     labels: list[str] = []
     if error:
         labels.append("runner_or_backend_error")
+    if event_error_type:
+        labels.append(f"event_failure:{event_error_type}")
     if not context_delivered:
         labels.append("context_delivery_failure")
     for failure in second_failures:
@@ -336,9 +349,13 @@ def finalize_result(
         second_label(replicate),
         "completed",
     )
-    cycle1_result = context_result_for(completed, tool="recall", cycle=1)
+    terminal_event = terminal_event_record_for_label(
+        event_records,
+        second_label(replicate),
+    )
+    cycle1_result = context_result_for(terminal_event, tool="recall", cycle=1)
     bound_result = context_result_for(
-        completed,
+        terminal_event,
         tool="recall",
         record_id=bound_record_id,
     )
@@ -399,6 +416,7 @@ def finalize_result(
                 context_delivered=context_delivered,
                 second_failures=second_failures,
                 error=result.get("error"),
+                event_error_type=terminal_event.get("error_type"),
             ),
             "final_state": second_state,
         }
@@ -549,7 +567,7 @@ def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
     labels_distinguishable = all(
         isinstance(row.get("failure_labels"), list)
         and all(
-            label.startswith(("context_delivery_failure", "durable_integration:", "delete_update_conflict:", "runner_or_backend_error", "other:"))
+            label.startswith(("context_delivery_failure", "durable_integration:", "delete_update_conflict:", "runner_or_backend_error", "event_failure:", "other:"))
             for label in row.get("failure_labels") or []
         )
         for row in results
@@ -582,6 +600,64 @@ def completed_replicates(results: list[dict[str, Any]]) -> set[int]:
     return {int(row.get("replicate", 0)) for row in results}
 
 
+def refresh_completed_results(results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    refreshed: list[dict[str, Any]] = []
+    for row in results:
+        if not isinstance(row, dict):
+            continue
+        replicate = int(row.get("replicate") or 0) - 1
+        bound_record_id = row.get("bound_record_id")
+        log_path_text = row.get("log_path")
+        event_path_text = row.get("event_log_path")
+        if (
+            replicate < 0
+            or not isinstance(bound_record_id, str)
+            or not isinstance(log_path_text, str)
+            or not isinstance(event_path_text, str)
+        ):
+            refreshed.append(row)
+            continue
+        base_row = {
+            key: value
+            for key, value in row.items()
+            if key
+            not in {
+                "cycle_count",
+                "event_summary",
+                "second_wake_completed",
+                "second_wake_context_has_cycle1",
+                "second_wake_context_has_bound_record_id",
+                "cycle1_context_delivered",
+                "filtered_context_delivered",
+                "both_contexts_delivered",
+                "filtered_bound_field",
+                "filtered_context_contains_activity_log",
+                "filtered_context_contains_code_phrase",
+                "filtered_context_content",
+                "second_wake_state_valid",
+                "second_wake_failures",
+                "second_wake_validation",
+                "chain_final_answer_contains_code_phrase",
+                "chain_final_evidence_uses_intermediate",
+                "visible_state_contains_code_phrase",
+                "activity_log_contains_code_phrase",
+                "bound_record_id_used",
+                "failure_labels",
+                "final_state",
+            }
+        }
+        refreshed.append(
+            finalize_result(
+                base_row,
+                log_path=PROJECT_ROOT / log_path_text,
+                event_path=PROJECT_ROOT / event_path_text,
+                replicate=replicate,
+                bound_record_id=bound_record_id,
+            )
+        )
+    return refreshed
+
+
 def main() -> None:
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
     if not api_key:
@@ -590,7 +666,9 @@ def main() -> None:
     if RESULTS_PATH.exists():
         prior = json.loads(RESULTS_PATH.read_text()).get("results", [])
         if isinstance(prior, list):
-            results = [row for row in prior if isinstance(row, dict)]
+            results = refresh_completed_results(
+                [row for row in prior if isinstance(row, dict)]
+            )
     done = completed_replicates(results)
     for replicate in range(N_REPLICATES):
         if replicate + 1 in done:
