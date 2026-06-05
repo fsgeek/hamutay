@@ -3,17 +3,62 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from hamutay.events import build_pending_event
+from hamutay.events import EventStore, build_pending_event, run_next_event
 
 TERMINAL_EVENT_STATUSES = {"completed", "failed", "suppressed", "expired"}
 
 
 def _json_clone(value: Any) -> Any:
     return json.loads(json.dumps(value, default=str))
+
+
+def latest_event_records_by_label(
+    event_records: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    """Return latest sidecar record keyed by original pending label."""
+    label_by_event_id = {
+        record["event_id"]: record.get("label")
+        for record in event_records
+        if record.get("status") == "pending" and record.get("label")
+    }
+    latest: dict[str, dict[str, Any]] = {}
+    for record in event_records:
+        event_id = record.get("event_id")
+        label = label_by_event_id.get(event_id)
+        if label:
+            latest[str(label)] = record
+    return latest
+
+
+@dataclass(frozen=True)
+class EventRunResult:
+    """Structured telemetry for one scheduler-run event."""
+
+    label: str
+    status: str
+    terminal_record: dict[str, Any] | None = None
+    error: str | None = None
+
+    @property
+    def result_record_id(self) -> str | None:
+        if not self.terminal_record:
+            return None
+        value = self.terminal_record.get("result_record_id")
+        return str(value) if value else None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "label": self.label,
+            "status": self.status,
+            "error": self.error,
+            "result_record_id": self.result_record_id,
+            "terminal_record": self.terminal_record,
+        }
 
 
 @dataclass(frozen=True)
@@ -147,4 +192,103 @@ class BranchContextPolicy:
             scheduled_by_cycle=int(fork_record["cycle"]),
             scheduled_by_record_id=UUID(str(fork_record["record_id"])),
             label=label,
+        )
+
+
+@dataclass
+class ForkJoinPolicyRunner:
+    """Reusable runner for explicit fork/join event orchestration."""
+
+    policy: BranchContextPolicy = field(default_factory=BranchContextPolicy)
+    now: datetime | None = None
+    branch_up_to_cycle: int = 3
+    join_up_to_cycle: int = 3
+    policy_name: str = "fork_join_policy_runner"
+
+    def run_branch(
+        self,
+        *,
+        label: str,
+        session: Any,
+        store: EventStore,
+        seed_records: list[dict[str, Any]],
+    ) -> EventRunResult:
+        self.policy.seed_branch_session(
+            session,
+            seed_records,
+            up_to_cycle=self.branch_up_to_cycle,
+        )
+        error = None
+        try:
+            terminal = run_next_event(session, store, now=self.now)
+        except Exception as exc:  # noqa: BLE001 -- telemetry captures failures
+            error = f"{type(exc).__name__}: {exc}"
+            terminal = latest_event_records_by_label(
+                store.read_records()
+            ).get(label)
+        status = str((terminal or {}).get("status", "unknown"))
+        return EventRunResult(
+            label=label,
+            status=status,
+            terminal_record=terminal,
+            error=error,
+        )
+
+    def schedule_join(
+        self,
+        *,
+        store: EventStore,
+        fork_record: dict[str, Any],
+        branch_outputs: list[dict[str, Any]],
+        label: str = "fork-join",
+        requested_context: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        event = self.policy.build_join_event(
+            fork_record=fork_record,
+            branch_outputs=branch_outputs,
+            label=label,
+            requested_context=requested_context,
+        )
+        store.append(event)
+        return event
+
+    def run_join(
+        self,
+        *,
+        session: Any,
+        store: EventStore,
+        seed_records: list[dict[str, Any]],
+        label: str = "fork-join",
+    ) -> EventRunResult:
+        session.seed_history(seed_records, up_to_cycle=self.join_up_to_cycle)
+        error = None
+        try:
+            terminal = run_next_event(session, store, now=self.now)
+        except Exception as exc:  # noqa: BLE001 -- telemetry captures failures
+            error = f"{type(exc).__name__}: {exc}"
+            terminal = latest_event_records_by_label(
+                store.read_records()
+            ).get(label)
+        status = str((terminal or {}).get("status", "unknown"))
+        return EventRunResult(
+            label=label,
+            status=status,
+            terminal_record=terminal,
+            error=error,
+        )
+
+    def suppress_pending_after_failure(
+        self,
+        *,
+        store: EventStore,
+        failed_wake_record: dict[str, Any],
+        classification: str = "branch_failed",
+        reason: str = "branch failure",
+    ) -> list[dict[str, Any]]:
+        return store.suppress_pending(
+            policy=self.policy_name,
+            reason=reason,
+            suppressed_by_record_id=failed_wake_record["record_id"],
+            suppressed_by_cycle=int(failed_wake_record["cycle"]),
+            suppressed_by_classification=classification,
         )

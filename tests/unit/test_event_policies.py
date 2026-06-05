@@ -4,8 +4,13 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from hamutay.event_policies import BranchContextPolicy
-from hamutay.events import build_pending_event
+from hamutay.event_policies import (
+    BranchContextPolicy,
+    EventRunResult,
+    ForkJoinPolicyRunner,
+    latest_event_records_by_label,
+)
+from hamutay.events import EventStore, build_pending_event
 
 
 def test_branch_visible_records_are_idempotent_and_strip_activity_log():
@@ -104,3 +109,65 @@ def test_build_join_event_uses_fork_coordinates_and_branch_outputs():
     )
     assert "branch-a" in event["purpose"]
     assert "branch-b" in event["purpose"]
+
+
+def test_latest_event_records_by_label_uses_pending_label_and_latest_status():
+    pending = build_pending_event(
+        purpose="Branch B work.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=UUID("00000000-0000-0000-0000-000000000001"),
+        label="branch-b",
+    )
+    failed = {
+        "record_type": "event_status",
+        "event_id": pending["event_id"],
+        "status": "failed",
+        "error": "boom",
+    }
+
+    latest = latest_event_records_by_label([pending, failed])
+
+    assert latest["branch-b"] == failed
+
+
+def test_event_run_result_reports_result_record_id():
+    result = EventRunResult(
+        label="branch-a",
+        status="completed",
+        terminal_record={
+            "status": "completed",
+            "result_record_id": "00000000-0000-0000-0000-000000000002",
+        },
+    )
+
+    assert result.result_record_id == "00000000-0000-0000-0000-000000000002"
+    assert result.to_dict()["result_record_id"] == result.result_record_id
+
+
+def test_fork_join_runner_suppresses_pending_after_failure(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    pending = build_pending_event(
+        purpose="Sibling branch.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=UUID("00000000-0000-0000-0000-000000000001"),
+        label="branch-b",
+    )
+    store.append(pending)
+    runner = ForkJoinPolicyRunner()
+
+    suppressed = runner.suppress_pending_after_failure(
+        store=store,
+        failed_wake_record={
+            "cycle": 3,
+            "record_id": "00000000-0000-0000-0000-000000000003",
+        },
+    )
+
+    assert len(suppressed) == 1
+    assert suppressed[0]["status"] == "suppressed"
+    assert suppressed[0]["suppressed_by_cycle"] == 3
+    assert suppressed[0]["suppressed_by_record_id"] == (
+        "00000000-0000-0000-0000-000000000003"
+    )
