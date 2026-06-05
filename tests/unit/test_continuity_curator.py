@@ -4,7 +4,10 @@ import json
 from datetime import datetime, timezone
 from uuid import UUID
 
-from hamutay.continuity_curator import ModelContinuityCurator
+from hamutay.continuity_curator import (
+    ClaimTableContinuityCurator,
+    ModelContinuityCurator,
+)
 from hamutay.taste_open import ExchangeResult, OpenTasteSession
 
 
@@ -153,3 +156,88 @@ def test_model_curator_integrates_with_open_taste_session(tmp_path):
     assert backend.calls[1]["model"] == "curator-model"
     assert backend.calls[2]["model"] == "main-model"
     assert "continuity_curation" not in records[0]["state"]
+
+
+def test_claim_table_curator_renders_accepted_rows_deterministically():
+    backend = _FakeBackend([
+        ExchangeResult(
+            raw_output={
+                "response": "claim rows produced",
+                "claims": [
+                    {
+                        "claim": "West Shelter replaced East Clinic.",
+                        "status": "supported",
+                        "source_cycle": "3",
+                        "support": "cycle 3 contradictory update",
+                    },
+                    {
+                        "claim": "Local document storage is prohibited.",
+                        "status": "invalidated",
+                        "source_cycle": 3,
+                        "support": "privacy officer ruling",
+                    },
+                    {
+                        "claim": "Use rugged tablets.",
+                        "status": "asserted",
+                        "source_cycle": 4,
+                        "support": "not supported",
+                    },
+                ],
+            },
+            input_tokens=13,
+            output_tokens=8,
+        )
+    ])
+    curator = ClaimTableContinuityCurator(
+        backend=backend,
+        model="curator-model",
+        max_summary_chars=1200,
+    )
+
+    artifact = curator.curate(
+        cycle=3,
+        record_id=UUID("00000000-0000-0000-0000-000000000003"),
+        timestamp=datetime(2026, 6, 5, tzinfo=timezone.utc),
+        prior_state={"site": "East Clinic"},
+        raw_output={"response": "main"},
+        response_text="main",
+        state={"site": "West Shelter"},
+    )
+
+    assert artifact["curator_type"] == "claim_table_model"
+    assert artifact["summary_source"] == "deterministic_claim_table"
+    assert artifact["accepted_claim_rows"] == 2
+    assert artifact["rejected_claim_rows"] == 1
+    assert "[supported c3] West Shelter replaced East Clinic." in artifact["summary"]
+    assert "[invalidated c3] Local document storage is prohibited." in (
+        artifact["summary"]
+    )
+    assert "rugged tablets" not in artifact["summary"].lower()
+    assert artifact["usage"]["output_tokens"] == 8
+    assert "bounded claim" in backend.calls[0]["messages"][0]["content"]
+
+
+def test_claim_table_curator_rejects_missing_claims_without_prose_fallback():
+    backend = _FakeBackend([
+        ExchangeResult(raw_output={"response": "free prose instead"})
+    ])
+    curator = ClaimTableContinuityCurator(
+        backend=backend,
+        model="curator-model",
+        max_summary_chars=1200,
+    )
+
+    artifact = curator.curate(
+        cycle=1,
+        record_id=UUID("00000000-0000-0000-0000-000000000001"),
+        timestamp=datetime(2026, 6, 5, tzinfo=timezone.utc),
+        prior_state=None,
+        raw_output={"response": "main"},
+        response_text="main",
+        state={"cycle": 1},
+    )
+
+    assert artifact["summary"] == "(no valid curator claim rows)"
+    assert artifact["accepted_claim_rows"] == 0
+    assert artifact["rejected_claim_rows"] == 1
+    assert artifact["summary_truncated"] is False
