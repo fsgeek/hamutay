@@ -169,6 +169,103 @@ def build_pending_event(
     return record
 
 
+def _expand_result_record_id(value: object, result_record_id: str) -> object:
+    if isinstance(value, str):
+        return value.replace("<result_record_id>", result_record_id)
+    if isinstance(value, list):
+        return [_expand_result_record_id(item, result_record_id) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: _expand_result_record_id(item, result_record_id)
+            for key, item in value.items()
+        }
+    return value
+
+
+def build_bound_continuation_event(
+    *,
+    completed_event: dict,
+    continuation_request: dict,
+) -> dict | None:
+    """Build a pending event bound to a completed event's result record.
+
+    The helper is intentionally pure: it validates and returns a pending event
+    record, but does not append to EventStore. A model-owned durable
+    continuation request can use the string placeholder ``<result_record_id>``
+    anywhere in JSON-safe fields to refer to the completed wake record.
+    """
+    if not isinstance(completed_event, dict):
+        raise ValueError("completed_event must be an object")
+    if not isinstance(continuation_request, dict):
+        raise ValueError("continuation_request must be an object")
+    if continuation_request.get("requested") is not True:
+        return None
+
+    result_record_id = completed_event.get("result_record_id")
+    if not result_record_id:
+        raise ValueError("completed_event.result_record_id is required")
+    result_record_id = str(UUID(str(result_record_id)))
+
+    wake_cycle = completed_event.get("wake_cycle")
+    if not isinstance(wake_cycle, int) or isinstance(wake_cycle, bool):
+        raise ValueError("completed_event.wake_cycle must be an integer")
+
+    purpose = _expand_result_record_id(
+        continuation_request.get("purpose"),
+        result_record_id,
+    )
+    if not isinstance(purpose, str) or not purpose.strip():
+        raise ValueError("continuation_request.purpose is required")
+
+    requested_context = _expand_result_record_id(
+        continuation_request.get("requested_context"),
+        result_record_id,
+    )
+    label = _expand_result_record_id(
+        continuation_request.get("label"),
+        result_record_id,
+    )
+    not_before = _expand_result_record_id(
+        continuation_request.get("not_before"),
+        result_record_id,
+    )
+    expires_at = _expand_result_record_id(
+        continuation_request.get("expires_at"),
+        result_record_id,
+    )
+    terminal_surface = _expand_result_record_id(
+        continuation_request.get("terminal_surface"),
+        result_record_id,
+    )
+    contract = _expand_result_record_id(
+        continuation_request.get("durable_update_contract"),
+        result_record_id,
+    )
+    example = _expand_result_record_id(
+        continuation_request.get("durable_update_example"),
+        result_record_id,
+    )
+
+    event = build_pending_event(
+        purpose=purpose,
+        requested_context=requested_context,
+        scheduled_by_cycle=wake_cycle,
+        scheduled_by_record_id=UUID(result_record_id),
+        label=label if isinstance(label, str) and label else None,
+        not_before=not_before if isinstance(not_before, str) and not_before else None,
+        expires_at=expires_at if isinstance(expires_at, str) and expires_at else None,
+        durable_update_contract=contract if isinstance(contract, dict) else None,
+        durable_update_example=example if isinstance(example, dict) else None,
+        terminal_surface=terminal_surface if isinstance(terminal_surface, dict) else None,
+    )
+    event["bound_by"] = "continuation_request"
+    event["bound_source_event_id"] = completed_event.get("event_id")
+    event["bound_result_record_id"] = result_record_id
+    if continuation_request.get("kind") is not None:
+        event["continuation_kind"] = str(continuation_request["kind"])
+    return event
+
+
 @dataclass
 class EventStore:
     """Append-only JSONL event store."""

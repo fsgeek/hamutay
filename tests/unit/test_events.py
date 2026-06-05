@@ -12,6 +12,7 @@ import pytest
 
 from hamutay.events import (
     EventStore,
+    build_bound_continuation_event,
     build_event_envelope,
     build_outcome_observation,
     build_pending_event,
@@ -425,6 +426,129 @@ def test_build_pending_event_accepts_terminal_surface():
                 "00000000-0000-0000-0000-000000000001"
             ),
             terminal_surface={"tool_name": "bad", "input_schema": {}},
+        )
+
+
+def test_build_bound_continuation_event_expands_result_record_id():
+    completed = {
+        "event_id": "event-1",
+        "status": "completed",
+        "wake_cycle": 3,
+        "result_record_id": "00000000-0000-0000-0000-000000000333",
+    }
+    request = {
+        "requested": True,
+        "kind": "substrate_bound_second_wake",
+        "purpose": "Use <result_record_id> as the first wake record.",
+        "requested_context": [
+            {"tool": "recall", "cycle": 1},
+            {
+                "tool": "recall",
+                "record_id": "<result_record_id>",
+                "field": "chain_intermediate",
+            },
+        ],
+        "label": "bound-<result_record_id>",
+        "not_before": "2026-06-01T02:00:00+00:00",
+        "terminal_surface": {
+            "tool_name": "complete_second_wake",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "response": {"type": "string"},
+                    "answer": {"type": "string"},
+                },
+                "required": ["response", "answer"],
+            },
+            "state_update": {
+                "response_field": "response",
+                "copy": {"chain_final_answer": "answer"},
+                "set": {"bound_record_id_used": "<result_record_id>"},
+            },
+        },
+    }
+
+    event = build_bound_continuation_event(
+        completed_event=completed,
+        continuation_request=request,
+    )
+
+    assert event is not None
+    assert event["scheduled_by_cycle"] == 3
+    assert event["scheduled_by_record_id"] == completed["result_record_id"]
+    assert event["bound_by"] == "continuation_request"
+    assert event["bound_source_event_id"] == "event-1"
+    assert event["bound_result_record_id"] == completed["result_record_id"]
+    assert event["continuation_kind"] == "substrate_bound_second_wake"
+    assert completed["result_record_id"] in event["purpose"]
+    assert event["requested_context"][1] == {
+        "tool": "recall",
+        "record_id": completed["result_record_id"],
+        "field": "chain_intermediate",
+    }
+    assert event["terminal_surface"]["state_update"]["set"] == {
+        "bound_record_id_used": completed["result_record_id"]
+    }
+
+
+def test_build_bound_continuation_event_returns_none_when_not_requested():
+    event = build_bound_continuation_event(
+        completed_event={
+            "wake_cycle": 3,
+            "result_record_id": "00000000-0000-0000-0000-000000000333",
+        },
+        continuation_request={"requested": False},
+    )
+
+    assert event is None
+
+
+@pytest.mark.parametrize(
+    ("completed", "continuation", "message"),
+    [
+        (
+            {"wake_cycle": 3},
+            {
+                "requested": True,
+                "purpose": "Continue.",
+                "requested_context": [{"tool": "recall", "cycle": 1}],
+            },
+            "result_record_id",
+        ),
+        (
+            {
+                "wake_cycle": 3,
+                "result_record_id": "00000000-0000-0000-0000-000000000333",
+            },
+            {
+                "requested": True,
+                "requested_context": [{"tool": "recall", "cycle": 1}],
+            },
+            "purpose",
+        ),
+        (
+            {
+                "wake_cycle": 3,
+                "result_record_id": "00000000-0000-0000-0000-000000000333",
+            },
+            {
+                "requested": True,
+                "purpose": "Continue.",
+                "requested_context": [{"tool": "recall"}],
+            },
+            "recall context",
+        ),
+    ],
+)
+def test_build_bound_continuation_event_rejects_malformed_requests(
+    completed,
+    continuation,
+    message,
+):
+    with pytest.raises(ValueError, match=message):
+        build_bound_continuation_event(
+            completed_event=completed,
+            continuation_request=continuation,
         )
 
 
