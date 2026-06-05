@@ -55,7 +55,9 @@ BOUND_FIELD = filtered.BOUND_FIELD
 def run_replicate(replicate: int, api_key: str) -> dict[str, Any]:
     original_builder = filtered.sb.FirstWakeRepairBuilder
     try:
-        filtered.sb.FirstWakeRepairBuilder = stability.StrongFirstWakeRepairBuilder
+        filtered.sb.FirstWakeRepairBuilder = (
+            lambda: stability.StrongFirstWakeRepairBuilder(replicate=replicate)
+        )
         row = filtered.run_replicate(replicate, api_key)
     finally:
         filtered.sb.FirstWakeRepairBuilder = original_builder
