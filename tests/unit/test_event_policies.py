@@ -403,7 +403,7 @@ def test_apply_fork_run_graph_plan_to_memory_bridge_is_walkable():
         plan=plan,
         cycle=4,
     )
-    walked = tool_walk(
+    path_walk = tool_walk(
         {
             "from_record_id": applied["fork_run_record_id"],
             "direction": "forward",
@@ -412,8 +412,27 @@ def test_apply_fork_run_graph_plan_to_memory_bridge_is_walkable():
         prior_states=[],
         bridge=bridge,
     )
+    walked = tool_walk(
+        {
+            "from_record_id": applied["fork_run_record_id"],
+            "direction": "forward",
+            "depth": 1,
+            "mode": "adjacent",
+        },
+        prior_states=[],
+        bridge=bridge,
+    )
 
     assert len(applied["suppression_nodes"]) == 1
+    assert len(path_walk["path"]) == 1
+    assert all(
+        edge["from_record_id"] == applied["fork_run_record_id"]
+        for edge in applied["edges"]
+    )
+    assert all(
+        node["from_record_id"] == applied["fork_run_record_id"]
+        for node in applied["suppression_nodes"]
+    )
     reached = {step["record_id"] for step in walked["path"]}
     assert str(root_id) in reached
     assert str(branch_id) in reached

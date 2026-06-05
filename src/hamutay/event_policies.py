@@ -297,21 +297,19 @@ def apply_fork_run_graph_plan(
         tags=tuple(plan.get("fork_run_tags", ())),
     )
     edges = []
-    edge_source_id = fork_run_record_id
     for edge in plan.get("edges", []):
         target_id = UUID(str(edge["target_record_id"]))
         edge_id = bridge.store_edge(
-            edge_source_id,
+            fork_run_record_id,
             target_id,
             edge["relation"],
             ordering=cycle,
         )
         edges.append({
             **edge,
-            "from_record_id": str(edge_source_id),
+            "from_record_id": str(fork_run_record_id),
             "edge_id": str(edge_id),
         })
-        edge_source_id = target_id
 
     suppression_nodes = []
     for item in plan.get("suppression_records", []):
@@ -321,7 +319,7 @@ def apply_fork_run_graph_plan(
             tags=("fork_run", "suppression", plan["fork_run_id"]),
         )
         edge_id = bridge.store_edge(
-            edge_source_id,
+            fork_run_record_id,
             suppression_id,
             item["relation"],
             ordering=cycle,
@@ -329,11 +327,10 @@ def apply_fork_run_graph_plan(
         suppression_nodes.append({
             "role": item["role"],
             "record_id": str(suppression_id),
-            "from_record_id": str(edge_source_id),
+            "from_record_id": str(fork_run_record_id),
             "edge_id": str(edge_id),
             "content": item["content"],
         })
-        edge_source_id = suppression_id
 
     return {
         "fork_run_id": plan["fork_run_id"],
