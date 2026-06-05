@@ -400,6 +400,7 @@ class EventStore:
         context_results: list[dict] | None = None,
         outcome_observation: dict | None = None,
         wake_validation: dict | None = None,
+        auto_continuation_event: dict | None = None,
     ) -> dict:
         record = {
             "record_type": "event_status",
@@ -418,6 +419,11 @@ class EventStore:
             record["outcome_observation"] = outcome_observation
         if wake_validation is not None:
             record["wake_validation"] = wake_validation
+        if auto_continuation_event is not None:
+            record["auto_continuation_appended"] = True
+            record["auto_continuation_event_id"] = (
+                auto_continuation_event.get("event_id")
+            )
         self.append(record)
         return record
 
@@ -1179,6 +1185,7 @@ def run_next_event(
     store: EventStore,
     *,
     now: datetime | None = None,
+    auto_continuations: bool = False,
 ) -> dict:
     """Run the oldest pending event once using an OpenTasteSession."""
     claim = store.claim_next_pending(now=now)
@@ -1212,16 +1219,37 @@ def run_next_event(
         wake_validation = build_wake_validation_summary(
             getattr(session, "_last_state_validation", None)
         )
-        return store.append_completed(
+        result_record_id = session._prior_states[-1][1]
+        wake_cycle = session.cycle
+        auto_continuation_event = None
+        if auto_continuations:
+            continuation_request = after_state.get("continuation_request")
+            if isinstance(continuation_request, dict):
+                auto_continuation_event = build_bound_continuation_event(
+                    completed_event={
+                        "event_id": event["event_id"],
+                        "status": "completed",
+                        "run_id": run_id,
+                        "wake_cycle": wake_cycle,
+                        "result_record_id": str(result_record_id),
+                    },
+                    continuation_request=continuation_request,
+                )
+        completed = store.append_completed(
             event=event,
             run_id=run_id,
-            wake_cycle=session.cycle,
-            result_record_id=session._prior_states[-1][1],
+            wake_cycle=wake_cycle,
+            result_record_id=result_record_id,
             response_text=response,
             context_results=context_results,
             outcome_observation=outcome_observation,
             wake_validation=wake_validation,
+            auto_continuation_event=auto_continuation_event,
         )
+        if auto_continuation_event is not None:
+            store.append(auto_continuation_event)
+            completed["auto_continuation_event"] = auto_continuation_event
+        return completed
     except Exception as e:
         store.append_failed(
             event=event,
@@ -1239,12 +1267,18 @@ def run_pending_events(
     limit: int = 10,
     stop_on_failure: bool = True,
     now: datetime | None = None,
+    auto_continuations: bool = False,
 ) -> dict:
     """Run up to limit pending events and return a batch summary."""
     results: list[dict] = []
     for _ in range(limit):
         try:
-            result = run_next_event(session, store, now=now)
+            result = run_next_event(
+                session,
+                store,
+                now=now,
+                auto_continuations=auto_continuations,
+            )
         except Exception as e:
             failure = {
                 "status": "failed",
@@ -1275,6 +1309,7 @@ def step_pending_events(
     limit: int = 10,
     stop_on_failure: bool = True,
     now: datetime | None = None,
+    auto_continuations: bool = False,
 ) -> dict:
     """Run one fixed-time scheduler step and report why the step stopped.
 
@@ -1288,6 +1323,7 @@ def step_pending_events(
         limit=limit,
         stop_on_failure=stop_on_failure,
         now=now,
+        auto_continuations=auto_continuations,
     )
     summary = summarize_event_log(store.read_records(), now=now)
     results = batch.get("results", [])

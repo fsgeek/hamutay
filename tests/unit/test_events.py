@@ -1104,6 +1104,176 @@ def test_run_next_event_completes(tmp_path):
     assert "wake_validation" not in records[-1]
 
 
+def _continuation_request() -> dict:
+    return {
+        "requested": True,
+        "kind": "unit_bound_continuation",
+        "purpose": "Continue from <result_record_id>.",
+        "requested_context": [
+            {"tool": "recall", "cycle": 1},
+            {
+                "tool": "recall",
+                "record_id": "<result_record_id>",
+                "field": "event_reflection",
+            },
+        ],
+        "label": "unit-bound-continuation",
+        "terminal_surface": {
+            "tool_name": "complete_continuation",
+            "input_schema": {
+                "type": "object",
+                "properties": {
+                    "response": {"type": "string"},
+                    "answer": {"type": "string"},
+                },
+                "required": ["response", "answer"],
+            },
+            "state_update": {
+                "response_field": "response",
+                "copy": {"continuation_answer": "answer"},
+                "set": {"bound_record_id_used": "<result_record_id>"},
+            },
+        },
+    }
+
+
+def test_run_next_event_does_not_auto_continue_by_default(tmp_path):
+    log_path = tmp_path / "session.jsonl"
+    event_path = tmp_path / "session.events.jsonl"
+    session = OpenTasteSession(
+        backend=_FakeBackend(),
+        log_path=str(log_path),
+        event_log_path=str(event_path),
+        enable_tools=True,
+        project_root=tmp_path,
+    )
+    session.exchange("seed")
+    session._backend = _FakeBackend(
+        ExchangeResult(
+            raw_output={
+                "response": "event handled",
+                "event_reflection": "revised",
+                "continuation_request": _continuation_request(),
+            },
+            stop_reason="end_turn",
+        )
+    )
+    event = build_pending_event(
+        purpose="Reflect on claim.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=session._prior_states[-1][1],
+    )
+    store = EventStore(event_path)
+    store.append(event)
+
+    result = run_next_event(session, store)
+
+    assert result["status"] == "completed"
+    records = store.read_records()
+    assert [r["status"] for r in records] == ["pending", "running", "completed"]
+    assert "auto_continuation_event" not in result
+
+
+def test_run_next_event_auto_appends_bound_continuation(tmp_path):
+    log_path = tmp_path / "session.jsonl"
+    event_path = tmp_path / "session.events.jsonl"
+    session = OpenTasteSession(
+        backend=_FakeBackend(),
+        log_path=str(log_path),
+        event_log_path=str(event_path),
+        enable_tools=True,
+        project_root=tmp_path,
+    )
+    session.exchange("seed")
+    session._backend = _FakeBackend(
+        ExchangeResult(
+            raw_output={
+                "response": "event handled",
+                "event_reflection": "revised",
+                "continuation_request": _continuation_request(),
+            },
+            stop_reason="end_turn",
+        )
+    )
+    event = build_pending_event(
+        purpose="Reflect on claim.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=session._prior_states[-1][1],
+    )
+    store = EventStore(event_path)
+    store.append(event)
+
+    result = run_next_event(session, store, auto_continuations=True)
+
+    assert result["status"] == "completed"
+    continuation = result["auto_continuation_event"]
+    assert continuation["status"] == "pending"
+    assert continuation["bound_by"] == "continuation_request"
+    assert continuation["bound_source_event_id"] == event["event_id"]
+    assert continuation["scheduled_by_cycle"] == result["wake_cycle"]
+    assert continuation["scheduled_by_record_id"] == result["result_record_id"]
+    assert continuation["requested_context"][1] == {
+        "tool": "recall",
+        "record_id": result["result_record_id"],
+        "field": "event_reflection",
+    }
+    assert continuation["terminal_surface"]["state_update"]["set"] == {
+        "bound_record_id_used": result["result_record_id"]
+    }
+    records = store.read_records()
+    assert [r["status"] for r in records] == [
+        "pending",
+        "running",
+        "completed",
+        "pending",
+    ]
+    assert records[2]["auto_continuation_appended"] is True
+    assert records[2]["auto_continuation_event_id"] == continuation["event_id"]
+
+
+def test_run_next_event_auto_continuation_failure_marks_event_failed(tmp_path):
+    log_path = tmp_path / "session.jsonl"
+    event_path = tmp_path / "session.events.jsonl"
+    session = OpenTasteSession(
+        backend=_FakeBackend(),
+        log_path=str(log_path),
+        event_log_path=str(event_path),
+        enable_tools=True,
+        project_root=tmp_path,
+    )
+    session.exchange("seed")
+    session._backend = _FakeBackend(
+        ExchangeResult(
+            raw_output={
+                "response": "event handled",
+                "continuation_request": {
+                    "requested": True,
+                    "requested_context": [{"tool": "recall", "cycle": 1}],
+                },
+            },
+            stop_reason="end_turn",
+        )
+    )
+    event = build_pending_event(
+        purpose="Reflect on claim.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=session._prior_states[-1][1],
+    )
+    store = EventStore(event_path)
+    store.append(event)
+
+    with pytest.raises(ValueError, match="continuation_request.purpose"):
+        run_next_event(session, store, auto_continuations=True)
+
+    records = store.read_records()
+    assert [r["status"] for r in records] == ["pending", "running", "failed"]
+    assert records[-1]["error_type"] == "ValueError"
+    assert "continuation_request.purpose" in records[-1]["error"]
+
+
 def test_run_next_event_uses_terminal_surface(tmp_path):
     log_path = tmp_path / "session.jsonl"
     event_path = tmp_path / "session.events.jsonl"
