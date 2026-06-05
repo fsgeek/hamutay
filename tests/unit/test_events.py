@@ -615,6 +615,9 @@ def test_build_event_envelope_is_explicit():
     assert envelope["event_type"] == "self_scheduled_reflection"
     assert envelope["event_id"] == event["event_id"]
     assert "self-scheduled reflection" in envelope["instruction"]
+    assert "top-level fields" in envelope["instruction"]
+    assert "Visible prose is not enough" in envelope["instruction"]
+    assert "cycle and _activity_log are substrate-owned" in envelope["instruction"]
 
 
 def test_build_event_envelope_preserves_walk_context():

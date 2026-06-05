@@ -452,7 +452,13 @@ def build_event_envelope(event: dict, context_results: list[dict], run_id: str) 
         "instruction": (
             "This is a self-scheduled reflection event. Use the provided "
             "context to decide whether to revise, preserve, defer, or "
-            "declare losses. End the cycle with think_and_respond."
+            "declare losses. If the purpose names required durable wake "
+            "updates, those updates must be committed as top-level fields in "
+            "the object you produce with think_and_respond. Visible prose is "
+            "not enough. Preserve model-owned continuity fields unless the "
+            "purpose explicitly says to change them; framework-owned fields "
+            "such as cycle and _activity_log are substrate-owned. End the "
+            "cycle with think_and_respond."
         ),
     }
     return json.dumps(envelope, indent=2, default=str)
