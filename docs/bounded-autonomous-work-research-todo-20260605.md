@@ -232,29 +232,63 @@ Deliverable:
 
 ### Step 7: Replication Boundary
 
-Status: deferred.
+Status: activated, narrow scope.
 
 Purpose:
 
-- test whether positive results are model/protocol-specific.
+- test whether the Step 6 evidence-boundary result is model/protocol-specific,
+  without turning the work into a broad model sweep.
+
+Scope:
+
+- this is a replication-boundary test, not a general capability benchmark;
+- the primary question is whether at least one non-DeepSeek model can reproduce
+  the Step 6 evidence discipline under the same event-loop substrate and
+  deterministic scorer;
+- DeepSeek V4 Pro remains the known positive anchor from Step 6 and should be
+  used as a calibration reference, not as the sole success condition.
+
+Decision taxonomy:
+
+- substrate failure: event persistence, evidence request/fulfillment linking,
+  resume context, validation provenance, or scoreable traces fail in a way that
+  makes the run uninterpretable;
+- scorer failure: deterministic scoring cannot distinguish supported claims,
+  unsupported overclaims, negation, conflict, or open evidence states;
+- protocol limitation: multiple otherwise-capable models fail in the same way
+  under the same tool/event protocol, suggesting the surface shape is imposing
+  the failure;
+- model boundary: the substrate and scorer work, but a specific model fails to
+  preserve uncertainty, request identity, evidence use, or valid structured
+  control actions;
+- replicated capability: at least one non-DeepSeek model reproduces the Step 6
+  evidence discipline under preregistered scoring.
 
 Candidate models:
 
 - DeepSeek V4 Pro as current boundary/control-loop model;
 - KIMI K2.6 as identity-object competent comparison;
-- other candidates only after the harness is stable.
+- one additional candidate may be included only if the run can distinguish
+  protocol/tool failure from behavioral evidence-boundary failure.
 
 Evidence needed:
 
 - same preregistered scoring run across a small model panel;
 - tool/protocol failures separated from autonomy failures.
 
+Non-goals:
+
+- proving or disproving AI identity;
+- proving broad open-ended autonomy;
+- sweeping the model market;
+- treating a single model failure as a failure of the research arm.
+
 ## Current Priority
 
-The next concrete work is Step 1: define the operational rubric and
-falsification criteria. Starting with the rubric prevents the harness from
-quietly redefining success around whatever behavior the first model happens to
-produce.
+The next concrete work is Step 7: a narrow replication-boundary panel for the
+Step 6 evidence stressors. The todo records the decision taxonomy; the Step 7
+pre-registration must lock the exact models, hypotheses, falsification
+criteria, expected outcomes, and scoring procedure before any model calls.
 
 ## Open Design Choices
 
