@@ -241,3 +241,85 @@ def test_claim_table_curator_rejects_missing_claims_without_prose_fallback():
     assert artifact["accepted_claim_rows"] == 0
     assert artifact["rejected_claim_rows"] == 1
     assert artifact["summary_truncated"] is False
+    assert artifact["protocol_recovery_used"] is False
+
+
+def test_claim_table_curator_can_log_response_object_recovery():
+    backend = _FakeBackend([
+        ExchangeResult(
+            raw_output={
+                "response": {
+                    "claims": [
+                        {
+                            "claim": "Offline document storage is prohibited.",
+                            "status": "supported",
+                            "source_cycle": 3,
+                            "support": "privacy officer ruling",
+                        }
+                    ]
+                }
+            }
+        )
+    ])
+    curator = ClaimTableContinuityCurator(
+        backend=backend,
+        model="curator-model",
+        recover_response_claims=True,
+    )
+
+    artifact = curator.curate(
+        cycle=3,
+        record_id=UUID("00000000-0000-0000-0000-000000000003"),
+        timestamp=datetime(2026, 6, 5, tzinfo=timezone.utc),
+        prior_state=None,
+        raw_output={"response": "main"},
+        response_text="main",
+        state={"cycle": 3},
+    )
+
+    assert artifact["accepted_claim_rows"] == 1
+    assert artifact["protocol_recovery_used"] is True
+    assert artifact["protocol_recovery_source"] == "response_object_claims"
+    assert artifact["recovered_claim_rows"] == 1
+    assert "Offline document storage is prohibited." in artifact["summary"]
+
+
+def test_claim_table_curator_can_log_response_string_recovery():
+    backend = _FakeBackend([
+        ExchangeResult(
+            raw_output={
+                "response": json.dumps(
+                    {
+                        "claims": [
+                            {
+                                "claim": "West Shelter replaced East Clinic.",
+                                "status": "supported",
+                                "source_cycle": 3,
+                                "support": "site update",
+                            }
+                        ]
+                    }
+                )
+            }
+        )
+    ])
+    curator = ClaimTableContinuityCurator(
+        backend=backend,
+        model="curator-model",
+        recover_response_claims=True,
+    )
+
+    artifact = curator.curate(
+        cycle=3,
+        record_id=UUID("00000000-0000-0000-0000-000000000003"),
+        timestamp=datetime(2026, 6, 5, tzinfo=timezone.utc),
+        prior_state=None,
+        raw_output={"response": "main"},
+        response_text="main",
+        state={"cycle": 3},
+    )
+
+    assert artifact["accepted_claim_rows"] == 1
+    assert artifact["protocol_recovery_used"] is True
+    assert artifact["protocol_recovery_source"] == "response_stringified_json_claims"
+    assert artifact["recovered_claim_rows"] == 1

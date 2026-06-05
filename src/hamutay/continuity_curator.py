@@ -125,6 +125,30 @@ def _normalize_claim_rows(
     return accepted, rejected
 
 
+def _claim_rows_from_response(raw: dict) -> tuple[object, dict | None]:
+    response = raw.get("response")
+    if isinstance(response, dict) and "claims" in response:
+        rows = response.get("claims")
+        count = len(rows) if isinstance(rows, list) else 0
+        return rows, {
+            "source": "response_object_claims",
+            "recovered_claim_rows": count,
+        }
+    if isinstance(response, str):
+        try:
+            parsed = json.loads(response)
+        except json.JSONDecodeError:
+            return None, None
+        if isinstance(parsed, dict) and "claims" in parsed:
+            rows = parsed.get("claims")
+            count = len(rows) if isinstance(rows, list) else 0
+            return rows, {
+                "source": "response_stringified_json_claims",
+                "recovered_claim_rows": count,
+            }
+    return None, None
+
+
 def _render_claim_table(rows: list[dict], max_chars: int) -> tuple[str, bool]:
     if not rows:
         return "(no valid curator claim rows)", False
@@ -237,6 +261,7 @@ class ClaimTableContinuityCurator:
     max_claims: int = 8
     max_claim_chars: int = 180
     max_support_chars: int = 120
+    recover_response_claims: bool = False
 
     def curate(
         self,
@@ -279,8 +304,14 @@ class ClaimTableContinuityCurator:
             experiment_label=self.experiment_label,
         )
         raw = _jsonable(result.raw_output)
+        raw_rows = raw.get("claims")
+        protocol_recovery = None
+        if not isinstance(raw_rows, list) and self.recover_response_claims:
+            recovered_rows, protocol_recovery = _claim_rows_from_response(raw)
+            if protocol_recovery is not None:
+                raw_rows = recovered_rows
         rows, rejected = _normalize_claim_rows(
-            raw.get("claims"),
+            raw_rows,
             max_claims=self.max_claims,
             max_claim_chars=self.max_claim_chars,
             max_support_chars=self.max_support_chars,
@@ -301,6 +332,16 @@ class ClaimTableContinuityCurator:
             "accepted_claim_rows": len(rows),
             "rejected_claim_rows": len(rejected),
             "rejected_claim_row_examples": rejected[:8],
+            "protocol_recovery": protocol_recovery,
+            "protocol_recovery_used": protocol_recovery is not None,
+            "protocol_recovery_source": (
+                protocol_recovery.get("source") if protocol_recovery else None
+            ),
+            "recovered_claim_rows": (
+                int(protocol_recovery.get("recovered_claim_rows") or 0)
+                if protocol_recovery
+                else 0
+            ),
             "usage": {
                 "input_tokens": result.input_tokens,
                 "output_tokens": result.output_tokens,
