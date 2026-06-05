@@ -757,6 +757,44 @@ def test_summarize_event_log_classifies_pending_runnability(tmp_path):
     assert summary["oldest_expired_pending"]["event_id"] == expired["event_id"]
 
 
+def test_suppress_pending_marks_pending_events_terminal(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    first = _event_record()
+    second = _event_record()
+    store.append(first)
+    store.append(second)
+
+    suppressed = store.suppress_pending(
+        policy="bounded_autonomy",
+        reason="stasis cutoff",
+        suppressed_by_record_id="record-1",
+    )
+
+    assert len(suppressed) == 2
+    latest = store.latest_by_event_id()
+    assert latest[first["event_id"]]["status"] == "suppressed"
+    assert latest[first["event_id"]]["suppressed_by_policy"] == (
+        "bounded_autonomy"
+    )
+    assert latest[first["event_id"]]["suppression_reason"] == "stasis cutoff"
+    assert latest[first["event_id"]]["suppressed_by_record_id"] == "record-1"
+
+
+def test_suppressed_events_summarize_without_lifecycle_anomaly(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    event = _event_record()
+    store.append(event)
+    store.suppress_pending(policy="bounded_autonomy", reason="drift")
+
+    summary = summarize_event_log(store.read_records())
+
+    assert summary["status_counts"] == {"suppressed": 1}
+    assert summary["pending_runnable_count"] == 0
+    assert summary["suppressed"][0]["event_id"] == event["event_id"]
+    assert summary["suppressed"][0]["suppression_reason"] == "drift"
+    assert summary["lifecycle_anomalies"] == []
+
+
 def test_detect_lifecycle_anomalies_flags_invalid_history():
     anomalies = detect_lifecycle_anomalies(
         "event-1",
@@ -881,6 +919,19 @@ def test_format_event_report_includes_pending_runnability(tmp_path):
     assert "Oldest runnable pending:" in report
     assert "Oldest waiting pending:" in report
     assert "Oldest expired pending:" in report
+
+
+def test_format_event_report_includes_suppressed_events(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    event = _event_record()
+    store.append(event)
+    store.suppress_pending(policy="bounded_autonomy", reason="stasis cutoff")
+
+    report = format_event_report(summarize_event_log(store.read_records()))
+
+    assert "Statuses: suppressed=1" in report
+    assert "Suppressed:" in report
+    assert "policy=bounded_autonomy reason=stasis cutoff" in report
 
 
 def test_format_event_report_includes_lifecycle_anomalies(tmp_path):

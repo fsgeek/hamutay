@@ -306,6 +306,42 @@ class EventStore:
         self.append(record)
         return record
 
+    def suppress_pending(
+        self,
+        *,
+        reason: str,
+        policy: str,
+        suppressed_by_record_id: str | UUID | None = None,
+    ) -> list[dict]:
+        """Mark all currently pending events as suppressed by scheduler policy."""
+        suppressed: list[dict] = []
+        with self._locked():
+            latest = self._latest_by_event_id_from_records(
+                self._read_records_unlocked()
+            )
+            pending = [
+                record for record in latest.values()
+                if record.get("status") == "pending"
+            ]
+            pending.sort(key=lambda record: str(record.get("created_at", "")))
+            for event in pending:
+                record = {
+                    "record_type": "event_status",
+                    "event_id": event["event_id"],
+                    "event_type": event.get("event_type", EVENT_TYPE_REFLECTION),
+                    "status": "suppressed",
+                    "suppressed_at": utc_now_iso(),
+                    "suppressed_by_policy": policy,
+                    "suppression_reason": reason,
+                }
+                if suppressed_by_record_id is not None:
+                    record["suppressed_by_record_id"] = str(
+                        suppressed_by_record_id
+                    )
+                self._append_unlocked(record)
+                suppressed.append(record)
+        return suppressed
+
 
 def is_expired(event: dict, *, now: datetime | None = None) -> bool:
     expires_at = event.get("expires_at")
@@ -453,7 +489,7 @@ def _context_error_count(history: list[dict]) -> int:
     return count
 
 
-TERMINAL_EVENT_STATUSES = {"completed", "failed", "expired"}
+TERMINAL_EVENT_STATUSES = {"completed", "failed", "expired", "suppressed"}
 
 
 def detect_lifecycle_anomalies(event_id: str, history: list[dict]) -> list[dict]:
@@ -550,6 +586,10 @@ def summarize_event_history(
         "completed_at": latest.get("completed_at"),
         "failed_at": latest.get("failed_at"),
         "expired_at": latest.get("expired_at"),
+        "suppressed_at": latest.get("suppressed_at"),
+        "suppressed_by_policy": latest.get("suppressed_by_policy"),
+        "suppression_reason": latest.get("suppression_reason"),
+        "suppressed_by_record_id": latest.get("suppressed_by_record_id"),
         "not_before": first.get("not_before"),
         "expires_at": first.get("expires_at"),
         "scheduled_by_cycle": first.get("scheduled_by_cycle"),
@@ -637,6 +677,12 @@ def summarize_event_log(
     failed.sort(key=lambda event: str(event.get("failed_at", "")), reverse=True)
     completed = [event for event in events if event.get("status") == "completed"]
     completed.sort(key=lambda event: str(event.get("completed_at", "")), reverse=True)
+    suppressed = [
+        event for event in events if event.get("status") == "suppressed"
+    ]
+    suppressed.sort(
+        key=lambda event: str(event.get("suppressed_at", "")), reverse=True
+    )
     context_errors = [
         event for event in events
         if int(event.get("context_error_count", 0)) > 0
@@ -702,6 +748,7 @@ def summarize_event_log(
         ),
         "stale_running": stale_running[:limit],
         "failed": failed[:limit],
+        "suppressed": suppressed[:limit],
         "completed": completed[:limit],
         "context_errors": context_errors[:limit],
         "outcome_warnings": outcome_warnings[:limit],
@@ -797,6 +844,17 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
                 f"{event['event_id']} "
                 f"{event.get('error_type', 'Error')}: "
                 f"{event.get('error', '')}"
+            )
+
+    if report.get("suppressed"):
+        lines.append("")
+        lines.append("Suppressed:")
+        for event in report["suppressed"]:
+            lines.append(
+                "  "
+                f"{event['event_id']} "
+                f"policy={event.get('suppressed_by_policy', '?')} "
+                f"reason={event.get('suppression_reason', '')}"
             )
 
     if report.get("stale_running"):
