@@ -232,7 +232,7 @@ Deliverable:
 
 ### Step 7: Replication Boundary
 
-Status: activated, narrow scope.
+Status: complete.
 
 Purpose:
 
@@ -283,12 +283,33 @@ Non-goals:
 - sweeping the model market;
 - treating a single model failure as a failure of the research arm.
 
+Result:
+
+- narrow two-model non-DeepSeek panel completed against
+  `moonshotai/kimi-k2.6` and `openai/gpt-4.1-mini`;
+- H1101 was falsified: no non-DeepSeek model replicated all three Step 6
+  evidence stressors;
+- H1102, H1103, and H1104 survived: all produced rows were interpretable,
+  unsupported completion was not counted as replication, and protocol/provider
+  failures were separated from model-boundary failures;
+- KIMI produced valid first-wake evidence-block behavior but timed out before
+  scoreable resumed rows under this OpenRouter OpenAI-compatible surface;
+- GPT-4.1-mini replicated partial evidence and multiple-open-request stressors,
+  but failed conflicting evidence as an action/artifact consistency boundary:
+  it preserved the conflict while choosing `continue_after` without a
+  continuation request.
+
+Deliverable:
+
+- live replication-boundary panel:
+  `experiments/event_loop/bounded_autonomous_work_replication_boundary_20260605/`.
+
 ## Current Priority
 
-The next concrete work is Step 7: a narrow replication-boundary panel for the
-Step 6 evidence stressors. The todo records the decision taxonomy; the Step 7
-pre-registration must lock the exact models, hypotheses, falsification
-criteria, expected outcomes, and scoring procedure before any model calls.
+The next concrete work should be selected from the Step 7 boundary findings:
+test whether GPT-4.1-mini's conflicting-evidence action mismatch is stable,
+test KIMI through a different provider/protocol path, or tighten the terminal
+surface so `continue_after` requires a continuation request at validation time.
 
 ## Open Design Choices
 
