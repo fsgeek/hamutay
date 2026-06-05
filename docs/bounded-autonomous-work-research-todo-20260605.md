@@ -148,7 +148,7 @@ Placement:
 
 ### Step 4: Less-Scaffolded Panel
 
-Status: not started.
+Status: complete.
 
 Purpose:
 
@@ -161,6 +161,11 @@ Evidence needed:
 - reduced task-specific hints;
 - clear record of whether choices remain coherent;
 - comparison of goal provenance against the scaffolded panel.
+
+Deliverable:
+
+- live less-scaffolded panel:
+  `experiments/event_loop/bounded_autonomous_work_less_scaffolded_20260605/`.
 
 ### Step 5: Controls
 
