@@ -120,9 +120,10 @@ def test_execute_concurrent_tool_calls_runs_each_block(tmp_path):
             input={"path": "f.py"},
         ),
     ]
-    execute_concurrent_tool_calls(blocks, executor)
+    results = execute_concurrent_tool_calls(blocks, executor)
 
     log = executor.activity_log
+    assert [result["tool"] for result in results] == ["clock", "read"]
     assert len(log) == 2
     assert log[0]["tool"] == "clock"
     assert log[1]["tool"] == "read"
@@ -133,7 +134,7 @@ def test_execute_concurrent_tool_calls_tolerates_no_executor():
     blocks = [
         SimpleNamespace(type="tool_use", name="clock", id="c_1", input={}),
     ]
-    execute_concurrent_tool_calls(blocks, None)  # should not raise
+    assert execute_concurrent_tool_calls(blocks, None) == []
 
 
 # ---------------------------------------------------------------------------

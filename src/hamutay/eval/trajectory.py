@@ -9,10 +9,10 @@ shifts, IFN compensation patterns — these are the tensor's vital signs.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Sequence
 
-from hamutay.tensor import Tensor, LossCategory
+from hamutay.tensor import Tensor
 from hamutay.eval.divergence import (
     capacity_allocation,
     loss_distribution,
@@ -21,8 +21,6 @@ from hamutay.eval.divergence import (
     ComponentDivergence,
     CapacityAllocation,
     LossDistribution,
-    _tokenize,
-    _cosine_bow,
 )
 
 
@@ -138,7 +136,7 @@ class TrajectoryStats:
         """Meta-fraction over time. Rising = tensor eating itself."""
         return [cap.meta_frac for cap in self.capacity_series]
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, str | float]:
         """Compact summary for display."""
         return {
             "cycles": self.cycles,
@@ -163,7 +161,7 @@ def _detect_strand_events(
     prev_titles: set[str], curr_titles: set[str], cycle: int
 ) -> list[StrandEvent]:
     """Detect strand births, deaths, and persists between consecutive cycles."""
-    events = []
+    events: list[StrandEvent] = []
     for t in curr_titles - prev_titles:
         events.append(StrandEvent(cycle=cycle, event_type="birth", title=t))
     for t in prev_titles - curr_titles:
@@ -187,17 +185,17 @@ def trajectory_stats(tensors: Sequence[Tensor]) -> TrajectoryStats:
             consecutive_divergence=[],
         )
 
-    strand_counts = []
+    strand_counts: list[int] = []
     strand_events: list[StrandEvent] = []
-    loss_counts = []
-    loss_dists = []
-    ifn_lengths = []
-    question_counts = []
-    cap_series = []
-    token_series = []
-    truth_series = []
-    indet_series = []
-    consec_div = []
+    loss_counts: list[int] = []
+    loss_dists: list[LossDistribution] = []
+    ifn_lengths: list[int] = []
+    question_counts: list[int] = []
+    cap_series: list[CapacityAllocation] = []
+    token_series: list[int] = []
+    truth_series: list[float] = []
+    indet_series: list[float] = []
+    consec_div: list[ComponentDivergence] = []
 
     prev_titles: set[str] = set()
 
@@ -291,7 +289,7 @@ class TrajectoryComparison:
                       key=lambda i: self.cross_divergence[i].overall)
         return max_idx + 1  # cycles are 1-indexed
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, int | str | dict[str, str | float] | None] :
         return {
             "cycles_compared": len(self.cross_divergence),
             "mean_divergence": f"{self.mean_cross_divergence:.3f}",
@@ -315,9 +313,12 @@ class ProcessHealth:
     Captures what Riemann dispersion misses: the dynamics of how the
     tensor rewrites itself, not just the final output quality.
 
-    Derived from the metacognitive breathing analysis (2026-03-20):
+    Derived from the metacognitive breathing analysis (2026-03-20,
+    corrected 2026-05-30):
     - Metacognitive maintenance: does meta_frac hold or atrophy?
-    - Breathing rhythm: healthy oscillation in meta_frac (~10-cycle period)
+    - Breathing: aperiodic shed-and-recover in meta_frac (CV~0.87,
+      Poisson-like, NOT a 10-cycle clock). Healthy = aperiodic with
+      single-cycle precursors that recover; consecutive precursors = collapse.
     - Precursor recovery: single-cycle precursors self-recover
     - Loss evolution: growing losses = accumulating self-awareness
     """
@@ -326,13 +327,21 @@ class ProcessHealth:
     # Positive = maintaining/growing, negative = atrophying
     meta_trend: float
 
-    # Breathing rhythm: autocorrelation at lag ~10
-    # Negative = oscillatory (healthy), near-zero = damped, positive = stuck
-    meta_acf_lag10: float
+    # Autocorrelation at lag N (adaptive: min(10, max(3, n//5))).
+    # NOTE: This was formerly hard-coded at lag 10 as a "breathing clock"
+    # detector. Breathing is aperiodic (B1, corrected 2026-05-30). The ACF
+    # is kept as a descriptive statistic but the "breathing" property no
+    # longer asserts periodicity.
+    meta_acf_lagN: float
 
     # Precursor rate and recovery
     precursor_rate: float  # fraction of cycles that are precursors
     precursor_recovery_rate: float  # fraction of precursors that recover next cycle
+    # Consecutive precursors = collapse signal (B1). A single shed that
+    # recovers is healthy breathing; two precursors in a row is the
+    # discriminator that distinguishes breathing from collapse. This was
+    # named in the analysis but never computed until C5 was composted.
+    consecutive_precursor_rate: float  # fraction of precursors immediately followed by another
 
     # Loss channel health
     loss_trend: float  # slope of loss count (positive = growing awareness)
@@ -348,22 +357,61 @@ class ProcessHealth:
 
     @property
     def breathing(self) -> bool:
-        """Does the tensor show the healthy breathing rhythm?"""
-        return self.meta_acf_lag10 < -0.05
+        """Does the tensor show healthy aperiodic breathing?
+
+        Health is NOT periodicity and NOT shed frequency — both were the
+        clock hypothesis wearing different clothes. B1's discriminator is
+        about *recovery*: a shed that recovers is healthy breathing; a
+        consecutive precursor pair that does NOT recover is collapse.
+        Frequency is aperiodic noise (CV≈0.84 per breathing_cv.py) and
+        carries no health signal, so it is deliberately absent from this test.
+
+        Composted 2026-06-01 (C5): formerly returned `meta_acf_lagN < -0.05`,
+        which operationalized the repudiated 10-cycle clock.
+
+        CORRECTED 2026-06-03 (the C5 fix had its OWN uncaught husk — found by
+        the three-lens fossil hunt): the prior test was
+        `recovery_rate >= 0.8 AND consecutive_precursor_rate == 0.0`. That
+        `== 0.0` term returns **False on observation_full**, the canonical
+        healthy-breathing exemplar B1 itself rests on — because cycles 51-52
+        are a consecutive precursor pair that *recovers at 53*
+        (metacognitive_breathing_analysis.md: "one two-cycle pair (51-52)
+        recovers at 53"). So the detector named `breathing` rejected the very
+        data that defines breathing. The `== 0.0` conflated "contains any
+        consecutive pair" with "is collapsing"; the analysis's actual
+        discriminator (L164-177) is that consecutive pairs which *fail to
+        recover* signal collapse — a recovering consecutive pair is still
+        healthy. recovery_rate is 0.83-0.91 across all 5 sessions, so the
+        `>= 0.8` term is near-vacuous (it has never returned False); the
+        `== 0.0` term did all the work and did it backwards. The honest test:
+        recovery high AND no *unrecovered* consecutive collapse. We do not
+        re-pick a magic threshold (that is how the last husk formed); we
+        require recovery and treat a fully-recovering trajectory as breathing
+        regardless of isolated recovering pairs. See test_breathing_observation_full.
+        """
+        if self.precursor_rate == 0:
+            return True  # nothing shed; trivially not collapsing
+        # Healthy breathing = precursors recover. A consecutive pair is only a
+        # collapse signal when it does NOT recover; recovery_rate already
+        # captures that (an unrecovered pair drags the rate down). Gating
+        # additionally on consecutive_rate == 0.0 mislabels recovering pairs
+        # (observation_full 51-52) as non-breathing, so it is removed.
+        return self.precursor_recovery_rate >= 0.8
 
     @property
     def precursors_recovering(self) -> bool:
         """Are precursor events self-recovering?"""
         return self.precursor_recovery_rate >= 0.8 or self.precursor_rate == 0
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, str | float]:
         return {
             "meta_trend": f"{self.meta_trend:+.4f}",
             "metacognition_healthy": self.metacognition_healthy,
             "breathing": self.breathing,
-            "meta_acf_lag10": f"{self.meta_acf_lag10:+.3f}",
+            "meta_acf_lagN": f"{self.meta_acf_lagN:+.3f}",
             "precursor_rate": f"{self.precursor_rate:.2%}",
             "precursor_recovery_rate": f"{self.precursor_recovery_rate:.2%}",
+            "consecutive_precursor_rate": f"{self.consecutive_precursor_rate:.2%}",
             "loss_trend": f"{self.loss_trend:+.4f}",
             "mean_divergence": f"{self.mean_consecutive_divergence:.3f}",
             "divergence_cv": f"{self.divergence_cv:.3f}",
@@ -408,7 +456,10 @@ def process_health(stats: TrajectoryStats) -> ProcessHealth:
     # Meta trend
     meta_trend = _linear_slope(meta_series)
 
-    # Breathing rhythm (autocorrelation at lag 10, or lag n//5 for short sequences)
+    # Lag-N autocorrelation, kept as a DESCRIPTIVE statistic only. Breathing
+    # is aperiodic (B1), so this no longer gates the `breathing` property; it
+    # is reported because the ACF value itself is informative, not because a
+    # negative value means "healthy rhythm."
     lag = min(10, max(3, len(meta_series) // 5))
     meta_acf = _autocorrelation(meta_series, lag)
 
@@ -418,14 +469,21 @@ def process_health(stats: TrajectoryStats) -> ProcessHealth:
     precursor_rate = n_precursors / len(meta_series) if meta_series else 0.0
 
     # Precursor recovery: next cycle meta_frac >= 0.1
+    # Consecutive precursors (two sheds in a row) = collapse signal (B1).
     recoveries = 0
     recovery_opportunities = 0
+    consecutive = 0
     for i, is_precursor in enumerate(precursor_mask):
         if is_precursor and i + 1 < len(precursor_mask):
             recovery_opportunities += 1
             if meta_series[i + 1] >= 0.1:
                 recoveries += 1
+            if precursor_mask[i + 1]:
+                consecutive += 1
     recovery_rate = recoveries / recovery_opportunities if recovery_opportunities > 0 else 1.0
+    consecutive_precursor_rate = (
+        consecutive / n_precursors if n_precursors > 0 else 0.0
+    )
 
     # Loss trend
     loss_trend = _linear_slope([float(c) for c in stats.loss_counts])
@@ -445,9 +503,10 @@ def process_health(stats: TrajectoryStats) -> ProcessHealth:
 
     return ProcessHealth(
         meta_trend=meta_trend,
-        meta_acf_lag10=meta_acf,
+        meta_acf_lagN=meta_acf,
         precursor_rate=precursor_rate,
         precursor_recovery_rate=recovery_rate,
+        consecutive_precursor_rate=consecutive_precursor_rate,
         loss_trend=loss_trend,
         mean_consecutive_divergence=mean_div,
         divergence_cv=cv,
@@ -468,8 +527,8 @@ def compare_trajectories(
 
     # Match by cycle number
     b_by_cycle = {t.cycle: t for t in b}
-    cross_div = []
-    cross_sim = []
+    cross_div : list[ComponentDivergence] = []
+    cross_sim : list[float] = []
 
     for t_a in a:
         t_b = b_by_cycle.get(t_a.cycle)

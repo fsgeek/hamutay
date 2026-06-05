@@ -33,6 +33,16 @@ def _find_by_cycle(
     return None
 
 
+def _find_by_record_id(
+    prior_states: list[tuple[int, UUID, dict, str]], record_id: UUID
+) -> tuple[int, UUID, dict, str] | None:
+    """Return the first prior-state tuple matching record_id, or None."""
+    for entry in prior_states:
+        if entry[1] == record_id:
+            return entry
+    return None
+
+
 def _type_name(value) -> str:
     """Compact Python type name for a JSON-ish value."""
     return type(value).__name__
@@ -48,6 +58,36 @@ def _field_size(value) -> int:
 def _token_estimate(state: dict) -> int:
     """Rough token count: JSON bytes / 4."""
     return len(json.dumps(state, default=str)) // 4
+
+
+_MISSING = object()
+
+
+def _resolve_field(container: dict, field: str):
+    """Resolve exact, dotted, or model-nested state fields.
+
+    Some OpenAI-compatible models wrap their durable object in a top-level
+    ``state`` key despite the prompt asking for top-level fields. Preserve
+    exact top-level semantics first, then allow dotted paths, then fall back
+    to the nested state object for simple field recall.
+    """
+    if field in container:
+        return container[field]
+
+    current = container
+    for part in field.split("."):
+        if not isinstance(current, dict) or part not in current:
+            current = _MISSING
+            break
+        current = current[part]
+    if current is not _MISSING:
+        return current
+
+    nested = container.get("state")
+    if isinstance(nested, dict) and field != "state":
+        return _resolve_field(nested, field)
+
+    return _MISSING
 
 
 def tool_memory_schema(
@@ -125,7 +165,7 @@ def tool_recall(
 
     Modes (mutually exclusive; precedence top-down):
     - record_id=<UUID>, field=X → one field's value at a specific record
-      (cross-session by construction; requires bridge)
+      (in-session first, bridge fallback)
     - record_id=<UUID> → the full record content
     - cycle=N, field=X → one field's value at one cycle (session-scoped)
     - cycle=N → the full state dict at one cycle (session-scoped)
@@ -146,30 +186,52 @@ def tool_recall(
     record_id_str = params.get("record_id")
     scope = params.get("scope", "session")
 
-    # Mode 1: record_id — cross-session by construction
+    # Mode 1: record_id — in-session first, bridge fallback
     if record_id_str is not None:
-        if bridge is None:
-            return {
-                "error": "record_id mode requires a bridge (persistence backend)"
-            }
         try:
             record_id = UUID(record_id_str)
         except (ValueError, AttributeError, TypeError):
             return {
                 "error": f"record_id is not a valid UUID: {record_id_str!r}"
             }
+        found = _find_by_record_id(prior_states, record_id)
+        if found is not None:
+            _cycle, _record_id, state, timestamp = found
+            if field is not None:
+                value = _resolve_field(state, field)
+                if value is _MISSING:
+                    return {
+                        "error": f"Field {field!r} not in record {record_id}"
+                    }
+                return {
+                    "cycle": _cycle,
+                    "record_id": str(_record_id),
+                    "timestamp": timestamp,
+                    "content": value,
+                }
+            return {
+                "cycle": _cycle,
+                "record_id": str(_record_id),
+                "timestamp": timestamp,
+                "content": state,
+            }
+        if bridge is None:
+            return {
+                "error": "record_id mode requires a bridge (persistence backend)"
+            }
         try:
             content = bridge.retrieve(record_id)
         except Exception as e:
             return {"error": f"Record {record_id} not found: {e}"}
         if field is not None:
-            if field not in content:
+            value = _resolve_field(content, field)
+            if value is _MISSING:
                 return {
                     "error": f"Field {field!r} not in record {record_id}"
                 }
             return {
                 "record_id": str(record_id),
-                "content": content[field],
+                "content": value,
             }
         return {
             "record_id": str(record_id),
@@ -183,7 +245,8 @@ def tool_recall(
             return {"error": f"No state found for cycle {cycle}"}
         _cycle, record_id, state, timestamp = found
         if field is not None:
-            if field not in state:
+            value = _resolve_field(state, field)
+            if value is _MISSING:
                 return {
                     "error": f"Field {field!r} not in state at cycle {cycle}"
                 }
@@ -191,7 +254,7 @@ def tool_recall(
                 "cycle": _cycle,
                 "record_id": str(record_id),
                 "timestamp": timestamp,
-                "content": state[field],
+                "content": value,
             }
         return {
             "cycle": _cycle,
@@ -233,13 +296,14 @@ def _collect_recent(
 
     if scope in ("session", "all"):
         for _cycle, record_id, state, timestamp in reversed(prior_states):
-            if field in state:
+            value = _resolve_field(state, field)
+            if value is not _MISSING:
                 collected.append(
                     {
                         "cycle": _cycle,
                         "record_id": str(record_id),
                         "timestamp": timestamp,
-                        "value": state[field],
+                        "value": value,
                     }
                 )
                 if len(collected) >= recent:
@@ -282,13 +346,14 @@ def _candidates_with_field(
 
     if scope in ("session", "all"):
         for _cycle, record_id, state, timestamp in prior_states:
-            if field in state:
+            value = _resolve_field(state, field)
+            if value is not _MISSING:
                 candidates.append(
                     {
                         "cycle": _cycle,
                         "record_id": str(record_id),
                         "timestamp": timestamp,
-                        "content": state[field],
+                        "content": value,
                     }
                 )
 
@@ -312,9 +377,6 @@ def _candidates_with_field(
             )
 
     return candidates
-
-
-_MISSING = object()
 
 
 def tool_compare(
@@ -449,6 +511,7 @@ def tool_walk(
     from_record_id_str = params.get("from_record_id")
     direction = params.get("direction", "both")
     depth = params.get("depth", 1)
+    mode = params.get("mode", "path")
 
     if from_record_id_str is not None:
         if bridge is None:
@@ -461,6 +524,15 @@ def tool_walk(
             return {
                 "error": f"from_record_id is not a valid UUID: {from_record_id_str!r}"
             }
+        if mode == "adjacent":
+            return _walk_by_record_id_adjacent(
+                from_record_id,
+                direction,
+                depth,
+                bridge,
+            )
+        if mode != "path":
+            return {"error": "walk mode must be one of: path, adjacent"}
         return _walk_by_record_id(from_record_id, direction, depth, bridge)
 
     if from_cycle is None:
@@ -553,6 +625,80 @@ def _walk_by_record_id(
         extend(from_record_id, "backward")
     if direction in ("forward", "both"):
         extend(from_record_id, "forward")
+
+    return {"path": path}
+
+
+def _walk_content_step(
+    *,
+    record_id: UUID,
+    chosen_edge: dict,
+    content: dict,
+    depth: int | None = None,
+) -> dict:
+    view = {
+        k: v for k, v in content.items()
+        if k not in ("provenance", "lineage_tags")
+    }
+    session = None
+    prov = content.get("provenance")
+    if isinstance(prov, dict):
+        session = prov.get("author_instance_id")
+    step = {
+        "record_id": str(record_id),
+        "session": session,
+        "edge_type": chosen_edge["relation_type"],
+        "edge_source": "composition_graph",
+        "field_names": sorted(view.keys()),
+        "summary": _step_summary(view),
+    }
+    if depth is not None:
+        step["depth"] = depth
+    return step
+
+
+def _walk_by_record_id_adjacent(
+    from_record_id: UUID, direction: str, depth: int, bridge
+) -> dict:
+    """Bounded adjacency traversal over composition graph edges."""
+    path: list[dict] = []
+    visited: set[UUID] = {from_record_id}
+    frontier: list[tuple[UUID, int]] = [(from_record_id, 0)]
+
+    while frontier:
+        current, current_depth = frontier.pop(0)
+        if current_depth >= depth:
+            continue
+        edge_directions = []
+        if direction in ("backward", "both"):
+            edge_directions.append("backward")
+        if direction in ("forward", "both"):
+            edge_directions.append("forward")
+        for edge_direction in edge_directions:
+            edges = bridge.query_edges_by_endpoint(current, edge_direction)
+            for edge in edges:
+                candidate = (
+                    edge["to_record"]
+                    if edge_direction == "forward"
+                    else edge["from_record"]
+                )
+                if candidate in visited:
+                    continue
+                visited.add(candidate)
+                try:
+                    content = bridge.retrieve(candidate)
+                except Exception:
+                    continue
+                next_depth = current_depth + 1
+                path.append(
+                    _walk_content_step(
+                        record_id=candidate,
+                        chosen_edge=edge,
+                        content=content,
+                        depth=next_depth,
+                    )
+                )
+                frontier.append((candidate, next_depth))
 
     return {"path": path}
 
@@ -668,7 +814,15 @@ def _match_in_session(
     for cycle, record_id, state, timestamp in candidates:
         matched_fields: list[str] = []
         snippets: dict[str, str] = {}
-        search_fields = field_filter if field_filter else list(state.keys())
+        # Default search ignores framework-authored _-prefixed fields (e.g.
+        # _activity_log) — they are the harness's record of tool calls, not the
+        # instance's content, and matching them self-pollutes the search. An
+        # explicit fields filter overrides: exclusion is a default, not a ban.
+        search_fields = (
+            field_filter
+            if field_filter
+            else [k for k in state.keys() if not k.startswith("_")]
+        )
         for key in search_fields:
             if key not in state:
                 continue
@@ -706,7 +860,13 @@ def _match_cross_session(bridge, query_lower: str, narrow_by: dict) -> list[dict
         if has_field and has_field not in extras:
             continue
 
-        search_fields = field_filter if field_filter else list(extras.keys())
+        # Same _-prefix exclusion as in-session: framework fields are not the
+        # instance's content. Explicit fields filter overrides.
+        search_fields = (
+            field_filter
+            if field_filter
+            else [k for k in extras.keys() if not k.startswith("_")]
+        )
         matched_fields: list[str] = []
         snippets: dict[str, str] = {}
         for key in search_fields:

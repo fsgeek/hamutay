@@ -45,6 +45,23 @@ without changing the author/committer email, which causes a mismatch.
 A pre-commit hook checks `user.signingkey` against `user.email` but cannot
 detect command-line `--gpg-sign` overrides.
 
+**The repo's local git config does NOT match the history's identity.** `git config`
+reports `user.email=fsgeek@cs.ubc.ca` / `user.signingkey=5F5BF6BAEC2541D2`, but the
+commit history is authored and signed as `hamutay@wamason.com` / `01193FA2...` via the
+`-c` overrides above. This is why the `-c` flags are mandatory, not optional polish:
+any commit made with the bare config will diverge from history and silently fail to
+push. Any automation that commits (e.g. the OTS hook below) MUST bake in the
+`hamutay@wamason.com` / `01193FA2...` identity rather than trusting git config.
+
+### Pre-registration: OpenTimestamps commit stamping
+
+`scripts/hooks/post-commit` stamps every commit (writes `timestamps/<hash>`, runs
+`ots stamp`, commits the proof) so an experiment's design can be cryptographically
+proven to predate its results. Install with `scripts/install-hooks.sh`; run
+`scripts/ots-upgrade.sh` a few hours later to anchor proofs to Bitcoin. The stamp
+commits are signed with hamutay's identity (see the divergence warning above) — do
+not simplify the `-c` overrides out of these scripts. Mirrors the `../governance` repo.
+
 ### Running experiments
 
 Use `uv run` — there is no system Python. Dependencies are managed via `pyproject.toml` and `uv.lock`.

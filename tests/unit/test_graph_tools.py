@@ -252,3 +252,84 @@ def test_annotate_edge_end_to_end_with_real_bridge():
     assert after["path"][0]["record_id"] == str(rid_b)
     # Edge type in walk results carries the enum value, not the name.
     assert after["path"][0]["edge_type"] == "confirms"
+
+
+def test_walk_adjacent_mode_returns_all_star_edges():
+    from hamutay.tools.memory import tool_walk
+
+    bridge = ApachetaBridge.from_memory(session_id="s", model="haiku")
+    root = uuid4()
+    branches = [uuid4(), uuid4(), uuid4()]
+    bridge.store_open_state(
+        {"cycle": 1, "label": "root"},
+        cycle=1,
+        record_id=root,
+        timestamp=_now(),
+    )
+    for i, rid in enumerate(branches, start=1):
+        bridge._prior_id = None
+        bridge.store_open_state(
+            {"cycle": i + 1, "label": f"branch-{i}"},
+            cycle=i + 1,
+            record_id=rid,
+            timestamp=_now(),
+        )
+        bridge.store_edge(root, rid, "BRANCHES_FROM", ordering=i)
+
+    path_walk = tool_walk(
+        {"from_record_id": str(root), "direction": "forward", "depth": 3},
+        prior_states=[],
+        bridge=bridge,
+    )
+    adjacent_walk = tool_walk(
+        {
+            "from_record_id": str(root),
+            "direction": "forward",
+            "depth": 1,
+            "mode": "adjacent",
+        },
+        prior_states=[],
+        bridge=bridge,
+    )
+
+    assert len(path_walk["path"]) == 1
+    assert {step["record_id"] for step in adjacent_walk["path"]} == {
+        str(rid) for rid in branches
+    }
+    assert {step["depth"] for step in adjacent_walk["path"]} == {1}
+
+
+def test_walk_adjacent_mode_is_cycle_safe():
+    from hamutay.tools.memory import tool_walk
+
+    bridge = ApachetaBridge.from_memory(session_id="s", model="haiku")
+    a = uuid4()
+    b = uuid4()
+    c = uuid4()
+    for i, rid in enumerate((a, b, c), start=1):
+        bridge._prior_id = None
+        bridge.store_open_state(
+            {"cycle": i, "label": chr(64 + i)},
+            cycle=i,
+            record_id=rid,
+            timestamp=_now(),
+        )
+    bridge.store_edge(a, b, "BRIDGES", ordering=1)
+    bridge.store_edge(b, c, "BRIDGES", ordering=2)
+    bridge.store_edge(c, a, "BRIDGES", ordering=3)
+
+    result = tool_walk(
+        {
+            "from_record_id": str(a),
+            "direction": "forward",
+            "depth": 5,
+            "mode": "adjacent",
+        },
+        prior_states=[],
+        bridge=bridge,
+    )
+
+    reached = [step["record_id"] for step in result["path"]]
+    assert reached == [str(b), str(c)]
+    assert len(reached) == len(set(reached))
+    assert [step["depth"] for step in result["path"]] == [1, 2]

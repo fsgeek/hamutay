@@ -1,0 +1,33 @@
+{
+  "date": "2026-06-05",
+  "experiment": "protected_merge_observability",
+  "provider_calls": 0,
+  "tests": {
+    "targeted": {
+      "command": "uv run pytest tests/test_taste_open.py::TestExchangeCycleRollback -q",
+      "passed": 7,
+      "failed": 0
+    },
+    "focused_regression": {
+      "command": "uv run pytest tests/unit tests/test_taste_open.py -q",
+      "passed": 289,
+      "failed": 0
+    },
+    "compile": {
+      "command": "uv run python -m py_compile src/hamutay/taste_open.py tests/test_taste_open.py",
+      "passed": true
+    }
+  },
+  "hypothesis_results": {
+    "H177_live_protected_fields_block_model_overwrite_or_delete": true,
+    "H178_ignored_protected_attempts_are_logged_explicitly": true,
+    "H179_live_protected_merge_allows_ordinary_unprotected_changes": true,
+    "H180_live_protected_merge_rejects_unprotected_overlap": true
+  },
+  "notes": [
+    "OpenTasteSession now accepts protected_state_fields.",
+    "Successful cycle logs include state_merge_diagnostics when protection is configured.",
+    "Failure logs include raw updated/deleted fields plus effective updated/deleted fields.",
+    "Repair merge artifacts include state_merge_diagnostics when protection is configured."
+  ]
+}

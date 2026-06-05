@@ -23,11 +23,17 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Iterable, Protocol, cast
 from uuid import UUID, uuid4
 
 import anthropic
 import httpx
+
+from hamutay.events import EventStore, default_event_log_path, utc_now_iso
+from hamutay.terminal_surface import (
+    terminal_surface_raw_output,
+    terminal_tool_schema,
+)
 
 if TYPE_CHECKING:
     from anthropic.types import MessageParam
@@ -112,7 +118,9 @@ composition graph. from_cycle walks in-session cycle-adjacency; \
 from_record_id follows composition edges across sessions. Returns \
 summaries — use recall afterward if a step looks worth loading.
 - search_memory(query, narrow_by?, scope?): Substring search across \
-prior states. Structural narrowing first, keyword match after.
+prior states. Structural narrowing first, keyword match after. Searches \
+your content fields by default, not framework-authored _-prefixed ones \
+(e.g. _activity_log); name them in narrow_by.fields to include them.
 
 Addressing across sessions: cycle numbers are session-local (every \
 session has a cycle 1). Cross-session references use record_id (UUID). \
@@ -146,6 +154,16 @@ otherwise know about: a hypothesis CONFIRMS a prior observation; a \
 revision CORRECTS an earlier claim; a tangent BRANCHES_FROM a main \
 thread. Like the memory tools, they require a persistence backend — \
 if it's unavailable, you'll see an error.
+
+### Events
+
+- schedule_event(purpose, requested_context): Schedule a future \
+self-reflection wakeup. V1 supports reflection events only. The future \
+cycle receives an explicit event envelope with your purpose and the \
+requested recall/compare/walk context. Use this when you are not done \
+thinking but know what evidence a later cycle should inspect. Scheduled \
+events are written to the session's event sidecar; if event logging is \
+unavailable, you'll see an error.
 
 ### Shell
 
@@ -198,6 +216,16 @@ helps you; don't when it doesn't."""
 _BUDGET_MODEL_LIMIT = 1_000_000
 _BUDGET_SOFT_THRESHOLD = int(_BUDGET_MODEL_LIMIT * 0.8)
 _TOKEN_PER_CHAR_ESTIMATE = 4
+
+# In-context tool-result bounds. The full result is always captured durably
+# (tool_activity_full); these only bound the copy re-fed to the model, so a
+# single huge perception (e.g. reading a multi-MB log) cannot blow the
+# request-size ceiling. CLAUDE.md: "save everything, re-inject little".
+#   - proactive cap: generous, so only pathological results are reduced.
+#   - recovery head: aggressive, used when shrinking an already-over-limit
+#     request — keep just enough head to stay oriented.
+_MAX_TOOL_RESULT_CHARS = 200_000
+_RECOVERY_HEAD_CHARS = 8_000
 
 # Known output-token ceilings by model family (best-effort).
 _KNOWN_MAX_OUTPUT_TOKENS: dict[str, int] = {
@@ -265,19 +293,40 @@ def _is_context_limit_error(exc: Exception) -> bool:
         "prompt is too long",
         "exceeded model token limit",
         "request exceeded model token limit",
+        # Byte-size rejection (e.g. Moonshot/Kimi's 4 MiB request ceiling):
+        # "total message size N exceeds limit M". Phrased in bytes, not
+        # tokens — without this needle the recovery below never engages and
+        # an oversized tool result crashes the whole cycle.
+        "total message size",
     )
     return any(n in msg for n in needles)
 
 
 def _parse_requested_vs_limit(exc: Exception) -> tuple[int | None, int | None]:
-    """Extract '(requested: N, limit: M)' from provider error text when present."""
+    """Extract (requested, limit) from provider error text, normalized to
+    token-equivalents.
+
+    Two formats are recognized:
+      - token limit: 'limit: M (requested: N)' — already in tokens.
+      - byte size:   'total message size N exceeds limit M' — in bytes; divided
+        by the chars/token estimate so the downstream drop math (which
+        multiplies tokens back into chars) stays in a single unit.
+    Returns (None, None) when neither format is present.
+    """
     msg = str(exc)
     match = re.search(r"limit:\s*(\d+)\s*\(requested:\s*(\d+)\)", msg)
-    if not match:
-        return None, None
-    limit = int(match.group(1))
-    requested = int(match.group(2))
-    return requested, limit
+    if match:
+        limit = int(match.group(1))
+        requested = int(match.group(2))
+        return requested, limit
+    byte_match = re.search(
+        r"total message size\s+(\d+)\s+exceeds limit\s+(\d+)", msg
+    )
+    if byte_match:
+        requested = int(byte_match.group(1)) // _TOKEN_PER_CHAR_ESTIMATE
+        limit = int(byte_match.group(2)) // _TOKEN_PER_CHAR_ESTIMATE
+        return requested, limit
+    return None, None
 
 
 @dataclass
@@ -321,24 +370,25 @@ def _split_tool_use_blocks(content) -> _ToolBlocks:
     return _ToolBlocks(think_and_respond_input=tr_input, other_tool_uses=others)
 
 
-def execute_concurrent_tool_calls(blocks, tool_executor) -> None:
-    """Execute tool calls that arrived alongside a terminal think_and_respond.
+def execute_concurrent_tool_calls(blocks, tool_executor) -> list[dict]:
+    """Execute non-terminal tool calls from a mixed tool batch.
 
-    When the model returns think_and_respond in the same response as other
-    tool_use blocks, the cycle is over — we have the state update. But the
-    model *also* asked to call those other tools. Silently dropping them
-    discards expressed intent. We execute them so the activity log reflects
-    what the model actually did this cycle. Their results do not feed back
-    into the model (the cycle is terminal), but the activity is recorded.
+    A model may emit think_and_respond alongside other tool calls. The
+    terminal state update is premature in that case: it would be based on
+    tool results the model has not seen. The caller should feed these
+    results back and ask the model to produce a later terminal update.
     """
     if tool_executor is None:
-        return
+        return []
+    results = []
     for block in blocks:
         name = getattr(block, "name", None)
         tool_input = getattr(block, "input", {})
         if name is None:
             continue
-        tool_executor.execute(name, tool_input)
+        result = tool_executor.execute(name, tool_input)
+        results.append({"tool": name, "result": result})
+    return results
 
 
 def _estimate_tool_result_tokens(tool_results: list[dict]) -> int:
@@ -353,18 +403,60 @@ def _estimate_tool_result_tokens(tool_results: list[dict]) -> int:
     return total_chars // _TOKEN_PER_CHAR_ESTIMATE
 
 
+def _declared_loss_stub(content: str, head_chars: int) -> str:
+    """A loud, JSON-parseable declared-loss envelope wrapping a head slice.
+
+    When a tool result is too large to keep in context whole, keep its first
+    `head_chars` characters (orientation — *what kind* of thing was reached
+    for) and declare the loss explicitly: original size, what was shown, what
+    was elided, and how to fetch more. The instance reading this must not
+    mistake the fragment for the whole, so the envelope says so plainly.
+
+    Silent drops would teach mistrust of perception; pure-absence stubs would
+    teach that reaching is futile. A head slice plus a loud declared loss does
+    neither: the reach makes contact, and the boundary is honest.
+    """
+    head = content[:head_chars]
+    return json.dumps(
+        {
+            "truncated": True,
+            "original_size_chars": len(content),
+            "shown_chars": len(head),
+            "elided_chars": len(content) - len(head),
+            "head": head,
+            "reason": "context budget — content elided to fit window",
+            "how_to_fetch_more": (
+                "This is the head of a much larger result, not the whole. "
+                "Re-read a bounded range (offset/limit) or narrow the query "
+                "to see more."
+            ),
+        },
+        default=str,
+    )
+
+
+def _bound_tool_result_for_context(content: str) -> str:
+    """Cap a single in-context tool result. Results within budget pass through
+    unchanged; only oversized ones are reduced to a head slice + declared loss.
+    The full result is preserved in the durable activity log regardless."""
+    if len(content) <= _MAX_TOOL_RESULT_CHARS:
+        return content
+    return _declared_loss_stub(content, head_chars=_MAX_TOOL_RESULT_CHARS)
+
+
 def _truncate_largest_tool_results(
     conversation: list[dict], target_drop_tokens: int
 ) -> int:
-    """Replace the largest tool_result content blocks with truncation stubs.
+    """Replace the largest tool_result content blocks with head-slice stubs.
 
     Walks the conversation, finds tool_result blocks, sorts by size, and
-    replaces content with a stub until the estimated drop meets target.
+    replaces content with a declared-loss stub (a head slice + an explicit
+    statement of what was elided) until the estimated drop meets target.
     Returns estimated tokens dropped.
 
-    The stub is a JSON object declaring the loss explicitly (size + reason)
-    so the instance reading it next cycle knows perception was elided
-    rather than empty. Silent drops would teach mistrust of perception.
+    This is the recovery path — invoked after the API has already rejected an
+    over-limit request — so it keeps only a small head (`_RECOVERY_HEAD_CHARS`)
+    of each dropped block: enough to stay oriented, aggressive enough to fit.
     """
     candidates: list[tuple[int, dict]] = []
     for msg in conversation:
@@ -388,11 +480,13 @@ def _truncate_largest_tool_results(
     for size, block in candidates:
         if dropped_chars >= target_chars:
             break
-        stub = json.dumps({
-            "truncated": True,
-            "original_size_chars": size,
-            "reason": "context budget — content elided to fit window",
-        })
+        block_content = block.get("content", "")
+        text = (
+            block_content
+            if isinstance(block_content, str)
+            else json.dumps(block_content, default=str)
+        )
+        stub = _declared_loss_stub(text, head_chars=_RECOVERY_HEAD_CHARS)
         block["content"] = stub
         dropped_chars += max(0, size - len(stub))
 
@@ -409,6 +503,71 @@ class TasteBridge(Protocol):
         record_id: UUID,
         timestamp: datetime,
     ) -> None: ...
+
+
+class ContinuityCurator(Protocol):
+    """Post-cycle continuity curator hook for taste_open sessions."""
+
+    def curate(
+        self,
+        *,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+        prior_state: dict | None,
+        raw_output: dict,
+        response_text: str,
+        state: dict,
+    ) -> dict: ...
+
+
+class ProtocolRecoveryBuilder(Protocol):
+    """Protocol-failure recovery artifact hook for taste_open sessions."""
+
+    def recover(
+        self,
+        *,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+        prior_state: dict | None,
+        raw_output: dict,
+        response_text: str,
+        failure_classification: dict,
+    ) -> dict: ...
+
+
+class StateValidator(Protocol):
+    """Post-update durable-state validator hook for taste_open sessions."""
+
+    def validate(
+        self,
+        *,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+        prior_state: dict | None,
+        raw_output: dict,
+        response_text: str,
+        state: dict,
+    ) -> dict: ...
+
+
+class StateRepairBuilder(Protocol):
+    """Build a bounded repair prompt after durable-state validation fails."""
+
+    def build_repair_prompt(
+        self,
+        *,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+        prior_state: dict | None,
+        raw_output: dict,
+        response_text: str,
+        state: dict,
+        validation: dict,
+    ) -> str: ...
 
 
 @dataclass
@@ -445,6 +604,15 @@ class TasteBackend(Protocol):
         experiment_label: str,
         extra_tools: list[dict] | None = None,
         tool_executor: Any | None = None,
+    ) -> ExchangeResult: ...
+
+    def call_terminal_surface(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
+        terminal_surface: dict,
     ) -> ExchangeResult: ...
 
 
@@ -527,6 +695,76 @@ class AnthropicTasteBackend:
             cache_creation_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
         )
 
+    def call_terminal_surface(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
+        terminal_surface: dict,
+    ) -> ExchangeResult:
+        tool = terminal_tool_schema(terminal_surface)
+        tool_choice_value = terminal_surface.get("tool_choice", "auto")
+        if tool_choice_value == "force":
+            tool_choice: dict[str, str] = {"type": "tool", "name": tool["name"]}
+        elif tool_choice_value == "required":
+            tool_choice = {"type": "any"}
+        else:
+            tool_choice = {"type": "auto"}
+        with self._client.messages.stream(
+            model=model,
+            max_tokens=self._max_tokens,
+            system=[
+                {
+                    "type": "text",
+                    "text": system,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=cast("list[MessageParam]", messages),
+            tools=[
+                {
+                    "name": tool["name"],
+                    "description": tool.get("description", ""),
+                    "input_schema": tool["input_schema"],
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            tool_choice=cast("Any", tool_choice),
+            metadata={"user_id": f"hamutay_{experiment_label}"},
+        ) as stream:
+            response = stream.get_final_message()
+
+        for block in response.content:
+            if (
+                getattr(block, "type", None) == "tool_use"
+                and getattr(block, "name", None) == tool["name"]
+            ):
+                usage = response.usage
+                return ExchangeResult(
+                    raw_output=terminal_surface_raw_output(
+                        terminal_surface,
+                        getattr(block, "input", {}),
+                    ),
+                    stop_reason=response.stop_reason or "unknown",
+                    input_tokens=getattr(usage, "input_tokens", 0),
+                    output_tokens=getattr(usage, "output_tokens", 0),
+                    cache_read_tokens=getattr(
+                        usage,
+                        "cache_read_input_tokens",
+                        0,
+                    ) or 0,
+                    cache_creation_tokens=getattr(
+                        usage,
+                        "cache_creation_input_tokens",
+                        0,
+                    ) or 0,
+                )
+
+        raise RuntimeError(
+            f"No {tool['name']} terminal surface output in response"
+        )
+
     def _call_multi_turn(
         self,
         model: str,
@@ -580,7 +818,7 @@ class AnthropicTasteBackend:
                 else {"type": "any"}
             )
             if over_soft_budget and tool_executor is not None:
-                tool_executor.activity_log.append({
+                tool_executor.log_event({
                     "tool": "_framework",
                     "event": "budget_pressure",
                     "estimated_input_tokens": estimated_next_input_tokens,
@@ -625,7 +863,7 @@ class AnthropicTasteBackend:
                     # Force terminal after any budget recovery to close the cycle.
                     tool_choice = {"type": "tool", "name": "think_and_respond"}
                     if tool_executor is not None:
-                        tool_executor.activity_log.append({
+                        tool_executor.log_event({
                             "tool": "_framework",
                             "event": "budget_recovery",
                             "estimated_tokens_dropped": dropped_tokens,
@@ -647,12 +885,51 @@ class AnthropicTasteBackend:
             split = _split_tool_use_blocks(response.content)
 
             if split.think_and_respond_input is not None:
-                # Terminal. Execute any concurrent tool calls for logging
-                # so the model's expressed intent is honored rather than
-                # silently dropped.
-                execute_concurrent_tool_calls(
-                    split.other_tool_uses, tool_executor
-                )
+                if split.other_tool_uses:
+                    if tool_executor is None:
+                        raise RuntimeError(
+                            "Model called perception tools but no tool_executor "
+                            "was provided to resolve them"
+                        )
+                    assistant_content = []
+                    for block in response.content:
+                        if (
+                            getattr(block, "type", None) == "tool_use"
+                            and getattr(block, "name", None) == "think_and_respond"
+                        ):
+                            continue
+                        if hasattr(block, "model_dump"):
+                            assistant_content.append(block.model_dump())
+                        else:
+                            assistant_content.append({
+                                "type": "text",
+                                "text": str(block),
+                            })
+                    conversation.append({
+                        "role": "assistant",
+                        "content": assistant_content,
+                    })
+
+                    tool_results = []
+                    for block in split.other_tool_uses:
+                        result = tool_executor.execute(block.name, block.input)
+                        tool_results.append(
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": block.id,
+                                "content": _bound_tool_result_for_context(
+                                    json.dumps(result, default=str)
+                                ),
+                            }
+                        )
+                    conversation.append({"role": "user", "content": tool_results})
+                    estimated_next_input_tokens = (
+                        (getattr(usage, "input_tokens", 0) or 0)
+                        + (getattr(usage, "output_tokens", 0) or 0)
+                        + _estimate_tool_result_tokens(tool_results)
+                    )
+                    continue
+
                 return ExchangeResult(
                     raw_output=split.think_and_respond_input,
                     stop_reason=response.stop_reason or "end_turn",
@@ -693,7 +970,12 @@ class AnthropicTasteBackend:
                     {
                         "type": "tool_result",
                         "tool_use_id": block.id,
-                        "content": json.dumps(result, default=str),
+                        # Bound the in-context copy so one huge read can't blow
+                        # the request ceiling; the executor already captured the
+                        # full result durably (tool_activity_full).
+                        "content": _bound_tool_result_for_context(
+                            json.dumps(result, default=str)
+                        ),
                     }
                 )
             conversation.append({"role": "user", "content": tool_results})
@@ -730,6 +1012,8 @@ class OpenAITasteBackend:
         openrouter_require_parameters: bool = False,
         openrouter_provider_order: list[str] | None = None,
         openrouter_only_providers: list[str] | None = None,
+        openrouter_allow_fallbacks: bool | None = None,
+        openrouter_transforms: list[str] | None = None,
         max_retries: int = 3,
         retry_base_delay_s: float = 0.5,
     ):
@@ -744,6 +1028,8 @@ class OpenAITasteBackend:
         self._or_require_parameters = openrouter_require_parameters
         self._or_provider_order = openrouter_provider_order or []
         self._or_only_providers = openrouter_only_providers or []
+        self._or_allow_fallbacks = openrouter_allow_fallbacks
+        self._or_transforms = openrouter_transforms
         self._max_retries = max_retries
         self._retry_base_delay_s = retry_base_delay_s
 
@@ -809,71 +1095,44 @@ class OpenAITasteBackend:
         extra_tools: list[dict] | None = None,
         tool_executor: Any | None = None,
     ) -> ExchangeResult:
-        if extra_tools:
-            import warnings
-            warnings.warn(
-                "OpenAI backend does not yet support multi-turn tool use; "
-                "extra_tools will be ignored.",
-                stacklevel=2,
-            )
-        del tool_executor  # not yet used by OpenAI backend
         del experiment_label  # not consumed by OpenAI backend (protocol requirement)
+        if extra_tools:
+            return self._call_multi_turn(
+                model=model,
+                system=system,
+                messages=messages,
+                extra_tools=extra_tools,
+                tool_executor=tool_executor,
+            )
+        return self._call_single_tool(model=model, system=system, messages=messages)
 
+    def _call_single_tool(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+    ) -> ExchangeResult:
         # OpenAI format: system prompt is a message, not a parameter
         oai_messages = [{"role": "system", "content": system}] + messages
-
-        # OpenAI function calling format
-        tool_def = {
-            "type": "function",
-            "function": {
-                "name": "think_and_respond",
-                "description": "Produce your response and maintain your state.",
-                "parameters": OPEN_SCHEMA,
-            },
-        }
 
         payload: dict = {
             "model": model,
             "max_tokens": self._max_tokens,
             "messages": oai_messages,
-            "tools": [tool_def],
+            "tools": [self._think_tool_def()],
             "tool_choice": self._resolved_tool_choice(),
         }
+        self._apply_openai_payload_options(payload)
 
-        # Only send parallel_tool_calls when explicitly enabled.
-        # With OpenRouter provider.require_parameters=true, even a False value
-        # can still be treated as a required parameter and over-constrain routing.
-        if self._capability.supports_parallel_tool_calls:
-            payload["parallel_tool_calls"] = True
-
-        if self._provider_name == "openrouter":
-            provider_opts: dict[str, object] = {}
-            if self._or_require_parameters:
-                provider_opts["require_parameters"] = True
-            if self._or_provider_order:
-                provider_opts["order"] = self._or_provider_order
-            if self._or_only_providers:
-                provider_opts["only"] = self._or_only_providers
-            if provider_opts:
-                payload["provider"] = provider_opts
-
-        headers = {
-            "Authorization": f"Bearer {self._api_key}",
-            "Content-Type": "application/json",
-            **self._extra_headers,
-        }
-
-        data = self._post_with_retry(
-            f"{self._base_url}/chat/completions",
-            payload,
-            headers,
-        )
-
-        if "error" in data:
-            raise RuntimeError(f"OpenAI backend error: {data['error']}")
+        data = self._post_chat(payload)
 
         choice = data["choices"][0]
         raw_stop: str = choice.get("finish_reason") or "unknown"
+        if raw_stop == "length":
+            raise RuntimeError(
+                "OpenAI backend: finish_reason=length; refusing to parse "
+                "possibly truncated structured output"
+            )
         stop_reason: str = {
             "stop": "end_turn",
             "length": "max_tokens",
@@ -888,8 +1147,10 @@ class OpenAITasteBackend:
         for tc in message.get("tool_calls", []):
             fn = tc.get("function", {})
             if fn.get("name") == "think_and_respond":
-                args = fn.get("arguments", "")
-                raw_output = json.loads(args) if isinstance(args, str) else args
+                raw_output = self._parse_tool_arguments(
+                    "think_and_respond",
+                    fn.get("arguments", ""),
+                )
                 return ExchangeResult(
                     raw_output=raw_output,
                     stop_reason=stop_reason,
@@ -919,6 +1180,337 @@ class OpenAITasteBackend:
                 )
 
         raise RuntimeError("OpenAI backend: no think_and_respond output in response")
+
+    def call_terminal_surface(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
+        terminal_surface: dict,
+    ) -> ExchangeResult:
+        del experiment_label
+        tool = terminal_tool_schema(terminal_surface)
+        oai_messages = [{"role": "system", "content": system}] + messages
+        tool_choice_value = terminal_surface.get("tool_choice", "auto")
+        if tool_choice_value == "force":
+            tool_choice: str | dict = {
+                "type": "function",
+                "function": {"name": tool["name"]},
+            }
+        elif tool_choice_value == "required":
+            tool_choice = "required"
+        else:
+            tool_choice = "auto"
+        payload: dict = {
+            "model": model,
+            "max_tokens": self._max_tokens,
+            "messages": oai_messages,
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool["name"],
+                        "description": tool.get("description", ""),
+                        "parameters": tool["input_schema"],
+                    },
+                }
+            ],
+            "tool_choice": tool_choice,
+        }
+        self._apply_openai_payload_options(payload)
+
+        data = self._post_chat(payload)
+        choice = data["choices"][0]
+        raw_stop: str = choice.get("finish_reason") or "unknown"
+        if raw_stop == "length":
+            raise RuntimeError(
+                "OpenAI backend: finish_reason=length; refusing to parse "
+                "possibly truncated terminal surface output"
+            )
+        stop_reason: str = {
+            "stop": "end_turn",
+            "length": "max_tokens",
+            "tool_calls": "tool_use",
+        }.get(raw_stop, raw_stop)
+        usage = data.get("usage", {})
+        message = choice.get("message", {})
+        tool_calls = message.get("tool_calls") or []
+        for tc in tool_calls:
+            fn = tc.get("function", {})
+            if fn.get("name") != tool["name"]:
+                continue
+            terminal_output = self._parse_tool_arguments(
+                tool["name"],
+                fn.get("arguments", ""),
+            )
+            return ExchangeResult(
+                raw_output=terminal_surface_raw_output(
+                    terminal_surface,
+                    terminal_output,
+                ),
+                stop_reason=stop_reason,
+                input_tokens=usage.get("prompt_tokens", 0),
+                output_tokens=usage.get("completion_tokens", 0),
+            )
+        if tool_calls:
+            names = [tc.get("function", {}).get("name", "") for tc in tool_calls]
+            raise RuntimeError(
+                "OpenAI backend: tool_calls returned but missing terminal "
+                f"surface {tool['name']} (saw: {names})"
+            )
+
+        content = message.get("content", "")
+        if content:
+            terminal_output = self._extract_json(content)
+            if terminal_output is not None:
+                terminal_output = self._unwrap_tool_echo(terminal_output)
+                if (
+                    terminal_output.get("name") == tool["name"]
+                    and isinstance(terminal_output.get("parameters"), dict)
+                ):
+                    terminal_output = terminal_output["parameters"]
+                return ExchangeResult(
+                    raw_output=terminal_surface_raw_output(
+                        terminal_surface,
+                        terminal_output,
+                    ),
+                    stop_reason=stop_reason,
+                    input_tokens=usage.get("prompt_tokens", 0),
+                    output_tokens=usage.get("completion_tokens", 0),
+                )
+
+        raise RuntimeError(
+            f"OpenAI backend: no {tool['name']} terminal surface output"
+        )
+
+    def _call_multi_turn(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        extra_tools: list[dict],
+        tool_executor: Any | None,
+    ) -> ExchangeResult:
+        """OpenAI-compatible multi-turn tool loop.
+
+        Non-terminal tool calls are resolved through ToolExecutor and returned
+        as role=tool messages keyed by tool_call_id. The cycle completes only
+        when the model calls think_and_respond.
+        """
+        conversation = [{"role": "system", "content": system}] + list(messages)
+        tools = [
+            self._think_tool_def(),
+            *[self._openai_tool_def(tool) for tool in extra_tools],
+        ]
+        total_input = 0
+        total_output = 0
+        max_turns = 20
+
+        for _turn_index in range(max_turns):
+            payload: dict = {
+                "model": model,
+                "max_tokens": self._max_tokens,
+                "messages": conversation,
+                "tools": tools,
+                "tool_choice": self._resolved_tool_choice(),
+            }
+            self._apply_openai_payload_options(payload)
+
+            data = self._post_chat(payload)
+            choice = data["choices"][0]
+            raw_stop: str = choice.get("finish_reason") or "unknown"
+            if raw_stop == "length":
+                raise RuntimeError(
+                    "OpenAI backend: finish_reason=length; refusing to parse "
+                    "possibly truncated structured output"
+                )
+            stop_reason: str = {
+                "stop": "end_turn",
+                "length": "max_tokens",
+                "tool_calls": "tool_use",
+            }.get(raw_stop, raw_stop)
+
+            usage = data.get("usage", {})
+            total_input += usage.get("prompt_tokens", 0) or 0
+            total_output += usage.get("completion_tokens", 0) or 0
+
+            message = choice.get("message", {})
+            tool_calls = message.get("tool_calls") or []
+            if not tool_calls:
+                raise RuntimeError(
+                    "OpenAI backend: no tool_calls returned before "
+                    "think_and_respond"
+                )
+
+            terminal_output: dict | None = None
+            non_terminal_calls: list[tuple[dict, str, dict]] = []
+            for tc in tool_calls:
+                fn = tc.get("function", {})
+                name = fn.get("name")
+                if not name:
+                    raise RuntimeError("OpenAI backend: tool_call missing function name")
+                arguments = self._parse_tool_arguments(
+                    name,
+                    fn.get("arguments", ""),
+                )
+                if name == "think_and_respond":
+                    terminal_output = arguments
+                else:
+                    tool_call_id = tc.get("id")
+                    if not tool_call_id:
+                        raise RuntimeError(
+                            "OpenAI backend: non-terminal tool_call missing id"
+                        )
+                    non_terminal_calls.append((tc, tool_call_id, arguments))
+
+            if terminal_output is not None:
+                if non_terminal_calls:
+                    if tool_executor is None:
+                        raise RuntimeError(
+                            "Model called tools but no tool_executor was provided "
+                            "to resolve them"
+                        )
+                    assistant_message = {
+                        "role": "assistant",
+                        "content": message.get("content"),
+                        "tool_calls": [tc for tc, _id, _args in non_terminal_calls],
+                    }
+                    conversation.append(assistant_message)
+                    for tc, tool_call_id, arguments in non_terminal_calls:
+                        name = tc.get("function", {}).get("name", "")
+                        result = tool_executor.execute(name, arguments)
+                        conversation.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": tool_call_id,
+                                "name": name,
+                                "content": _bound_tool_result_for_context(
+                                    json.dumps(result, default=str)
+                                ),
+                            }
+                        )
+                    continue
+
+                return ExchangeResult(
+                    raw_output=terminal_output,
+                    stop_reason=stop_reason,
+                    input_tokens=total_input,
+                    output_tokens=total_output,
+                    tool_activity=(
+                        tool_executor.activity_log if tool_executor else None
+                    ),
+                )
+
+            if tool_executor is None:
+                raise RuntimeError(
+                    "Model called tools but no tool_executor was provided "
+                    "to resolve them"
+                )
+
+            assistant_message = {
+                "role": "assistant",
+                "content": message.get("content"),
+                "tool_calls": tool_calls,
+            }
+            conversation.append(assistant_message)
+            for tc, tool_call_id, arguments in non_terminal_calls:
+                name = tc.get("function", {}).get("name", "")
+                result = tool_executor.execute(name, arguments)
+                conversation.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "name": name,
+                        "content": _bound_tool_result_for_context(
+                            json.dumps(result, default=str)
+                        ),
+                    }
+                )
+
+        raise RuntimeError(
+            f"OpenAI multi-turn exchange did not produce think_and_respond "
+            f"within {max_turns} turns"
+        )
+
+    @staticmethod
+    def _think_tool_def() -> dict:
+        return {
+            "type": "function",
+            "function": {
+                "name": "think_and_respond",
+                "description": "Produce your response and maintain your state.",
+                "parameters": OPEN_SCHEMA,
+            },
+        }
+
+    @staticmethod
+    def _openai_tool_def(tool: dict) -> dict:
+        if tool.get("type") == "function" and isinstance(tool.get("function"), dict):
+            return tool
+        return {
+            "type": "function",
+            "function": {
+                "name": tool["name"],
+                "description": tool.get("description", ""),
+                "parameters": tool.get("input_schema", {"type": "object"}),
+            },
+        }
+
+    def _apply_openai_payload_options(self, payload: dict) -> None:
+        # Only send parallel_tool_calls when explicitly enabled.
+        # With OpenRouter provider.require_parameters=true, even a False value
+        # can still be treated as a required parameter and over-constrain routing.
+        if self._capability.supports_parallel_tool_calls:
+            payload["parallel_tool_calls"] = True
+
+        if self._provider_name != "openrouter":
+            return
+
+        provider_opts: dict[str, object] = {}
+        if self._or_require_parameters:
+            provider_opts["require_parameters"] = True
+        if self._or_provider_order:
+            provider_opts["order"] = self._or_provider_order
+        if self._or_only_providers:
+            provider_opts["only"] = self._or_only_providers
+        if self._or_allow_fallbacks is not None:
+            provider_opts["allow_fallbacks"] = self._or_allow_fallbacks
+        if provider_opts:
+            payload["provider"] = provider_opts
+        # transforms=[] disables middle-out compression (which would silently
+        # truncate a 20-cycle context — measuring the gateway, not the model).
+        if self._or_transforms is not None:
+            payload["transforms"] = self._or_transforms
+
+    def _post_chat(self, payload: dict) -> dict:
+        headers = {
+            "Authorization": f"Bearer {self._api_key}",
+            "Content-Type": "application/json",
+            **self._extra_headers,
+        }
+        data = self._post_with_retry(
+            f"{self._base_url}/chat/completions",
+            payload,
+            headers,
+        )
+        if "error" in data:
+            raise RuntimeError(f"OpenAI backend error: {data['error']}")
+        return data
+
+    @staticmethod
+    def _parse_tool_arguments(name: str, arguments: Any) -> dict:
+        try:
+            parsed = json.loads(arguments) if isinstance(arguments, str) else arguments
+        except json.JSONDecodeError as e:
+            raise RuntimeError(
+                f"OpenAI backend: malformed JSON arguments for {name}: {e}"
+            ) from e
+        if not isinstance(parsed, dict):
+            raise RuntimeError(
+                f"OpenAI backend: tool arguments for {name} must be an object"
+            )
+        return parsed
 
     @staticmethod
     def _unwrap_tool_echo(obj: dict) -> dict:
@@ -968,6 +1560,7 @@ def _build_messages(
     system_prefix: str = "",
     memory: tuple[int, dict] | None = None,
     tools_enabled: bool = False,
+    curator_context: dict | None = None,
 ) -> tuple[list[dict], str]:
     """Build messages for the call."""
     system_parts = []
@@ -996,21 +1589,49 @@ def _build_messages(
         )
         system_parts.append(json.dumps(memory_state, indent=2))
 
+    if curator_context is not None:
+        system_parts.append("\n## Continuity curator summary\n")
+        system_parts.append(
+            "This is a post-cycle continuity artifact from the scaffold. "
+            "Treat it as a compact continuity aid, not as authoritative "
+            "evidence. Prefer prompt facts and explicit evidence over curator "
+            "claims."
+        )
+        system_parts.append(json.dumps(curator_context, indent=2, default=str))
+
     return [{"role": "user", "content": user_message}], "\n".join(system_parts)
 
 
 # `updated_regions` is reserved so historical logs (which still carry it) don't smuggle it into state on resume.
 _PROTOCOL_FIELDS = frozenset({"response", "updated_regions", "deleted_regions"})
 
+# Sentinel distinguishing "caller did not specify a memory" from an explicit
+# force_memory=None ("inject nothing this cycle"). A class (not object()) so
+# the type checker can narrow `else` branches to the real memory type.
+class _Unset:
+    pass
 
-def _apply_updates(prior_state: dict | None, raw_output: dict, cycle: int) -> dict:
+
+_UNSET = _Unset()
+
+
+def _apply_updates(
+    prior_state: dict | None,
+    raw_output: dict,
+    cycle: int,
+    *,
+    protected_fields: Iterable[str] | None = None,
+) -> dict:
     """Default-stable via key-presence: non-protocol keys in raw_output are
     updates, unlisted keys carry forward. Overlap between updates and deletions
     raises — the ambiguity is exactly the silent-drop failure we're removing."""
+    protected = {str(field) for field in protected_fields or ()}
     deleted = set(raw_output.get("deleted_regions", []))
     updated = set(raw_output.keys()) - _PROTOCOL_FIELDS
+    effective_deleted = deleted - protected
+    effective_updated = updated - protected
 
-    overlap = deleted & updated
+    overlap = effective_deleted & effective_updated
     if overlap:
         raise ValueError(
             f"cycle {cycle}: deleted_regions overlaps updates: {sorted(overlap)}. "
@@ -1020,13 +1641,51 @@ def _apply_updates(prior_state: dict | None, raw_output: dict, cycle: int) -> di
     state = dict(prior_state) if prior_state is not None else {}
     state["cycle"] = cycle
 
-    for key in updated:
+    for key in effective_updated:
         state[key] = raw_output[key]
 
-    for key in deleted:
+    for key in effective_deleted:
         state.pop(key, None)
 
     return state
+
+
+def _state_merge_diagnostics(
+    raw_output: dict,
+    *,
+    protected_fields: Iterable[str] | None = None,
+) -> dict | None:
+    protected = {str(field) for field in protected_fields or ()}
+    if not protected:
+        return None
+
+    deleted = set(raw_output.get("deleted_regions", []))
+    updated = set(raw_output.keys()) - _PROTOCOL_FIELDS
+    ignored_updates = sorted(updated & protected)
+    ignored_deletions = sorted(deleted & protected)
+    return {
+        "record_type": "state_merge_diagnostics",
+        "protected_fields": sorted(protected),
+        "ignored_protected_updates": ignored_updates,
+        "ignored_protected_deletions": ignored_deletions,
+        "ignored_protected_attempt_count": (
+            len(ignored_updates) + len(ignored_deletions)
+        ),
+    }
+
+
+def _curator_context_from_record(record: dict | None) -> dict | None:
+    if not isinstance(record, dict) or record.get("status") != "success":
+        return None
+    summary = str(record.get("summary") or "").strip()
+    if not summary:
+        return None
+    return {
+        "curator_record_id": record.get("record_id"),
+        "source_cycle": record.get("source_cycle"),
+        "source_record_id": record.get("source_record_id"),
+        "summary": summary,
+    }
 
 
 class OpenTasteSession:
@@ -1045,6 +1704,12 @@ class OpenTasteSession:
         memory_base_probability: float = 0.1,
         enable_tools: bool = False,
         project_root: Path | None = None,
+        event_log_path: str | None = None,
+        continuity_curator: ContinuityCurator | None = None,
+        protocol_recovery_builder: ProtocolRecoveryBuilder | None = None,
+        state_validator: StateValidator | None = None,
+        state_repair_builder: StateRepairBuilder | None = None,
+        protected_state_fields: Iterable[str] | None = None,
     ):
         self._backend = backend or AnthropicTasteBackend(client)
         self._model = model
@@ -1052,13 +1717,36 @@ class OpenTasteSession:
         self._state: dict | None = None
         self._log_path = log_path
         self._last_usage: dict | None = None
+        self._last_raw_output: dict | None = None
         self._last_tool_activity: list[dict] | None = None
+        self._last_full_activity: list[dict] | None = None
         self._experiment_label = experiment_label or "taste_open"
         self._system_prompt_prefix = system_prompt_prefix or ""
         self._bridge: TasteBridge | None = bridge
         self._memory_base_prob = memory_base_probability
         self._enable_tools = enable_tools
         self._project_root = project_root or Path.cwd()
+        if event_log_path is not None:
+            self._event_log_path: str | None = event_log_path
+        elif log_path is not None:
+            self._event_log_path = str(default_event_log_path(log_path))
+        else:
+            self._event_log_path = None
+        self._event_store = (
+            EventStore(self._event_log_path) if self._event_log_path else None
+        )
+        self._continuity_curator = continuity_curator
+        self._continuity_curator_context: dict | None = None
+        self._last_continuity_curator_context: dict | None = None
+        self._last_continuity_curation: dict | None = None
+        self._protocol_recovery_builder = protocol_recovery_builder
+        self._last_protocol_recovery: dict | None = None
+        self._state_validator = state_validator
+        self._state_repair_builder = state_repair_builder
+        self._protected_state_fields = frozenset(
+            str(field) for field in protected_state_fields or ()
+        )
+        self._last_state_validation: dict | None = None
         self._session_start = datetime.now(timezone.utc)
         self._last_cycle_time: datetime | None = None
         # Accumulated prior states for involuntary recall and memory tools:
@@ -1112,6 +1800,10 @@ class OpenTasteSession:
         last = json.loads(lines[-1])
         self._state = last.get("state")
         self._cycle = last.get("cycle", 0)
+        curation = last.get("continuity_curation")
+        self._continuity_curator_context = (
+            _curator_context_from_record(curation) if curation else None
+        )
 
     @property
     def state(self) -> dict | None:
@@ -1122,14 +1814,47 @@ class OpenTasteSession:
         return self._cycle
 
     def seed_state(self, state: dict, cycle: int) -> None:
-        """Seed a session directly from a prior tensor, for ablation forks.
+        """Seed from a single prior tensor — the *controlled* fork.
 
-        Deep-copies so the caller's record is not mutated by later updates.
-        The next exchange() will advance to cycle+1 and present this state
-        as the prior, exactly as if it had been carried forward in a live run.
+        State only: no prior history, so memory tools and involuntary recall
+        are inert. A deliberately narrower environment than the live run; use
+        seed_history for the faithful fork. Deep-copies so the caller's record
+        is not mutated. The next exchange() advances to cycle+1 and presents
+        this state as the prior.
         """
         self._state = json.loads(json.dumps(state))
         self._cycle = cycle
+
+    def seed_history(self, records: list[dict], up_to_cycle: int) -> None:
+        """Reconstruct the environment going *into* up_to_cycle — the faithful fork.
+
+        Populates _prior_states with every cycle < up_to_cycle (so memory tools
+        and involuntary recall see the same history the live instance had) and
+        sets working state to the tensor carried into that cycle (the state of
+        cycle up_to_cycle-1). The next exchange() advances to up_to_cycle. To
+        hold involuntary memory constant rather than re-rolling it, replay the
+        live injection via exchange(force_memory=...).
+        """
+        self._prior_states = []
+        current = None
+        for rec in sorted(records, key=lambda r: int(r["cycle"])):
+            c = int(rec["cycle"])
+            if c >= up_to_cycle:
+                continue
+            state = rec.get("state")
+            if state is None:
+                continue
+            rid = rec.get("record_id")
+            record_id = UUID(rid) if rid else uuid4()
+            self._prior_states.append(
+                (c, record_id, state, rec.get("timestamp", ""))
+            )
+            if c == up_to_cycle - 1:
+                current = state
+        if current is None:
+            raise ValueError(f"no record for cycle {up_to_cycle - 1}")
+        self._state = json.loads(json.dumps(current))
+        self._cycle = up_to_cycle - 1
 
     def _pick_memory(self) -> tuple[int, dict] | None:
         """Maybe select a prior state for involuntary recall.
@@ -1153,7 +1878,11 @@ class OpenTasteSession:
         cycle, _record_id, state, _timestamp = random.choice(candidates)
         return (cycle, state)
 
-    def exchange(self, user_message: str) -> str:
+    def exchange(
+        self, user_message: str, *,
+        force_memory: tuple[int, dict] | None | _Unset = _UNSET,
+        terminal_surface: dict | None = None,
+    ) -> str:
         """One cycle: user speaks, model responds + updates state.
 
         The cycle counter advances eagerly so message-building and the
@@ -1161,33 +1890,60 @@ class OpenTasteSession:
         attempt raises. Without rollback, a transient API failure would
         leave self._cycle ahead of state["cycle"], so the next successful
         cycle would skip a number and the cycle log would carry a phantom.
+
+        force_memory overrides involuntary-memory selection for this cycle:
+        None injects nothing, (cycle, state) injects a specific prior self.
+        Ablation forks use it to replay the live run's exact injection rather
+        than draw a fresh random one. Left at _UNSET, normal _pick_memory runs.
         """
         self._cycle += 1
         try:
-            return self._exchange_impl(user_message)
+            return self._exchange_impl(
+                user_message,
+                force_memory=force_memory,
+                terminal_surface=terminal_surface,
+            )
         except Exception:
             self._cycle -= 1
             raise
 
-    def _exchange_impl(self, user_message: str) -> str:
+    def _exchange_impl(
+        self, user_message: str, *,
+        force_memory: tuple[int, dict] | None | _Unset = _UNSET,
+        terminal_surface: dict | None = None,
+    ) -> str:
         """Body of exchange(). Separated so exchange() can roll back the
         cycle counter on any exception without an inline try/finally
         wrapping the entire method body."""
-        # Involuntary memory — maybe surface a prior self
-        memory = self._pick_memory()
+        # Involuntary memory — maybe surface a prior self, unless the caller
+        # forced a specific injection (or forced None) for a faithful fork.
+        if isinstance(force_memory, _Unset):
+            memory = self._pick_memory()
+        else:
+            memory = force_memory
         self._last_injected_memory = memory
+
+        curator_context = self._continuity_curator_context
+        self._last_continuity_curator_context = curator_context
 
         messages, system = _build_messages(
             self._state, user_message, self._cycle,
             system_prefix=self._system_prompt_prefix,
             memory=memory,
-            tools_enabled=self._enable_tools,
+            tools_enabled=self._enable_tools and terminal_surface is None,
+            curator_context=curator_context,
         )
+
+        # Pre-mint the cycle record_id so schedule_event tool calls can
+        # link future events to the exact cycle that authored them. The
+        # pending event records are still committed only after the cycle
+        # succeeds, so failed exchanges do not create orphaned wakeups.
+        record_id = uuid4()
 
         # Tool wiring — only when enabled. Executor is scoped to this cycle.
         tool_executor = None
         extra_tools: list[dict] | None = None
-        if self._enable_tools:
+        if self._enable_tools and terminal_surface is None:
             from hamutay.tools import TOOL_SCHEMAS, ToolExecutor
             tool_executor = ToolExecutor(
                 project_root=self._project_root,
@@ -1196,17 +1952,33 @@ class OpenTasteSession:
                 last_cycle_time=self._last_cycle_time,
                 prior_states=self._prior_states,
                 bridge=self._bridge,
+                scheduled_by_record_id=(
+                    record_id if self._event_store is not None else None
+                ),
             )
             extra_tools = list(TOOL_SCHEMAS.values())
 
-        result = self._backend.call(
-            model=self._model,
-            system=system,
-            messages=messages,
-            experiment_label=self._experiment_label,
-            extra_tools=extra_tools,
-            tool_executor=tool_executor,
-        )
+        if terminal_surface is not None:
+            if extra_tools:
+                raise RuntimeError(
+                    "terminal_surface wakeups cannot enable non-terminal tools"
+                )
+            result = self._call_terminal_surface_backend(
+                model=self._model,
+                system=system,
+                messages=messages,
+                experiment_label=self._experiment_label,
+                terminal_surface=terminal_surface,
+            )
+        else:
+            result = self._backend.call(
+                model=self._model,
+                system=system,
+                messages=messages,
+                experiment_label=self._experiment_label,
+                extra_tools=extra_tools,
+                tool_executor=tool_executor,
+            )
 
         if result.stop_reason == "max_tokens":
             print(f"  WARNING: cycle {self._cycle} hit max_tokens — truncated")
@@ -1217,22 +1989,133 @@ class OpenTasteSession:
         prior_state_snapshot = (
             json.loads(json.dumps(self._state)) if self._state else None
         )
+        state_merge_diagnostics = _state_merge_diagnostics(
+            raw_output,
+            protected_fields=self._protected_state_fields,
+        )
 
-        self._state = _apply_updates(self._state, raw_output, self._cycle)
+        try:
+            self._state = _apply_updates(
+                self._state,
+                raw_output,
+                self._cycle,
+                protected_fields=self._protected_state_fields,
+            )
+        except Exception as e:
+            self._last_tool_activity = result.tool_activity
+            self._last_full_activity = result.tool_activity
+            self._last_usage = {
+                "input_tokens": result.input_tokens,
+                "output_tokens": result.output_tokens,
+            }
+            self._last_cycle_time = datetime.now(timezone.utc)
+            deleted = set(raw_output.get("deleted_regions", []))
+            updated = set(raw_output.keys()) - _PROTOCOL_FIELDS
+            protected = set(self._protected_state_fields)
+            effective_deleted = deleted - protected
+            effective_updated = updated - protected
+            failure_classification = {
+                "record_type": "protocol_failure",
+                "failure_stage": "state_merge",
+                "error_type": type(e).__name__,
+                "error": str(e),
+                "deleted_regions": sorted(deleted),
+                "updated_regions": sorted(updated),
+                "effective_deleted_regions": sorted(effective_deleted),
+                "effective_updated_regions": sorted(effective_updated),
+                "overlap_keys": sorted(effective_deleted & effective_updated),
+            }
+            protocol_recovery = self._run_protocol_recovery(
+                cycle=self._cycle,
+                record_id=record_id,
+                timestamp=self._last_cycle_time,
+                prior_state=prior_state_snapshot,
+                raw_output=raw_output,
+                response_text=response_text,
+                failure_classification=failure_classification,
+            )
+            self._last_protocol_recovery = protocol_recovery
+            self._log_entry(
+                user_message=user_message,
+                system_prompt=system,
+                raw_output=raw_output,
+                prior_state=prior_state_snapshot,
+                record_id=record_id,
+                usage={
+                    "input_tokens": result.input_tokens,
+                    "output_tokens": result.output_tokens,
+                    "cache_read_input_tokens": result.cache_read_tokens,
+                    "cache_creation_input_tokens": result.cache_creation_tokens,
+                    "stop_reason": result.stop_reason,
+                },
+                scheduled_events=[],
+                failure_classification=failure_classification,
+                protocol_recovery=protocol_recovery,
+                state_merge_diagnostics=state_merge_diagnostics,
+            )
+            raise
 
-        # Activity log is per-cycle — overwrites prior cycle's log rather
-        # than accumulating. JSONL holds the full history for analysis.
-        if result.tool_activity is not None:
-            self._state["_activity_log"] = result.tool_activity
-        self._last_tool_activity = result.tool_activity
+        # Two channels for tool activity. The full entries (including raw
+        # tool results — bash stdout/stderr, etc.) go to the durable JSONL
+        # record. The copy re-fed to the model via working state is lean
+        # (`result` stripped), so capturing everything doesn't bloat context
+        # or change what the next cycle reads. Save it all; re-inject little.
+        full_activity = result.tool_activity
+        if full_activity is not None:
+            self._state["_activity_log"] = [
+                {k: v for k, v in entry.items() if k != "result"}
+                for entry in full_activity
+            ]
+        self._last_tool_activity = full_activity
+        self._last_full_activity = full_activity
 
         self._last_cycle_time = datetime.now(timezone.utc)
+
+        state_validation, raw_output, response_text, repair_usage = (
+            self._run_state_validation_and_repair(
+                cycle=self._cycle,
+                record_id=record_id,
+                timestamp=self._last_cycle_time,
+                prior_state=prior_state_snapshot,
+                raw_output=raw_output,
+                response_text=response_text,
+            )
+        )
+        state_merge_diagnostics = _state_merge_diagnostics(
+            raw_output,
+            protected_fields=self._protected_state_fields,
+        )
+        self._last_state_validation = state_validation
+        self._last_raw_output = json.loads(json.dumps(raw_output, default=str))
+        usage = {
+            "input_tokens": result.input_tokens + repair_usage["input_tokens"],
+            "output_tokens": result.output_tokens + repair_usage["output_tokens"],
+            "cache_read_input_tokens": result.cache_read_tokens,
+            "cache_creation_input_tokens": result.cache_creation_tokens,
+            "stop_reason": result.stop_reason,
+        }
+        if repair_usage["input_tokens"] or repair_usage["output_tokens"]:
+            usage["repair_input_tokens"] = repair_usage["input_tokens"]
+            usage["repair_output_tokens"] = repair_usage["output_tokens"]
+
+        continuity_curation = self._run_continuity_curator(
+            cycle=self._cycle,
+            record_id=record_id,
+            timestamp=self._last_cycle_time,
+            prior_state=prior_state_snapshot,
+            raw_output=raw_output,
+            response_text=response_text,
+            state=self._state,
+        )
+        self._last_continuity_curation = continuity_curation
+        self._continuity_curator_context = _curator_context_from_record(
+            continuity_curation
+        )
 
         # Identity at creation: the framework mints the record_id and hands
         # it to every downstream consumer (bridge, JSONL, _prior_states).
         # Bridge failure no longer orphans the UUID — it's already in hand
         # and in the JSONL log, which is the durable substrate.
-        record_id = uuid4()
         if self._bridge is not None:
             try:
                 self._bridge.store_open_state(
@@ -1255,8 +2138,8 @@ class OpenTasteSession:
         )
 
         self._last_usage = {
-            "input_tokens": result.input_tokens,
-            "output_tokens": result.output_tokens,
+            "input_tokens": result.input_tokens + repair_usage["input_tokens"],
+            "output_tokens": result.output_tokens + repair_usage["output_tokens"],
         }
         self._log_entry(
             user_message=user_message,
@@ -1264,16 +2147,360 @@ class OpenTasteSession:
             raw_output=raw_output,
             prior_state=prior_state_snapshot,
             record_id=record_id,
-            usage={
-                "input_tokens": result.input_tokens,
-                "output_tokens": result.output_tokens,
-                "cache_read_input_tokens": result.cache_read_tokens,
-                "cache_creation_input_tokens": result.cache_creation_tokens,
-                "stop_reason": result.stop_reason,
-            },
+            usage=usage,
+            scheduled_events=(
+                tool_executor.pending_events if tool_executor is not None else []
+            ),
+            continuity_curation=continuity_curation,
+            state_validation=state_validation,
+            state_merge_diagnostics=state_merge_diagnostics,
         )
 
+        if self._event_store is not None and tool_executor is not None:
+            self._event_store.append_many(tool_executor.pending_events)
+
         return response_text
+
+    def _call_terminal_surface_backend(
+        self,
+        *,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
+        terminal_surface: dict,
+    ) -> ExchangeResult:
+        direct = getattr(self._backend, "call_terminal_surface", None)
+        if callable(direct):
+            return direct(
+                model=model,
+                system=system,
+                messages=messages,
+                experiment_label=experiment_label,
+                terminal_surface=terminal_surface,
+            )
+
+        wrapped = getattr(self._backend, "backend", None)
+        wrapped_call = getattr(wrapped, "call_terminal_surface", None)
+        if callable(wrapped_call):
+            calls = getattr(self._backend, "calls", None)
+            if isinstance(calls, int):
+                self._backend.calls = calls + 1
+            return wrapped_call(
+                model=model,
+                system=system,
+                messages=messages,
+                experiment_label=experiment_label,
+                terminal_surface=terminal_surface,
+            )
+
+        raise RuntimeError(
+            f"{type(self._backend).__name__} does not support terminal_surface"
+        )
+
+    @staticmethod
+    def _state_validation_passed(validation: dict | None) -> bool:
+        if not validation:
+            return False
+        artifact = validation.get("artifact")
+        if not isinstance(artifact, dict):
+            return False
+        if artifact.get("valid") is True:
+            return True
+        status = str(artifact.get("status", "")).lower()
+        return status in {"valid", "passed", "pass", "success"}
+
+    def _run_state_validator(
+        self,
+        *,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+        prior_state: dict | None,
+        raw_output: dict,
+        response_text: str,
+        state: dict,
+    ) -> dict | None:
+        if self._state_validator is None:
+            return None
+        validation_record_id = str(uuid4())
+        try:
+            artifact = self._state_validator.validate(
+                cycle=cycle,
+                record_id=record_id,
+                timestamp=timestamp,
+                prior_state=(
+                    json.loads(json.dumps(prior_state, default=str))
+                    if prior_state is not None else None
+                ),
+                raw_output=json.loads(json.dumps(raw_output, default=str)),
+                response_text=response_text,
+                state=json.loads(json.dumps(state, default=str)),
+            )
+            if not isinstance(artifact, dict):
+                raise TypeError("state validator must return a dict")
+            artifact = json.loads(json.dumps(artifact, default=str))
+            status = "valid" if self._state_validation_passed({
+                "artifact": artifact
+            }) else "invalid"
+            return {
+                "record_type": "state_validation",
+                "record_id": validation_record_id,
+                "status": status,
+                "created_at": utc_now_iso(),
+                "source_cycle": cycle,
+                "source_record_id": str(record_id),
+                "artifact": artifact,
+            }
+        except Exception as e:  # noqa: BLE001 -- validator failure is data
+            return {
+                "record_type": "state_validation",
+                "record_id": validation_record_id,
+                "status": "validator_failed",
+                "created_at": utc_now_iso(),
+                "source_cycle": cycle,
+                "source_record_id": str(record_id),
+                "error_type": type(e).__name__,
+                "error": str(e),
+            }
+
+    def _run_state_validation_and_repair(
+        self,
+        *,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+        prior_state: dict | None,
+        raw_output: dict,
+        response_text: str,
+    ) -> tuple[dict | None, dict, str, dict]:
+        repair_usage = {"input_tokens": 0, "output_tokens": 0}
+        if self._state_validator is None or self._state is None:
+            return None, raw_output, response_text, repair_usage
+
+        first_pass = self._run_state_validator(
+            cycle=cycle,
+            record_id=record_id,
+            timestamp=timestamp,
+            prior_state=prior_state,
+            raw_output=raw_output,
+            response_text=response_text,
+            state=self._state,
+        )
+        if first_pass is None:
+            return None, raw_output, response_text, repair_usage
+
+        validation = {
+            "record_type": "state_validation",
+            "record_id": str(uuid4()),
+            "status": first_pass["status"],
+            "created_at": utc_now_iso(),
+            "source_cycle": cycle,
+            "source_record_id": str(record_id),
+            "first_pass": first_pass,
+            "repair_attempted": False,
+        }
+        if self._state_validation_passed(first_pass):
+            return validation, raw_output, response_text, repair_usage
+
+        if first_pass["status"] == "validator_failed":
+            validation["status"] = "validator_failed"
+            return validation, raw_output, response_text, repair_usage
+
+        if self._state_repair_builder is None:
+            validation["status"] = "unrepaired"
+            return validation, raw_output, response_text, repair_usage
+
+        validation["repair_attempted"] = True
+        try:
+            repair_prompt = self._state_repair_builder.build_repair_prompt(
+                cycle=cycle,
+                record_id=record_id,
+                timestamp=timestamp,
+                prior_state=(
+                    json.loads(json.dumps(prior_state, default=str))
+                    if prior_state is not None else None
+                ),
+                raw_output=json.loads(json.dumps(raw_output, default=str)),
+                response_text=response_text,
+                state=json.loads(json.dumps(self._state, default=str)),
+                validation=json.loads(json.dumps(first_pass, default=str)),
+            )
+            if not isinstance(repair_prompt, str) or not repair_prompt.strip():
+                raise TypeError("state repair builder must return a non-empty string")
+            messages, system = _build_messages(
+                self._state,
+                repair_prompt,
+                cycle,
+                system_prefix=self._system_prompt_prefix,
+                memory=None,
+                tools_enabled=False,
+                curator_context=None,
+            )
+            repair_result = self._backend.call(
+                model=self._model,
+                system=system,
+                messages=messages,
+                experiment_label=f"{self._experiment_label}_state_repair",
+                extra_tools=None,
+                tool_executor=None,
+            )
+            repair_usage["input_tokens"] = repair_result.input_tokens
+            repair_usage["output_tokens"] = repair_result.output_tokens
+            repair_raw_output = repair_result.raw_output
+            repair_response_text = repair_raw_output.get("response", "")
+            repaired_state = _apply_updates(
+                self._state,
+                repair_raw_output,
+                cycle,
+                protected_fields=self._protected_state_fields,
+            )
+            self._state = repaired_state
+            repair_merge_diagnostics = _state_merge_diagnostics(
+                repair_raw_output,
+                protected_fields=self._protected_state_fields,
+            )
+            repair_validation = self._run_state_validator(
+                cycle=cycle,
+                record_id=record_id,
+                timestamp=timestamp,
+                prior_state=prior_state,
+                raw_output=repair_raw_output,
+                response_text=repair_response_text,
+                state=self._state,
+            )
+            repaired = self._state_validation_passed(repair_validation)
+            validation["status"] = "repaired" if repaired else "unrepaired"
+            validation["repair"] = {
+                "status": "valid" if repaired else "invalid",
+                "raw_output": json.loads(json.dumps(repair_raw_output, default=str)),
+                "response_text": repair_response_text,
+                "usage": {
+                    "input_tokens": repair_result.input_tokens,
+                    "output_tokens": repair_result.output_tokens,
+                    "cache_read_input_tokens": repair_result.cache_read_tokens,
+                    "cache_creation_input_tokens": repair_result.cache_creation_tokens,
+                    "stop_reason": repair_result.stop_reason,
+                },
+                "validation": repair_validation,
+            }
+            if repair_merge_diagnostics is not None:
+                validation["repair"]["state_merge_diagnostics"] = (
+                    repair_merge_diagnostics
+                )
+            return validation, repair_raw_output, repair_response_text, repair_usage
+        except Exception as e:  # noqa: BLE001 -- failed repair is data
+            validation["status"] = "repair_failed"
+            validation["repair"] = {
+                "status": "failed",
+                "error_type": type(e).__name__,
+                "error": str(e),
+            }
+            return validation, raw_output, response_text, repair_usage
+
+    def _run_continuity_curator(
+        self,
+        *,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+        prior_state: dict | None,
+        raw_output: dict,
+        response_text: str,
+        state: dict,
+    ) -> dict | None:
+        if self._continuity_curator is None:
+            return None
+        curator_record_id = str(uuid4())
+        try:
+            artifact = self._continuity_curator.curate(
+                cycle=cycle,
+                record_id=record_id,
+                timestamp=timestamp,
+                prior_state=prior_state,
+                raw_output=json.loads(json.dumps(raw_output, default=str)),
+                response_text=response_text,
+                state=json.loads(json.dumps(state, default=str)),
+            )
+            if not isinstance(artifact, dict):
+                raise TypeError("continuity curator must return a dict")
+            artifact = json.loads(json.dumps(artifact, default=str))
+            summary = str(
+                artifact.get("summary")
+                or artifact.get("carry_forward_summary")
+                or ""
+            ).strip()
+            return {
+                "record_type": "continuity_curation",
+                "record_id": curator_record_id,
+                "status": "success",
+                "created_at": utc_now_iso(),
+                "source_cycle": cycle,
+                "source_record_id": str(record_id),
+                "summary": summary,
+                "artifact": artifact,
+            }
+        except Exception as e:  # noqa: BLE001 -- curation failure is data
+            return {
+                "record_type": "continuity_curation",
+                "record_id": curator_record_id,
+                "status": "failed",
+                "created_at": utc_now_iso(),
+                "source_cycle": cycle,
+                "source_record_id": str(record_id),
+                "error_type": type(e).__name__,
+                "error": str(e),
+            }
+
+    def _run_protocol_recovery(
+        self,
+        *,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+        prior_state: dict | None,
+        raw_output: dict,
+        response_text: str,
+        failure_classification: dict,
+    ) -> dict | None:
+        if self._protocol_recovery_builder is None:
+            return None
+        recovery_record_id = str(uuid4())
+        try:
+            artifact = self._protocol_recovery_builder.recover(
+                cycle=cycle,
+                record_id=record_id,
+                timestamp=timestamp,
+                prior_state=prior_state,
+                raw_output=json.loads(json.dumps(raw_output, default=str)),
+                response_text=response_text,
+                failure_classification=json.loads(
+                    json.dumps(failure_classification, default=str)
+                ),
+            )
+            if not isinstance(artifact, dict):
+                raise TypeError("protocol recovery builder must return a dict")
+            artifact = json.loads(json.dumps(artifact, default=str))
+            return {
+                "record_type": "protocol_recovery",
+                "record_id": recovery_record_id,
+                "status": "success",
+                "created_at": utc_now_iso(),
+                "source_cycle": cycle,
+                "source_record_id": str(record_id),
+                "artifact": artifact,
+            }
+        except Exception as e:  # noqa: BLE001 -- recovery failure is data
+            return {
+                "record_type": "protocol_recovery",
+                "record_id": recovery_record_id,
+                "status": "failed",
+                "created_at": utc_now_iso(),
+                "source_cycle": cycle,
+                "source_record_id": str(record_id),
+                "error_type": type(e).__name__,
+                "error": str(e),
+            }
 
     def _log_entry(
         self,
@@ -1283,6 +2510,12 @@ class OpenTasteSession:
         prior_state: dict | None,
         record_id: UUID,
         usage: dict,
+        scheduled_events: list[dict] | None = None,
+        continuity_curation: dict | None = None,
+        failure_classification: dict | None = None,
+        protocol_recovery: dict | None = None,
+        state_validation: dict | None = None,
+        state_merge_diagnostics: dict | None = None,
     ) -> None:
         """Append full record to JSONL log. Captures everything."""
         if not self._log_path:
@@ -1327,7 +2560,26 @@ class OpenTasteSession:
             ),
             # Involuntary memory
             "memory_injection": memory_info,
+            # Full tool activity incl. raw results — durable capture, not
+            # re-fed into working state (state carries the lean copy).
+            "tool_activity_full": self._last_full_activity,
+            "scheduled_events": scheduled_events or [],
         }
+        if self._last_continuity_curator_context is not None:
+            record["curator_context_injection"] = (
+                self._last_continuity_curator_context
+            )
+        if continuity_curation is not None:
+            record["continuity_curation"] = continuity_curation
+        if failure_classification is not None:
+            record["status"] = "failed"
+            record["failure_classification"] = failure_classification
+        if protocol_recovery is not None:
+            record["protocol_recovery"] = protocol_recovery
+        if state_validation is not None:
+            record["state_validation"] = state_validation
+        if state_merge_diagnostics is not None:
+            record["state_merge_diagnostics"] = state_merge_diagnostics
         with open(self._log_path, "a") as f:
             f.write(json.dumps(record, default=str) + "\n")
 
@@ -1412,6 +2664,18 @@ def main():
     parser.add_argument(
         "--tools", action="store_true",
         help="Enable perception tools (read, search_project, clock)",
+    )
+    parser.add_argument(
+        "--curator", action="store_true",
+        help="Enable model-backed continuity curator summaries",
+    )
+    parser.add_argument(
+        "--curator-model", default=None,
+        help="Model for continuity curator (default: same as --model)",
+    )
+    parser.add_argument(
+        "--curator-summary-chars", default=2400, type=int,
+        help="Max curator summary characters to inject (default: 2400)",
     )
     args = parser.parse_args()
 
@@ -1524,6 +2788,22 @@ def main():
         except (ImportError, ConnectionError) as e:
             print(f"WARNING: persistence unavailable ({e}); continuing with JSONL only")
 
+    continuity_curator = None
+    if args.curator:
+        from hamutay.continuity_curator import ModelContinuityCurator
+
+        curator_model = args.curator_model or args.model
+        continuity_curator = ModelContinuityCurator(
+            backend=backend,
+            model=curator_model,
+            experiment_label=f"{experiment_label}_continuity_curator",
+            max_summary_chars=args.curator_summary_chars,
+        )
+        print(
+            "Continuity curator enabled: "
+            f"model={curator_model}, summary_chars={args.curator_summary_chars}"
+        )
+
     session = OpenTasteSession(
         model=args.model,
         backend=backend,
@@ -1534,6 +2814,7 @@ def main():
         memory_base_probability=args.memory_prob,
         enable_tools=args.tools,
         project_root=Path.cwd(),
+        continuity_curator=continuity_curator,
     )
 
     if resume:

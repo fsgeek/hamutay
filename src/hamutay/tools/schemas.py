@@ -283,6 +283,15 @@ WALK_SCHEMA = {
                     "Number of steps in the chosen direction(s). Default: 1."
                 ),
             },
+            "mode": {
+                "type": "string",
+                "enum": ["path", "adjacent"],
+                "description": (
+                    "Traversal mode for from_record_id. path preserves the "
+                    "existing single-path walk. adjacent walks all adjacent "
+                    "edges up to depth. Default: path."
+                ),
+            },
             "reason": _REASON_FIELD,
         },
         "required": [],
@@ -429,6 +438,133 @@ ANNOTATE_EDGE_SCHEMA = {
 }
 
 
+SCHEDULE_EVENT_SCHEMA = {
+    "name": "schedule_event",
+    "description": (
+        "Schedule a future self-reflection event. The event will wake a "
+        "future cycle with an explicit event envelope containing your "
+        "purpose and requested memory context. V1 supports reflection only: "
+        "use this when you are not done thinking, but know what context "
+        "you need later."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "purpose": {
+                "type": "string",
+                "description": (
+                    "Why this future reflection should happen. This is "
+                    "recorded durably and shown to the future cycle."
+                ),
+            },
+            "requested_context": {
+                "type": "array",
+                "description": (
+                    "Memory context to resolve before wake. Each item is "
+                    "one of: recall by cycle/record_id with optional field; "
+                    "compare by cycle_a/cycle_b with optional field/content; "
+                    "or walk by from_record_id with optional direction/depth/mode."
+                ),
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "tool": {
+                            "type": "string",
+                            "enum": ["recall", "compare", "walk"],
+                        },
+                        "cycle": {"type": "integer"},
+                        "record_id": {"type": "string"},
+                        "field": {"type": "string"},
+                        "cycle_a": {"type": "integer"},
+                        "cycle_b": {"type": "integer"},
+                        "content": {"type": "boolean"},
+                        "from_record_id": {"type": "string"},
+                        "direction": {
+                            "type": "string",
+                            "enum": ["forward", "backward", "both"],
+                        },
+                        "depth": {"type": "integer"},
+                        "mode": {
+                            "type": "string",
+                            "enum": ["path", "adjacent"],
+                        },
+                    },
+                    "required": ["tool"],
+                },
+            },
+            "label": {
+                "type": "string",
+                "description": "Optional short label for browsing the event log.",
+            },
+            "durable_update_contract": {
+                "type": "object",
+                "description": (
+                    "Optional explicit contract for the future durable state "
+                    "update. Use this to name required top-level fields, exact "
+                    "values, or simple type expectations the wake should satisfy."
+                ),
+                "additionalProperties": True,
+            },
+            "durable_update_example": {
+                "type": "object",
+                "description": (
+                    "Optional example of the future think_and_respond object "
+                    "shape. Use this to show the wake a valid durable update "
+                    "pattern."
+                ),
+                "additionalProperties": True,
+            },
+            "terminal_surface": {
+                "type": "object",
+                "description": (
+                    "Optional task-specific terminal completion surface for "
+                    "bounded wake work. When present, the future wake uses the "
+                    "declared terminal tool instead of broad think_and_respond; "
+                    "the substrate translates its output into durable state."
+                ),
+                "properties": {
+                    "tool_name": {"type": "string"},
+                    "description": {"type": "string"},
+                    "input_schema": {"type": "object"},
+                    "tool_choice": {
+                        "type": "string",
+                        "enum": ["auto", "required", "force"],
+                    },
+                    "state_update": {
+                        "type": "object",
+                        "properties": {
+                            "response_field": {"type": "string"},
+                            "copy": {"type": "object"},
+                            "set": {"type": "object"},
+                        },
+                        "required": ["copy"],
+                    },
+                    "label": {"type": "string"},
+                },
+                "required": ["tool_name", "input_schema", "state_update"],
+                "additionalProperties": False,
+            },
+            "not_before": {
+                "type": "string",
+                "description": (
+                    "Optional ISO timestamp. The event remains pending but is "
+                    "not runnable before this time."
+                ),
+            },
+            "expires_at": {
+                "type": "string",
+                "description": (
+                    "Optional ISO timestamp. If expired when the runner sees "
+                    "it, the event is marked expired rather than run."
+                ),
+            },
+            "reason": _REASON_FIELD,
+        },
+        "required": ["purpose", "requested_context"],
+    },
+}
+
+
 BASH_SCHEMA = {
     "name": "bash",
     "description": (
@@ -474,5 +610,6 @@ TOOL_SCHEMAS: dict[str, dict] = {
     "search_memory": SEARCH_MEMORY_SCHEMA,
     "store": STORE_SCHEMA,
     "annotate_edge": ANNOTATE_EDGE_SCHEMA,
+    "schedule_event": SCHEDULE_EVENT_SCHEMA,
     "bash": BASH_SCHEMA,
 }

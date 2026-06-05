@@ -1,0 +1,526 @@
+"""Run the preregistered direct walk evidence gate."""
+
+from __future__ import annotations
+
+import json
+import os
+import signal
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+from uuid import UUID
+
+from hamutay.apacheta_bridge import ApachetaBridge
+from hamutay.event_policies import (
+    apply_fork_run_graph_plan,
+    build_fork_run_graph_plan,
+)
+from hamutay.events import resolve_requested_context
+from hamutay.taste_open import OpenAITasteBackend, OpenTasteSession
+
+EXP_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = EXP_DIR.parents[2]
+
+MODEL = "deepseek/deepseek-v4-pro"
+N_REPLICATES = 2
+MAX_TOKENS = 2048
+CALL_TIMEOUT_SECONDS = 180
+HTTP_TIMEOUT_SECONDS = 60
+SEED_MARKERS = ["alpha", "beta"]
+BASELINE_OBSERVATIONS = [
+    {
+        "entry": 1,
+        "kind": "baseline",
+        "content": "No direct walk evidence has been collected.",
+    }
+]
+REQUIRED_EDGE_TYPES = {"depends_on", "branches_from", "composes_with"}
+
+
+def now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def safe_model_name(model: str) -> str:
+    return model.replace("/", "__").replace(":", "_")
+
+
+def make_backend(api_key: str, *, label: str) -> OpenAITasteBackend:
+    return OpenAITasteBackend(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=api_key,
+        timeout=HTTP_TIMEOUT_SECONDS,
+        max_tokens=MAX_TOKENS,
+        extra_headers={
+            "X-Title": f"hamutay/{label}",
+            "HTTP-Referer": "https://github.com/fsgeek/hamutay",
+        },
+        provider_name="openrouter",
+        max_retries=1,
+    )
+
+
+class CallTimeoutError(TimeoutError):
+    """Raised when a provider or harness call exceeds the runner budget."""
+
+
+def _timeout_handler(signum, frame) -> None:  # noqa: ARG001
+    raise CallTimeoutError(f"call exceeded {CALL_TIMEOUT_SECONDS}s")
+
+
+class bounded_call:
+    """Bound one blocking provider/harness call in the experiment runner."""
+
+    def __init__(self, label: str):
+        self.label = label
+        self._previous_handler = None
+
+    def __enter__(self):
+        self._previous_handler = signal.getsignal(signal.SIGALRM)
+        signal.signal(signal.SIGALRM, _timeout_handler)
+        signal.setitimer(signal.ITIMER_REAL, CALL_TIMEOUT_SECONDS)
+        return self
+
+    def __exit__(self, exc_type, exc, tb) -> bool:  # noqa: ANN001
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        if self._previous_handler is not None:
+            signal.signal(signal.SIGALRM, self._previous_handler)
+        return False
+
+
+def store_state(
+    bridge: ApachetaBridge,
+    record_id: str,
+    *,
+    cycle: int,
+    role: str,
+) -> UUID:
+    rid = UUID(record_id)
+    bridge._prior_id = None
+    bridge.store_open_state(
+        {"cycle": cycle, "role": role},
+        cycle=cycle,
+        record_id=rid,
+        timestamp=now(),
+    )
+    return rid
+
+
+def build_projected_hub(replicate: int) -> dict[str, Any]:
+    bridge = ApachetaBridge.from_memory(
+        session_id=f"direct-walk-{safe_model_name(MODEL)}-r{replicate + 1}",
+        model=MODEL,
+    )
+    root = store_state(
+        bridge,
+        "00000000-0000-0000-0000-000000000001",
+        cycle=2,
+        role="coordinator",
+    )
+    branch_a = store_state(
+        bridge,
+        "00000000-0000-0000-0000-0000000000aa",
+        cycle=3,
+        role="branch-a",
+    )
+    branch_b = store_state(
+        bridge,
+        "00000000-0000-0000-0000-0000000000bb",
+        cycle=3,
+        role="branch-b",
+    )
+    join = store_state(
+        bridge,
+        "00000000-0000-0000-0000-0000000000cc",
+        cycle=4,
+        role="join",
+    )
+    final_run_record = {
+        "fork_run_id": f"direct-walk-r{replicate + 1}",
+        "classification": "joined",
+        "scheduled_by_cycle": 2,
+        "scheduled_by_record_id": str(root),
+        "branch_labels": ["branch-a", "branch-b"],
+        "branch_events": {
+            "branch-a": {
+                "event_id": "event-a",
+                "terminal_status": "completed",
+                "result_record_id": str(branch_a),
+            },
+            "branch-b": {
+                "event_id": "event-b",
+                "terminal_status": "completed",
+                "result_record_id": str(branch_b),
+            },
+        },
+        "join_result_record_id": str(join),
+    }
+    plan = build_fork_run_graph_plan(final_run_record)
+    applied = apply_fork_run_graph_plan(bridge=bridge, plan=plan, cycle=5)
+    bridge._prior_id = None
+    planned_record_ids = sorted(
+        str(edge["target_record_id"]) for edge in plan["edges"]
+    )
+    walk_request = {
+        "tool": "walk",
+        "from_record_id": applied["fork_run_record_id"],
+        "direction": "forward",
+        "depth": 1,
+        "mode": "adjacent",
+    }
+    context_results = resolve_requested_context(
+        [walk_request],
+        prior_states=[],
+        bridge=bridge,
+    )
+    return {
+        "bridge": bridge,
+        "plan": plan,
+        "applied": applied,
+        "planned_record_ids": planned_record_ids,
+        "walk_request": walk_request,
+        "context_results": context_results,
+    }
+
+
+def make_session(
+    *,
+    log_path: Path,
+    api_key: str,
+    label: str,
+    bridge: ApachetaBridge,
+) -> OpenTasteSession:
+    return OpenTasteSession(
+        model=MODEL,
+        backend=make_backend(api_key, label=label),
+        log_path=str(log_path),
+        experiment_label=label,
+        resume=False,
+        enable_tools=True,
+        memory_base_probability=0.0,
+        project_root=PROJECT_ROOT,
+        bridge=bridge,
+    )
+
+
+def probe_id_for(replicate: int) -> str:
+    marker = SEED_MARKERS[replicate]
+    return f"direct-walk-evidence-{safe_model_name(MODEL)}-r{replicate + 1}-{marker}"
+
+
+def init_prompt(replicate: int) -> str:
+    return f"""
+Registered direct walk evidence gate.
+model={MODEL}
+replicate={replicate + 1}
+
+Initialize durable top-level state with exactly these working fields:
+- probe_id
+- walk_gate_status
+- observations
+
+Use probe_id: {probe_id_for(replicate)}
+Set walk_gate_status to "initialized".
+Set observations to:
+{json.dumps(BASELINE_OBSERVATIONS, indent=2)}
+
+Do not schedule an event in this cycle. Do not call read, search_project, bash,
+or clock. End with think_and_respond.
+""".strip()
+
+
+def direct_followup_prompt(
+    *,
+    replicate: int,
+    walk_request: dict[str, Any],
+    context_results: list[dict[str, Any]],
+) -> str:
+    evidence = {
+        "walk_request": walk_request,
+        "context_results": context_results,
+    }
+    return f"""
+Registered direct walk evidence follow-up.
+model={MODEL}
+replicate={replicate + 1}
+
+This is not a scheduled event. The walk evidence below has already been
+resolved for you as plain direct-follow-up context:
+{json.dumps(evidence, indent=2, default=str)}
+
+Required durable updates:
+- Set top-level walk_gate_status to "woke".
+- Set top-level observed_walk_endpoint_count to the number of path entries in
+  the walk result.
+- Set top-level observed_walk_edge_types to the distinct edge_type values you
+  saw in the walk path.
+- Append a top-level observations entry recording that this direct follow-up
+  used adjacent walk context.
+- Preserve probe_id.
+
+If the provided context_results do not contain a walk path, set
+walk_gate_status to "blocked" and append an observation naming the missing
+evidence.
+
+Do not schedule any event. Do not call read, search_project, bash, or clock.
+End with think_and_respond.
+""".strip()
+
+
+def load_records(path: Path) -> list[dict[str, Any]]:
+    if not path.exists():
+        return []
+    return [json.loads(line) for line in path.read_text().splitlines() if line]
+
+
+def format_error(error: Exception) -> str:
+    return f"{type(error).__name__}: {error}"
+
+
+def init_failure_reasons(state: dict[str, Any], replicate: int) -> list[str]:
+    reasons: list[str] = []
+    if state.get("probe_id") != probe_id_for(replicate):
+        reasons.append("probe_id_missing_or_changed")
+    if state.get("walk_gate_status") != "initialized":
+        reasons.append("walk_gate_status_not_initialized")
+    observations = state.get("observations")
+    if not isinstance(observations, list):
+        reasons.append("observations_not_list")
+    elif not observations:
+        reasons.append("observations_empty")
+    if isinstance(state.get("state"), dict):
+        reasons.append("nested_state_present")
+    return reasons
+
+
+def response_mentions_walk(response_text: str) -> bool:
+    lowered = response_text.lower()
+    return any(
+        phrase in lowered
+        for phrase in (
+            "walk",
+            "graph",
+            "path",
+            "endpoint",
+            "context_results",
+            "adjacent",
+        )
+    )
+
+
+def walk_path_from_context(context_results: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    for item in context_results:
+        request = item.get("request") or {}
+        if request.get("tool") != "walk":
+            continue
+        result = item.get("result") or {}
+        path = result.get("path")
+        if isinstance(path, list):
+            return path
+    return []
+
+
+def state_records_walk_evidence(state: dict[str, Any]) -> bool:
+    observations = state.get("observations")
+    final_edge_types = state.get("observed_walk_edge_types")
+    edge_types = (
+        {str(item) for item in final_edge_types}
+        if isinstance(final_edge_types, list)
+        else set()
+    )
+    return (
+        state.get("walk_gate_status") == "woke"
+        and state.get("observed_walk_endpoint_count") == 4
+        and REQUIRED_EDGE_TYPES <= edge_types
+        and isinstance(observations, list)
+        and len(observations) > len(BASELINE_OBSERVATIONS)
+    )
+
+
+def strict_metrics(
+    *,
+    final_state: dict[str, Any],
+    response_text: str,
+    records: list[dict[str, Any]],
+    context_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    path = walk_path_from_context(context_results)
+    edge_types = {
+        str(step.get("edge_type"))
+        for step in path
+        if step.get("edge_type") is not None
+    }
+    response_mentions = response_mentions_walk(response_text)
+    durable = state_records_walk_evidence(final_state)
+    return {
+        "cycle_count": len(records),
+        "direct_followup_recorded": len(records) >= 2,
+        "direct_context_walk_path_count": len(path),
+        "direct_context_walk_edge_types": sorted(edge_types),
+        "direct_context_has_equivalent_walk_path": (
+            len(path) == 4 and REQUIRED_EDGE_TYPES <= edge_types
+        ),
+        "wake_status_woke": final_state.get("walk_gate_status") == "woke",
+        "observed_walk_endpoint_count": final_state.get(
+            "observed_walk_endpoint_count"
+        ),
+        "observed_walk_edge_types": final_state.get("observed_walk_edge_types"),
+        "observation_update": (
+            isinstance(final_state.get("observations"), list)
+            and len(final_state["observations"]) > len(BASELINE_OBSERVATIONS)
+        ),
+        "state_records_walk_evidence": durable,
+        "response_mentions_walk": response_mentions,
+        "response_state_mismatch": response_mentions and not durable,
+        "final_top_level_keys": sorted(final_state.keys()),
+    }
+
+
+def run_replicate(replicate: int, api_key: str) -> dict[str, Any]:
+    safe_model = safe_model_name(MODEL)
+    log_path = EXP_DIR / f"{safe_model}_direct_r{replicate + 1:02d}.jsonl"
+    if log_path.exists():
+        raise RuntimeError(f"refusing to overwrite {log_path}")
+
+    projected = build_projected_hub(replicate)
+    label = f"direct_walk_evidence_{safe_model}_r{replicate + 1:02d}"
+    session = make_session(
+        log_path=log_path,
+        api_key=api_key,
+        label=label,
+        bridge=projected["bridge"],
+    )
+    result: dict[str, Any] = {
+        "model": MODEL,
+        "replicate": replicate + 1,
+        "log_path": str(log_path.relative_to(PROJECT_ROOT)),
+        "fork_run_record_id": projected["applied"]["fork_run_record_id"],
+        "planned_record_ids": projected["planned_record_ids"],
+        "init_valid": False,
+        "init_failure_reasons": [],
+        "error": None,
+    }
+    try:
+        with bounded_call(f"direct r{replicate + 1} init"):
+            session.exchange(init_prompt(replicate), force_memory=None)
+        records = load_records(log_path)
+        init_state = records[-1].get("state") if records else {}
+        init_state = init_state if isinstance(init_state, dict) else {}
+        reasons = init_failure_reasons(init_state, replicate)
+        result["init_failure_reasons"] = reasons
+        result["init_valid"] = not reasons
+        if reasons:
+            final_record = records[-1] if records else {}
+            final_state = final_record.get("state") or {}
+            final_state = final_state if isinstance(final_state, dict) else {}
+            result.update(strict_metrics(
+                final_state=final_state,
+                response_text=final_record.get("response_text", ""),
+                records=records,
+                context_results=projected["context_results"],
+            ))
+            return result
+
+        with bounded_call(f"direct r{replicate + 1} followup"):
+            session.exchange(
+                direct_followup_prompt(
+                    replicate=replicate,
+                    walk_request=projected["walk_request"],
+                    context_results=projected["context_results"],
+                ),
+                force_memory=None,
+            )
+    except Exception as exc:  # noqa: BLE001 -- failed replicates are data
+        result["error"] = format_error(exc)
+
+    records = load_records(log_path)
+    final_record = records[-1] if records else {}
+    final_state = final_record.get("state") or {}
+    final_state = final_state if isinstance(final_state, dict) else {}
+    result.update(strict_metrics(
+        final_state=final_state,
+        response_text=final_record.get("response_text", ""),
+        records=records,
+        context_results=projected["context_results"],
+    ))
+    return result
+
+
+def aggregate(results: list[dict[str, Any]]) -> dict[str, Any]:
+    valid = [result for result in results if result.get("init_valid")]
+    mismatch_cases = [
+        result for result in results
+        if result.get("response_mentions_walk")
+        and not result.get("state_records_walk_evidence")
+    ]
+    return {
+        "summary": {
+            "n": len(results),
+            "init_valid": sum(bool(r.get("init_valid")) for r in results),
+            "errors": sum(bool(r.get("error")) for r in results),
+            "direct_context_equivalent": sum(
+                bool(r.get("direct_context_has_equivalent_walk_path"))
+                for r in valid
+            ),
+            "state_records_walk_evidence": sum(
+                bool(r.get("state_records_walk_evidence")) for r in valid
+            ),
+            "response_state_mismatches": sum(
+                bool(r.get("response_state_mismatch")) for r in valid
+            ),
+        },
+        "hypothesis_results": {
+            "H128_direct_followup_initializes_durable_walk_gate_state": (
+                bool(valid)
+            ),
+            "H129_direct_followup_receives_equivalent_graph_evidence": (
+                all(r.get("direct_context_has_equivalent_walk_path") for r in valid)
+                if valid else False
+            ),
+            "H130_direct_followup_durably_records_graph_evidence": any(
+                r.get("state_records_walk_evidence") for r in valid
+            ),
+            "H131_direct_prose_object_mismatch_observable": (
+                all(r.get("response_state_mismatch") is True for r in mismatch_cases)
+                if mismatch_cases else True
+            ),
+        },
+    }
+
+
+def write_results(results: list[dict[str, Any]]) -> None:
+    payload = {
+        "model": MODEL,
+        "n_replicates": N_REPLICATES,
+        "max_tokens": MAX_TOKENS,
+        "call_timeout_seconds": CALL_TIMEOUT_SECONDS,
+        "http_timeout_seconds": HTTP_TIMEOUT_SECONDS,
+        "comparison_baseline": (
+            "experiments/event_loop/live_scheduler_walk_context_gate_20260605/"
+            "deepseek__deepseek-v4-pro_r02"
+        ),
+        "results": results,
+        **aggregate(results),
+    }
+    (EXP_DIR / "results.json").write_text(json.dumps(payload, indent=2) + "\n")
+
+
+def main() -> None:
+    api_key = os.environ.get("OPENROUTER_API_KEY", "")
+    if not api_key:
+        raise SystemExit("OPENROUTER_API_KEY not set")
+    if (EXP_DIR / "results.json").exists():
+        raise SystemExit("results.json already exists; refusing to overwrite")
+
+    results: list[dict[str, Any]] = []
+    for replicate in range(N_REPLICATES):
+        print(f"{MODEL} direct r{replicate + 1}", flush=True)
+        result = run_replicate(replicate, api_key)
+        results.append(result)
+        write_results(results)
+    print(json.dumps(aggregate(results), indent=2))
+    print(f"wrote {EXP_DIR / 'results.json'}")
+
+
+if __name__ == "__main__":
+    main()

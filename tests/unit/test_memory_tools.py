@@ -78,6 +78,57 @@ def test_recall_surgical():
     assert result["content"] == "curiosity"
 
 
+def test_recall_surgical_falls_back_to_nested_state_object():
+    prior_states = [
+        (
+            1,
+            _RID_1,
+            {
+                "state": {
+                    "current_claim": "nested claim",
+                    "evidence_register": [{"entry": 1}],
+                },
+                "cycle": 1,
+            },
+            "2026-04-18T10:00:00+00:00",
+        ),
+    ]
+
+    claim = tool_recall(
+        {"cycle": 1, "field": "current_claim"},
+        prior_states=prior_states,
+    )
+    evidence = tool_recall(
+        {"cycle": 1, "field": "state.evidence_register"},
+        prior_states=prior_states,
+    )
+
+    assert claim["content"] == "nested claim"
+    assert evidence["content"] == [{"entry": 1}]
+
+
+def test_recall_surgical_prefers_top_level_field_over_nested_state():
+    prior_states = [
+        (
+            1,
+            _RID_1,
+            {
+                "current_claim": "top claim",
+                "state": {"current_claim": "nested claim"},
+                "cycle": 1,
+            },
+            "2026-04-18T10:00:00+00:00",
+        ),
+    ]
+
+    result = tool_recall(
+        {"cycle": 1, "field": "current_claim"},
+        prior_states=prior_states,
+    )
+
+    assert result["content"] == "top claim"
+
+
 def test_recall_full_snapshot():
     """cycle alone returns the full state dict, with record_id."""
     result = tool_recall({"cycle": 3}, prior_states=_make_prior_states())
@@ -110,6 +161,30 @@ def test_recall_recent_skips_missing_field():
     assert len(result["content"]) == 2
     cycles_returned = {e["cycle"] for e in result["content"]}
     assert cycles_returned == {2, 3}
+
+
+def test_recall_recent_finds_nested_state_fields():
+    prior_states = [
+        (
+            1,
+            _RID_1,
+            {"state": {"theme": "nested"}, "cycle": 1},
+            "2026-04-18T10:00:00+00:00",
+        ),
+        (
+            2,
+            _RID_2,
+            {"theme": "top", "cycle": 2},
+            "2026-04-18T10:01:00+00:00",
+        ),
+    ]
+
+    result = tool_recall(
+        {"recent": 5, "field": "theme"},
+        prior_states=prior_states,
+    )
+
+    assert [item["value"] for item in result["content"]] == ["top", "nested"]
 
 
 def test_recall_random_picks_from_history():
@@ -232,11 +307,23 @@ def test_recall_recent_scope_all_appends_cross_session():
     assert "cycle" not in last
 
 
-def test_recall_by_record_id_requires_bridge():
-    """record_id mode needs a bridge — honest error otherwise."""
+def test_recall_by_record_id_retrieves_in_session_without_bridge():
+    """record_id mode resolves in-session prior states before bridge fallback."""
+    result = tool_recall(
+        {"record_id": str(_RID_2), "field": "theme"},
+        prior_states=_make_prior_states(),
+        bridge=None,
+    )
+    assert result["cycle"] == 2
+    assert result["record_id"] == str(_RID_2)
+    assert result["content"] == "curiosity"
+
+
+def test_recall_by_unknown_record_id_requires_bridge():
+    """Unknown record_id mode needs a bridge — honest error otherwise."""
     result = tool_recall(
         {"record_id": str(_CROSS_RID)},
-        prior_states=[],
+        prior_states=_make_prior_states(),
         bridge=None,
     )
     assert "error" in result
@@ -531,6 +618,47 @@ def test_search_memory_no_match():
 def test_search_memory_missing_query():
     result = tool_search_memory({}, prior_states=_searchable_prior_states())
     assert "error" in result
+
+
+def _prior_states_with_activity_log():
+    """A cycle whose framework-authored _activity_log mentions the query term.
+
+    The instance's content (theme) does NOT contain the term; only the
+    framework's record of its own tool calls does.
+    """
+    return [
+        (1, _RID_1, {"theme": "opening", "cycle": 1}, "2026-04-18T10:00:00+00:00"),
+        (2, _RID_2,
+         {
+             "theme": "curiosity",
+             "cycle": 2,
+             "_activity_log": [{"tool": "recall", "params": {"field": "pattern"}}],
+         },
+         "2026-04-18T10:01:00+00:00"),
+    ]
+
+
+def test_search_memory_excludes_underscore_fields_by_default():
+    """Framework-authored _-prefixed fields are not the instance's content;
+    a default search must not match against them (self-pollution guard)."""
+    result = tool_search_memory(
+        {"query": "pattern"},
+        prior_states=_prior_states_with_activity_log(),
+    )
+    # The only occurrence of "pattern" is inside _activity_log — excluded.
+    assert result["results"] == []
+
+
+def test_search_memory_includes_underscore_field_when_named():
+    """If the instance explicitly names a _-prefixed field, honor it —
+    exclusion is a default, not a prohibition."""
+    result = tool_search_memory(
+        {"query": "pattern", "narrow_by": {"fields": ["_activity_log"]}},
+        prior_states=_prior_states_with_activity_log(),
+    )
+    matched_cycles = [r["cycle"] for r in result["results"]]
+    assert matched_cycles == [2]
+    assert result["results"][0]["matched_fields"] == ["_activity_log"]
 
 
 # ---------------------------------------------------------------------------

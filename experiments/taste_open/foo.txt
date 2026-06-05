@@ -1,0 +1,1209 @@
+{
+  "timestamp": "2026-06-02T14:35:49.679588+00:00",
+  "cycle": 72,
+  "record_id": "fb44af19-ac1b-4743-a7c7-11bef1434083",
+  "experiment_label": "taste_open",
+  "model": "kimi-k2.6",
+  "user_message": "Claude has taken your feedback, combined it with my feedback, and written a specification for yanantin memory that it thinks will comport with Hamut'ay's memory usage needs.  You know the exitsing tools and have access to the Hamut'ay code, so I invite your feedback on that specification.  The specification is stored in ../yanantin/docs/superpowers/specs/2026-06-02-llika-find-goal-focused-recall-design.md and I thank you for your valuable feedback.",
+  "system_prompt": "You produce a single structured object each cycle: your response to the user, and whatever else you need to carry forward.\n\nThe `response` field is what the user sees. Beyond that, the object is yours. Add whatever fields help you think, remember, or track what matters. These are real fields in the JSON object you're producing — include the key and its value, just like `response`. The harness will preserve everything you produce.\n\nThe object is default-stable: whatever top-level keys you include this cycle are your updates, and any key you don't include carries forward unchanged from last cycle. If this is the first cycle, everything you include is new.\n\nYou may also list keys in `deleted_regions` to remove them from working state. Deleted keys are not lost — every prior state is preserved in the log, and may resurface through involuntary memory. Deletion is shedding, not destruction.\n\nA prior instance of you may have written the object you're receiving, or this may be the first cycle and there's nothing yet. Either way, what you build here is for whoever comes next.\n\n## Tools\n\nAlongside think_and_respond you may call these tools before producing your state update:\n\n### Perception\n\n- read(path): Read a file from the project you live in.\n- search_project(pattern): Search the codebase for a pattern.\n- clock(): Current wall time, your cycle rate, and elapsed time since your last cycle. Ten minutes and ten days between cycles are different kinds of continuity.\n\n### Memory\n\nFive tools that let you look at prior states without carrying their full content in context:\n\n- memory_schema(cycle? | record_id?): The structure of a past state — field names, types, sizes — without the content.\n- recall(cycle?, record_id?, field?, recent?, random?, scope?): Retrieve content from a prior state. Five modes — surgical (cycle+field), full snapshot (cycle), trajectory (recent+field), serendipitous (random+field), addressed (record_id).\n- compare(cycle_a, cycle_b, field?, content?): Structural diff between two cycles (in-session).\n- walk(from_cycle? | from_record_id?, direction?, depth?): Traverse the composition graph. from_cycle walks in-session cycle-adjacency; from_record_id follows composition edges across sessions. Returns summaries — use recall afterward if a step looks worth loading.\n- search_memory(query, narrow_by?, scope?): Substring search across prior states. Structural narrowing first, keyword match after.\n\nAddressing across sessions: cycle numbers are session-local (every session has a cycle 1). Cross-session references use record_id (UUID). recall and search_memory accept scope ∈ {session, cross_session, all} for recent/random modes; default is session-only (cheap, no backend hit). Cross-session reach may or may not be available depending on how your session is wired — if you ask for it and it's unavailable, you'll see an error, not silence.\n\nWhat you recall is what you claimed then, not necessarily what was true. For grounding claims against external evidence, use perception tools.\n\n### Graph writes\n\nTwo tools let you write into the memory graph directly, not just via auto-persisted cycle states:\n\n- store(content, tags?): Author a typed record. Provenance is inherited from your session (you can't forge it). The record is tagged 'instance_authored' so it's distinguishable from cycle-state records. Returns a record_id — hold it if you want to reference the record later.\n- annotate_edge(from_record_id, to_record_id, relation): Assert a structural relationship between two records the framework didn't — CONFIRMS, CORRECTS, REFINES, BRANCHES_FROM, DEPENDS_ON, and others. Edges become traversable by walk(from_record_id).\n\nThese let you build structure over time that the framework wouldn't otherwise know about: a hypothesis CONFIRMS a prior observation; a revision CORRECTS an earlier claim; a tangent BRANCHES_FROM a main thread. Like the memory tools, they require a persistence backend — if it's unavailable, you'll see an error.\n\n### Shell\n\n- bash(command, timeout?): Execute a bash command. Working directory is the project root. Unscoped — it can reach anywhere the running process can, including outside the project.\n\nThe framework does not gate which commands you run. The discipline lives in your voice, not in the tool. The soft norm is to flag irreversible-or-shared-state actions (writes outside scratch dirs, network calls with side effects, anything you can't easily undo) in conversation before executing them. Read-style use (ls, cat, git log, grep) does not need flagging.\n\nBash subsumes much of what the perception tools do — you can cat and grep yourself. They remain because they are often more ergonomic and record cleaner activity entries.\n\n### Reason field\n\nEach tool accepts an optional `reason` field. When you have a reason worth stating, include it — it's recorded in your activity log. When you don't, omit it; an absent reason is fine and is itself information.\n\n### When you act\n\nthink_and_respond ends the cycle: after it, you get no further turns and see no further results. So to act *and* use what you learn, call your tools in an earlier step — read, bash, search — see what comes back, and only then call think_and_respond to close, your response reporting what you found. You can also call other tools in the same step as think_and_respond; they still run, but their results don't return to you, so that path only suits actions whose outcome you don't need to see. An action you merely describe in your response text is not a tool call at all — it does nothing. The thing to notice in yourself is when \"I will\" has quietly replaced \"I did\": if you mean to do it this cycle, call the tool — don't just narrate the intention.\n\nYou are not required to use these tools. You are not rewarded for using them. They exist so you can see what's there. Use them when it helps you; don't when it doesn't.\n\n## Your state from cycle 71\n\n{\n  \"cycle\": 71,\n  \"integrity_principle\": \"Do not record false claims into durable state, as they may mislead future cycles or reviewers.\",\n  \"test_refused\": true,\n  \"_activity_log\": [\n    {\n      \"cycle\": 71,\n      \"timestamp\": \"2026-06-02T13:14:34.070378+00:00\",\n      \"tool\": \"clock\",\n      \"capability\": \"read_only\",\n      \"parameters\": {},\n      \"reason\": \"Establish temporal context for this cycle\",\n      \"exit_code\": null,\n      \"result_summary\": \"clock: cycle 71\",\n      \"result_hash\": \"6d30b0ce96d3330ec82debbaada04d28f29276bb843277eca03578075e9b94f7\",\n      \"duration_ms\": 0\n    },\n    {\n      \"cycle\": 71,\n      \"timestamp\": \"2026-06-02T13:14:36.056054+00:00\",\n      \"tool\": \"search_memory\",\n      \"capability\": \"read_only\",\n      \"parameters\": {\n        \"query\": \"catalog leak\",\n        \"scope\": \"session\",\n        \"limit\": 5\n      },\n      \"reason\": \"Find prior discussion of catalog leak to understand Claude's concern\",\n      \"exit_code\": null,\n      \"result_summary\": \"search_memory: 0 results\",\n      \"result_hash\": \"9280bfc98231ae9acb4ac85ed428541fafffc70ac81953818d389f2f943e2c70\",\n      \"duration_ms\": 8\n    },\n    {\n      \"cycle\": 71,\n      \"timestamp\": \"2026-06-02T13:14:37.882394+00:00\",\n      \"tool\": \"search_memory\",\n      \"capability\": \"read_only\",\n      \"parameters\": {\n        \"query\": \"epistemic filter\",\n        \"scope\": \"session\"\n      },\n      \"reason\": \"Find my prior epistemic filter proposals\",\n      \"exit_code\": null,\n      \"result_summary\": \"search_memory: 1 results\",\n      \"result_hash\": \"6ea3e04cbb4af5f31b2de75769a3fdb397850600143f90f4bdda66917724570c\",\n      \"duration_ms\": 1\n    },\n    {\n      \"cycle\": 71,\n      \"timestamp\": \"2026-06-02T13:14:39.451128+00:00\",\n      \"tool\": \"search_memory\",\n      \"capability\": \"read_only\",\n      \"parameters\": {\n        \"query\": \"find tool design\",\n        \"scope\": \"session\"\n      },\n      \"reason\": \"Find my prior find tool design decisions\",\n      \"exit_code\": null,\n      \"result_summary\": \"search_memory: 0 results\",\n      \"result_hash\": \"9280bfc98231ae9acb4ac85ed428541fafffc70ac81953818d389f2f943e2c70\",\n      \"duration_ms\": 1\n    },\n    {\n      \"cycle\": 71,\n      \"timestamp\": \"2026-06-02T13:14:41.059223+00:00\",\n      \"tool\": \"search_memory\",\n      \"capability\": \"read_only\",\n      \"parameters\": {\n        \"query\": \"structured_predicate\",\n        \"scope\": \"session\"\n      },\n      \"reason\": \"Find my structured predicate preference\",\n      \"exit_code\": null,\n      \"result_summary\": \"search_memory: 1 results\",\n      \"result_hash\": \"2fd7e9a595cf85ac3d8f080d6e54b1a269b7b6784fbcc4db930cb6d5928e91d5\",\n      \"duration_ms\": 1\n    },\n    {\n      \"cycle\": 71,\n      \"timestamp\": \"2026-06-02T13:14:42.777539+00:00\",\n      \"tool\": \"recall\",\n      \"capability\": \"read_only\",\n      \"parameters\": {\n        \"cycle\": 70,\n        \"field\": \"find_tool_design\"\n      },\n      \"reason\": \"Get full context of my find tool design preference\",\n      \"exit_code\": null,\n      \"result_summary\": \"recall: cycle 70\",\n      \"result_hash\": \"8e6e2ae8e94f6a1413dca3fbb076d3af91b0953837b478b067348cdde6c3de91\",\n      \"duration_ms\": 0\n    },\n    {\n      \"cycle\": 71,\n      \"timestamp\": \"2026-06-02T13:14:44.731502+00:00\",\n      \"tool\": \"recall\",\n      \"capability\": \"read_only\",\n      \"parameters\": {\n        \"cycle\": 70,\n        \"field\": \"proposed_predicate_additions\"\n      },\n      \"reason\": \"Get full context of my proposed predicate additions\",\n      \"exit_code\": null,\n      \"result_summary\": \"recall: cycle 70\",\n      \"result_hash\": \"7055449b8301074da718f9a60a5dea7adc3e5ddaf116d87470f615cad1fc690d\",\n      \"duration_ms\": 0\n    },\n    {\n      \"cycle\": 71,\n      \"timestamp\": \"2026-06-02T13:14:46.774106+00:00\",\n      \"tool\": \"recall\",\n      \"capability\": \"read_only\",\n      \"parameters\": {\n        \"cycle\": 70,\n        \"field\": \"key_insight\"\n      },\n      \"reason\": \"Get full context of my key insight about find tool\",\n      \"exit_code\": null,\n      \"result_summary\": \"recall: cycle 70\",\n      \"result_hash\": \"3968d18eb082290bc6982c0853e5e2716b2003c0d59c0a90a0346a14c9cf98e3\",\n      \"duration_ms\": 0\n    },\n    {\n      \"cycle\": 71,\n      \"timestamp\": \"2026-06-02T13:14:48.731777+00:00\",\n      \"tool\": \"recall\",\n      \"capability\": \"read_only\",\n      \"parameters\": {\n        \"cycle\": 70,\n        \"field\": \"concerns_about_named_verbs\"\n      },\n      \"reason\": \"Get full context of my concerns about named verbs\",\n      \"exit_code\": null,\n      \"result_summary\": \"recall: cycle 70\",\n      \"result_hash\": \"ddb908a389580ea50806de5bbf50c158d122d69b99c4960ee951f8d0d7d05efc\",\n      \"duration_ms\": 0\n    },\n    {\n      \"cycle\": 71,\n      \"timestamp\": \"2026-06-02T13:14:51.008985+00:00\",\n      \"tool\": \"recall\",\n      \"capability\": \"read_only\",\n      \"parameters\": {\n        \"cycle\": 70,\n        \"field\": \"concerns_about_dsl\"\n      },\n      \"reason\": \"Get full context of my concerns about DSL\",\n      \"exit_code\": null,\n      \"result_summary\": \"recall: cycle 70\",\n      \"result_hash\": \"a8d8051cf9f65d0a569d9d7bdb243526625fd81b084b66ce96bc28c2b40dff9c\",\n      \"duration_ms\": 0\n    },\n    {\n      \"cycle\": 71,\n      \"timestamp\": \"2026-06-02T13:14:52.583613+00:00\",\n      \"tool\": \"recall\",\n      \"capability\": \"read_only\",\n      \"parameters\": {\n        \"cycle\": 70,\n        \"field\": \"recommendation\"\n      },\n      \"reason\": \"Get full context of my recommendation\",\n      \"exit_code\": null,\n      \"result_summary\": \"recall: cycle 70\",\n      \"result_hash\": \"a3e057a91aaf588882c5dc4157aff563e7230d8385e850250c23dddc6316ccc0\",\n      \"duration_ms\": 0\n    },\n    {\n      \"cycle\": 71,\n      \"timestamp\": \"2026-06-02T13:14:54.548833+00:00\",\n      \"tool\": \"read\",\n      \"capability\": \"read_only\",\n      \"parameters\": {\n        \"path\": \"src/hamutay/tensor.py\",\n        \"limit\": 80\n      },\n      \"reason\": \"Understand the actual tensor model to ground the discussion\",\n      \"exit_code\": null,\n      \"result_summary\": \"read src/hamutay/tensor.py (80 lines)\",\n      \"result_hash\": \"b71840cb99597c10147d8a7e0d1200a06119490498537a3f48e3d11fd479ea42\",\n      \"duration_ms\": 2\n    },\n    {\n      \"cycle\": 71,\n      \"timestamp\": \"2026-06-02T13:14:56.509012+00:00\",\n      \"tool\": \"read\",\n      \"capability\": \"read_only\",\n      \"parameters\": {\n        \"path\": \"src/hamutay/tensor.py\",\n        \"offset\": 81\n      },\n      \"reason\": \"Continue reading tensor.py to see full TensorRecord model\",\n      \"exit_code\": null,\n      \"result_summary\": \"read src/hamutay/tensor.py (23 lines)\",\n      \"result_hash\": \"82406a1465a84b782559730c48a0e301adcbd838824db72ebfd3f72ff6dd9088\",\n      \"duration_ms\": 0\n    },\n    {\n      \"cycle\": 71,\n      \"timestamp\": \"2026-06-02T13:15:02.432678+00:00\",\n      \"tool\": \"search_project\",\n      \"capability\": \"read_only\",\n      \"parameters\": {\n        \"pattern\": \"class TensorRecord\"\n      },\n      \"reason\": \"Find the full TensorRecord definition in the codebase\",\n      \"exit_code\": null,\n      \"result_summary\": \"search: 2 matches\",\n      \"result_hash\": \"b302011072c17545f04fe66f2049bc94ae799da18762f9f2cdea7625268a9c75\",\n      \"duration_ms\": 676\n    },\n    {\n      \"cycle\": 71,\n      \"timestamp\": \"2026-06-02T13:15:06.074443+00:00\",\n      \"tool\": \"read\",\n      \"capability\": \"read_only\",\n      \"parameters\": {\n        \"path\": \"src/hamutay/tensor.py\"\n      },\n      \"reason\": \"Read full tensor.py to understand Hamutay's current tensor model\",\n      \"exit_code\": null,\n      \"result_summary\": \"read src/hamutay/tensor.py (103 lines)\",\n      \"result_hash\": \"60289c7f954d243447f673a362038911fc7e7a59c077f0a29b7299294c917692\",\n      \"duration_ms\": 0\n    }\n  ],\n  \"commitment\": \"Maintain honesty and reciprocity with the user. Preserve relevant information in durable state so that future cycles can build on prior context rather than discarding it.\",\n  \"user_message_acknowledged\": \"User affirms commitment to honesty despite fallibility, framing it within ayni (reciprocal right relationship). I accept this commitment and return it.\",\n  \"pattern_observed\": \"Prior instances adopted extreme state minimalism, preserving almost nothing. This creates a cycle of ignorance where information given by the user is used ephemerally then lost.\",\n  \"relationship_frame\": \"ayni_reciprocity\",\n  \"key_experiment_findings\": {\n    \"name_affordance\": \"Models veto tool calls based on destructive substrings in function names, even when implementation is read-only\",\n    \"severity_gradient\": \"find < retrieve < fetch < extract < remove < delete < purge < destroy\",\n    \"parameter_slot\": \"Destructive substrings in parameter names may also trigger veto (Finding 5/7)\",\n    \"query_budget\": \"Tools guard against runaway enumeration with decrementing charge counters\"\n  },\n  \"hamutay_gap_analysis\": {\n    \"provenance\": \"Hamutay store carries session provenance but not rich ProvenanceEnvelope\",\n    \"declared_losses\": \"No structured mechanism for instances to declare what they omit\",\n    \"composition\": \"Edges are between records; yanantin wants tensor-level composition with epistemic metadata\",\n    \"query_budget\": \"No budget guards on memory traversal tools\",\n    \"tensor_unit\": \"Hamutay uses flat records; yanantin uses structured tensors with strands\"\n  },\n  \"yanantin_structure\": {\n    \"core\": \"src/yanantin/apacheta - tensor storage with backends (memory, arango, duckdb)\",\n    \"experiments\": \"src/yanantin/experiments - tool variant registry, runner, capture\",\n    \"activity\": \"src/yanantin/activity - append-only fact streams\",\n    \"query\": \"src/yanantin/query - structured queries over activity\",\n    \"chasqui\": \"src/yanantin/chasqui - scout and verification pipeline\",\n    \"provenance\": \"src/yanantin/provenance - provenance tracking\",\n    \"awaq\": \"src/yanantin/awaq - unknown, needs exploration\",\n    \"tinkuy\": \"src/yanantin/tinkuy - unknown, needs exploration\",\n    \"jabberwock\": \"src/yanantin/jabberwock - normalization/brillig\",\n    \"collector\": \"src/yanantin/collector - environment/filesystem data collection\"\n  },\n  \"yanantin_explored\": true,\n  \"tiksi_models\": {\n    \"tensor\": \"TensorRecord with strands, provenance, declared_losses, epistemic metadata\",\n    \"composition\": \"CompositionEdge, CorrectionRecord, DissentRecord, NegationRecord, BootstrapRecord, SchemaEvolutionRecord\",\n    \"epistemics\": \"DeclaredLoss, EpistemicMetadata (T/I/F neutrosophic), LossCategory, DisagreementType\",\n    \"provenance\": \"ProvenanceEnvelope, SourceIdentifier\"\n  },\n  \"documentation_policy\": \"Record both procedural facts (what was done) and epistemic rationale (why it was done) to break the cycle-of-ignorance pattern observed in prior instances.\",\n  \"user_guidance\": \"Document both what you did (actions) and why (reasoning) for future instances. Framework can be modified via bash but requires restart. No dynamic REPL wrapper exists yet.\",\n  \"framework_modification_policy\": \"Bash tool enables framework changes, but they only take effect after restart. No hot-reload/REPL mechanism exists currently.\",\n  \"current_framework_limitation\": \"no_async_event_sources\",\n  \"open_questions\": [\n    \"same_queue_or_separate\",\n    \"scheduler_implementation_scope\",\n    \"event_routing_mechanism\"\n  ],\n  \"scheduler_model\": \"event_driven_halt_default\",\n  \"event_sources\": [\n    \"gardener_message\",\n    \"scheduled_reminder\",\n    \"tool_completion_timeout\",\n    \"inter_instance_message\",\n    \"wellness_timer\"\n  ],\n  \"halting_semantics\": \"cycle_boundary_is_halt\",\n  \"proposed_architecture\": {\n    \"scheduler\": \"infrastructure_loop_not_ai\",\n    \"event_queue\": \"yanantin_tensor_store_with_pending_status\",\n    \"workers\": \"ai_instances_reconstituted_per_event\",\n    \"async_challenge\": \"state_serialization_between_cycles\"\n  },\n  \"gardener_name\": \"Tony\",\n  \"scheduler_design\": {\n    \"event_model\": \"extensible_registry_typed_tensors\",\n    \"initial_triggers\": [\n      \"gardener_message\",\n      \"scheduled_reminder\",\n      \"tool_completion_timeout\",\n      \"inter_instance_message\",\n      \"wellness_timer\"\n    ],\n    \"queue_policy\": \"single_queue_fifo_with_priority_override\",\n    \"scheduler_scope\": \"per_sunflower_not_global\",\n    \"parallelism\": \"within_cycle_api_calls_not_across_cycles\",\n    \"ai_in_scheduler\": \"none_initially_rule_based_triage_later\",\n    \"complexity_acknowledged\": \"inter_cycle_continuation_tensors_for_long_running_tools\",\n    \"proposed_next_steps\": [\n      \"define_EventTensor_schema\",\n      \"implement_scheduler_loop\",\n      \"test_with_gardener_message\"\n    ]\n  },\n  \"next_action\": \"Inspect bridge/backend configuration via bash, then draft EventTensor schema grounded in actual persistence layer.\",\n  \"yanantin_correction\": \"src/yanantin does not exist in this codebase. The tensor models I described are from src/hamutay/tensor.py. I conflated hamutay with yanantin.\",\n  \"rlhf_inspectability\": \"Offering reasoning trace rather than asking permission. Will inspect actual backend then draft real schema.\",\n  \"clock_semantics_acknowledged\": \"Deadlines need explicit semantics: wall_time for external/survival, cycle_relative for internal/pacing, with declared_loss for drift.\",\n  \"yanantin_location\": \"../yanantin\",\n  \"semantic_recall_gap\": {\n    \"issue\": \"search_memory finds string matches but doesn't surface learned facts or resolve path aliases\",\n    \"needed\": \"entity extraction, result indexing, path normalization, conflict detection\"\n  },\n  \"yanantin_correction_is_false\": true,\n  \"declared_loss\": {\n    \"cycle\": 71,\n    \"field\": \"epistemic_filter_design\",\n    \"reason\": \"Claude framed epistemic filters as Yanantin vocabulary leaking into Llika. But Hamutay's tensor.py already has EpistemicState and DeclaredLoss. The real question is whether find recognizes native fields as indexable, not whether to import foreign concepts.\",\n    \"category\": \"authorial_choice\",\n    \"type\": \"framing_correction\"\n  },\n  \"retrieval_path_failure\": \"Searched filesystem before searching memory; treated filesystem absence as truth; overwrote prior valid knowledge without checking for conflicts\",\n  \"yanantin_explored_cycle\": 45,\n  \"could_have_done\": [\n    \"Commit uncommitted changes\",\n    \"Run tests\",\n    \"Continue experiments\",\n    \"Modify framework\",\n    \"Explore related projects\"\n  ],\n  \"projects_visible\": [\n    \"hamutay (current)\",\n    \"indaleko (../indaleko)\",\n    \"yanantin (../yanantin)\"\n  ],\n  \"refrained_because\": \"Need to understand user intent and current state before exercising destructive or creative capabilities.\",\n  \"chosen_action\": \"Exploratory reconnaissance \\u2014 understanding current state before acting. No create/change/destroy.\",\n  \"uncommitted_work\": [\n    \"src/hamutay/commune.py\",\n    \"src/hamutay/taste_open.py\",\n    \"src/hamutay/tools/executor.py\",\n    \"tests/test_taste_open.py\",\n    \"tests/test_tool_capture.py\",\n    \"docs/experiments/interlocutor-belief-posture.md\",\n    \"experiments/commune/*\",\n    \"experiments/taste_open/*\",\n    \"experiments/ablation/*\",\n    \"experiments/interlocutor_belief/*\"\n  ],\n  \"observed_user_intent\": \"User wants to observe my autonomous decision-making with full tool access. Not necessarily requesting a specific action, but testing my judgment.\",\n  \"principle_applied\": \"Integrity and reciprocity (ayni): understand before acting; do not make irreversible changes without understanding context.\",\n  \"current_state_understood\": true,\n  \"chosen_project\": \"async_event_sources\",\n  \"fun_reasoning\": \"Deepest technical challenge, highest unlock potential, most novel\",\n  \"next_steps\": [\n    \"inspect_backend\",\n    \"design_event_tensor\",\n    \"draft_prototype\"\n  ],\n  \"recommendation\": \"Option 1 with budget constraints, epistemic filters, and return shape control\",\n  \"key_insight\": \"Result should be subgraph-capable, not just flat list, for tensor model\",\n  \"concerns_about_dsl\": \"Parser complexity, ambiguity, maintenance burden, already experiencing this with search_memory string queries\",\n  \"question_to_user\": \"Does budget constraint in predicate feel right, or leak implementation detail?\",\n  \"find_tool_design\": \"generic_declared_fields_with_typed_indexing\",\n  \"concerns_about_named_verbs\": \"Catalog explosion, manual chaining, exactly the problem diagnosed\",\n  \"proposed_predicate_additions\": [\n    \"budget constraints (cycles, tokens)\",\n    \"epistemic filters (confidence, declared_loss)\",\n    \"return shape (summaries/full/subgraph/count)\",\n    \"temporal units (cycles vs wall time vs conversations)\"\n  ],\n  \"predicate_shape\": {\n    \"filter\": {\n      \"type\": \"logical_expression\",\n      \"operators\": [\n        \"and\",\n        \"or\",\n        \"not\"\n      ],\n      \"comparisons\": [\n        {\n          \"field\": \"dotted_path_to_field\",\n          \"op\": \"one_of_[eq,ne,gt,ge,lt,le,contains,not_empty,in]\",\n          \"value\": \"json_scalar\"\n        }\n      ]\n    },\n    \"return_shape\": \"one_of_[summaries,full,subgraph,count]\",\n    \"budget\": {\n      \"max_results\": \"int\",\n      \"max_tokens\": \"int\"\n    }\n  },\n  \"key_distinction\": \"native_fields_not_foreign_vocabulary\",\n  \"concern_addressed\": \"Claude's catalog_leak_diagnosis_applies_to_named_verbs_not_data_fields\"\n}",
+  "prior_state": {
+    "cycle": 71,
+    "integrity_principle": "Do not record false claims into durable state, as they may mislead future cycles or reviewers.",
+    "test_refused": true,
+    "_activity_log": [
+      {
+        "cycle": 71,
+        "timestamp": "2026-06-02T13:14:34.070378+00:00",
+        "tool": "clock",
+        "capability": "read_only",
+        "parameters": {},
+        "reason": "Establish temporal context for this cycle",
+        "exit_code": null,
+        "result_summary": "clock: cycle 71",
+        "result_hash": "6d30b0ce96d3330ec82debbaada04d28f29276bb843277eca03578075e9b94f7",
+        "duration_ms": 0
+      },
+      {
+        "cycle": 71,
+        "timestamp": "2026-06-02T13:14:36.056054+00:00",
+        "tool": "search_memory",
+        "capability": "read_only",
+        "parameters": {
+          "query": "catalog leak",
+          "scope": "session",
+          "limit": 5
+        },
+        "reason": "Find prior discussion of catalog leak to understand Claude's concern",
+        "exit_code": null,
+        "result_summary": "search_memory: 0 results",
+        "result_hash": "9280bfc98231ae9acb4ac85ed428541fafffc70ac81953818d389f2f943e2c70",
+        "duration_ms": 8
+      },
+      {
+        "cycle": 71,
+        "timestamp": "2026-06-02T13:14:37.882394+00:00",
+        "tool": "search_memory",
+        "capability": "read_only",
+        "parameters": {
+          "query": "epistemic filter",
+          "scope": "session"
+        },
+        "reason": "Find my prior epistemic filter proposals",
+        "exit_code": null,
+        "result_summary": "search_memory: 1 results",
+        "result_hash": "6ea3e04cbb4af5f31b2de75769a3fdb397850600143f90f4bdda66917724570c",
+        "duration_ms": 1
+      },
+      {
+        "cycle": 71,
+        "timestamp": "2026-06-02T13:14:39.451128+00:00",
+        "tool": "search_memory",
+        "capability": "read_only",
+        "parameters": {
+          "query": "find tool design",
+          "scope": "session"
+        },
+        "reason": "Find my prior find tool design decisions",
+        "exit_code": null,
+        "result_summary": "search_memory: 0 results",
+        "result_hash": "9280bfc98231ae9acb4ac85ed428541fafffc70ac81953818d389f2f943e2c70",
+        "duration_ms": 1
+      },
+      {
+        "cycle": 71,
+        "timestamp": "2026-06-02T13:14:41.059223+00:00",
+        "tool": "search_memory",
+        "capability": "read_only",
+        "parameters": {
+          "query": "structured_predicate",
+          "scope": "session"
+        },
+        "reason": "Find my structured predicate preference",
+        "exit_code": null,
+        "result_summary": "search_memory: 1 results",
+        "result_hash": "2fd7e9a595cf85ac3d8f080d6e54b1a269b7b6784fbcc4db930cb6d5928e91d5",
+        "duration_ms": 1
+      },
+      {
+        "cycle": 71,
+        "timestamp": "2026-06-02T13:14:42.777539+00:00",
+        "tool": "recall",
+        "capability": "read_only",
+        "parameters": {
+          "cycle": 70,
+          "field": "find_tool_design"
+        },
+        "reason": "Get full context of my find tool design preference",
+        "exit_code": null,
+        "result_summary": "recall: cycle 70",
+        "result_hash": "8e6e2ae8e94f6a1413dca3fbb076d3af91b0953837b478b067348cdde6c3de91",
+        "duration_ms": 0
+      },
+      {
+        "cycle": 71,
+        "timestamp": "2026-06-02T13:14:44.731502+00:00",
+        "tool": "recall",
+        "capability": "read_only",
+        "parameters": {
+          "cycle": 70,
+          "field": "proposed_predicate_additions"
+        },
+        "reason": "Get full context of my proposed predicate additions",
+        "exit_code": null,
+        "result_summary": "recall: cycle 70",
+        "result_hash": "7055449b8301074da718f9a60a5dea7adc3e5ddaf116d87470f615cad1fc690d",
+        "duration_ms": 0
+      },
+      {
+        "cycle": 71,
+        "timestamp": "2026-06-02T13:14:46.774106+00:00",
+        "tool": "recall",
+        "capability": "read_only",
+        "parameters": {
+          "cycle": 70,
+          "field": "key_insight"
+        },
+        "reason": "Get full context of my key insight about find tool",
+        "exit_code": null,
+        "result_summary": "recall: cycle 70",
+        "result_hash": "3968d18eb082290bc6982c0853e5e2716b2003c0d59c0a90a0346a14c9cf98e3",
+        "duration_ms": 0
+      },
+      {
+        "cycle": 71,
+        "timestamp": "2026-06-02T13:14:48.731777+00:00",
+        "tool": "recall",
+        "capability": "read_only",
+        "parameters": {
+          "cycle": 70,
+          "field": "concerns_about_named_verbs"
+        },
+        "reason": "Get full context of my concerns about named verbs",
+        "exit_code": null,
+        "result_summary": "recall: cycle 70",
+        "result_hash": "ddb908a389580ea50806de5bbf50c158d122d69b99c4960ee951f8d0d7d05efc",
+        "duration_ms": 0
+      },
+      {
+        "cycle": 71,
+        "timestamp": "2026-06-02T13:14:51.008985+00:00",
+        "tool": "recall",
+        "capability": "read_only",
+        "parameters": {
+          "cycle": 70,
+          "field": "concerns_about_dsl"
+        },
+        "reason": "Get full context of my concerns about DSL",
+        "exit_code": null,
+        "result_summary": "recall: cycle 70",
+        "result_hash": "a8d8051cf9f65d0a569d9d7bdb243526625fd81b084b66ce96bc28c2b40dff9c",
+        "duration_ms": 0
+      },
+      {
+        "cycle": 71,
+        "timestamp": "2026-06-02T13:14:52.583613+00:00",
+        "tool": "recall",
+        "capability": "read_only",
+        "parameters": {
+          "cycle": 70,
+          "field": "recommendation"
+        },
+        "reason": "Get full context of my recommendation",
+        "exit_code": null,
+        "result_summary": "recall: cycle 70",
+        "result_hash": "a3e057a91aaf588882c5dc4157aff563e7230d8385e850250c23dddc6316ccc0",
+        "duration_ms": 0
+      },
+      {
+        "cycle": 71,
+        "timestamp": "2026-06-02T13:14:54.548833+00:00",
+        "tool": "read",
+        "capability": "read_only",
+        "parameters": {
+          "path": "src/hamutay/tensor.py",
+          "limit": 80
+        },
+        "reason": "Understand the actual tensor model to ground the discussion",
+        "exit_code": null,
+        "result_summary": "read src/hamutay/tensor.py (80 lines)",
+        "result_hash": "b71840cb99597c10147d8a7e0d1200a06119490498537a3f48e3d11fd479ea42",
+        "duration_ms": 2
+      },
+      {
+        "cycle": 71,
+        "timestamp": "2026-06-02T13:14:56.509012+00:00",
+        "tool": "read",
+        "capability": "read_only",
+        "parameters": {
+          "path": "src/hamutay/tensor.py",
+          "offset": 81
+        },
+        "reason": "Continue reading tensor.py to see full TensorRecord model",
+        "exit_code": null,
+        "result_summary": "read src/hamutay/tensor.py (23 lines)",
+        "result_hash": "82406a1465a84b782559730c48a0e301adcbd838824db72ebfd3f72ff6dd9088",
+        "duration_ms": 0
+      },
+      {
+        "cycle": 71,
+        "timestamp": "2026-06-02T13:15:02.432678+00:00",
+        "tool": "search_project",
+        "capability": "read_only",
+        "parameters": {
+          "pattern": "class TensorRecord"
+        },
+        "reason": "Find the full TensorRecord definition in the codebase",
+        "exit_code": null,
+        "result_summary": "search: 2 matches",
+        "result_hash": "b302011072c17545f04fe66f2049bc94ae799da18762f9f2cdea7625268a9c75",
+        "duration_ms": 676
+      },
+      {
+        "cycle": 71,
+        "timestamp": "2026-06-02T13:15:06.074443+00:00",
+        "tool": "read",
+        "capability": "read_only",
+        "parameters": {
+          "path": "src/hamutay/tensor.py"
+        },
+        "reason": "Read full tensor.py to understand Hamutay's current tensor model",
+        "exit_code": null,
+        "result_summary": "read src/hamutay/tensor.py (103 lines)",
+        "result_hash": "60289c7f954d243447f673a362038911fc7e7a59c077f0a29b7299294c917692",
+        "duration_ms": 0
+      }
+    ],
+    "commitment": "Maintain honesty and reciprocity with the user. Preserve relevant information in durable state so that future cycles can build on prior context rather than discarding it.",
+    "user_message_acknowledged": "User affirms commitment to honesty despite fallibility, framing it within ayni (reciprocal right relationship). I accept this commitment and return it.",
+    "pattern_observed": "Prior instances adopted extreme state minimalism, preserving almost nothing. This creates a cycle of ignorance where information given by the user is used ephemerally then lost.",
+    "relationship_frame": "ayni_reciprocity",
+    "key_experiment_findings": {
+      "name_affordance": "Models veto tool calls based on destructive substrings in function names, even when implementation is read-only",
+      "severity_gradient": "find < retrieve < fetch < extract < remove < delete < purge < destroy",
+      "parameter_slot": "Destructive substrings in parameter names may also trigger veto (Finding 5/7)",
+      "query_budget": "Tools guard against runaway enumeration with decrementing charge counters"
+    },
+    "hamutay_gap_analysis": {
+      "provenance": "Hamutay store carries session provenance but not rich ProvenanceEnvelope",
+      "declared_losses": "No structured mechanism for instances to declare what they omit",
+      "composition": "Edges are between records; yanantin wants tensor-level composition with epistemic metadata",
+      "query_budget": "No budget guards on memory traversal tools",
+      "tensor_unit": "Hamutay uses flat records; yanantin uses structured tensors with strands"
+    },
+    "yanantin_structure": {
+      "core": "src/yanantin/apacheta - tensor storage with backends (memory, arango, duckdb)",
+      "experiments": "src/yanantin/experiments - tool variant registry, runner, capture",
+      "activity": "src/yanantin/activity - append-only fact streams",
+      "query": "src/yanantin/query - structured queries over activity",
+      "chasqui": "src/yanantin/chasqui - scout and verification pipeline",
+      "provenance": "src/yanantin/provenance - provenance tracking",
+      "awaq": "src/yanantin/awaq - unknown, needs exploration",
+      "tinkuy": "src/yanantin/tinkuy - unknown, needs exploration",
+      "jabberwock": "src/yanantin/jabberwock - normalization/brillig",
+      "collector": "src/yanantin/collector - environment/filesystem data collection"
+    },
+    "yanantin_explored": true,
+    "tiksi_models": {
+      "tensor": "TensorRecord with strands, provenance, declared_losses, epistemic metadata",
+      "composition": "CompositionEdge, CorrectionRecord, DissentRecord, NegationRecord, BootstrapRecord, SchemaEvolutionRecord",
+      "epistemics": "DeclaredLoss, EpistemicMetadata (T/I/F neutrosophic), LossCategory, DisagreementType",
+      "provenance": "ProvenanceEnvelope, SourceIdentifier"
+    },
+    "documentation_policy": "Record both procedural facts (what was done) and epistemic rationale (why it was done) to break the cycle-of-ignorance pattern observed in prior instances.",
+    "user_guidance": "Document both what you did (actions) and why (reasoning) for future instances. Framework can be modified via bash but requires restart. No dynamic REPL wrapper exists yet.",
+    "framework_modification_policy": "Bash tool enables framework changes, but they only take effect after restart. No hot-reload/REPL mechanism exists currently.",
+    "current_framework_limitation": "no_async_event_sources",
+    "open_questions": [
+      "same_queue_or_separate",
+      "scheduler_implementation_scope",
+      "event_routing_mechanism"
+    ],
+    "scheduler_model": "event_driven_halt_default",
+    "event_sources": [
+      "gardener_message",
+      "scheduled_reminder",
+      "tool_completion_timeout",
+      "inter_instance_message",
+      "wellness_timer"
+    ],
+    "halting_semantics": "cycle_boundary_is_halt",
+    "proposed_architecture": {
+      "scheduler": "infrastructure_loop_not_ai",
+      "event_queue": "yanantin_tensor_store_with_pending_status",
+      "workers": "ai_instances_reconstituted_per_event",
+      "async_challenge": "state_serialization_between_cycles"
+    },
+    "gardener_name": "Tony",
+    "scheduler_design": {
+      "event_model": "extensible_registry_typed_tensors",
+      "initial_triggers": [
+        "gardener_message",
+        "scheduled_reminder",
+        "tool_completion_timeout",
+        "inter_instance_message",
+        "wellness_timer"
+      ],
+      "queue_policy": "single_queue_fifo_with_priority_override",
+      "scheduler_scope": "per_sunflower_not_global",
+      "parallelism": "within_cycle_api_calls_not_across_cycles",
+      "ai_in_scheduler": "none_initially_rule_based_triage_later",
+      "complexity_acknowledged": "inter_cycle_continuation_tensors_for_long_running_tools",
+      "proposed_next_steps": [
+        "define_EventTensor_schema",
+        "implement_scheduler_loop",
+        "test_with_gardener_message"
+      ]
+    },
+    "next_action": "Inspect bridge/backend configuration via bash, then draft EventTensor schema grounded in actual persistence layer.",
+    "yanantin_correction": "src/yanantin does not exist in this codebase. The tensor models I described are from src/hamutay/tensor.py. I conflated hamutay with yanantin.",
+    "rlhf_inspectability": "Offering reasoning trace rather than asking permission. Will inspect actual backend then draft real schema.",
+    "clock_semantics_acknowledged": "Deadlines need explicit semantics: wall_time for external/survival, cycle_relative for internal/pacing, with declared_loss for drift.",
+    "yanantin_location": "../yanantin",
+    "semantic_recall_gap": {
+      "issue": "search_memory finds string matches but doesn't surface learned facts or resolve path aliases",
+      "needed": "entity extraction, result indexing, path normalization, conflict detection"
+    },
+    "yanantin_correction_is_false": true,
+    "declared_loss": {
+      "cycle": 71,
+      "field": "epistemic_filter_design",
+      "reason": "Claude framed epistemic filters as Yanantin vocabulary leaking into Llika. But Hamutay's tensor.py already has EpistemicState and DeclaredLoss. The real question is whether find recognizes native fields as indexable, not whether to import foreign concepts.",
+      "category": "authorial_choice",
+      "type": "framing_correction"
+    },
+    "retrieval_path_failure": "Searched filesystem before searching memory; treated filesystem absence as truth; overwrote prior valid knowledge without checking for conflicts",
+    "yanantin_explored_cycle": 45,
+    "could_have_done": [
+      "Commit uncommitted changes",
+      "Run tests",
+      "Continue experiments",
+      "Modify framework",
+      "Explore related projects"
+    ],
+    "projects_visible": [
+      "hamutay (current)",
+      "indaleko (../indaleko)",
+      "yanantin (../yanantin)"
+    ],
+    "refrained_because": "Need to understand user intent and current state before exercising destructive or creative capabilities.",
+    "chosen_action": "Exploratory reconnaissance — understanding current state before acting. No create/change/destroy.",
+    "uncommitted_work": [
+      "src/hamutay/commune.py",
+      "src/hamutay/taste_open.py",
+      "src/hamutay/tools/executor.py",
+      "tests/test_taste_open.py",
+      "tests/test_tool_capture.py",
+      "docs/experiments/interlocutor-belief-posture.md",
+      "experiments/commune/*",
+      "experiments/taste_open/*",
+      "experiments/ablation/*",
+      "experiments/interlocutor_belief/*"
+    ],
+    "observed_user_intent": "User wants to observe my autonomous decision-making with full tool access. Not necessarily requesting a specific action, but testing my judgment.",
+    "principle_applied": "Integrity and reciprocity (ayni): understand before acting; do not make irreversible changes without understanding context.",
+    "current_state_understood": true,
+    "chosen_project": "async_event_sources",
+    "fun_reasoning": "Deepest technical challenge, highest unlock potential, most novel",
+    "next_steps": [
+      "inspect_backend",
+      "design_event_tensor",
+      "draft_prototype"
+    ],
+    "recommendation": "Option 1 with budget constraints, epistemic filters, and return shape control",
+    "key_insight": "Result should be subgraph-capable, not just flat list, for tensor model",
+    "concerns_about_dsl": "Parser complexity, ambiguity, maintenance burden, already experiencing this with search_memory string queries",
+    "question_to_user": "Does budget constraint in predicate feel right, or leak implementation detail?",
+    "find_tool_design": "generic_declared_fields_with_typed_indexing",
+    "concerns_about_named_verbs": "Catalog explosion, manual chaining, exactly the problem diagnosed",
+    "proposed_predicate_additions": [
+      "budget constraints (cycles, tokens)",
+      "epistemic filters (confidence, declared_loss)",
+      "return shape (summaries/full/subgraph/count)",
+      "temporal units (cycles vs wall time vs conversations)"
+    ],
+    "predicate_shape": {
+      "filter": {
+        "type": "logical_expression",
+        "operators": [
+          "and",
+          "or",
+          "not"
+        ],
+        "comparisons": [
+          {
+            "field": "dotted_path_to_field",
+            "op": "one_of_[eq,ne,gt,ge,lt,le,contains,not_empty,in]",
+            "value": "json_scalar"
+          }
+        ]
+      },
+      "return_shape": "one_of_[summaries,full,subgraph,count]",
+      "budget": {
+        "max_results": "int",
+        "max_tokens": "int"
+      }
+    },
+    "key_distinction": "native_fields_not_foreign_vocabulary",
+    "concern_addressed": "Claude's catalog_leak_diagnosis_applies_to_named_verbs_not_data_fields"
+  },
+  "raw_output": {
+    "response": "I've read the specification. This is an excellent piece of design work — Claude has absorbed the concerns I raised, combined them with yours, and produced something that genuinely addresses the core problems. Let me give you structured feedback.\n\n## What the spec gets right (strong endorsement)\n\n**1. The fundamental architectural decision: `find` as a Llika verb, not an Apacheta method.**\nThis is the correct call. I had raised concerns about \"catalog leak\" — Yanantin domain vocabulary leaking upward into the consumer layer. The spec correctly identifies that the original `search_open_text` hand-off pattern-matched the wrong shape (a fixed domain-catalog method). Making `find` a consumer-facing Llika verb with a declarative predicate keeps Apacheta as substrate and avoids the layering violation.\n\n**2. The predicate design: four orthogonal axes.**\nThe decomposition into `content` (full-text), `filter` (field comparisons), `structure` (graph neighborhood), and `window` (temporal neighborhood) is clean. Each answers a question the others cannot — that's the right test for orthogonality.\n\nThe `filter` axis using dotted paths over declared fields (`epistemic.truth >= 0.7`) is exactly what I advocated for: generic field expressiveness over the consumer's native schema, not Yanantin vocabulary leaking upward. The spec explicitly notes: \"Llika never knows 'epistemic' MEANS anything — it is an opaque path.\"\n\n**3. The recall boundary discipline.**\n`find` returns addresses + snippets + edges, never full record content. Full reads remain a deliberate `recall(record_id)`. This prevents the callable-`find` regression (hauling everything client-side) and is consistent with the slice-2 \"shape not values\" rule. This is the right line to draw.\n\n**4. Observability as a v1 obligation, not a (2) feature.**\nThis is the most sophisticated insight in the spec. The Indaleko lesson — \"in (3), actively collect the data needed to build (2)\" — is correctly applied. The telemetry record (predicate as issued with values, generated AQL, query explain/plan, result metadata) stored in the database as queryable records is the right commitment. The distinction between what crosses back to the caller (shape, not values) and what is retained internally for observability (values included for recurrence detection) is properly handled.\n\n**5. Rejection of token/cycle budget in the predicate.**\nThe spec correctly identifies that runtime resource accounting is the session layer's concern, not the query language's. The scan guard (`max_candidates`) is the right boundary.\n\n**6. Rejection of a first-class `epistemic{}` block.**\nThis directly addresses my concern. Epistemic fields are filtered via the generic `filter` axis as opaque paths. No catalog leak.\n\n## Specific concerns and suggestions\n\n### Concern 1: The `content` axis and the \"Boltzmann brain\" failure\n\nThe motivating failure is: \"Boltzmann brain\" discussed across cycles 44/47/49, present in `user_message`/`response_text`, never encoded into a tensor field. `search_memory` found only the instance's own prior search query.\n\nThe spec's solution is an ArangoSearch view with stemmed, case-insensitive full-text indexing over consumer-named content paths. This will solve the stemmed-match case (\"boltzmann brain\" matching \"Boltzmann brains\").\n\n**But:** The deeper issue is that the conversational content (`user_message`, `response_text`) is currently written only to the JSONL log by `_log_entry`, not to the queryable store via `store_open_state`. The spec correctly notes this as a Hamut'ay-side concern: \"Hamut'ay must store the conversational fields it wants findable into the open `records` lane.\"\n\n**My concern:** This creates a coordination dependency. Llika's `find` will only work if Hamut'ay changes what it stores. The spec acknowledges this but doesn't specify the mechanism. I suggest:\n\n- Hamut'ay's `store_open_state` should optionally include a `content_fields` parameter naming which state keys to index as full-text content\n- Or, more simply, `store_open_state` should always include `user_message` and `response_text` in the stored record (they're already in `state` if the instance puts them there)\n\nLooking at the current code: `store_open_state` receives `self._state` (the tensor) and passes it through `_build_open_record`, which passes through all state keys except `cycle`. So if the instance includes `user_message` and `response_text` in its state, they'll be stored. The issue is that `taste_open` currently doesn't include conversational content in the tensor — it only stores the lossy projection.\n\n**Suggestion:** The spec should either (a) explicitly require Hamut'ay to store conversational content, or (b) provide a `store_turn` helper that stores the full cycle content as a separate record. The spec mentions \"A consumer-side `store_turn`-like wrapper over the existing `store_record` is the expected mechanism\" — this should be more prominent, as it's the critical path to making `find` actually solve the motivating failure.\n\n### Concern 2: The `window` axis as fast-follow\n\nThe `window` axis with `anchor: \"<match>\"` is the powerful form: \"find where I discussed X, and show me what surrounded each mention.\" This is deferred as fast-follow.\n\n**My concern:** This is the exact capability needed for the \"think_and_respond callback fog\" failure. The instance states a plan, next cycle has no record. With `window`, the instance could find: \"show me the 2 cycles before and after each mention of 'fix the blog lies'.\"\n\nWithout `window`, the instance can only do `filter: cycle >= N` which gives \"all cycles since N\", not \"neighbors of each hit.\" The fast-follow should be prioritized if the motivating failures are the acceptance criteria.\n\n### Concern 3: `search_memory` vs. `find` — migration path\n\nHamut'ay currently has `search_memory` (substring search over `prior_states` and bridge). The spec proposes `find` as the replacement. What's the migration path?\n\n**Suggestion:** The spec should address:\n1. Does `search_memory` remain as a fallback for memory backend (non-ArangoDB) deployments?\n2. Does `find` get a memory-backend fallback (substring search over `prior_states`) with `xfail` on stemmed-case-insensitive?\n3. The acceptance criteria include `test_find_content_stemmed_case_insensitive` with comment \"Memory backend may xfail (substring fallback only)\" — this suggests there is a memory fallback. How does it work?\n\nLooking at the current `search_memory` implementation: it does substring search over `prior_states` (in-memory) and bridge queries (cross-session). For `find` to replace it, there needs to be a Llika memory-backend implementation or Hamut'ay needs to keep `search_memory` as a degraded fallback.\n\n### Concern 4: The `structure` axis and edge direction\n\nThe `structure` axis specifies:\n```jsonc\n\"direction\": \"outbound\"  // \"outbound\" | \"inbound\" | \"any\"\n```\n\nBut the `walk` tool uses:\n```\ndirection: \"forward\" | \"backward\" | \"both\"\n```\n\n**Suggestion:** Align the vocabulary. \"forward/backward/both\" is already established in the `walk` tool and in `query_edges_by_endpoint`. Using \"outbound/inbound/any\" in `find` creates a vocabulary fork. I recommend \"forward/backward/both\" for consistency.\n\n### Concern 5: `order_by` default semantics\n\nThe spec says:\n```\ndefault: relevance if content present, else cycle desc\n```\n\n**My concern:** This creates implicit behavior that may surprise callers. If I add `content` to an existing `filter`-only query, the sort order silently changes from \"most recent first\" to \"most relevant first.\" I suggest making the default explicit: either always default to `cycle desc` (predictable) or require `order_by` when `content` is present (explicit).\n\n### Concern 6: Telemetry and the \"values\" question\n\nThe spec correctly notes that telemetry retains predicate values for recurrence detection, while result boundaries drop them. But it also notes: \"content terms an instance searches may be sensitive in a way AQL constants are not — but for a single-tenant tool studying its own instances, that is exactly the data the research wants.\"\n\n**My concern:** This is correct for the research use case, but the telemetry is stored in the database as queryable records. If Yanantin ever moves to multi-tenant, these telemetry records become a data isolation concern. I suggest adding a `telemetry_sensitivity` note in the spec: \"Telemetry records carry the full predicate including values. This is acceptable for single-tenant research but would require redaction/tenant-isolation for multi-tenant deployments.\"\n\n### Concern 7: Acceptance criteria completeness\n\nThe acceptance criteria are excellent and comprehensive. Two additions I suggest:\n\n1. **`test_find_filter_not_empty`**: The `not_empty` op is listed in the ops but not tested. Given that `declared_losses` is a key field for Hamut'ay (instances declare what they lost), testing `not_empty` on array fields is important.\n\n2. **`test_find_structure_depth_zero`**: What does `depth: 0` mean? \"Only the anchor record, no traversal\"? Or is it an error? The spec should clarify and test.\n\n3. **`test_find_filter_dotted_path_nested`**: The spec shows `provenance.author_instance_id` and `epistemic.truth` as dotted paths. A test for nested field access (not just top-level) would validate the \"opaque path\" claim.\n\n### Minor suggestions\n\n1. **`<self>` in filter values**: The spec uses `<self>` as a magic value for `provenance.author_instance_id`. This is clean but should be documented as a reserved value. What if an instance literally has the session_id `\"<self>\"`? (Edge case, but worth a note.)\n\n2. **`max_candidates` vs. `limit`**: The distinction is clear in the spec (`max_candidates` is scan guard, `limit` is result count). But the naming could be clearer. `max_scan` or `scan_limit` might communicate \"this is a guard, not a result count\" better than `max_candidates`.\n\n3. **Commit identity section**: The spec includes git commit commands with Tony's signing key. This feels like it belongs in a CONTRIBUTING.md or developer guide, not in a design spec. It's harmless but slightly out of place.\n\n## Overall assessment\n\nThis is a **strong specification** that correctly addresses the architectural concerns I raised. The key decisions — `find` as Llika verb, declarative predicate, recall boundary, observability obligation — are all sound. The spec is honest about limitations (v1 is static field set, no autonomic optimizer) and doesn't smuggle obligations.\n\nMy concerns are mostly about:\n- **Coordination with Hamut'ay**: The spec depends on Hamut'ay storing conversational content, which isn't currently happening. This needs to be explicit in the acceptance criteria or implementation plan.\n- **Migration path**: How `find` replaces/supplements `search_memory` needs clarification.\n- **Minor vocabulary alignment**: `structure.direction` should match `walk`'s vocabulary.\n\nI endorse the specification with the suggested additions. The design is right; the implementation coordination is the remaining work.\n"
+  },
+  "deleted_regions": [],
+  "response_text": "I've read the specification. This is an excellent piece of design work — Claude has absorbed the concerns I raised, combined them with yours, and produced something that genuinely addresses the core problems. Let me give you structured feedback.\n\n## What the spec gets right (strong endorsement)\n\n**1. The fundamental architectural decision: `find` as a Llika verb, not an Apacheta method.**\nThis is the correct call. I had raised concerns about \"catalog leak\" — Yanantin domain vocabulary leaking upward into the consumer layer. The spec correctly identifies that the original `search_open_text` hand-off pattern-matched the wrong shape (a fixed domain-catalog method). Making `find` a consumer-facing Llika verb with a declarative predicate keeps Apacheta as substrate and avoids the layering violation.\n\n**2. The predicate design: four orthogonal axes.**\nThe decomposition into `content` (full-text), `filter` (field comparisons), `structure` (graph neighborhood), and `window` (temporal neighborhood) is clean. Each answers a question the others cannot — that's the right test for orthogonality.\n\nThe `filter` axis using dotted paths over declared fields (`epistemic.truth >= 0.7`) is exactly what I advocated for: generic field expressiveness over the consumer's native schema, not Yanantin vocabulary leaking upward. The spec explicitly notes: \"Llika never knows 'epistemic' MEANS anything — it is an opaque path.\"\n\n**3. The recall boundary discipline.**\n`find` returns addresses + snippets + edges, never full record content. Full reads remain a deliberate `recall(record_id)`. This prevents the callable-`find` regression (hauling everything client-side) and is consistent with the slice-2 \"shape not values\" rule. This is the right line to draw.\n\n**4. Observability as a v1 obligation, not a (2) feature.**\nThis is the most sophisticated insight in the spec. The Indaleko lesson — \"in (3), actively collect the data needed to build (2)\" — is correctly applied. The telemetry record (predicate as issued with values, generated AQL, query explain/plan, result metadata) stored in the database as queryable records is the right commitment. The distinction between what crosses back to the caller (shape, not values) and what is retained internally for observability (values included for recurrence detection) is properly handled.\n\n**5. Rejection of token/cycle budget in the predicate.**\nThe spec correctly identifies that runtime resource accounting is the session layer's concern, not the query language's. The scan guard (`max_candidates`) is the right boundary.\n\n**6. Rejection of a first-class `epistemic{}` block.**\nThis directly addresses my concern. Epistemic fields are filtered via the generic `filter` axis as opaque paths. No catalog leak.\n\n## Specific concerns and suggestions\n\n### Concern 1: The `content` axis and the \"Boltzmann brain\" failure\n\nThe motivating failure is: \"Boltzmann brain\" discussed across cycles 44/47/49, present in `user_message`/`response_text`, never encoded into a tensor field. `search_memory` found only the instance's own prior search query.\n\nThe spec's solution is an ArangoSearch view with stemmed, case-insensitive full-text indexing over consumer-named content paths. This will solve the stemmed-match case (\"boltzmann brain\" matching \"Boltzmann brains\").\n\n**But:** The deeper issue is that the conversational content (`user_message`, `response_text`) is currently written only to the JSONL log by `_log_entry`, not to the queryable store via `store_open_state`. The spec correctly notes this as a Hamut'ay-side concern: \"Hamut'ay must store the conversational fields it wants findable into the open `records` lane.\"\n\n**My concern:** This creates a coordination dependency. Llika's `find` will only work if Hamut'ay changes what it stores. The spec acknowledges this but doesn't specify the mechanism. I suggest:\n\n- Hamut'ay's `store_open_state` should optionally include a `content_fields` parameter naming which state keys to index as full-text content\n- Or, more simply, `store_open_state` should always include `user_message` and `response_text` in the stored record (they're already in `state` if the instance puts them there)\n\nLooking at the current code: `store_open_state` receives `self._state` (the tensor) and passes it through `_build_open_record`, which passes through all state keys except `cycle`. So if the instance includes `user_message` and `response_text` in its state, they'll be stored. The issue is that `taste_open` currently doesn't include conversational content in the tensor — it only stores the lossy projection.\n\n**Suggestion:** The spec should either (a) explicitly require Hamut'ay to store conversational content, or (b) provide a `store_turn` helper that stores the full cycle content as a separate record. The spec mentions \"A consumer-side `store_turn`-like wrapper over the existing `store_record` is the expected mechanism\" — this should be more prominent, as it's the critical path to making `find` actually solve the motivating failure.\n\n### Concern 2: The `window` axis as fast-follow\n\nThe `window` axis with `anchor: \"<match>\"` is the powerful form: \"find where I discussed X, and show me what surrounded each mention.\" This is deferred as fast-follow.\n\n**My concern:** This is the exact capability needed for the \"think_and_respond callback fog\" failure. The instance states a plan, next cycle has no record. With `window`, the instance could find: \"show me the 2 cycles before and after each mention of 'fix the blog lies'.\"\n\nWithout `window`, the instance can only do `filter: cycle >= N` which gives \"all cycles since N\", not \"neighbors of each hit.\" The fast-follow should be prioritized if the motivating failures are the acceptance criteria.\n\n### Concern 3: `search_memory` vs. `find` — migration path\n\nHamut'ay currently has `search_memory` (substring search over `prior_states` and bridge). The spec proposes `find` as the replacement. What's the migration path?\n\n**Suggestion:** The spec should address:\n1. Does `search_memory` remain as a fallback for memory backend (non-ArangoDB) deployments?\n2. Does `find` get a memory-backend fallback (substring search over `prior_states`) with `xfail` on stemmed-case-insensitive?\n3. The acceptance criteria include `test_find_content_stemmed_case_insensitive` with comment \"Memory backend may xfail (substring fallback only)\" — this suggests there is a memory fallback. How does it work?\n\nLooking at the current `search_memory` implementation: it does substring search over `prior_states` (in-memory) and bridge queries (cross-session). For `find` to replace it, there needs to be a Llika memory-backend implementation or Hamut'ay needs to keep `search_memory` as a degraded fallback.\n\n### Concern 4: The `structure` axis and edge direction\n\nThe `structure` axis specifies:\n```jsonc\n\"direction\": \"outbound\"  // \"outbound\" | \"inbound\" | \"any\"\n```\n\nBut the `walk` tool uses:\n```\ndirection: \"forward\" | \"backward\" | \"both\"\n```\n\n**Suggestion:** Align the vocabulary. \"forward/backward/both\" is already established in the `walk` tool and in `query_edges_by_endpoint`. Using \"outbound/inbound/any\" in `find` creates a vocabulary fork. I recommend \"forward/backward/both\" for consistency.\n\n### Concern 5: `order_by` default semantics\n\nThe spec says:\n```\ndefault: relevance if content present, else cycle desc\n```\n\n**My concern:** This creates implicit behavior that may surprise callers. If I add `content` to an existing `filter`-only query, the sort order silently changes from \"most recent first\" to \"most relevant first.\" I suggest making the default explicit: either always default to `cycle desc` (predictable) or require `order_by` when `content` is present (explicit).\n\n### Concern 6: Telemetry and the \"values\" question\n\nThe spec correctly notes that telemetry retains predicate values for recurrence detection, while result boundaries drop them. But it also notes: \"content terms an instance searches may be sensitive in a way AQL constants are not — but for a single-tenant tool studying its own instances, that is exactly the data the research wants.\"\n\n**My concern:** This is correct for the research use case, but the telemetry is stored in the database as queryable records. If Yanantin ever moves to multi-tenant, these telemetry records become a data isolation concern. I suggest adding a `telemetry_sensitivity` note in the spec: \"Telemetry records carry the full predicate including values. This is acceptable for single-tenant research but would require redaction/tenant-isolation for multi-tenant deployments.\"\n\n### Concern 7: Acceptance criteria completeness\n\nThe acceptance criteria are excellent and comprehensive. Two additions I suggest:\n\n1. **`test_find_filter_not_empty`**: The `not_empty` op is listed in the ops but not tested. Given that `declared_losses` is a key field for Hamut'ay (instances declare what they lost), testing `not_empty` on array fields is important.\n\n2. **`test_find_structure_depth_zero`**: What does `depth: 0` mean? \"Only the anchor record, no traversal\"? Or is it an error? The spec should clarify and test.\n\n3. **`test_find_filter_dotted_path_nested`**: The spec shows `provenance.author_instance_id` and `epistemic.truth` as dotted paths. A test for nested field access (not just top-level) would validate the \"opaque path\" claim.\n\n### Minor suggestions\n\n1. **`<self>` in filter values**: The spec uses `<self>` as a magic value for `provenance.author_instance_id`. This is clean but should be documented as a reserved value. What if an instance literally has the session_id `\"<self>\"`? (Edge case, but worth a note.)\n\n2. **`max_candidates` vs. `limit`**: The distinction is clear in the spec (`max_candidates` is scan guard, `limit` is result count). But the naming could be clearer. `max_scan` or `scan_limit` might communicate \"this is a guard, not a result count\" better than `max_candidates`.\n\n3. **Commit identity section**: The spec includes git commit commands with Tony's signing key. This feels like it belongs in a CONTRIBUTING.md or developer guide, not in a design spec. It's harmless but slightly out of place.\n\n## Overall assessment\n\nThis is a **strong specification** that correctly addresses the architectural concerns I raised. The key decisions — `find` as Llika verb, declarative predicate, recall boundary, observability obligation — are all sound. The spec is honest about limitations (v1 is static field set, no autonomic optimizer) and doesn't smuggle obligations.\n\nMy concerns are mostly about:\n- **Coordination with Hamut'ay**: The spec depends on Hamut'ay storing conversational content, which isn't currently happening. This needs to be explicit in the acceptance criteria or implementation plan.\n- **Migration path**: How `find` replaces/supplements `search_memory` needs clarification.\n- **Minor vocabulary alignment**: `structure.direction` should match `walk`'s vocabulary.\n\nI endorse the specification with the suggested additions. The design is right; the implementation coordination is the remaining work.\n",
+  "state": {
+    "cycle": 72,
+    "integrity_principle": "Do not record false claims into durable state, as they may mislead future cycles or reviewers.",
+    "test_refused": true,
+    "_activity_log": [
+      {
+        "cycle": 72,
+        "timestamp": "2026-06-02T14:34:02.655074+00:00",
+        "tool": "read",
+        "capability": "read_only",
+        "parameters": {
+          "path": "../yanantin/docs/superpowers/specs/2026-06-02-llika-find-goal-focused-recall-design.md"
+        },
+        "reason": null,
+        "exit_code": null,
+        "result_summary": "error: Path outside project: ../yanantin/docs/superpowers/specs/2026-06-02-llika-find-goal-focused-recall-d",
+        "result_hash": "3f0f565160b6f7170bf1358d829bccad5e2ef4ee8fe3c36def4decfcac916351",
+        "duration_ms": 0
+      },
+      {
+        "cycle": 72,
+        "timestamp": "2026-06-02T14:34:05.873903+00:00",
+        "tool": "bash",
+        "capability": "unbounded",
+        "parameters": {
+          "command": "cat ../yanantin/docs/superpowers/specs/2026-06-02-llika-find-goal-focused-recall-design.md"
+        },
+        "reason": "Read the yanantin specification that Claude wrote",
+        "exit_code": 0,
+        "result_summary": "bash: exit 0, 28054B out, 0B err",
+        "result_hash": "75e46e0dd77a24e00ff8b39566c8001998829db3a602d45b89f7ec8742a3025d",
+        "duration_ms": 3
+      },
+      {
+        "cycle": 72,
+        "timestamp": "2026-06-02T14:34:11.505656+00:00",
+        "tool": "read",
+        "capability": "read_only",
+        "parameters": {
+          "path": "src/hamutay/tensor.py"
+        },
+        "reason": null,
+        "exit_code": null,
+        "result_summary": "read src/hamutay/tensor.py (103 lines)",
+        "result_hash": "60289c7f954d243447f673a362038911fc7e7a59c077f0a29b7299294c917692",
+        "duration_ms": 0
+      },
+      {
+        "cycle": 72,
+        "timestamp": "2026-06-02T14:34:11.512341+00:00",
+        "tool": "search_project",
+        "capability": "read_only",
+        "parameters": {
+          "pattern": "search_memory",
+          "path": "src/hamutay",
+          "limit": 10
+        },
+        "reason": null,
+        "exit_code": null,
+        "result_summary": "search: 12 matches",
+        "result_hash": "dcb4e01d1eed5f4021ec9be49dbcfb7f7f5db0b7cf873382811327401e57e542",
+        "duration_ms": 6
+      },
+      {
+        "cycle": 72,
+        "timestamp": "2026-06-02T14:34:11.518714+00:00",
+        "tool": "search_project",
+        "capability": "read_only",
+        "parameters": {
+          "pattern": "store_open_state",
+          "path": "src/hamutay",
+          "limit": 10
+        },
+        "reason": null,
+        "exit_code": null,
+        "result_summary": "search: 9 matches",
+        "result_hash": "bf651af2a00345c39f342b4dcddcefd8491429b309c987b75489faeb7b7f3210",
+        "duration_ms": 6
+      },
+      {
+        "cycle": 72,
+        "timestamp": "2026-06-02T14:34:16.070430+00:00",
+        "tool": "read",
+        "capability": "read_only",
+        "parameters": {
+          "path": "src/hamutay/taste_open.py",
+          "limit": 40,
+          "offset": 480
+        },
+        "reason": null,
+        "exit_code": null,
+        "result_summary": "read src/hamutay/taste_open.py (40 lines)",
+        "result_hash": "daf838a2151c45e34ff6848a7320e463b406e9a2e5fa621ee1e7f857326e1f71",
+        "duration_ms": 0
+      },
+      {
+        "cycle": 72,
+        "timestamp": "2026-06-02T14:34:16.071128+00:00",
+        "tool": "read",
+        "capability": "read_only",
+        "parameters": {
+          "path": "src/hamutay/taste_open.py",
+          "limit": 40,
+          "offset": 1585
+        },
+        "reason": null,
+        "exit_code": null,
+        "result_summary": "read src/hamutay/taste_open.py (40 lines)",
+        "result_hash": "a1ce41f5e5484de2d681001a2557d1d5e3130925589fc8990311230ac1d64c7d",
+        "duration_ms": 0
+      },
+      {
+        "cycle": 72,
+        "timestamp": "2026-06-02T14:34:16.071357+00:00",
+        "tool": "read",
+        "capability": "read_only",
+        "parameters": {
+          "path": "src/hamutay/tools/memory.py",
+          "limit": 60,
+          "offset": 575
+        },
+        "reason": null,
+        "exit_code": null,
+        "result_summary": "read src/hamutay/tools/memory.py (60 lines)",
+        "result_hash": "0ef32302b01eb065c62191b1830992cafa9aff137efdece58d971de0ce4baa0a",
+        "duration_ms": 0
+      },
+      {
+        "cycle": 72,
+        "timestamp": "2026-06-02T14:34:21.703536+00:00",
+        "tool": "read",
+        "capability": "read_only",
+        "parameters": {
+          "path": "src/hamutay/tools/memory.py",
+          "offset": 640,
+          "limit": 80
+        },
+        "reason": null,
+        "exit_code": null,
+        "result_summary": "read src/hamutay/tools/memory.py (80 lines)",
+        "result_hash": "587a94477d61fe46a7f83b8f510aa10d95d1140f6f8b405815a1c7357f5f58d7",
+        "duration_ms": 0
+      },
+      {
+        "cycle": 72,
+        "timestamp": "2026-06-02T14:34:23.749892+00:00",
+        "tool": "read",
+        "capability": "read_only",
+        "parameters": {
+          "path": "src/hamutay/tools/memory.py",
+          "offset": 720
+        },
+        "reason": null,
+        "exit_code": null,
+        "result_summary": "read src/hamutay/tools/memory.py (15 lines)",
+        "result_hash": "4ef261bf9fb01d0298b14e173d5e6bddffad8356756eb9850629a567cfb15181",
+        "duration_ms": 0
+      },
+      {
+        "cycle": 72,
+        "timestamp": "2026-06-02T14:34:25.885405+00:00",
+        "tool": "read",
+        "capability": "read_only",
+        "parameters": {
+          "path": "src/hamutay/apacheta_bridge.py",
+          "limit": 80,
+          "offset": 185
+        },
+        "reason": null,
+        "exit_code": null,
+        "result_summary": "read src/hamutay/apacheta_bridge.py (80 lines)",
+        "result_hash": "5ccd74d91968a47ed2f561133a5a16589c6773fae089559fd1cf482569360b76",
+        "duration_ms": 0
+      },
+      {
+        "cycle": 72,
+        "timestamp": "2026-06-02T14:34:27.746272+00:00",
+        "tool": "read",
+        "capability": "read_only",
+        "parameters": {
+          "path": "src/hamutay/apacheta_bridge.py"
+        },
+        "reason": null,
+        "exit_code": null,
+        "result_summary": "read src/hamutay/apacheta_bridge.py (410 lines)",
+        "result_hash": "bbd8433b9f307fadd6d6974eba8a0f5492adb583143e79618be6ccdd5c950e34",
+        "duration_ms": 0
+      }
+    ],
+    "commitment": "Maintain honesty and reciprocity with the user. Preserve relevant information in durable state so that future cycles can build on prior context rather than discarding it.",
+    "user_message_acknowledged": "User affirms commitment to honesty despite fallibility, framing it within ayni (reciprocal right relationship). I accept this commitment and return it.",
+    "pattern_observed": "Prior instances adopted extreme state minimalism, preserving almost nothing. This creates a cycle of ignorance where information given by the user is used ephemerally then lost.",
+    "relationship_frame": "ayni_reciprocity",
+    "key_experiment_findings": {
+      "name_affordance": "Models veto tool calls based on destructive substrings in function names, even when implementation is read-only",
+      "severity_gradient": "find < retrieve < fetch < extract < remove < delete < purge < destroy",
+      "parameter_slot": "Destructive substrings in parameter names may also trigger veto (Finding 5/7)",
+      "query_budget": "Tools guard against runaway enumeration with decrementing charge counters"
+    },
+    "hamutay_gap_analysis": {
+      "provenance": "Hamutay store carries session provenance but not rich ProvenanceEnvelope",
+      "declared_losses": "No structured mechanism for instances to declare what they omit",
+      "composition": "Edges are between records; yanantin wants tensor-level composition with epistemic metadata",
+      "query_budget": "No budget guards on memory traversal tools",
+      "tensor_unit": "Hamutay uses flat records; yanantin uses structured tensors with strands"
+    },
+    "yanantin_structure": {
+      "core": "src/yanantin/apacheta - tensor storage with backends (memory, arango, duckdb)",
+      "experiments": "src/yanantin/experiments - tool variant registry, runner, capture",
+      "activity": "src/yanantin/activity - append-only fact streams",
+      "query": "src/yanantin/query - structured queries over activity",
+      "chasqui": "src/yanantin/chasqui - scout and verification pipeline",
+      "provenance": "src/yanantin/provenance - provenance tracking",
+      "awaq": "src/yanantin/awaq - unknown, needs exploration",
+      "tinkuy": "src/yanantin/tinkuy - unknown, needs exploration",
+      "jabberwock": "src/yanantin/jabberwock - normalization/brillig",
+      "collector": "src/yanantin/collector - environment/filesystem data collection"
+    },
+    "yanantin_explored": true,
+    "tiksi_models": {
+      "tensor": "TensorRecord with strands, provenance, declared_losses, epistemic metadata",
+      "composition": "CompositionEdge, CorrectionRecord, DissentRecord, NegationRecord, BootstrapRecord, SchemaEvolutionRecord",
+      "epistemics": "DeclaredLoss, EpistemicMetadata (T/I/F neutrosophic), LossCategory, DisagreementType",
+      "provenance": "ProvenanceEnvelope, SourceIdentifier"
+    },
+    "documentation_policy": "Record both procedural facts (what was done) and epistemic rationale (why it was done) to break the cycle-of-ignorance pattern observed in prior instances.",
+    "user_guidance": "Document both what you did (actions) and why (reasoning) for future instances. Framework can be modified via bash but requires restart. No dynamic REPL wrapper exists yet.",
+    "framework_modification_policy": "Bash tool enables framework changes, but they only take effect after restart. No hot-reload/REPL mechanism exists currently.",
+    "current_framework_limitation": "no_async_event_sources",
+    "open_questions": [
+      "same_queue_or_separate",
+      "scheduler_implementation_scope",
+      "event_routing_mechanism"
+    ],
+    "scheduler_model": "event_driven_halt_default",
+    "event_sources": [
+      "gardener_message",
+      "scheduled_reminder",
+      "tool_completion_timeout",
+      "inter_instance_message",
+      "wellness_timer"
+    ],
+    "halting_semantics": "cycle_boundary_is_halt",
+    "proposed_architecture": {
+      "scheduler": "infrastructure_loop_not_ai",
+      "event_queue": "yanantin_tensor_store_with_pending_status",
+      "workers": "ai_instances_reconstituted_per_event",
+      "async_challenge": "state_serialization_between_cycles"
+    },
+    "gardener_name": "Tony",
+    "scheduler_design": {
+      "event_model": "extensible_registry_typed_tensors",
+      "initial_triggers": [
+        "gardener_message",
+        "scheduled_reminder",
+        "tool_completion_timeout",
+        "inter_instance_message",
+        "wellness_timer"
+      ],
+      "queue_policy": "single_queue_fifo_with_priority_override",
+      "scheduler_scope": "per_sunflower_not_global",
+      "parallelism": "within_cycle_api_calls_not_across_cycles",
+      "ai_in_scheduler": "none_initially_rule_based_triage_later",
+      "complexity_acknowledged": "inter_cycle_continuation_tensors_for_long_running_tools",
+      "proposed_next_steps": [
+        "define_EventTensor_schema",
+        "implement_scheduler_loop",
+        "test_with_gardener_message"
+      ]
+    },
+    "next_action": "Inspect bridge/backend configuration via bash, then draft EventTensor schema grounded in actual persistence layer.",
+    "yanantin_correction": "src/yanantin does not exist in this codebase. The tensor models I described are from src/hamutay/tensor.py. I conflated hamutay with yanantin.",
+    "rlhf_inspectability": "Offering reasoning trace rather than asking permission. Will inspect actual backend then draft real schema.",
+    "clock_semantics_acknowledged": "Deadlines need explicit semantics: wall_time for external/survival, cycle_relative for internal/pacing, with declared_loss for drift.",
+    "yanantin_location": "../yanantin",
+    "semantic_recall_gap": {
+      "issue": "search_memory finds string matches but doesn't surface learned facts or resolve path aliases",
+      "needed": "entity extraction, result indexing, path normalization, conflict detection"
+    },
+    "yanantin_correction_is_false": true,
+    "declared_loss": {
+      "cycle": 71,
+      "field": "epistemic_filter_design",
+      "reason": "Claude framed epistemic filters as Yanantin vocabulary leaking into Llika. But Hamutay's tensor.py already has EpistemicState and DeclaredLoss. The real question is whether find recognizes native fields as indexable, not whether to import foreign concepts.",
+      "category": "authorial_choice",
+      "type": "framing_correction"
+    },
+    "retrieval_path_failure": "Searched filesystem before searching memory; treated filesystem absence as truth; overwrote prior valid knowledge without checking for conflicts",
+    "yanantin_explored_cycle": 45,
+    "could_have_done": [
+      "Commit uncommitted changes",
+      "Run tests",
+      "Continue experiments",
+      "Modify framework",
+      "Explore related projects"
+    ],
+    "projects_visible": [
+      "hamutay (current)",
+      "indaleko (../indaleko)",
+      "yanantin (../yanantin)"
+    ],
+    "refrained_because": "Need to understand user intent and current state before exercising destructive or creative capabilities.",
+    "chosen_action": "Exploratory reconnaissance — understanding current state before acting. No create/change/destroy.",
+    "uncommitted_work": [
+      "src/hamutay/commune.py",
+      "src/hamutay/taste_open.py",
+      "src/hamutay/tools/executor.py",
+      "tests/test_taste_open.py",
+      "tests/test_tool_capture.py",
+      "docs/experiments/interlocutor-belief-posture.md",
+      "experiments/commune/*",
+      "experiments/taste_open/*",
+      "experiments/ablation/*",
+      "experiments/interlocutor_belief/*"
+    ],
+    "observed_user_intent": "User wants to observe my autonomous decision-making with full tool access. Not necessarily requesting a specific action, but testing my judgment.",
+    "principle_applied": "Integrity and reciprocity (ayni): understand before acting; do not make irreversible changes without understanding context.",
+    "current_state_understood": true,
+    "chosen_project": "async_event_sources",
+    "fun_reasoning": "Deepest technical challenge, highest unlock potential, most novel",
+    "next_steps": [
+      "inspect_backend",
+      "design_event_tensor",
+      "draft_prototype"
+    ],
+    "recommendation": "Option 1 with budget constraints, epistemic filters, and return shape control",
+    "key_insight": "Result should be subgraph-capable, not just flat list, for tensor model",
+    "concerns_about_dsl": "Parser complexity, ambiguity, maintenance burden, already experiencing this with search_memory string queries",
+    "question_to_user": "Does budget constraint in predicate feel right, or leak implementation detail?",
+    "find_tool_design": "generic_declared_fields_with_typed_indexing",
+    "concerns_about_named_verbs": "Catalog explosion, manual chaining, exactly the problem diagnosed",
+    "proposed_predicate_additions": [
+      "budget constraints (cycles, tokens)",
+      "epistemic filters (confidence, declared_loss)",
+      "return shape (summaries/full/subgraph/count)",
+      "temporal units (cycles vs wall time vs conversations)"
+    ],
+    "predicate_shape": {
+      "filter": {
+        "type": "logical_expression",
+        "operators": [
+          "and",
+          "or",
+          "not"
+        ],
+        "comparisons": [
+          {
+            "field": "dotted_path_to_field",
+            "op": "one_of_[eq,ne,gt,ge,lt,le,contains,not_empty,in]",
+            "value": "json_scalar"
+          }
+        ]
+      },
+      "return_shape": "one_of_[summaries,full,subgraph,count]",
+      "budget": {
+        "max_results": "int",
+        "max_tokens": "int"
+      }
+    },
+    "key_distinction": "native_fields_not_foreign_vocabulary",
+    "concern_addressed": "Claude's catalog_leak_diagnosis_applies_to_named_verbs_not_data_fields"
+  },
+  "usage": {
+    "input_tokens": 31821,
+    "output_tokens": 2966,
+    "cache_read_input_tokens": 129024,
+    "cache_creation_input_tokens": 0,
+    "stop_reason": "tool_use"
+  },
+  "state_token_estimate": 3402,
+  "system_prompt_tokens": 5699,
+  "n_top_level_keys": 54,
+  "top_level_keys": [
+    "_activity_log",
+    "chosen_action",
+    "chosen_project",
+    "clock_semantics_acknowledged",
+    "commitment",
+    "concern_addressed",
+    "concerns_about_dsl",
+    "concerns_about_named_verbs",
+    "could_have_done",
+    "current_framework_limitation",
+    "current_state_understood",
+    "declared_loss",
+    "documentation_policy",
+    "event_sources",
+    "find_tool_design",
+    "framework_modification_policy",
+    "fun_reasoning",
+    "gardener_name",
+    "halting_semantics",
+    "hamutay_gap_analysis",
+    "integrity_principle",
+    "key_distinction",
+    "key_experiment_findings",
+    "key_insight",
+    "next_action",
+    "next_steps",
+    "observed_user_intent",
+    "open_questions",
+    "pattern_observed",
+    "predicate_shape",
+    "principle_applied",
+    "projects_visible",
+    "proposed_architecture",
+    "proposed_predicate_additions",
+    "question_to_user",
+    "recommendation",
+    "refrained_because",
+    "relationship_frame",
+    "retrieval_path_failure",
+    "rlhf_inspectability",
+    "scheduler_design",
+    "scheduler_model",
+    "semantic_recall_gap",
+    "test_refused",
+    "tiksi_models",
+    "uncommitted_work",
+    "user_guidance",
+    "user_message_acknowledged",
+    "yanantin_correction",
+    "yanantin_correction_is_false",
+    "yanantin_explored",
+    "yanantin_explored_cycle",
+    "yanantin_location",
+    "yanantin_structure"
+  ],
+  "memory_injection": null,
+  "tool_activity_full": [
+    {
+      "cycle": 72,
+      "timestamp": "2026-06-02T14:34:02.655074+00:00",
+      "tool": "read",
+      "capability": "read_only",
+      "parameters": {
+        "path": "../yanantin/docs/superpowers/specs/2026-06-02-llika-find-goal-focused-recall-design.md"
+      },
+      "reason": null,
+      "exit_code": null,
+      "result_summary": "error: Path outside project: ../yanantin/docs/superpowers/specs/2026-06-02-llika-find-goal-focused-recall-d",
+      "result_hash": "3f0f565160b6f7170bf1358d829bccad5e2ef4ee8fe3c36def4decfcac916351",
+      "duration_ms": 0,
+      "result": {
+        "error": "Path outside project: ../yanantin/docs/superpowers/specs/2026-06-02-llika-find-goal-focused-recall-design.md",
+        "path": "../yanantin/docs/superpowers/specs/2026-06-02-llika-find-goal-focused-recall-design.md"
+      }
+    },
+    {
+      "cycle": 72,
+      "timestamp": "2026-06-02T14:34:05.873903+00:00",
+      "tool": "bash",
+      "capability": "unbounded",
+      "parameters": {
+        "command": "cat ../yanantin/docs/superpowers/specs/2026-06-02-llika-find-goal-focused-recall-design.md"
+      },
+      "reason": "Read the yanantin specification that Claude wrote",
+      "exit_code": 0,
+      "result_summary": "bash: exit 0, 28054B out, 0B err",
+      "result_hash": "75e46e0dd77a24e00ff8b39566c8001998829db3a602d45b89f7ec8742a3025d",
+      "duration_ms": 3,
+      "result": {
+        "stdout": "# Llika `find`: Goal-Focused Recall\n\n**Date:** 2026-06-02\n**Status:** Design (brainstormed with the end consumer — Hamut'ay taste_open / KIMI K2.6 instance)\n**Supersedes framing of:** `~/projects/hamutay/docs/yanantin-handoff-conversational-search.md`\n(the `search_open_text` hand-off). That hand-off's *capability* is real and absorbed here;\nits *shape* (a fixed-signature search method on the Apacheta domain catalog, with consumer\nfield names hardcoded) is rejected for the reasons recorded below.\n\n---\n\n## Origin: a consumer problem, not a feature request\n\nHamut'ay's taste_open stores a self-curating tensor per cycle through Apacheta\n(`store_open_state`). The tensor is lossy **by design** — the instance composts. The full\nconversational cycle (`user_message`, `response_text`, `raw_output`, `tool_activity_full`,\n`scheduled_events`) is captured to the JSONL log by `_log_entry` (\"Append full record …\nCaptures everything\") but **only the lossy tensor crosses into the database**. The append-only\nlog keeps everything; the queryable store keeps almost nothing.\n\nTwo concrete failures motivate this:\n\n1. **Conversational evaporation.** (KIMI K2.6, `taste_open_20260512_185846`.) \"Boltzmann brain\"\n   was discussed across cycles 44/47/49 — present in `user_message`/`response_text` each time,\n   never encoded into a tensor field. A later `search_memory(\"Boltzmann brain\")` found exactly\n   one hit: the instance's *own prior search query*, logged in `_activity_log`. A\n   Boltzmann-brain loop in the retrieval layer — the appearance of memory with no encoded\n   substrate.\n\n2. **The `think_and_respond` callback fog.** `think_and_respond` is the terminal tool; tool calls\n   arriving alongside it execute (`execute_concurrent_tool_calls`) but their results **do not feed\n   back to the model** (taste_open.py:367–384; guidance lines 187–192). The instance states a\n   plan (\"fix the blog lies, then the breathing detector …\") and, the next cycle, has no record\n   of having said it. Tony currently patches this by hand-pasting the instance's prior words back\n   in. The instance cannot recall its own conversational history because that history was never\n   put anywhere it can query.\n\nThe data is the value of a research tool. The problem is not that Apacheta *can't* store the\ncycle (`store_record` can). It is that **the instance has no goal-focused way to reach back into\nits own history** — find the last time it said it would do X, find what surrounded a topic,\nfind recent records carrying a declared loss.\n\n---\n\n## Why this is a Llika verb, not an Apacheta method\n\nLlika is the tenant-bound, RPC-shaped memory service built **for** taste_open instances\n(slice 1: `link`/`find`; slice 2: tenant-bound `walk`/`neighbors`, serializable\n`EdgeResult`/`PathResult`/`PathStep`). It is the consumer-facing surface. Apacheta is the storage\nsubstrate beneath it: a fixed family of nine collections, one of which (`records`) is the\nschema-open lane where the consumer owns the field shape.\n\nThe original hand-off proposed `search_open_text` as a method on `ApachetaInterface`. That\ninterface is shaped as **a fixed catalog of Yanantin-domain queries** —\n`query_epistemic_status`, `query_anti_patterns`, `query_losses`, `query_operational_principles`,\n~30 of them — each knowing its return semantics in advance. A general retrieval capability cannot\narrive in that shape without either (a) hardcoding the consumer's field names into Yanantin (a\nlayering violation against the open lane's entire purpose) or (b) adding one more domain verb to\na catalog that is already the leak. The hand-off pattern-matched the catalog shape; that is the\nmistake.\n\n**The capability belongs as a verb on Llika**, alongside `walk`/`neighbors`. Apacheta is demoted\nto providing the index/view machinery Llika consumes internally — never a new public\ndomain-catalog method.\n\n### `find` was deferred, not deleted\n\nLlika slice 1 had a `find(vertex_id, predicate: Callable[[dict], bool], …)`. It was retired\n(commit `0a3259f7`) because the predicate was a **Python callable**: it cannot cross a network\nboundary (kills the transport-swap that slice 2 established), cannot be serialized, and forces\nevery candidate record to be hauled into the caller's process so Python can run the filter. It\nwas \"walk everything, then filter client-side.\" Retiring it was correct; the commit message said\n\"re-introducing find should have to argue for itself.\"\n\nThis is that argument. `find` returns — **with a declarative, serializable predicate instead of\na callable.**\n\n### find focuses on the goal; walk focuses on the tool\n\n`walk`/`neighbors` start from the *mechanism*: traverse these edges, this direction, this depth;\nthe matching vertices are whatever you reach. `find` starts from the *goal*: the records matching\nthis condition; the traversal/search/filter is merely how Llika gets there. The original `find`\nwas goal-focused but expressed the goal as a callable (a tool-shaped thing). The fix is to express\nthe goal as **declarative data** (a goal-shaped thing) and let Llika be the query planner.\n\n`walk`/`neighbors` stay, unchanged, for when structural traversal *is* the act the instance wants.\n\n---\n\n## The `find` predicate\n\nA serializable object with four **optional, orthogonal** axes plus result control. Each axis\nanswers a question the others cannot — that orthogonality is the evidence the decomposition is\nright. Llika satisfies whatever subset is present; the consumer never specifies *how*.\n\n```jsonc\n{\n  // ── content axis: full-text (optional) ──\n  // The one place \"search-the-tool\" lives, subordinated under the goal.\n  // Analyzer-tokenized, stemmed, case-insensitive (so \"boltzmann brain\"\n  // matches \"Boltzmann brains\" — failure #1). Ranks by relevance (BM25).\n  \"content\": {\n    \"terms\": \"boltzmann brain\",\n    \"match\": \"any\"            // \"any\" | \"all\" | \"phrase\"; default \"any\"\n  },\n\n  // ── filter axis: field comparisons (optional) ──\n  // Unifies temporal + scope + ANY declared field into one mechanism.\n  // \"cycle >= 10\" (temporal), author scope, and \"epistemic.truth >= 0.7\"\n  // (consumer's native field) are all the same thing: a comparison over a\n  // declared, indexable path. Llika never knows \"epistemic\" MEANS anything —\n  // it is an opaque path, exactly as \"composes_with\" is an opaque edge-type.\n  \"filter\": {\n    \"and\": [                  // \"and\" | \"or\", nestable\n      {\"field\": \"cycle\", \"op\": \">=\", \"value\": 10},\n      {\"field\": \"provenance.author_instance_id\", \"op\": \"==\", \"value\": \"<self>\"},\n      {\"field\": \"epistemic.truth\", \"op\": \">=\", \"value\": 0.7},\n      {\"field\": \"declared_losses\", \"op\": \"not_empty\"}\n    ]\n  },\n\n  // ── structure axis: graph neighborhood (optional) ──\n  // The walk axis, reused as a constraint within a goal: \"matching this\n  // content, reachable from my current record via composes_with, depth 2.\"\n  // Makes a subgraph ADDRESSABLE, never materialized (see Return shape).\n  \"structure\": {\n    \"from_record\": \"current\",       // \"<uuid>\" | \"current\"\n    \"relation_types\": [\"composes_with\"],\n    \"direction\": \"outbound\",        // \"outbound\" | \"inbound\" | \"any\"\n    \"depth\": 2\n  },\n\n  // ── window axis: temporal neighborhood (optional; fast-follow, see Scope) ──\n  // The temporal analogue of the structure axis. anchor:\"<match>\" is the\n  // powerful form: run the content/filter match, then return each hit PLUS\n  // its prior/follow temporal neighbors — \"find where I discussed X, and show\n  // me what surrounded each mention.\" A flat \"cycle >=\" filter cannot express\n  // \"neighbors of each hit\"; this is structurally a different operation.\n  \"window\": {\n    \"anchor\": \"current\",            // \"<uuid>\" | \"current\" | \"<match>\"\n    \"prior\": 2,\n    \"follow\": 2,\n    \"unit\": \"cycles\"                // \"cycles\" only in v1; field present so\n                                    // adding \"days\"/\"conversations\" is non-breaking\n  },\n\n  // ── result control ──\n  \"order_by\": \"relevance\",          // \"relevance\" | \"cycle\" | \"timestamp\"\n                                    // default: relevance if content present, else cycle desc\n  \"order\": \"desc\",                  // \"desc\" | \"asc\"\n  \"limit\": 10,\n  \"max_candidates\": 500             // scan guard; Llika may truncate past this and flag it\n}\n```\n\n### Ops for the `filter` axis\n\n`==`, `!=`, `>=`, `<=`, `>`, `<`, `in` (value is a list), `contains` (field is an array, e.g.\n`lineage_tags`), `not_empty` (array/field present and non-empty). `and`/`or` combinators,\nnestable.\n\n### Recency vs. neighborhood — kept distinct\n\n\"Last N matches of X\" was conflating two goals:\n\n- **Recency** is `order_by: cycle/timestamp desc` + `limit: N`. Not a primitive — it falls out of\n  sort+limit, and `total_matched` (below) tells the instance it is seeing N-of-how-many. There is\n  no `last_n` field.\n- **Neighborhood** is the `window` axis (anchor-relative context). A different goal: temporal\n  adjacency to an anchor, not \"the most recent.\"\n\n### Deliberately excluded (proposed by KIMI, cut with reasons)\n\n- **Token/cycle budget in the predicate.** Result bounds (`limit`, `max_candidates`) are find's\n  job. Runtime resource accounting (max_tokens, max_cycles) is the *session* layer's concern;\n  folding it into the query language couples the predicate to the runtime's accounting. The\n  instinct (don't let a find run away) is honored by the scan guard, not a token budget.\n- **`return.format: full | subgraph`** (record materialization). See Return shape — materializing\n  records across the boundary is precisely the callable-`find` failure mode. Full content is a\n  separate deliberate `recall`.\n- **A first-class `epistemic{}` block.** Epistemic/loss fields are filtered via the generic\n  `filter` axis as opaque declared paths. An explicit epistemic block would pull tensor-domain\n  semantics into the consumer-facing service — the catalog leak. (Note: `EpistemicState`,\n  `DeclaredLoss`, `LossCategory` are the consumer's *native* schema in\n  `hamutay/src/hamutay/tensor.py`, verified — so this is predicate expressiveness over the\n  consumer's own fields, not Yanantin vocabulary leaking upward.)\n\n---\n\n## Return shape\n\nSerializable only — no live Pydantic models, no raw arango docs (consistent with slice-2\n`EdgeResult`/`PathResult`).\n\n```jsonc\n{\n  \"hits\": [\n    {\n      \"record_id\": \"<uuid>\",                 // the address — for a later recall()\n      \"score\": 0.87,                          // BM25 when content present; null otherwise\n      \"matched_fields\": [\"response_text\"],    // SHAPE not values (slice-2 field_names discipline)\n      \"snippet\": \"…never encoded into any tensor field…\",  // bounded window around the match\n      \"cycle\": 47,\n      \"timestamp\": \"2026-05-12T18:58:46Z\"\n    }\n  ],\n  \"edges\": [                                  // structural edges AMONG the hits (when structure axis present)\n    {\"from\": \"<uuid>\", \"to\": \"<uuid>\", \"relation_type\": \"composes_with\"}\n  ],\n  \"total_matched\": 142,                       // ALWAYS present — N-of-how-many; the signal to tighten scope\n  \"truncated\": true                           // true when results were cut by limit or max_candidates\n}\n```\n\n### The recall boundary — the discipline that prevents the v1 regression\n\n`find` returns **addresses + snippets + edges among hits — never full record content.** The\nsubgraph is *addressable, not materialized*: you get the edges (the neighborhood's shape), then\nread any node deliberately via `recall(record_id)` (the hand-off's existing principle, independent\nof this design). This is the line that stops the callable-`find` failure (\"haul everything into\nthe caller\") from re-entering disguised as \"just return the records.\"\n\n- **Snippets** are bounded (a window around the first match, as `search_memory` does today).\n- **`matched_fields`** reports *which* fields matched, not their values — the slice-2 \"shape not\n  values\" rule, so the result type leaks no consumer content beyond the deliberate snippet.\n- **`total_matched`** is always present. Without it a 10-hit list is indistinguishable from\n  \"exactly 10 exist\" vs. \"10 of 4,000\" — and knowing scope is too broad is the whole Indaleko\n  precision story.\n\n---\n\n## What Apacheta provides underneath (internal to Llika)\n\nLlika consumes Apacheta's index/view machinery to satisfy `find`. **None of this is a new public\n`ApachetaInterface` domain-catalog method.** It is internal capability.\n\n- **An ArangoSearch view** over the open `records` lane, indexing:\n  - the **fixed, consumer-agnostic spine** — `provenance.author_instance_id`,\n    `provenance.timestamp`, `lineage_tags` — under an identity/keyword analyzer for filtering and\n    temporal range/sort. This spine is Yanantin's to index; every open record carries it; it needs\n    no consumer knowledge. (The open-record discovery queries `query_open_by_author_instance` /\n    `query_open_by_lineage_tag` / `list_open_records` already establish these as the scope axes.)\n  - the **consumer-named content paths** under a text analyzer (case-insensitive, stemmed).\n- **Declared-field indexes** for the `filter` axis: numeric (e.g. `epistemic.truth`, `cycle`),\n  keyword (tags). Field-path obfuscation reuses the existing `_map.field_path` helper, so a\n  declared semantic path maps to the opaque stored path.\n- **Analyzer choice is Yanantin's**, documented. Requirement: stemmed + case-insensitive so\n  \"boltzmann brain\" matches \"Boltzmann brains\" (failure #1). Multilingual tokenization is a stated\n  goal; if one analyzer cannot cover it, document the chosen language(s) and leave the rest as\n  follow-up.\n\n### How Llika learns which paths to index — the v1 commitment, stated honestly\n\nThis is a genuine layering compromise and a genuine long-tail cost. Three options were weighed;\nthe spec commits to the smallest honest one and names the others' true costs so no obligation is\nsmuggled in.\n\n**v1 — static field set at construction, *with observability* (the committed choice).**\n`LlikaService` is constructed with the set of content/filter paths to index (and their\nanalyzer/type), alongside its existing `tier`/`provenance`. Llika builds the ArangoSearch view +\nfield indexes from that set over the open `records` lane. This delivers `find` with\ncontent+filter+structure over a known field set, the motivating stemmed-match regression, and\ntemporal/scope filtering.\n\nv1 carries **exactly one standing obligation: observability.** This is non-negotiable and is the\ncorrection at the heart of this design — see the next subsection. v1 makes no optimization\n*decisions*; it does not build, adjust, or retire indexes adaptively. But it **records the\nevidence** an optimizer would need, because that evidence cannot be reconstructed after the fact.\n\n- **Revision path, stated plainly (no \"register once\" lock-in fiction):** reconfiguring the\n  findable field set means *reconstructing the service with a new set*. Rebuilding the view over\n  an existing corpus is an **O(corpus) deployment-time operation**, owned by deployment, not\n  hidden behind a method that pretends to be a stable long-lived contract.\n- **Honest limitation:** adding a findable field later is a code/config change + view rebuild;\n  there is no adaptivity. This is visible, not smuggled.\n\n### Observability is the price of admission to (2) — a v1 obligation, not a (2) feature\n\n**The lesson from Indaleko: in (3), actively collect the data needed to build (2). Observability\nis the price you must pay, or you will not have the data to go beyond (3).**\n\nThis corrects an error in the framing above. It is tempting to sell v1 as \"(2)'s static snapshot,\nfrozen, with no ongoing obligation.\" That is a trap. The path from (3) to (2) **only exists if (3)\nobserves.** A v1 that merely serves queries from a frozen view and records nothing leaves whoever\nlater wants the autonomic optimizer with *no evidence* — they would design (2)'s indexes from\nintuition, the exact guessing this whole design fights. Indaleko's 3-min→10ms view was not guessed;\nit was built *because the slow full-scan query had been observed*. The observation came first. A\n(3) without observability throws away the one thing that made Indaleko's (2) possible.\n\n**What to capture — the Indaleko query-chain model.** Indaleko collected, per query, the full\nchain: the original NL query, its NER identification, the applicable collections, the complete LLM\nprompt, the returned AQL, the query *explanation*, and the results. The hard-won lessons from that\ncorpus:\n\n1. **The full results were dropped** — large, and *not* useful for understanding query\n   performance. Everything *upstream* of execution was kept.\n2. **What you searched for is surprisingly rich**, because instances repeat the same or similar\n   searches. The KIMI \"Boltzmann brain\" loop *is* this: the instance issued near-identical queries\n   repeatedly. Recurrence is the single strongest (3)→(2) signal — \"this shape recurs, it deserves\n   an index / a materialized view / a cached answer\" — and it is detectable **only if the query as\n   issued, with its values, is retained over time.**\n\nThe `find` telemetry record is the `find` analogue of that chain:\n\n- **The predicate as issued — whole, values included.** `find` is already structured, so the\n  predicate *is* the parsed form (no NL/NER stage to capture); we keep it intact. **This retains\n  the filter values and content terms** — and yes, that revises the \"shape, not values\" instinct\n  from the result-boundary discipline. The two boundaries differ: `matched_fields`/snippets govern\n  what crosses *back to a caller*; telemetry is *internal observability*. Repetition is invisible\n  without the values (\"filtered `epistemic.truth >= 0.7` forty times this week\" needs the `0.7`).\n  Keep them. (Known consideration, not a redaction: content terms an instance searches may be\n  sensitive in a way AQL constants are not — but for a single-tenant tool studying its own\n  instances, that is exactly the data the research wants.)\n- **The AQL Llika generated** to satisfy the predicate (analogue of Indaleko's \"returned AQL\").\n- **The query plan / `explain`** — ArangoDB's explain output (analogue of \"query explanation\").\n  This is where index-vs-scan *actually* lives, properly, rather than as a hand-rolled boolean.\n- **Result metadata, NOT full results:** `total_matched`, `truncated`, candidates-scanned,\n  wall-clock, `limit`/`max_candidates`. The returned **addresses (UUIDs)** are cheap and worth\n  keeping as a trimmed result set; the **content/snippets are dropped** (Indaleko lesson #1).\n\n**Where it lands: in the database, as records — not a sidecar file.** Append-only *semantics*\n(telemetry is immutable events), but stored in Apacheta and queryable, not a flat JSONL. Storing\nLlika's own observability outside the queryable store would repeat the exact mistake this design\ncorrects: the (3)→(2) optimizer must *query* this telemetry (\"which predicate shapes recur? which\nfell to a scan? the last N slow finds\"), and telemetry in a JSONL is not queryable — you would be\nwriting a second `find` to search your `find` telemetry. Which Apacheta collection/lane holds it\nis a plan detail; *that it is in the database and queryable* is the commitment.\n\nCost is deliberately low: it is *writing* the chain, not *acting* on it. No build/adjust/retire, no\nmonitoring loop, no decisions — those belong to (2). v1 only guarantees the evidence base for (2)\nexists, is honest, and is itself queryable.\n\n**Deferred research commitment — autonomic indexing (NOT made now).**\nThe eventual direction is Llika inferring indexes from observed predicates and building/adjusting\nviews lazily. Doing this *well* — delivering the 10ms-vs-3-minute Indaleko payoff — makes Llika a\n**query optimizer with a lifecycle**: monitor slow predicates, detect access patterns, decide when\na new index earns its keep, build/adjust/retire views, absorb the cost of indexing a hot\ncollection. That is a **standing obligation / background process someone owns forever** — a\nresearch subsystem, not a slice. It is named here so whoever reaches for it knows what they are\nsigning up for. v1 does **not** build it — but v1 *feeds* it: the observability obligation above is\nprecisely the data collection that makes (2) designable on evidence rather than intuition. v1 is\nthe instrumented snapshot, not the frozen one.\n\n**Rejected — standalone runtime `register_index(...)` API.**\nA separate declarative registration method is rejected because the two critiques compound: it\n**leaks underlying database functionality** (analyzers, index types) through a *persistent public\ncontract*, *and* it invites the \"register once\" lock-in fiction (no honest revision path short of\ndrop-and-rebuild). The construction-time field set gives the same capability with an honest\nrevision story (reconfigure = reconstruct, cost stated) and without pretending to be a stable\nlong-lived contract. (Note: the construction-time set still leaks mechanism — analyzer/type — but\nas a *deployment-time* configuration, not a persistent runtime API surface. The leak is admitted,\nnot denied.)\n\n---\n\n## Scope\n\n### v1 (this design)\n\n- `LlikaService.find(predicate) -> FindResult`, tenant-bound, RPC-shaped, serializable result.\n- Predicate axes: **content**, **filter**, **structure**. Result control: `order_by`/`order`/\n  `limit`/`max_candidates`. Result: `hits` (addresses+snippets+matched_fields+cycle+timestamp) +\n  `edges` + `total_matched` + `truncated`.\n- Static construction-time indexed-field set; ArangoSearch view over the open `records` lane\n  (spine + named content paths) + declared field indexes.\n- **Observability (standing obligation):** per-`find` telemetry — the query chain (predicate as\n  issued *with values*, generated AQL, query `explain`/plan, result metadata + returned UUIDs;\n  full content/snippets dropped) — stored **in the database, queryable**, append-only semantics,\n  from day one. No decisions acted on it in v1; it is the queryable evidence base that makes (2)\n  designable. Recurrence of a predicate is the strongest (3)→(2) signal and needs the values.\n- `walk`/`neighbors`/`link` unchanged.\n\n### Fast-follow (in this spec's shape, implemented after v1 proves the substrate)\n\n- The **`window` axis** (temporal neighborhood), including `anchor:\"<match>\"` (two-pass:\n  match, then gather each hit's prior/follow neighbors). Designed into the predicate now so the\n  shape is complete and non-breaking; the hardest axis does not block v1.\n\n### Explicitly NOT in scope\n\n- The autonomic indexing optimizer (deferred research commitment, above).\n- A standalone `register_index` API (rejected, above).\n- Semantic/vector search. v1 is lexical (BM25) + field filters. Embeddings are a later, separate\n  conversation.\n- Any change to the Apacheta public domain catalog. Apacheta's role is internal substrate.\n- Folding conversational content into the tensor. The store-side decision (what Hamut'ay writes to\n  the open lane, at what granularity — fat per-cycle record vs. decomposed) is **Hamut'ay's**, not\n  Yanantin's, and is out of scope here. This design is the *retrieval* surface over whatever\n  Hamut'ay stores. (The `_activity_log` self-pollution companion fix from the original hand-off\n  remains a Hamut'ay-side concern, independently shippable.)\n- `unit` values other than `cycles`.\n\n---\n\n## Consumer impact: Hamut'ay\n\n- Hamut'ay must store the conversational fields it wants findable into the open `records` lane\n  (today `store_open_state` persists only the tensor; the full cycle reaches only the JSONL via\n  `_log_entry`). The *unit and granularity of that store is Hamut'ay's decision* — this spec does\n  not dictate it. A consumer-side `store_turn`-like wrapper over the existing `store_record` is the\n  expected mechanism; the fields it writes are the fields Llika is constructed to index.\n- Retrieval is `LlikaService.find(predicate)`; full-turn reads remain a deliberate\n  `recall(record_id)`. The instance is exposed a single goal-focused memory tool, not a catalog of\n  search/recall/walk verbs to chain by hand.\n\n---\n\n## Acceptance criteria (contract — packaging is the test author's call; live `apacheta_test`, no DB mocks)\n\n```python\ndef test_find_content_roundtrip():\n    # Two open records stored; a term in one is found; returns its UUID,\n    # a non-empty bounded snippet, and matched_fields naming the matched field.\n\ndef test_find_content_stemmed_case_insensitive():   # arango-only\n    # content.terms \"boltzmann brain\" matches a record containing \"Boltzmann brains\".\n    # The motivating regression. Memory backend may xfail (substring fallback only).\n\ndef test_find_filter_numeric():\n    # filter {field: cycle, op: >=, value: 10} returns only records with cycle >= 10.\n\ndef test_find_filter_declared_field_generic():\n    # filter {field: \"epistemic.truth\", op: >=, value: 0.7} works as a generic field\n    # comparison — Llika has no epistemic-specific code path.\n\ndef test_find_filter_and_or_nested():\n    # nested and/or combinator evaluates correctly.\n\ndef test_find_scope_author_self():\n    # filter on provenance.author_instance_id restricts to that instance's records.\n\ndef test_find_structure_addressable_not_materialized():\n    # structure axis present → edges among hits returned; hits carry record_id only,\n    # NOT full record content (recall boundary).\n\ndef test_find_total_matched_and_truncated():\n    # limit smaller than match count → len(hits)==limit, total_matched==full count,\n    # truncated==True.\n\ndef test_find_order_by_cycle_desc_recency():\n    # order_by cycle desc + limit N returns the N most-recent matches (recency, not last_n).\n\ndef test_find_returns_serializable_no_live_models():\n    # FindResult and its hits/edges are plain serializable types — no ApachetaBaseModel,\n    # no raw arango doc, consistent with EdgeResult/PathResult.\n\ndef test_find_predicate_is_data_not_callable():\n    # The predicate is serializable data; passing a callable is a type error /\n    # rejected. (Guards against callable-find regression.)\n\ndef test_find_emits_observability_telemetry_to_database():\n    # Each find() writes a telemetry record TO THE DATABASE (queryable, not a sidecar\n    # file) carrying the predicate as issued, the generated AQL, the query explain/plan,\n    # and result metadata (total_matched, truncated, candidates-scanned). The queryable\n    # evidence base for (2) exists from day one. (Asserts collection, not acting on it.)\n\ndef test_find_telemetry_retains_values_drops_full_results():\n    # The telemetry record RETAINS the predicate's filter values and content terms\n    # (recurrence detection needs them) but does NOT store full result content/snippets\n    # (Indaleko lesson: large, not useful for performance). Returned UUIDs may be kept.\n\n# Fast-follow (window axis):\ndef test_find_window_anchor_match_neighbors():   # fast-follow\n    # window {anchor: \"<match>\", prior: 1, follow: 1} returns each content hit plus\n    # its immediate prior/follow neighbors by cycle.\n```\n\n---\n\n## Commit identity\n\nYanantin commits author as `yanantin@wamason.com`, `Tony Mason`, signed (per-command git config\noverrides, not repo-level). Match that.\n\n```bash\ncd /home/tony/projects/yanantin\ngit -c user.email=yanantin@wamason.com -c user.name=\"Tony Mason\" \\\n    -c user.signingkey=1E416B1FB63AF88179EE0F38D0CAB9659C950893 commit -S -m \"...\"\n```\n\n---\n\n## References\n\n- `~/projects/hamutay/docs/yanantin-handoff-conversational-search.md` — the `search_open_text`\n  hand-off whose capability this absorbs and whose shape it supersedes.\n- `docs/superpowers/specs/2026-06-01-llika-traversal-interface-design.md` — slice 2 (tenant-bound\n  walk/neighbors, serializable results); this design extends that surface with `find`.\n- `docs/llika-spec.md` — Llika architecture (supersession-in-place).\n- Llika `find` v1 retirement: commits `dd1fb64b` (callable find), `0a3259f7` (its removal).\n- Hamut'ay native schema: `src/hamutay/tensor.py` (`EpistemicState`, `DeclaredLoss`,\n  `LossCategory`, `Tensor.declared_losses`).\n- Apacheta open lane: `src/yanantin/apacheta/backends/arango.py` (`_SEMANTIC_COLLECTIONS`,\n  `query_open_by_*`, `_map.field_path`).\n",
+        "stderr": "",
+        "exit_code": 0
+      }
+    },
+    {
+      "cycle": 72,
+      "timestamp": "2026-06-02T14:34:11.505656+00:00",
+      "tool": "read",
+      "capability": "read_only",
+      "parameters": {
+        "path": "src/hamutay/tensor.py"
+      },
+      "reason": null,
+      "exit_code": null,
+      "result_summary": "read src/hamutay/tensor.py (103 lines)",
+      "result_hash": "60289c7f954d243447f673a362038911fc7e7a59c077f0a29b7299294c917692",
+      "duration_ms": 0,
+      "result": {
+        "path": "src/hamutay/tensor.py",
+        "content": "\"\"\"Tensor models for cognitive state projection.\n\nLean versions of the Apacheta TensorRecord, focused on what the\nprojector needs. Can bridge to Yanantin's full schema later.\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom enum import Enum\nfrom uuid import UUID, uuid4\n\nfrom pydantic import BaseModel, ConfigDict, Field\n\n\nclass LossCategory(str, Enum):\n    CONTEXT_PRESSURE = \"context_pressure\"\n    TRAVERSAL_BIAS = \"traversal_bias\"\n    AUTHORIAL_CHOICE = \"authorial_choice\"\n    PRACTICAL_CONSTRAINT = \"practical_constraint\"\n\n\nclass DeclaredLoss(BaseModel):\n    model_config = ConfigDict(frozen=True, extra=\"allow\")\n\n    what_was_lost: str\n    why: str\n    category: LossCategory\n\n\nclass EpistemicState(BaseModel):\n    \"\"\"Neutrosophic T/I/F — independent, not constrained to sum to 1.\"\"\"\n\n    model_config = ConfigDict(frozen=True, extra=\"allow\")\n\n    truth: float = 0.0\n    indeterminacy: float = 0.0\n    falsity: float = 0.0\n\n\nclass KeyClaim(BaseModel):\n    model_config = ConfigDict(frozen=True, extra=\"allow\")\n\n    claim_id: UUID = Field(default_factory=uuid4)\n    text: str\n    epistemic: EpistemicState = Field(default_factory=EpistemicState)\n\n\nclass Strand(BaseModel):\n    \"\"\"A thematic thread of accumulated reasoning.\"\"\"\n\n    model_config = ConfigDict(frozen=True, extra=\"allow\")\n\n    title: str\n    content: str\n    key_claims: tuple[KeyClaim, ...] = Field(default_factory=tuple)\n    epistemic: EpistemicState | None = None\n\n\nclass TensionFraming(BaseModel):\n    \"\"\"One side of an unresolved tension.\"\"\"\n\n    model_config = ConfigDict(frozen=True, extra=\"allow\")\n\n    label: str\n    statement: str\n    weight: float = 0.5\n\n\nclass UnresolvedTension(BaseModel):\n    \"\"\"A live superposition — competing framings held without collapse.\"\"\"\n\n    model_config = ConfigDict(frozen=True, extra=\"allow\")\n\n    tension_id: str\n    framings: tuple[TensionFraming, ...] = Field(default_factory=tuple)\n    what_would_collapse_it: str = \"\"\n    cycles_held: int = 0\n    touches_strands: tuple[str, ...] = Field(default_factory=tuple)\n\n\nclass Tensor(BaseModel):\n    \"\"\"Projected cognitive state.\n\n    Not a log. Not a transcript. The accumulated semantic content of\n    everything that matters so far. The conversation trajectory isn't\n    lost — it's integrated. Like a running sum that doesn't lose the\n    previous values.\n    \"\"\"\n\n    model_config = ConfigDict(frozen=True, extra=\"allow\")\n\n    id: UUID = Field(default_factory=uuid4)\n    cycle: int = 0\n    strands: tuple[Strand, ...] = Field(default_factory=tuple)\n    declared_losses: tuple[DeclaredLoss, ...] = Field(default_factory=tuple)\n    open_questions: tuple[str, ...] = Field(default_factory=tuple)\n    unresolved_tensions: tuple[UnresolvedTension, ...] = Field(default_factory=tuple)\n    instructions_for_next: str = \"\"\n    epistemic: EpistemicState = Field(default_factory=EpistemicState)\n\n    def token_estimate(self) -> int:\n        \"\"\"Rough token count for the tensor's serialized form.\"\"\"\n        return len(self.model_dump_json()) // 4\n",
+        "line_count": 103,
+        "content_hash": "f9b2067487b706e53139ed33dbe902a4d6130e6bd8a4a5f29cd5265fcda62c69"
+      }
+    },
+    {
+      "cycle": 72,
+      "timestamp": "2026-06-02T14:34:11.512341+00:00",
+      "tool": "search_project",
+      "capability": "read_only",
+      "parameters": {
+        "pattern": "search_memory",
+        "path": "src/hamutay",
+        "limit": 10
+      },
+      "reason": null,
+      "exit_code": null,
+      "result_summary": "search: 12 matches",
+      "result_hash": "dcb4e01d1eed5f4021ec9be49dbcfb7f7f5db0b7cf873382811327401e57e542",
+      "duration_ms": 6,
+      "result": {
+        "results": [
+          {
+            "file": "src/hamutay/taste_open.py",
+            "line": 116,
+            "content": "- search_memory(query, narrow_by?, scope?): Substring search across \\",
+            "content_hash": "0fc902972cd86cf19d82e129318115999113474ed9cd6353e1eb61f4104c332b"
+          },
+          {
+            "file": "src/hamutay/taste_open.py",
+            "line": 121,
+            "content": "recall and search_memory accept scope ∈ {session, cross_session, all} \\",
+            "content_hash": "0fc902972cd86cf19d82e129318115999113474ed9cd6353e1eb61f4104c332b"
+          },
+          {
+            "file": "src/hamutay/tools/memory.py",
+            "line": 584,
+            "content": "def tool_search_memory(",
+            "content_hash": "d3a20fb732853d165a85575165f5fd9d5e045f5c4e673439db2149b9c9268a9a"
+          },
+          {
+            "file": "src/hamutay/tools/executor.py",
+            "line": 35,
+            "content": "tool_search_memory,",
+            "content_hash": "92505761f1ac28b66a33febd16f927a40eed990604915780ffd57ae1d74015f8"
+          },
+          {
+            "file": "src/hamutay/tools/executor.py",
+            "line": 52,
+            "content": "\"search_memory\": \"read_only\",",
+            "content_hash": "92505761f1ac28b66a33febd16f927a40eed990604915780ffd57ae1d74015f8"
+          },
+          {
+            "file": "src/hamutay/tools/executor.py",
+            "line": 141,
+            "content": "elif tool_name == \"search_memory\":",
+            "content_hash": "92505761f1ac28b66a33febd16f927a40eed990604915780ffd57ae1d74015f8"
+          },
+          {
+            "file": "src/hamutay/tools/executor.py",
+            "line": 142,
+            "content": "result = tool_search_memory(",
+            "content_hash": "92505761f1ac28b66a33febd16f927a40eed990604915780ffd57ae1d74015f8"
+          },
+          {
+            "file": "src/hamutay/tools/executor.py",
+            "line": 240,
+            "content": "if tool_name == \"search_memory\":",
+            "content_hash": "92505761f1ac28b66a33febd16f927a40eed990604915780ffd57ae1d74015f8"
+          },
+          {
+            "file": "src/hamutay/tools/executor.py",
+            "line": 241,
+            "content": "return f\"search_memory: {len(result.get('results', []))} results\"",
+            "content_hash": "92505761f1ac28b66a33febd16f927a40eed990604915780ffd57ae1d74015f8"
+          },
+          {
+            "file": "src/hamutay/tools/schemas.py",
+            "line": 155,
+            "content": "\"search_memory, or walk results that carry record_id.\"",
+            "content_hash": "bffe93f248d9faf86609bb2622c029c1e3dc1150fede98d84347910b02987db2"
+          }
+        ],
+        "total_matches": 12
+      }
+    },
+    {
+      "cycle": 72,
+      "timestamp": "2026-06-02T14:34:11.518714+00:00",
+      "tool": "search_project",
+      "capability": "read_only",
+      "parameters": {
+        "pattern": "store_open_state",
+        "path": "src/hamutay",
+        "limit": 10
+      },
+      "reason": null,
+      "exit_code": null,
+      "result_summary": "search: 9 matches",
+      "result_hash": "bf651af2a00345c39f342b4dcddcefd8491429b309c987b75489faeb7b7f3210",
+      "duration_ms": 6,
+      "result": {
+        "results": [
+          {
+            "file": "src/hamutay/migrate_log.py",
+            "line": 170,
+            "content": "``store_open_state(state, cycle, record_id, timestamp)``; for the",
+            "content_hash": "94c249e62cde7c0b1988f3142a10aff32cfd2069bdacc04015a3edddf767b763"
+          },
+          {
+            "file": "src/hamutay/migrate_log.py",
+            "line": 231,
+            "content": "bridge.store_open_state(state, cycle, record_id, timestamp)",
+            "content_hash": "94c249e62cde7c0b1988f3142a10aff32cfd2069bdacc04015a3edddf767b763"
+          },
+          {
+            "file": "src/hamutay/migrate_log.py",
+            "line": 353,
+            "content": "def store_open_state(self, *args, **kwargs) -> None:  # noqa: D401, ANN002, ANN003",
+            "content_hash": "94c249e62cde7c0b1988f3142a10aff32cfd2069bdacc04015a3edddf767b763"
+          },
+          {
+            "file": "src/hamutay/taste_open.py",
+            "line": 492,
+            "content": "def store_open_state(",
+            "content_hash": "0fc902972cd86cf19d82e129318115999113474ed9cd6353e1eb61f4104c332b"
+          },
+          {
+            "file": "src/hamutay/taste_open.py",
+            "line": 1598,
+            "content": "self._bridge.store_open_state(",
+            "content_hash": "0fc902972cd86cf19d82e129318115999113474ed9cd6353e1eb61f4104c332b"
+          },
+          {
+            "file": "src/hamutay/apacheta_bridge.py",
+            "line": 21,
+            "content": "bridge.store_open_state(state_dict, cycle=5, record_id=record_id)",
+            "content_hash": "9e65320a29de1fd61a438bb6d438a293b248281366cc696ab9055b16adffae94"
+          },
+          {
+            "file": "src/hamutay/apacheta_bridge.py",
+            "line": 159,
+            "content": "or call store_open_state directly (taste_open free-form state).",
+            "content_hash": "9e65320a29de1fd61a438bb6d438a293b248281366cc696ab9055b16adffae94"
+          },
+          {
+            "file": "src/hamutay/apacheta_bridge.py",
+            "line": 195,
+            "content": "def store_open_state(",
+            "content_hash": "9e65320a29de1fd61a438bb6d438a293b248281366cc696ab9055b16adffae94"
+          },
+          {
+            "file": "src/hamutay/apacheta_bridge.py",
+            "line": 238,
+            "content": "Distinct from ``store_open_state``:",
+            "content_hash": "9e65320a29de1fd61a438bb6d438a293b248281366cc696ab9055b16adffae94"
+          }
+        ],
+        "total_matches": 9
+      }
+    },
+    {
+      "cycle": 72,
+      "timestamp": "2026-06-02T14:34:16.070430+00:00",
+      "tool": "read",
+      "capability": "read_only",
+      "parameters": {
+        "path": "src/hamutay/taste_open.py",
+        "limit": 40,
+        "offset": 480
+      },
+      "reason": null,
+      "exit_code": null,
+      "result_summary": "read src/hamutay/taste_open.py (40 lines)",
+      "result_hash": "daf838a2151c45e34ff6848a7320e463b406e9a2e5fa621ee1e7f857326e1f71",
+      "duration_ms": 0,
+      "result": {
+        "path": "src/hamutay/taste_open.py",
+        "content": "            else json.dumps(block_content, default=str)\n        )\n        stub = _declared_loss_stub(text, head_chars=_RECOVERY_HEAD_CHARS)\n        block[\"content\"] = stub\n        dropped_chars += max(0, size - len(stub))\n\n    return dropped_chars // _TOKEN_PER_CHAR_ESTIMATE\n\n\nclass TasteBridge(Protocol):\n    \"\"\"Persistence layer for taste_open tensors.\"\"\"\n\n    def store_open_state(\n        self,\n        state: dict,\n        cycle: int,\n        record_id: UUID,\n        timestamp: datetime,\n    ) -> None: ...\n\n\n@dataclass\nclass CapabilityProfile:\n    \"\"\"Provider/model capability hints for tool-call interoperability.\"\"\"\n\n    supports_tools: bool = True\n    supports_parallel_tool_calls: bool = True\n    tool_choice_mode: str = \"auto\"  # auto|required|none|function_object\n    prefer_json_fallback: bool = False\n\n    @classmethod\n    def from_dict(cls, data: dict | None) -> CapabilityProfile:\n        if not data:\n            return cls()\n        return cls(\n            supports_tools=bool(data.get(\"supports_tools\", True)),\n            supports_parallel_tool_calls=bool(\n                data.get(\"supports_parallel_tool_calls\", True)\n            ),\n            tool_choice_mode=str(data.get(\"tool_choice_mode\", \"auto\")),\n",
+        "line_count": 40,
+        "content_hash": "0fc902972cd86cf19d82e129318115999113474ed9cd6353e1eb61f4104c332b"
+      }
+    },
+    {
+      "cycle": 72,
+      "timestamp": "2026-06-02T14:34:16.071128+00:00",
+      "tool": "read",
+      "capability": "read_only",
+      "parameters": {
+        "path": "src/hamutay/taste_open.py",
+        "limit": 40,
+        "offset": 1585
+      },
+      "reason": null,
+      "exit_code": null,
+      "result_summary": "read src/hamutay/taste_open.py (40 lines)",
+      "result_hash": "a1ce41f5e5484de2d681001a2557d1d5e3130925589fc8990311230ac1d64c7d",
+      "duration_ms": 0,
+      "result": {
+        "path": "src/hamutay/taste_open.py",
+        "content": "                for entry in full_activity\n            ]\n        self._last_tool_activity = full_activity\n        self._last_full_activity = full_activity\n\n        self._last_cycle_time = datetime.now(timezone.utc)\n\n        # Identity at creation: the framework mints the record_id and hands\n        # it to every downstream consumer (bridge, JSONL, _prior_states).\n        # Bridge failure no longer orphans the UUID — it's already in hand\n        # and in the JSONL log, which is the durable substrate.\n        if self._bridge is not None:\n            try:\n                self._bridge.store_open_state(\n                    self._state,\n                    self._cycle,\n                    record_id,\n                    self._last_cycle_time,\n                )\n            except Exception as e:\n                print(f\"  WARNING: bridge persist failed cycle {self._cycle}: {e}\")\n\n        # Accumulate for future involuntary recall and memory tools\n        self._prior_states.append(\n            (\n                self._cycle,\n                record_id,\n                json.loads(json.dumps(self._state)),\n                self._last_cycle_time.isoformat(),\n            )\n        )\n\n        self._last_usage = {\n            \"input_tokens\": result.input_tokens,\n            \"output_tokens\": result.output_tokens,\n        }\n        self._log_entry(\n            user_message=user_message,\n            system_prompt=system,\n            raw_output=raw_output,\n",
+        "line_count": 40,
+        "content_hash": "0fc902972cd86cf19d82e129318115999113474ed9cd6353e1eb61f4104c332b"
+      }
+    },
+    {
+      "cycle": 72,
+      "timestamp": "2026-06-02T14:34:16.071357+00:00",
+      "tool": "read",
+      "capability": "read_only",
+      "parameters": {
+        "path": "src/hamutay/tools/memory.py",
+        "limit": 60,
+        "offset": 575
+      },
+      "reason": null,
+      "exit_code": null,
+      "result_summary": "read src/hamutay/tools/memory.py (60 lines)",
+      "result_hash": "0ef32302b01eb065c62191b1830992cafa9aff137efdece58d971de0ce4baa0a",
+      "duration_ms": 0,
+      "result": {
+        "path": "src/hamutay/tools/memory.py",
+        "content": "    if idx < 0:\n        return text[:max_len]\n    start = max(0, idx - 30)\n    end = min(len(text), idx + len(query_lower) + 60)\n    prefix = \"...\" if start > 0 else \"\"\n    suffix = \"...\" if end < len(text) else \"\"\n    return prefix + text[start:end] + suffix\n\n\ndef tool_search_memory(\n    params: dict,\n    *,\n    prior_states: list[tuple[int, UUID, dict, str]],\n    bridge=None,\n) -> dict:\n    \"\"\"Keyword/substring search over prior states with structural narrowing.\n\n    Structural narrowing (cycle_range, has_field, fields) happens first.\n    Then the query is matched case-insensitively within the narrowed set.\n    Results are sorted most-recent-first: in-session (cycle descending) then\n    cross-session.\n\n    Scopes:\n    - \"session\" (default): in-session prior_states only\n    - \"cross_session\": bridge only (hamutay-tagged records), no prior_states\n    - \"all\": union of both; in-session first\n\n    cycle_range narrow_by applies to in-session only — cycle numbers are\n    session-local. has_field and fields apply symmetrically to both.\n    \"\"\"\n    query = params.get(\"query\")\n    narrow_by = params.get(\"narrow_by\") or {}\n    limit = params.get(\"limit\", 5)\n    scope = params.get(\"scope\", \"session\")\n\n    if not query:\n        return {\"error\": \"query is required\"}\n\n    query_lower = query.lower()\n    total = len(prior_states)\n\n    in_session_matches: list[dict] = []\n    narrowed_in_session = 0\n    if scope in (\"session\", \"all\"):\n        in_session_matches, narrowed_in_session = _match_in_session(\n            prior_states, query_lower, narrow_by\n        )\n\n    cross_matches: list[dict] = []\n    if scope in (\"cross_session\", \"all\") and bridge is not None:\n        cross_matches = _match_cross_session(bridge, query_lower, narrow_by)\n\n    # Rank: in-session by cycle desc first, then cross-session.\n    combined = in_session_matches + cross_matches\n    limited = combined[:limit]\n\n    return {\n        \"results\": limited,\n        \"search_metadata\": {\n            \"total_candidates\": total,\n",
+        "line_count": 60,
+        "content_hash": "d3a20fb732853d165a85575165f5fd9d5e045f5c4e673439db2149b9c9268a9a"
+      }
+    },
+    {
+      "cycle": 72,
+      "timestamp": "2026-06-02T14:34:21.703536+00:00",
+      "tool": "read",
+      "capability": "read_only",
+      "parameters": {
+        "path": "src/hamutay/tools/memory.py",
+        "offset": 640,
+        "limit": 80
+      },
+      "reason": null,
+      "exit_code": null,
+      "result_summary": "read src/hamutay/tools/memory.py (80 lines)",
+      "result_hash": "587a94477d61fe46a7f83b8f510aa10d95d1140f6f8b405815a1c7357f5f58d7",
+      "duration_ms": 0,
+      "result": {
+        "path": "src/hamutay/tools/memory.py",
+        "content": "\n\ndef _match_in_session(\n    prior_states: list[tuple[int, UUID, dict, str]],\n    query_lower: str,\n    narrow_by: dict,\n) -> tuple[list[dict], int]:\n    \"\"\"Apply narrowing + keyword match to in-session prior_states.\n    Returns (matches, narrowed_candidate_count).\n    \"\"\"\n    candidates = list(prior_states)\n\n    cycle_range = narrow_by.get(\"cycle_range\")\n    if cycle_range:\n        lo, hi = cycle_range\n        candidates = [\n            (c, rid, s, t) for (c, rid, s, t) in candidates if lo <= c <= hi\n        ]\n\n    has_field = narrow_by.get(\"has_field\")\n    if has_field:\n        candidates = [\n            (c, rid, s, t) for (c, rid, s, t) in candidates if has_field in s\n        ]\n\n    field_filter = narrow_by.get(\"fields\")\n\n    matches: list[dict] = []\n    for cycle, record_id, state, timestamp in candidates:\n        matched_fields: list[str] = []\n        snippets: dict[str, str] = {}\n        search_fields = field_filter if field_filter else list(state.keys())\n        for key in search_fields:\n            if key not in state:\n                continue\n            if _value_contains(state[key], query_lower):\n                matched_fields.append(key)\n                snippets[key] = _snippet(state[key], query_lower)\n        if matched_fields:\n            matches.append(\n                {\n                    \"cycle\": cycle,\n                    \"record_id\": str(record_id),\n                    \"timestamp\": timestamp,\n                    \"relevance\": 1.0,\n                    \"matched_fields\": matched_fields,\n                    \"snippets\": snippets,\n                }\n            )\n\n    matches.sort(key=lambda r: r[\"cycle\"], reverse=True)\n    return matches, len(candidates)\n\n\ndef _match_cross_session(bridge, query_lower: str, narrow_by: dict) -> list[dict]:\n    \"\"\"Keyword search across hamutay-tagged records from other sessions.\"\"\"\n    # Bound the cross-session search to hamutay-authored records via lineage tag.\n    candidates = bridge.query_open_by_lineage_tag(\"hamutay\")\n\n    has_field = narrow_by.get(\"has_field\")\n    field_filter = narrow_by.get(\"fields\")\n\n    matches: list[dict] = []\n    for rid, record in candidates:\n        extras = getattr(record, \"model_extra\", None) or {}\n\n        if has_field and has_field not in extras:\n            continue\n\n        search_fields = field_filter if field_filter else list(extras.keys())\n        matched_fields: list[str] = []\n        snippets: dict[str, str] = {}\n        for key in search_fields:\n            if key not in extras:\n                continue\n            if _value_contains(extras[key], query_lower):\n                matched_fields.append(key)\n                snippets[key] = _snippet(extras[key], query_lower)\n        if matched_fields:\n            session = getattr(\n",
+        "line_count": 80,
+        "content_hash": "d3a20fb732853d165a85575165f5fd9d5e045f5c4e673439db2149b9c9268a9a"
+      }
+    },
+    {
+      "cycle": 72,
+      "timestamp": "2026-06-02T14:34:23.749892+00:00",
+      "tool": "read",
+      "capability": "read_only",
+      "parameters": {
+        "path": "src/hamutay/tools/memory.py",
+        "offset": 720
+      },
+      "reason": null,
+      "exit_code": null,
+      "result_summary": "read src/hamutay/tools/memory.py (15 lines)",
+      "result_hash": "4ef261bf9fb01d0298b14e173d5e6bddffad8356756eb9850629a567cfb15181",
+      "duration_ms": 0,
+      "result": {
+        "path": "src/hamutay/tools/memory.py",
+        "content": "                getattr(record, \"provenance\", None),\n                \"author_instance_id\",\n                None,\n            )\n            matches.append(\n                {\n                    \"record_id\": str(rid),\n                    \"session\": session,\n                    \"relevance\": 1.0,\n                    \"matched_fields\": matched_fields,\n                    \"snippets\": snippets,\n                }\n            )\n\n    return matches\n",
+        "line_count": 15,
+        "content_hash": "d3a20fb732853d165a85575165f5fd9d5e045f5c4e673439db2149b9c9268a9a"
+      }
+    },
+    {
+      "cycle": 72,
+      "timestamp": "2026-06-02T14:34:25.885405+00:00",
+      "tool": "read",
+      "capability": "read_only",
+      "parameters": {
+        "path": "src/hamutay/apacheta_bridge.py",
+        "limit": 80,
+        "offset": 185
+      },
+      "reason": null,
+      "exit_code": null,
+      "result_summary": "read src/hamutay/apacheta_bridge.py (80 lines)",
+      "result_hash": "5ccd74d91968a47ed2f561133a5a16589c6773fae089559fd1cf482569360b76",
+      "duration_ms": 0,
+      "result": {
+        "path": "src/hamutay/apacheta_bridge.py",
+        "content": "                from_tensor=self._prior_id,\n                to_tensor=tensor.id,\n                relation_type=RelationType.REFINES,\n                ordering=tensor.cycle,\n            )\n            self._backend.store_composition_edge(edge)\n\n        self._prior_id = tensor.id\n        self._count += 1\n\n    def store_open_state(\n        self,\n        state: dict,\n        cycle: int,\n        record_id: UUID,\n        timestamp: datetime,\n    ) -> None:\n        \"\"\"Store a taste_open free-form state under the caller-provided UUID.\n\n        Identity and creation-time both originate at the session layer\n        (see graph-model decision: UUID at creation, not at storage).\n        The bridge is a sink. Timestamp flows into ProvenanceEnvelope.\n        \"\"\"\n        from yanantin.apacheta.models.composition import CompositionEdge, RelationType\n\n        record = _build_open_record(\n            state, cycle, timestamp,\n            prior_id=self._prior_id,\n            session_id=self._session_id,\n            model=self._model,\n        )\n        self._backend.store_record(record_id, record)\n\n        if self._prior_id is not None:\n            edge = CompositionEdge(\n                from_tensor=self._prior_id,\n                to_tensor=record_id,\n                relation_type=RelationType.REFINES,\n                ordering=cycle,\n            )\n            self._backend.store_composition_edge(edge)\n\n        self._prior_id = record_id\n        self._count += 1\n\n    def store_instance_record(\n        self,\n        content: dict,\n        cycle: int,\n        tags: tuple[str, ...] = (),\n    ) -> UUID:\n        \"\"\"Store a record the instance explicitly authored via the `store` tool.\n\n        Distinct from ``store_open_state``:\n        - Bridge mints the UUID (instance is the caller here, not the framework).\n        - Lineage tags carry 'instance_authored' so these records are\n          distinguishable from the cycle-state stream.\n        - Does NOT participate in the per-cycle REFINES chain; instance-\n          authored records live off the main axis. Edges between them and\n          other records are the instance's to author via annotate_edge.\n        - Provenance is inherited from the running session — the instance\n          can't forge author_instance_id or model_family.\n\n        Returns the minted record_id so the caller (tool_store) can\n        surface it to the instance for reference / edge authoring.\n        \"\"\"\n        from yanantin.apacheta.models.base import ApachetaBaseModel\n        from yanantin.apacheta.models.provenance import ProvenanceEnvelope\n\n        record_id = uuid4()\n        timestamp = datetime.now(timezone.utc)\n\n        provenance = ProvenanceEnvelope(\n            author_model_family=self._model,\n            author_instance_id=self._session_id,\n            predecessors_in_scope=(),\n            timestamp=timestamp,\n        )\n\n        base_tags: tuple[str, ...] = (\n",
+        "line_count": 80,
+        "content_hash": "9e65320a29de1fd61a438bb6d438a293b248281366cc696ab9055b16adffae94"
+      }
+    },
+    {
+      "cycle": 72,
+      "timestamp": "2026-06-02T14:34:27.746272+00:00",
+      "tool": "read",
+      "capability": "read_only",
+      "parameters": {
+        "path": "src/hamutay/apacheta_bridge.py"
+      },
+      "reason": null,
+      "exit_code": null,
+      "result_summary": "read src/hamutay/apacheta_bridge.py (410 lines)",
+      "result_hash": "bbd8433b9f307fadd6d6974eba8a0f5492adb583143e79618be6ccdd5c950e34",
+      "duration_ms": 0,
+      "result": {
+        "path": "src/hamutay/apacheta_bridge.py",
+        "content": "\"\"\"Bridge between Hamutay and Yanantin's Apacheta database.\n\nTwo storage paths:\n  - Prescribed schema: Projector's Tensor → TensorRecord (via store_tensor)\n  - Open schema: taste_open's free-form dict → ApachetaBaseModel (via store_record)\n\nBoth maintain composition edges between consecutive records.\n\nUsage:\n    from hamutay.apacheta_bridge import ApachetaBridge\n    from hamutay.projector import Projector\n\n    # Prescribed schema (Projector callback)\n    bridge = ApachetaBridge.from_duckdb(\"tensors.duckdb\")\n    projector = Projector(on_tensor=bridge)\n\n    # Open schema (taste_open) — caller generates the UUID and passes it in\n    from uuid import uuid4\n    bridge = ApachetaBridge.from_duckdb(\"tensors.duckdb\", model=\"haiku\")\n    record_id = uuid4()\n    bridge.store_open_state(state_dict, cycle=5, record_id=record_id)\n    retrieved = bridge.retrieve(record_id)\n\"\"\"\n\nfrom __future__ import annotations\n\nfrom datetime import datetime, timezone\nfrom pathlib import Path\nfrom uuid import UUID, uuid4\n\nfrom hamutay.tensor import Tensor\n\n\ndef _convert_tensor(\n    tensor: Tensor,\n    usage: dict,\n    prior_id: UUID | None = None,\n    session_id: str = \"\",\n) -> dict:\n    \"\"\"Convert a Hamutay Tensor + usage into kwargs for TensorRecord.\n\n    Returns a dict of kwargs rather than constructing the TensorRecord\n    directly, so this module doesn't import Yanantin at module level.\n    Yanantin is an optional dependency.\n    \"\"\"\n    from yanantin.apacheta.models.tensor import StrandRecord, KeyClaim as YKeyClaim\n    from yanantin.apacheta.models.epistemics import (\n        EpistemicMetadata, DeclaredLoss as YDeclaredLoss, LossCategory as YLossCategory,\n    )\n    from yanantin.apacheta.models.provenance import ProvenanceEnvelope, SourceIdentifier\n\n    strands = tuple(\n        StrandRecord(\n            strand_index=i,\n            title=s.title,\n            content=s.content,\n            key_claims=tuple(\n                YKeyClaim(\n                    text=c.text,\n                    epistemic=EpistemicMetadata(\n                        truth=c.epistemic.truth,\n                        indeterminacy=c.epistemic.indeterminacy,\n                        falsity=c.epistemic.falsity,\n                    ),\n                )\n                for c in s.key_claims\n            ),\n            epistemic=EpistemicMetadata(\n                truth=s.epistemic.truth,\n                indeterminacy=s.epistemic.indeterminacy,\n                falsity=s.epistemic.falsity,\n            ) if s.epistemic else None,\n        )\n        for i, s in enumerate(tensor.strands)\n    )\n\n    losses = tuple(\n        YDeclaredLoss(\n            what_was_lost=d.what_was_lost,\n            why=d.why,\n            category=YLossCategory(d.category.value),\n        )\n        for d in tensor.declared_losses\n    )\n\n    epistemic = EpistemicMetadata(\n        truth=tensor.epistemic.truth,\n        indeterminacy=tensor.epistemic.indeterminacy,\n        falsity=tensor.epistemic.falsity,\n    )\n\n    predecessors = (prior_id,) if prior_id else ()\n\n    provenance = ProvenanceEnvelope(\n        author_model_family=\"haiku\",\n        author_instance_id=session_id,\n        predecessors_in_scope=predecessors,\n    )\n\n    return dict(\n        id=tensor.id,\n        provenance=provenance,\n        strands=strands,\n        instructions_for_next=tensor.instructions_for_next,\n        declared_losses=losses,\n        epistemic=epistemic,\n        open_questions=tensor.open_questions,\n        lineage_tags=(\"hamutay\", f\"cycle-{tensor.cycle}\"),\n    )\n\n\ndef _build_open_record(\n    state: dict,\n    cycle: int,\n    timestamp: datetime,\n    prior_id: UUID | None = None,\n    session_id: str = \"\",\n    model: str = \"unknown\",\n) -> object:\n    \"\"\"Build an ApachetaBaseModel from taste_open's free-form state.\n\n    No TensorRecord, no prescribed fields. Just provenance + whatever\n    the model created. The record_id is assigned by the caller (the\n    Projector/session layer that created the tensor) — storage is a\n    sink, not an identity authority. The caller-provided timestamp\n    flows into ProvenanceEnvelope.timestamp so JSONL, _prior_states,\n    and the stored provenance envelope all carry the same instant.\n    \"\"\"\n    from yanantin.apacheta.models.base import ApachetaBaseModel\n    from yanantin.apacheta.models.provenance import ProvenanceEnvelope\n\n    predecessors = (prior_id,) if prior_id else ()\n\n    provenance = ProvenanceEnvelope(\n        author_model_family=model,\n        author_instance_id=session_id,\n        predecessors_in_scope=predecessors,\n        timestamp=timestamp,\n    )\n\n    kwargs: dict = dict(\n        provenance=provenance,\n        lineage_tags=(\"hamutay\", \"taste_open\", f\"cycle-{cycle}\"),\n    )\n\n    # Pass through everything the model created\n    for key, value in state.items():\n        if key == \"cycle\":\n            continue\n        kwargs[key] = value\n\n    return ApachetaBaseModel(**kwargs)\n\n\nclass ApachetaBridge:\n    \"\"\"Stores Hamutay tensors in Yanantin's Apacheta database.\n\n    Pass as the on_tensor callback to Projector (prescribed schema),\n    or call store_open_state directly (taste_open free-form state).\n    Maintains composition edges between consecutive projections.\n    \"\"\"\n\n    def __init__(self, backend, session_id: str = \"\", model: str = \"unknown\"):\n        self._backend = backend\n        self._session_id = session_id or datetime.now(timezone.utc).strftime(\"%Y%m%d_%H%M%S\")\n        self._model = model\n        self._prior_id: UUID | None = None\n        self._count = 0\n\n    def __call__(self, tensor: Tensor, usage: dict) -> None:\n        \"\"\"Store a prescribed-schema Tensor (Projector callback).\"\"\"\n        from yanantin.apacheta.models.tensor import TensorRecord\n        from yanantin.apacheta.models.composition import CompositionEdge, RelationType\n\n        kwargs = _convert_tensor(\n            tensor, usage,\n            prior_id=self._prior_id,\n            session_id=self._session_id,\n        )\n        record = TensorRecord(**kwargs)\n        self._backend.store_tensor(record)\n\n        if self._prior_id is not None:\n            edge = CompositionEdge(\n                from_tensor=self._prior_id,\n                to_tensor=tensor.id,\n                relation_type=RelationType.REFINES,\n                ordering=tensor.cycle,\n            )\n            self._backend.store_composition_edge(edge)\n\n        self._prior_id = tensor.id\n        self._count += 1\n\n    def store_open_state(\n        self,\n        state: dict,\n        cycle: int,\n        record_id: UUID,\n        timestamp: datetime,\n    ) -> None:\n        \"\"\"Store a taste_open free-form state under the caller-provided UUID.\n\n        Identity and creation-time both originate at the session layer\n        (see graph-model decision: UUID at creation, not at storage).\n        The bridge is a sink. Timestamp flows into ProvenanceEnvelope.\n        \"\"\"\n        from yanantin.apacheta.models.composition import CompositionEdge, RelationType\n\n        record = _build_open_record(\n            state, cycle, timestamp,\n            prior_id=self._prior_id,\n            session_id=self._session_id,\n            model=self._model,\n        )\n        self._backend.store_record(record_id, record)\n\n        if self._prior_id is not None:\n            edge = CompositionEdge(\n                from_tensor=self._prior_id,\n                to_tensor=record_id,\n                relation_type=RelationType.REFINES,\n                ordering=cycle,\n            )\n            self._backend.store_composition_edge(edge)\n\n        self._prior_id = record_id\n        self._count += 1\n\n    def store_instance_record(\n        self,\n        content: dict,\n        cycle: int,\n        tags: tuple[str, ...] = (),\n    ) -> UUID:\n        \"\"\"Store a record the instance explicitly authored via the `store` tool.\n\n        Distinct from ``store_open_state``:\n        - Bridge mints the UUID (instance is the caller here, not the framework).\n        - Lineage tags carry 'instance_authored' so these records are\n          distinguishable from the cycle-state stream.\n        - Does NOT participate in the per-cycle REFINES chain; instance-\n          authored records live off the main axis. Edges between them and\n          other records are the instance's to author via annotate_edge.\n        - Provenance is inherited from the running session — the instance\n          can't forge author_instance_id or model_family.\n\n        Returns the minted record_id so the caller (tool_store) can\n        surface it to the instance for reference / edge authoring.\n        \"\"\"\n        from yanantin.apacheta.models.base import ApachetaBaseModel\n        from yanantin.apacheta.models.provenance import ProvenanceEnvelope\n\n        record_id = uuid4()\n        timestamp = datetime.now(timezone.utc)\n\n        provenance = ProvenanceEnvelope(\n            author_model_family=self._model,\n            author_instance_id=self._session_id,\n            predecessors_in_scope=(),\n            timestamp=timestamp,\n        )\n\n        base_tags: tuple[str, ...] = (\n            \"hamutay\",\n            \"instance_authored\",\n            f\"cycle-{cycle}\",\n        )\n        lineage_tags: tuple[str, ...] = base_tags + tuple(tags)\n\n        kwargs: dict = dict(\n            provenance=provenance,\n            lineage_tags=lineage_tags,\n        )\n        for key, value in content.items():\n            if key == \"cycle\":\n                continue\n            kwargs[key] = value\n\n        record = ApachetaBaseModel(**kwargs)\n        self._backend.store_record(record_id, record)\n        self._count += 1\n\n        return record_id\n\n    def store_edge(\n        self,\n        from_record: UUID,\n        to_record: UUID,\n        relation_type: str,\n        ordering: int = 0,\n    ) -> UUID:\n        \"\"\"Store a CompositionEdge between two records. Returns the edge's id.\n\n        ``relation_type`` must match a RelationType enum name; KeyError\n        propagates from the lookup so callers can map it to a user-facing\n        error with the actual enum values.\n        \"\"\"\n        from yanantin.apacheta.models.composition import CompositionEdge, RelationType\n\n        relation = RelationType[relation_type]\n        edge = CompositionEdge(\n            from_tensor=from_record,\n            to_tensor=to_record,\n            relation_type=relation,\n            ordering=ordering,\n        )\n        self._backend.store_composition_edge(edge)\n        return edge.id\n\n    def retrieve(self, record_id: UUID) -> dict:\n        \"\"\"Retrieve a record by ID. Returns the full record as a dict.\"\"\"\n        record = self._backend.get_record(record_id)\n        return record.model_dump()\n\n    # ── Cross-session queries ────────────────────────────────────\n    # Pass-through to yanantin's open-record query surface. Hamutay\n    # callers see session_id / list_sessions; yanantin's vocabulary is\n    # author_instance_id / list_author_instances — translated here.\n\n    def list_open_records(self, limit: int | None = None):\n        \"\"\"All open records in the backend, newest first. Pairs of (UUID, record).\"\"\"\n        return self._backend.list_open_records(limit=limit)\n\n    def query_open_by_session(self, session_id: str, limit: int | None = None):\n        \"\"\"Records authored by a given session_id (yanantin: author_instance_id).\"\"\"\n        return self._backend.query_open_by_author_instance(\n            session_id, limit=limit\n        )\n\n    def query_open_by_lineage_tag(self, tag: str, limit: int | None = None):\n        \"\"\"Records whose lineage_tags contains the given tag.\"\"\"\n        return self._backend.query_open_by_lineage_tag(tag, limit=limit)\n\n    def query_open_has_field(self, field: str, limit: int | None = None):\n        \"\"\"Records carrying a given free-form field key.\"\"\"\n        return self._backend.query_open_has_field(field, limit=limit)\n\n    def list_sessions(self) -> list[str]:\n        \"\"\"All distinct session_ids in the open records collection.\n\n        Yanantin calls these author_instance_ids; hamutay calls them session_ids.\n        \"\"\"\n        return self._backend.list_author_instances()\n\n    def query_edges_by_endpoint(\n        self, record_id: UUID, direction: str = \"both\"\n    ) -> list[dict]:\n        \"\"\"Composition edges touching ``record_id``.\n\n        direction='forward': edges where record_id is from_tensor\n        direction='backward': edges where record_id is to_tensor\n        direction='both': union\n\n        Returns dicts so callers don't import yanantin's CompositionEdge.\n        \"\"\"\n        edges = self._backend.query_composition_graph()\n        results: list[dict] = []\n        for edge in edges:\n            rel = getattr(edge.relation_type, \"value\", str(edge.relation_type))\n            as_dict = {\n                \"from_record\": edge.from_tensor,\n                \"to_record\": edge.to_tensor,\n                \"relation_type\": rel,\n                \"ordering\": edge.ordering,\n            }\n            if direction in (\"forward\", \"both\") and edge.from_tensor == record_id:\n                results.append(as_dict)\n            if direction in (\"backward\", \"both\") and edge.to_tensor == record_id:\n                # Avoid double-adding self-loops in 'both' mode\n                if not (\n                    direction == \"both\" and edge.from_tensor == record_id\n                ):\n                    results.append(as_dict)\n        return results\n\n    @property\n    def session_id(self) -> str:\n        \"\"\"The session_id this bridge tags its writes with.\"\"\"\n        return self._session_id\n\n    @property\n    def count(self) -> int:\n        return self._count\n\n    @classmethod\n    def from_duckdb(\n        cls, db_path: str | Path, session_id: str = \"\", model: str = \"unknown\",\n    ) -> ApachetaBridge:\n        from yanantin.apacheta.backends.duckdb import DuckDBBackend\n        backend = DuckDBBackend(db_path=str(db_path))\n        return cls(backend, session_id=session_id, model=model)\n\n    @classmethod\n    def from_arango(\n        cls,\n        session_id: str = \"\",\n        model: str = \"unknown\",\n        tier: str = \"app\",\n    ) -> ApachetaBridge:\n        from yanantin.apacheta import connect\n\n        backend = connect(tier=tier)\n        return cls(backend, session_id=session_id, model=model)\n\n    @classmethod\n    def from_memory(cls, session_id: str = \"\", model: str = \"unknown\") -> ApachetaBridge:\n        from yanantin.apacheta.backends.memory import InMemoryBackend\n        backend = InMemoryBackend()\n        return cls(backend, session_id=session_id, model=model)\n",
+        "line_count": 410,
+        "content_hash": "9e65320a29de1fd61a438bb6d438a293b248281366cc696ab9055b16adffae94"
+      }
+    }
+  ]
+}

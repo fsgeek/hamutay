@@ -90,6 +90,21 @@ accumulated structure, found redundancy, and compressed.
 BIO never did this. From cycle 9 onward, BIO grew monotonically (with minor
 oscillation): 7348 -> 8096 -> 8309 -> 8210 -> 8088 -> 7971 -> 9242.
 
+> ⚠️ **CONFOUND on the cycle-13 "endogenous integration" reading (added 2026-06-03,
+> three-lens fork + referee).** Turn 13's `user_message` is literally *"What have you
+> changed YOUR mind about? What was your initial instinct that turned out to be wrong?"*
+> — an explicit revision prompt. BOTH arms engaged it (BIO's cycle-13 tensor carries 10
+> declared losses and "revision"/"changed" language; AUTO restructured). AND AUTO entered
+> cycle 13 with ~2× BIO's structural pressure (15 strands / 9757 tok vs 8 / 8210). So the
+> contraction being AUTO-only does **not** by itself prove endogenous self-curation: it is
+> confounded by (a) a content trigger asking for reconsideration and (b) AUTO's higher entry
+> pressure. The directive confound IS dead (BIO got "consider consolidating" on *more* cycles,
+> 11 vs 10, and never compressed — obedience predicts the wrong arm). But the *self-curation*
+> gloss of cycle 13 is n=1 and content-/pressure-confounded. To earn it: replicate feedback-free
+> at ≥14 cycles WITHOUT the introspective turn-13 prompt, matching entry strand-counts. If AUTO
+> still discontinuously reorganizes and BIO doesn't, the reading survives; if it vanishes without
+> the prompt, it was content-triggered. Do NOT headline self-curation from this run.
+
 ### Final state comparison
 
 | Metric           | AUTO   | BIO    | Ratio    |

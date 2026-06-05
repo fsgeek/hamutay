@@ -2,14 +2,18 @@
 
 Each tool call is logged with:
   - cycle, timestamp, tool name
+  - capability (read_only | bounded_write | unbounded) — descriptive, not a gate
   - parameters (excluding reason, which is stored separately)
   - reason (None if the model did not provide one)
+  - exit_code (None for tools that don't report one)
   - result_summary (short human-readable)
   - result_hash (sha256 of the full result dict, JSON-serialized)
   - duration_ms
+  - result (the full result dict — captured durably)
 
-The activity log is attached to the cycle's tensor by the session layer.
-Absence of reason is recorded as None — information, not noise.
+The session layer logs the full entry to the durable record and re-feeds a
+lean copy (without `result`) into the tensor, so capturing everything does
+not bloat working context. Absence of reason is recorded as None.
 """
 
 from __future__ import annotations
@@ -21,6 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
 
+from hamutay.events import build_pending_event
 from hamutay.tools.bash import tool_bash
 from hamutay.tools.graph import tool_annotate_edge, tool_store
 from hamutay.tools.memory import (
@@ -31,6 +36,25 @@ from hamutay.tools.memory import (
     tool_walk,
 )
 from hamutay.tools.perception import tool_clock, tool_read, tool_search_project
+
+
+# Capability of each tool. Descriptive metadata for analysis and for a future
+# knowing compression — not a gate on what gets captured. Everything is logged
+# regardless of capability; this just tags how far a call could reach.
+_CAPABILITY: dict[str, str] = {
+    "read": "read_only",
+    "search_project": "read_only",
+    "clock": "read_only",
+    "memory_schema": "read_only",
+    "recall": "read_only",
+    "compare": "read_only",
+    "walk": "read_only",
+    "search_memory": "read_only",
+    "store": "bounded_write",
+    "annotate_edge": "bounded_write",
+    "schedule_event": "bounded_write",
+    "bash": "unbounded",
+}
 
 
 class ToolExecutor:
@@ -44,6 +68,7 @@ class ToolExecutor:
         last_cycle_time: datetime | None = None,
         prior_states: list[tuple[int, UUID, dict, str]] | None = None,
         bridge=None,
+        scheduled_by_record_id: UUID | None = None,
     ):
         self._project_root = project_root
         self._cycle = cycle
@@ -56,11 +81,24 @@ class ToolExecutor:
         # Persistence backend for cross-session memory tool scope. None when
         # the session is running without persistence; tools gracefully degrade.
         self._bridge = bridge
+        self._scheduled_by_record_id = scheduled_by_record_id
+        self._pending_events: list[dict] = []
         self._activity_log: list[dict] = []
 
     @property
     def activity_log(self) -> list[dict]:
         return list(self._activity_log)
+
+    @property
+    def pending_events(self) -> list[dict]:
+        return list(self._pending_events)
+
+    def log_event(self, event: dict) -> None:
+        """Append a framework-level event (e.g. budget pressure/recovery) to the
+        durable activity log. Callers must use this rather than
+        `activity_log.append(...)`: the property returns a snapshot copy, so
+        appending to it silently drops the event."""
+        self._activity_log.append(event)
 
     def execute(self, tool_name: str, tool_input: dict) -> dict:
         """Dispatch a tool call and return its result dict."""
@@ -114,6 +152,8 @@ class ToolExecutor:
             result = tool_annotate_edge(
                 tool_input, cycle=self._cycle, bridge=self._bridge,
             )
+        elif tool_name == "schedule_event":
+            result = self._schedule_event(tool_input)
         elif tool_name == "bash":
             result = tool_bash(tool_input, project_root=self._project_root)
         else:
@@ -124,23 +164,68 @@ class ToolExecutor:
             json.dumps(result, sort_keys=True, default=str).encode()
         ).hexdigest()
 
-        # Record activity. Parameters exclude `reason` (stored separately).
+        # Capture everything durable here. Parameters exclude `reason`
+        # (stored separately). The full `result` is kept; the consumer
+        # decides what to re-feed into working state (taste_open strips
+        # `result` for the in-context copy but logs the full entry).
         self._activity_log.append(
             {
                 "cycle": self._cycle,
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "tool": tool_name,
+                "capability": _CAPABILITY.get(tool_name, "unknown"),
                 "parameters": {
                     k: v for k, v in tool_input.items() if k != "reason"
                 },
                 "reason": reason,
+                "exit_code": result.get("exit_code"),
                 "result_summary": _summarize(tool_name, result),
                 "result_hash": result_hash,
                 "duration_ms": duration_ms,
+                "result": result,
             }
         )
 
         return result
+
+    def _schedule_event(self, tool_input: dict) -> dict:
+        """Validate and buffer a scheduled event for cycle-commit time."""
+        if self._scheduled_by_record_id is None:
+            return {"error": "schedule_event requires a cycle record_id"}
+        try:
+            record = build_pending_event(
+                purpose=tool_input.get("purpose", ""),
+                requested_context=tool_input.get("requested_context"),
+                scheduled_by_cycle=self._cycle,
+                scheduled_by_record_id=self._scheduled_by_record_id,
+                label=tool_input.get("label"),
+                not_before=tool_input.get("not_before"),
+                expires_at=tool_input.get("expires_at"),
+                durable_update_contract=tool_input.get("durable_update_contract"),
+                durable_update_example=tool_input.get("durable_update_example"),
+                terminal_surface=tool_input.get("terminal_surface"),
+            )
+        except (TypeError, ValueError) as e:
+            return {"error": str(e)}
+        self._pending_events.append(record)
+        return {
+            "event_id": record["event_id"],
+            "status": "pending",
+            "accepted_context_count": len(record["requested_context"]),
+            **({"not_before": record["not_before"]} if "not_before" in record else {}),
+            **(
+                {"durable_update_contract": record["durable_update_contract"]}
+                if "durable_update_contract" in record else {}
+            ),
+            **(
+                {"durable_update_example": record["durable_update_example"]}
+                if "durable_update_example" in record else {}
+            ),
+            **(
+                {"terminal_surface": record["terminal_surface"]}
+                if "terminal_surface" in record else {}
+            ),
+        }
 
 
 def _summarize(tool_name: str, result: dict) -> str:
@@ -178,6 +263,8 @@ def _summarize(tool_name: str, result: dict) -> str:
             f"annotate_edge: {result.get('relation', '?')} "
             f"edge {result.get('edge_id', '?')[:8]}"
         )
+    if tool_name == "schedule_event":
+        return f"schedule_event: {result.get('event_id', '?')[:8]}"
     if tool_name == "bash":
         if result.get("timed_out"):
             return "bash: timed out"

@@ -19,8 +19,7 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from dataclasses import dataclass, field
-from typing import Sequence
+from dataclasses import dataclass
 
 from hamutay.tensor import Tensor, LossCategory
 
@@ -32,7 +31,7 @@ def _tokenize(text: str) -> set[str]:
     return set(re.findall(r"[a-z0-9_]+", text.lower()))
 
 
-def _jaccard(a: set, b: set) -> float:
+def _jaccard(a: set[str], b: set[str]) -> float:
     if not a and not b:
         return 1.0
     union = a | b
@@ -61,7 +60,7 @@ def _cosine_bow(a: str, b: str) -> float:
     return dot / (mag_a * mag_b)
 
 
-def _token_len(text: str) -> int:
+def token_len(text: str) -> int:
     """Rough token count (chars / 4)."""
     return max(1, len(text) // 4)
 
@@ -141,10 +140,10 @@ def strand_alignment(a: Tensor, b: Tensor, threshold: float = 0.15) -> StrandAli
     unmatched_b = tuple(b.strands[j].title for j in range(len(b.strands)) if j not in used_b)
 
     # Structural Jaccard on title token sets (the Q2 metric, reproduced)
-    titles_a = set()
+    titles_a: set[str] = set()
     for s in a.strands:
         titles_a |= _tokenize(s.title)
-    titles_b = set()
+    titles_b: set[str] = set()
     for s in b.strands:
         titles_b |= _tokenize(s.title)
     structural_jac = _jaccard(titles_a, titles_b)
@@ -178,7 +177,7 @@ def content_similarity(a: Tensor, b: Tensor) -> float:
     This is a coarse whole-tensor similarity that ignores structure.
     """
     def _all_text(t: Tensor) -> str:
-        parts = []
+        parts: list[str] = []
         for s in t.strands:
             parts.append(s.title)
             parts.append(s.content)
@@ -231,11 +230,11 @@ def capacity_allocation(t: Tensor) -> CapacityAllocation:
     ifn_text = t.instructions_for_next
     question_text = " ".join(t.open_questions)
 
-    strand_tok = _token_len(strand_text) if strand_text.strip() else 0
-    claim_tok = _token_len(claim_text) if claim_text.strip() else 0
-    loss_tok = _token_len(loss_text) if loss_text.strip() else 0
-    ifn_tok = _token_len(ifn_text) if ifn_text.strip() else 0
-    question_tok = _token_len(question_text) if question_text.strip() else 0
+    strand_tok = token_len(strand_text) if strand_text.strip() else 0
+    claim_tok = token_len(claim_text) if claim_text.strip() else 0
+    loss_tok = token_len(loss_text) if loss_text.strip() else 0
+    ifn_tok = token_len(ifn_text) if ifn_text.strip() else 0
+    question_tok = token_len(question_text) if question_text.strip() else 0
 
     total = strand_tok + claim_tok + loss_tok + ifn_tok + question_tok
     if total == 0:
@@ -371,10 +370,10 @@ def component_divergence(a: Tensor, b: Tensor) -> ComponentDivergence:
     ifn_sim = _cosine_bow(a.instructions_for_next, b.instructions_for_next)
 
     # Question overlap
-    q_tokens_a = set()
+    q_tokens_a: set[str] = set()
     for q in a.open_questions:
         q_tokens_a |= _tokenize(q)
-    q_tokens_b = set()
+    q_tokens_b: set[str] = set()
     for q in b.open_questions:
         q_tokens_b |= _tokenize(q)
     q_overlap = _jaccard(q_tokens_a, q_tokens_b)
@@ -427,7 +426,7 @@ class DivergenceProfile:
     losses_a: LossDistribution
     losses_b: LossDistribution
 
-    def summary(self) -> dict:
+    def summary(self) -> dict[str, str | float]:
         """Compact summary for tabular display."""
         return {
             "cycle_a": self.cycle_a,

@@ -1,9 +1,10 @@
 """Content flow analysis — tracking what survives the rewrite.
 
-The tensor rewrites almost everything each cycle (9% strand stability)
-but preserves 71-89% of semantic content. This module investigates
-that gap: what specific content persists, what gets dropped, and
-what determines survival.
+The tensor rewrites almost everything each cycle (9% strand stability).
+This module tracks lexical 3-gram survival: what specific surface content
+persists, what gets dropped, and what determines survival. It is not an
+embedding-based semantic-similarity analysis; use `semantic_flow.py` for
+the consecutive-cycle embedding check.
 
 Operates on a sequence of full tensors (as dicts with strands,
 declared_losses, instructions_for_next, etc.).

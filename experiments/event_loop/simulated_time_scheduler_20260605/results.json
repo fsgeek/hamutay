@@ -1,0 +1,33 @@
+{
+  "date": "2026-06-05",
+  "experiment": "simulated_time_scheduler_step",
+  "provider_calls": 0,
+  "tests": {
+    "event_suite": {
+      "command": "uv run pytest tests/unit/test_events.py -q",
+      "passed": 49,
+      "failed": 0
+    },
+    "focused_regression": {
+      "command": "uv run pytest tests/unit tests/test_taste_open.py -q",
+      "passed": 291,
+      "failed": 0
+    },
+    "compile": {
+      "command": "uv run python -m py_compile src/hamutay/events.py tests/unit/test_events.py",
+      "passed": true
+    }
+  },
+  "hypothesis_results": {
+    "H186_scheduler_step_runs_due_and_leaves_future_pending": true,
+    "H187_waiting_step_reports_next_wake_at": true,
+    "H188_empty_queue_reports_idle_without_next_wake_at": true,
+    "H189_expired_pending_events_terminalized_before_waiting": true,
+    "H190_fixed_now_batch_does_not_advance_time": true
+  },
+  "notes": [
+    "Added step_pending_events as a DES-facing wrapper around run_pending_events.",
+    "The helper reports stop_reason, next_wake_at, pending counts, wake_run_count, expired_count, and terminalized_count.",
+    "No live model calls were needed; fake backend tests exercise event-loop semantics deterministically."
+  ]
+}
