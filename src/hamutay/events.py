@@ -16,6 +16,11 @@ EVENT_TYPE_REFLECTION = "self_scheduled_reflection"
 VALID_CONTEXT_TOOLS = {"recall", "compare", "walk"}
 VALID_WALK_DIRECTIONS = {"forward", "backward", "both"}
 VALID_WALK_MODES = {"path", "adjacent"}
+VALID_POLICY_ACTIONS = {
+    "continue_after",
+    "stop_complete",
+    "ask_external_evidence",
+}
 LOAD_BEARING_FIELDS = {
     "current_claim",
     "revision_decision",
@@ -428,6 +433,64 @@ class EventStore:
             record["auto_continuation_event_id"] = (
                 auto_continuation_event.get("event_id")
             )
+        self.append(record)
+        return record
+
+    def append_policy_disposition(
+        self,
+        *,
+        event: dict,
+        run_id: str,
+        wake_cycle: int,
+        result_record_id: UUID | str,
+        policy_decision: dict,
+        policy_result: dict | None = None,
+        auto_continuation_event: dict | None = None,
+    ) -> dict:
+        """Append a lifecycle-neutral policy disposition for a completed wake."""
+        if not isinstance(policy_decision, dict):
+            raise ValueError("policy_decision must be an object")
+        action = policy_decision.get("action")
+        if action not in VALID_POLICY_ACTIONS:
+            raise ValueError(
+                "policy_decision.action must be one of: "
+                f"{', '.join(sorted(VALID_POLICY_ACTIONS))}"
+            )
+        result = policy_result if isinstance(policy_result, dict) else {}
+        record = {
+            "record_type": "policy_disposition",
+            "disposition_id": str(uuid4()),
+            "source_event_id": event["event_id"],
+            "event_type": event.get("event_type", EVENT_TYPE_REFLECTION),
+            "run_id": run_id,
+            "wake_cycle": int(wake_cycle),
+            "result_record_id": str(result_record_id),
+            "recorded_at": utc_now_iso(),
+            "policy_action": action,
+            "policy_rationale": policy_decision.get("rationale"),
+            "completion_condition": policy_decision.get("completion_condition"),
+        }
+        if result:
+            record["policy_result"] = json.loads(json.dumps(result, default=str))
+            missing = result.get("missing_evidence")
+            if isinstance(missing, list):
+                record["missing_evidence"] = json.loads(
+                    json.dumps(missing, default=str)
+                )
+        if action == "ask_external_evidence":
+            record["classification"] = "evidence_blocked"
+        elif action == "stop_complete":
+            record["classification"] = "complete"
+        elif action == "continue_after":
+            record["classification"] = "continued"
+        if auto_continuation_event is not None:
+            record["continuation_event_id"] = auto_continuation_event.get(
+                "event_id"
+            )
+            if auto_continuation_event.get("continuation_kind") is not None:
+                record["continuation_kind"] = auto_continuation_event.get(
+                    "continuation_kind"
+                )
         self.append(record)
         return record
 
@@ -889,6 +952,21 @@ def summarize_event_log(
         if event_id:
             histories.setdefault(str(event_id), []).append(record)
 
+    policy_dispositions = [
+        record for record in records
+        if record.get("record_type") == "policy_disposition"
+    ]
+    policy_dispositions.sort(
+        key=lambda record: str(record.get("recorded_at", "")),
+        reverse=True,
+    )
+    policy_disposition_counts: dict[str, int] = {}
+    for record in policy_dispositions:
+        action = str(record.get("policy_action", "unknown"))
+        policy_disposition_counts[action] = (
+            policy_disposition_counts.get(action, 0) + 1
+        )
+
     events = [
         summarize_event_history(
             event_id,
@@ -979,6 +1057,11 @@ def summarize_event_log(
         "record_count": len(records),
         "event_count": len(events),
         "status_counts": dict(sorted(status_counts.items())),
+        "policy_disposition_count": len(policy_dispositions),
+        "policy_disposition_counts": dict(
+            sorted(policy_disposition_counts.items())
+        ),
+        "policy_dispositions": policy_dispositions[:limit],
         "pending_runnable_count": len(pending_runnable),
         "pending_waiting_count": len(pending_waiting),
         "pending_expired_count": len(pending_expired),
@@ -1024,6 +1107,13 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
         f"{status}={count}" for status, count in status_counts.items()
     ) or "none"
     lines.append(f"Statuses: {status_text}")
+    disposition_counts = report.get("policy_disposition_counts", {})
+    if disposition_counts:
+        disposition_text = ", ".join(
+            f"{action}={count}"
+            for action, count in disposition_counts.items()
+        )
+        lines.append(f"Policy dispositions: {disposition_text}")
     pending_counts = (
         report.get("pending_runnable_count", 0),
         report.get("pending_waiting_count", 0),
@@ -1101,6 +1191,26 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
                 f"{event['event_id']} "
                 f"policy={event.get('suppressed_by_policy', '?')} "
                 f"reason={event.get('suppression_reason', '')}"
+            )
+
+    if report.get("policy_dispositions"):
+        lines.append("")
+        lines.append("Policy dispositions:")
+        for record in report["policy_dispositions"]:
+            extra = ""
+            if record.get("continuation_event_id"):
+                extra = f" continuation={record.get('continuation_event_id')}"
+            elif record.get("missing_evidence"):
+                extra = (
+                    " missing="
+                    + ", ".join(str(item) for item in record["missing_evidence"])
+                )
+            lines.append(
+                "  "
+                f"{record.get('source_event_id', '?')} "
+                f"action={record.get('policy_action', '?')} "
+                f"classification={record.get('classification', '?')}"
+                f"{extra}"
             )
 
     if report.get("stale_running"):
@@ -1190,6 +1300,7 @@ def run_next_event(
     *,
     now: datetime | None = None,
     auto_continuations: bool = False,
+    policy_dispositions: bool = False,
 ) -> dict:
     """Run the oldest pending event once using an OpenTasteSession."""
     claim = store.claim_next_pending(now=now)
@@ -1226,9 +1337,9 @@ def run_next_event(
         result_record_id = session._prior_states[-1][1]
         wake_cycle = session.cycle
         auto_continuation_event = None
+        raw_output = getattr(session, "_last_raw_output", None)
+        raw_output = raw_output if isinstance(raw_output, dict) else {}
         if auto_continuations:
-            raw_output = getattr(session, "_last_raw_output", None)
-            raw_output = raw_output if isinstance(raw_output, dict) else {}
             continuation_request = raw_output.get("continuation_request")
             if isinstance(continuation_request, dict):
                 auto_continuation_event = build_bound_continuation_event(
@@ -1255,6 +1366,19 @@ def run_next_event(
         if auto_continuation_event is not None:
             store.append(auto_continuation_event)
             completed["auto_continuation_event"] = auto_continuation_event
+        if policy_dispositions:
+            policy_decision = raw_output.get("policy_decision")
+            if isinstance(policy_decision, dict):
+                policy_disposition = store.append_policy_disposition(
+                    event=event,
+                    run_id=run_id,
+                    wake_cycle=wake_cycle,
+                    result_record_id=result_record_id,
+                    policy_decision=policy_decision,
+                    policy_result=raw_output.get("policy_result"),
+                    auto_continuation_event=auto_continuation_event,
+                )
+                completed["policy_disposition"] = policy_disposition
         return completed
     except Exception as e:
         store.append_failed(
@@ -1274,6 +1398,7 @@ def run_pending_events(
     stop_on_failure: bool = True,
     now: datetime | None = None,
     auto_continuations: bool = False,
+    policy_dispositions: bool = False,
     max_auto_continuations: int | None = None,
 ) -> dict:
     """Run up to limit pending events and return a batch summary."""
@@ -1296,6 +1421,7 @@ def run_pending_events(
                 store,
                 now=now,
                 auto_continuations=auto_continuations,
+                policy_dispositions=policy_dispositions,
             )
         except Exception as e:
             failure = {
@@ -1339,6 +1465,7 @@ def step_pending_events(
     stop_on_failure: bool = True,
     now: datetime | None = None,
     auto_continuations: bool = False,
+    policy_dispositions: bool = False,
     max_auto_continuations: int | None = None,
 ) -> dict:
     """Run one fixed-time scheduler step and report why the step stopped.
@@ -1354,6 +1481,7 @@ def step_pending_events(
         stop_on_failure=stop_on_failure,
         now=now,
         auto_continuations=auto_continuations,
+        policy_dispositions=policy_dispositions,
         max_auto_continuations=max_auto_continuations,
     )
     summary = summarize_event_log(store.read_records(), now=now)

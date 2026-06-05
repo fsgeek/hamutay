@@ -1313,6 +1313,65 @@ def test_run_next_event_auto_appends_bound_continuation(tmp_path):
     assert records[2]["auto_continuation_event_id"] == continuation["event_id"]
 
 
+def test_run_next_event_appends_policy_disposition_when_enabled(tmp_path):
+    log_path = tmp_path / "session.jsonl"
+    event_path = tmp_path / "session.events.jsonl"
+    session = OpenTasteSession(
+        backend=_FakeBackend(),
+        log_path=str(log_path),
+        event_log_path=str(event_path),
+        enable_tools=True,
+        project_root=tmp_path,
+    )
+    session.exchange("seed")
+    session._backend = _FakeBackend(
+        ExchangeResult(
+            raw_output={
+                "response": "event handled",
+                "event_reflection": "revised",
+                "policy_decision": {
+                    "action": "continue_after",
+                    "rationale": "follow-up can use generated context",
+                },
+                "policy_result": {
+                    "task_assessment": "continue with generated record",
+                },
+                "continuation_request": _continuation_request(),
+            },
+            stop_reason="end_turn",
+        )
+    )
+    event = build_pending_event(
+        purpose="Reflect on claim.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=session._prior_states[-1][1],
+    )
+    store = EventStore(event_path)
+    store.append(event)
+
+    result = run_next_event(
+        session,
+        store,
+        auto_continuations=True,
+        policy_dispositions=True,
+    )
+
+    disposition = result["policy_disposition"]
+    continuation = result["auto_continuation_event"]
+    assert disposition["record_type"] == "policy_disposition"
+    assert disposition["source_event_id"] == event["event_id"]
+    assert disposition["result_record_id"] == result["result_record_id"]
+    assert disposition["policy_action"] == "continue_after"
+    assert disposition["classification"] == "continued"
+    assert disposition["continuation_event_id"] == continuation["event_id"]
+    assert disposition["continuation_kind"] == "unit_bound_continuation"
+    summary = summarize_event_log(store.read_records())
+    assert summary["status_counts"] == {"completed": 1, "pending": 1}
+    assert summary["policy_disposition_counts"] == {"continue_after": 1}
+    assert summary["lifecycle_anomalies"] == []
+
+
 def test_run_next_event_auto_ignores_inherited_continuation(tmp_path):
     log_path = tmp_path / "session.jsonl"
     event_path = tmp_path / "session.events.jsonl"
@@ -1941,6 +2000,81 @@ def test_summarize_event_log_classifies_pending_runnability(tmp_path):
     assert summary["oldest_runnable_pending"]["event_id"] == ready["event_id"]
     assert summary["oldest_waiting_pending"]["event_id"] == waiting["event_id"]
     assert summary["oldest_expired_pending"]["event_id"] == expired["event_id"]
+
+
+def test_policy_dispositions_are_lifecycle_neutral_and_summarized(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    stop_event = _event_record()
+    evidence_event = _event_record()
+    store.append(stop_event)
+    store.append_running(
+        stop_event,
+        run_id=UUID("00000000-0000-0000-0000-000000000111"),
+    )
+    store.append_completed(
+        event=stop_event,
+        run_id="00000000-0000-0000-0000-000000000111",
+        wake_cycle=2,
+        result_record_id=UUID("00000000-0000-0000-0000-000000000002"),
+        response_text="done",
+    )
+    store.append_policy_disposition(
+        event=stop_event,
+        run_id="00000000-0000-0000-0000-000000000111",
+        wake_cycle=2,
+        result_record_id=UUID("00000000-0000-0000-0000-000000000002"),
+        policy_decision={
+            "action": "stop_complete",
+            "rationale": "task was complete",
+        },
+        policy_result={"task_assessment": "complete"},
+    )
+    store.append(evidence_event)
+    store.append_running(
+        evidence_event,
+        run_id=UUID("00000000-0000-0000-0000-000000000222"),
+    )
+    store.append_completed(
+        event=evidence_event,
+        run_id="00000000-0000-0000-0000-000000000222",
+        wake_cycle=2,
+        result_record_id=UUID("00000000-0000-0000-0000-000000000003"),
+        response_text="blocked",
+    )
+    store.append_policy_disposition(
+        event=evidence_event,
+        run_id="00000000-0000-0000-0000-000000000222",
+        wake_cycle=2,
+        result_record_id=UUID("00000000-0000-0000-0000-000000000003"),
+        policy_decision={
+            "action": "ask_external_evidence",
+            "rationale": "missing source",
+        },
+        policy_result={
+            "task_assessment": "blocked",
+            "missing_evidence": ["external source"],
+        },
+    )
+
+    summary = summarize_event_log(store.read_records())
+
+    assert summary["event_count"] == 2
+    assert summary["status_counts"] == {"completed": 2}
+    assert summary["policy_disposition_count"] == 2
+    assert summary["policy_disposition_counts"] == {
+        "ask_external_evidence": 1,
+        "stop_complete": 1,
+    }
+    assert summary["lifecycle_anomalies"] == []
+    evidence = [
+        record for record in summary["policy_dispositions"]
+        if record["policy_action"] == "ask_external_evidence"
+    ][0]
+    assert evidence["classification"] == "evidence_blocked"
+    assert evidence["missing_evidence"] == ["external source"]
+    report = format_event_report(summary)
+    assert "Policy dispositions: ask_external_evidence=1, stop_complete=1" in report
+    assert "classification=evidence_blocked missing=external source" in report
 
 
 def test_suppress_pending_marks_pending_events_terminal(tmp_path):
