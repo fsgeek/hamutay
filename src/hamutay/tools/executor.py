@@ -201,6 +201,7 @@ class ToolExecutor:
                 label=tool_input.get("label"),
                 not_before=tool_input.get("not_before"),
                 expires_at=tool_input.get("expires_at"),
+                durable_update_contract=tool_input.get("durable_update_contract"),
             )
         except (TypeError, ValueError) as e:
             return {"error": str(e)}
@@ -210,6 +211,10 @@ class ToolExecutor:
             "status": "pending",
             "accepted_context_count": len(record["requested_context"]),
             **({"not_before": record["not_before"]} if "not_before" in record else {}),
+            **(
+                {"durable_update_contract": record["durable_update_contract"]}
+                if "durable_update_contract" in record else {}
+            ),
         }
 
 

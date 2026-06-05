@@ -119,6 +119,7 @@ def build_pending_event(
     label: str | None = None,
     not_before: str | None = None,
     expires_at: str | None = None,
+    durable_update_contract: dict | None = None,
 ) -> dict:
     """Create a pending event record. Does not write it."""
     purpose = str(purpose).strip()
@@ -139,6 +140,12 @@ def build_pending_event(
     }
     if label:
         record["label"] = str(label)
+    if durable_update_contract is not None:
+        if not isinstance(durable_update_contract, dict):
+            raise ValueError("durable_update_contract must be an object")
+        record["durable_update_contract"] = json.loads(
+            json.dumps(durable_update_contract, default=str)
+        )
     if not_before:
         # Validate parseability but preserve original ISO spelling.
         datetime.fromisoformat(str(not_before).replace("Z", "+00:00"))
@@ -448,6 +455,7 @@ def build_event_envelope(event: dict, context_results: list[dict], run_id: str) 
         "scheduled_by_record_id": event.get("scheduled_by_record_id"),
         "purpose": event.get("purpose", ""),
         "requested_context": event.get("requested_context", []),
+        "durable_update_contract": event.get("durable_update_contract"),
         "context_results": context_results,
         "instruction": (
             "This is a self-scheduled reflection event. Use the provided "

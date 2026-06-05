@@ -496,6 +496,15 @@ SCHEDULE_EVENT_SCHEMA = {
                 "type": "string",
                 "description": "Optional short label for browsing the event log.",
             },
+            "durable_update_contract": {
+                "type": "object",
+                "description": (
+                    "Optional explicit contract for the future durable state "
+                    "update. Use this to name required top-level fields, exact "
+                    "values, or simple type expectations the wake should satisfy."
+                ),
+                "additionalProperties": True,
+            },
             "not_before": {
                 "type": "string",
                 "description": (

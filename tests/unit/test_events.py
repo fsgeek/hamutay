@@ -194,6 +194,40 @@ def test_build_pending_event_accepts_and_validates_not_before():
         )
 
 
+def test_build_pending_event_accepts_durable_update_contract():
+    contract = {
+        "required_top_level": {
+            "thinking_status": {"equals": "completed"},
+            "delayed_thought": {"type": "non_empty_string"},
+        }
+    }
+    event = build_pending_event(
+        purpose="Complete delayed thinking.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=UUID("00000000-0000-0000-0000-000000000001"),
+        durable_update_contract=contract,
+    )
+
+    assert event["durable_update_contract"] == contract
+    contract["required_top_level"]["thinking_status"]["equals"] = "changed"
+    assert (
+        event["durable_update_contract"]["required_top_level"]
+        ["thinking_status"]["equals"]
+    ) == "completed"
+
+    with pytest.raises(ValueError, match="durable_update_contract"):
+        build_pending_event(
+            purpose="Bad contract.",
+            requested_context=[{"tool": "recall", "cycle": 1}],
+            scheduled_by_cycle=1,
+            scheduled_by_record_id=UUID(
+                "00000000-0000-0000-0000-000000000001"
+            ),
+            durable_update_contract=["not", "an", "object"],
+        )
+
+
 def test_build_pending_event_accepts_walk_context():
     event = build_pending_event(
         purpose="Inspect fork-run graph hub.",
@@ -339,6 +373,7 @@ def test_schedule_event_schema_exists():
     assert "purpose" in TOOL_SCHEMAS["schedule_event"]["input_schema"]["required"]
     properties = TOOL_SCHEMAS["schedule_event"]["input_schema"]["properties"]
     assert "not_before" in properties
+    assert "durable_update_contract" in properties
     context_item = properties["requested_context"]["items"]["properties"]
     assert context_item["tool"]["enum"] == ["recall", "compare", "walk"]
     assert context_item["mode"]["enum"] == ["path", "adjacent"]
@@ -356,6 +391,11 @@ def test_executor_buffers_scheduled_event(tmp_path):
             "purpose": "Check whether the claim still holds.",
             "requested_context": [{"tool": "recall", "cycle": 2}],
             "not_before": "2026-06-01T01:00:00+00:00",
+            "durable_update_contract": {
+                "required_top_level": {
+                    "revision_decision": {"type": "non_empty_string"}
+                }
+            },
             "reason": "future self needs evidence",
         },
     )
@@ -363,10 +403,16 @@ def test_executor_buffers_scheduled_event(tmp_path):
     assert result["status"] == "pending"
     assert result["accepted_context_count"] == 1
     assert result["not_before"] == "2026-06-01T01:00:00+00:00"
+    assert result["durable_update_contract"]["required_top_level"] == {
+        "revision_decision": {"type": "non_empty_string"}
+    }
     assert len(executor.pending_events) == 1
     assert executor.pending_events[0]["scheduled_by_cycle"] == 4
     assert executor.pending_events[0]["not_before"] == (
         "2026-06-01T01:00:00+00:00"
+    )
+    assert executor.pending_events[0]["durable_update_contract"] == (
+        result["durable_update_contract"]
     )
     assert executor.activity_log[-1]["tool"] == "schedule_event"
     assert executor.activity_log[-1]["reason"] == "future self needs evidence"
@@ -611,9 +657,13 @@ def test_resolve_requested_context_uses_walk_memory_tool():
 
 def test_build_event_envelope_is_explicit():
     event = _event_record()
+    event["durable_update_contract"] = {
+        "required_top_level": {"thinking_status": {"equals": "completed"}}
+    }
     envelope = json.loads(build_event_envelope(event, [], "run-1"))
     assert envelope["event_type"] == "self_scheduled_reflection"
     assert envelope["event_id"] == event["event_id"]
+    assert envelope["durable_update_contract"] == event["durable_update_contract"]
     assert "self-scheduled reflection" in envelope["instruction"]
     assert "top-level fields" in envelope["instruction"]
     assert "Visible prose is not enough" in envelope["instruction"]
