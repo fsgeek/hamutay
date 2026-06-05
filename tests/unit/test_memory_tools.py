@@ -307,11 +307,23 @@ def test_recall_recent_scope_all_appends_cross_session():
     assert "cycle" not in last
 
 
-def test_recall_by_record_id_requires_bridge():
-    """record_id mode needs a bridge — honest error otherwise."""
+def test_recall_by_record_id_retrieves_in_session_without_bridge():
+    """record_id mode resolves in-session prior states before bridge fallback."""
+    result = tool_recall(
+        {"record_id": str(_RID_2), "field": "theme"},
+        prior_states=_make_prior_states(),
+        bridge=None,
+    )
+    assert result["cycle"] == 2
+    assert result["record_id"] == str(_RID_2)
+    assert result["content"] == "curiosity"
+
+
+def test_recall_by_unknown_record_id_requires_bridge():
+    """Unknown record_id mode needs a bridge — honest error otherwise."""
     result = tool_recall(
         {"record_id": str(_CROSS_RID)},
-        prior_states=[],
+        prior_states=_make_prior_states(),
         bridge=None,
     )
     assert "error" in result

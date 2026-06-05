@@ -33,6 +33,16 @@ def _find_by_cycle(
     return None
 
 
+def _find_by_record_id(
+    prior_states: list[tuple[int, UUID, dict, str]], record_id: UUID
+) -> tuple[int, UUID, dict, str] | None:
+    """Return the first prior-state tuple matching record_id, or None."""
+    for entry in prior_states:
+        if entry[1] == record_id:
+            return entry
+    return None
+
+
 def _type_name(value) -> str:
     """Compact Python type name for a JSON-ish value."""
     return type(value).__name__
@@ -155,7 +165,7 @@ def tool_recall(
 
     Modes (mutually exclusive; precedence top-down):
     - record_id=<UUID>, field=X → one field's value at a specific record
-      (cross-session by construction; requires bridge)
+      (in-session first, bridge fallback)
     - record_id=<UUID> → the full record content
     - cycle=N, field=X → one field's value at one cycle (session-scoped)
     - cycle=N → the full state dict at one cycle (session-scoped)
@@ -176,17 +186,38 @@ def tool_recall(
     record_id_str = params.get("record_id")
     scope = params.get("scope", "session")
 
-    # Mode 1: record_id — cross-session by construction
+    # Mode 1: record_id — in-session first, bridge fallback
     if record_id_str is not None:
-        if bridge is None:
-            return {
-                "error": "record_id mode requires a bridge (persistence backend)"
-            }
         try:
             record_id = UUID(record_id_str)
         except (ValueError, AttributeError, TypeError):
             return {
                 "error": f"record_id is not a valid UUID: {record_id_str!r}"
+            }
+        found = _find_by_record_id(prior_states, record_id)
+        if found is not None:
+            _cycle, _record_id, state, timestamp = found
+            if field is not None:
+                value = _resolve_field(state, field)
+                if value is _MISSING:
+                    return {
+                        "error": f"Field {field!r} not in record {record_id}"
+                    }
+                return {
+                    "cycle": _cycle,
+                    "record_id": str(_record_id),
+                    "timestamp": timestamp,
+                    "content": value,
+                }
+            return {
+                "cycle": _cycle,
+                "record_id": str(_record_id),
+                "timestamp": timestamp,
+                "content": state,
+            }
+        if bridge is None:
+            return {
+                "error": "record_id mode requires a bridge (persistence backend)"
             }
         try:
             content = bridge.retrieve(record_id)
