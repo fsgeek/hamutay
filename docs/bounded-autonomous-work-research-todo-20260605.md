@@ -88,12 +88,17 @@ Evidence needed:
 
 ### Step 3: Scaffolded Positive-Control Panel
 
-Status: not started.
+Status: complete.
 
 Purpose:
 
 - determine whether the full pattern can execute when the task class and
   affordances are explicit.
+
+Deliverable:
+
+- live scaffolded positive-control panel:
+  `experiments/event_loop/bounded_autonomous_work_scaffolded_positive_20260605/`.
 
 Evidence needed:
 
