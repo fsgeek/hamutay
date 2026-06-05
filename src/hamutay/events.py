@@ -10,6 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
+from hamutay.terminal_surface import validate_terminal_surface
+
 EVENT_TYPE_REFLECTION = "self_scheduled_reflection"
 VALID_CONTEXT_TOOLS = {"recall", "compare", "walk"}
 VALID_WALK_DIRECTIONS = {"forward", "backward", "both"}
@@ -121,6 +123,7 @@ def build_pending_event(
     expires_at: str | None = None,
     durable_update_contract: dict | None = None,
     durable_update_example: dict | None = None,
+    terminal_surface: dict | None = None,
 ) -> dict:
     """Create a pending event record. Does not write it."""
     purpose = str(purpose).strip()
@@ -153,6 +156,8 @@ def build_pending_event(
         record["durable_update_example"] = json.loads(
             json.dumps(durable_update_example, default=str)
         )
+    if terminal_surface is not None:
+        record["terminal_surface"] = validate_terminal_surface(terminal_surface)
     if not_before:
         # Validate parseability but preserve original ISO spelling.
         datetime.fromisoformat(str(not_before).replace("Z", "+00:00"))
@@ -467,6 +472,7 @@ def build_event_envelope(event: dict, context_results: list[dict], run_id: str) 
         "requested_context": event.get("requested_context", []),
         "durable_update_contract": event.get("durable_update_contract"),
         "durable_update_example": event.get("durable_update_example"),
+        "terminal_surface": event.get("terminal_surface"),
         "context_results": context_results,
         "instruction": (
             "This is a self-scheduled reflection event. Use the provided "
@@ -477,7 +483,8 @@ def build_event_envelope(event: dict, context_results: list[dict], run_id: str) 
             "not enough. Preserve model-owned continuity fields unless the "
             "purpose explicitly says to change them; framework-owned fields "
             "such as cycle and _activity_log are substrate-owned. End the "
-            "cycle with think_and_respond."
+            "cycle with the declared terminal surface if terminal_surface is "
+            "present; otherwise use think_and_respond."
         ),
     }
     return json.dumps(envelope, indent=2, default=str)
@@ -718,6 +725,12 @@ def summarize_event_history(
         "label": first.get("label"),
         "purpose": first.get("purpose", ""),
         "requested_context_count": len(first.get("requested_context", []) or []),
+        "terminal_surface_tool": (
+            first.get("terminal_surface", {}) or {}
+        ).get("tool_name"),
+        "terminal_surface_label": (
+            first.get("terminal_surface", {}) or {}
+        ).get("label"),
         "context_error_count": _context_error_count(history),
         "outcome_warning_count": sum(
             1
@@ -1088,7 +1101,11 @@ def run_next_event(
         )
         envelope = build_event_envelope(event, context_results, run_id)
         before_state = _json_safe_state(getattr(session, "_state", None))
-        response = session.exchange(envelope, force_memory=None)
+        response = session.exchange(
+            envelope,
+            force_memory=None,
+            terminal_surface=event.get("terminal_surface"),
+        )
         after_state = _json_safe_state(getattr(session, "_state", None))
         outcome_observation = build_outcome_observation(
             before_state=before_state,

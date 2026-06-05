@@ -203,6 +203,7 @@ class ToolExecutor:
                 expires_at=tool_input.get("expires_at"),
                 durable_update_contract=tool_input.get("durable_update_contract"),
                 durable_update_example=tool_input.get("durable_update_example"),
+                terminal_surface=tool_input.get("terminal_surface"),
             )
         except (TypeError, ValueError) as e:
             return {"error": str(e)}
@@ -219,6 +220,10 @@ class ToolExecutor:
             **(
                 {"durable_update_example": record["durable_update_example"]}
                 if "durable_update_example" in record else {}
+            ),
+            **(
+                {"terminal_surface": record["terminal_surface"]}
+                if "terminal_surface" in record else {}
             ),
         }
 

@@ -30,6 +30,10 @@ import anthropic
 import httpx
 
 from hamutay.events import EventStore, default_event_log_path, utc_now_iso
+from hamutay.terminal_surface import (
+    terminal_surface_raw_output,
+    terminal_tool_schema,
+)
 
 if TYPE_CHECKING:
     from anthropic.types import MessageParam
@@ -602,6 +606,15 @@ class TasteBackend(Protocol):
         tool_executor: Any | None = None,
     ) -> ExchangeResult: ...
 
+    def call_terminal_surface(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
+        terminal_surface: dict,
+    ) -> ExchangeResult: ...
+
 
 class AnthropicTasteBackend:
     """Streaming tool-use via the Anthropic SDK.
@@ -680,6 +693,76 @@ class AnthropicTasteBackend:
             output_tokens=getattr(usage, "output_tokens", 0),
             cache_read_tokens=getattr(usage, "cache_read_input_tokens", 0) or 0,
             cache_creation_tokens=getattr(usage, "cache_creation_input_tokens", 0) or 0,
+        )
+
+    def call_terminal_surface(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
+        terminal_surface: dict,
+    ) -> ExchangeResult:
+        tool = terminal_tool_schema(terminal_surface)
+        tool_choice_value = terminal_surface.get("tool_choice", "auto")
+        if tool_choice_value == "force":
+            tool_choice: dict[str, str] = {"type": "tool", "name": tool["name"]}
+        elif tool_choice_value == "required":
+            tool_choice = {"type": "any"}
+        else:
+            tool_choice = {"type": "auto"}
+        with self._client.messages.stream(
+            model=model,
+            max_tokens=self._max_tokens,
+            system=[
+                {
+                    "type": "text",
+                    "text": system,
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            messages=cast("list[MessageParam]", messages),
+            tools=[
+                {
+                    "name": tool["name"],
+                    "description": tool.get("description", ""),
+                    "input_schema": tool["input_schema"],
+                    "cache_control": {"type": "ephemeral"},
+                }
+            ],
+            tool_choice=cast("Any", tool_choice),
+            metadata={"user_id": f"hamutay_{experiment_label}"},
+        ) as stream:
+            response = stream.get_final_message()
+
+        for block in response.content:
+            if (
+                getattr(block, "type", None) == "tool_use"
+                and getattr(block, "name", None) == tool["name"]
+            ):
+                usage = response.usage
+                return ExchangeResult(
+                    raw_output=terminal_surface_raw_output(
+                        terminal_surface,
+                        getattr(block, "input", {}),
+                    ),
+                    stop_reason=response.stop_reason or "unknown",
+                    input_tokens=getattr(usage, "input_tokens", 0),
+                    output_tokens=getattr(usage, "output_tokens", 0),
+                    cache_read_tokens=getattr(
+                        usage,
+                        "cache_read_input_tokens",
+                        0,
+                    ) or 0,
+                    cache_creation_tokens=getattr(
+                        usage,
+                        "cache_creation_input_tokens",
+                        0,
+                    ) or 0,
+                )
+
+        raise RuntimeError(
+            f"No {tool['name']} terminal surface output in response"
         )
 
     def _call_multi_turn(
@@ -1097,6 +1180,109 @@ class OpenAITasteBackend:
                 )
 
         raise RuntimeError("OpenAI backend: no think_and_respond output in response")
+
+    def call_terminal_surface(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
+        terminal_surface: dict,
+    ) -> ExchangeResult:
+        del experiment_label
+        tool = terminal_tool_schema(terminal_surface)
+        oai_messages = [{"role": "system", "content": system}] + messages
+        tool_choice_value = terminal_surface.get("tool_choice", "auto")
+        if tool_choice_value == "force":
+            tool_choice: str | dict = {
+                "type": "function",
+                "function": {"name": tool["name"]},
+            }
+        elif tool_choice_value == "required":
+            tool_choice = "required"
+        else:
+            tool_choice = "auto"
+        payload: dict = {
+            "model": model,
+            "max_tokens": self._max_tokens,
+            "messages": oai_messages,
+            "tools": [
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool["name"],
+                        "description": tool.get("description", ""),
+                        "parameters": tool["input_schema"],
+                    },
+                }
+            ],
+            "tool_choice": tool_choice,
+        }
+        self._apply_openai_payload_options(payload)
+
+        data = self._post_chat(payload)
+        choice = data["choices"][0]
+        raw_stop: str = choice.get("finish_reason") or "unknown"
+        if raw_stop == "length":
+            raise RuntimeError(
+                "OpenAI backend: finish_reason=length; refusing to parse "
+                "possibly truncated terminal surface output"
+            )
+        stop_reason: str = {
+            "stop": "end_turn",
+            "length": "max_tokens",
+            "tool_calls": "tool_use",
+        }.get(raw_stop, raw_stop)
+        usage = data.get("usage", {})
+        message = choice.get("message", {})
+        tool_calls = message.get("tool_calls") or []
+        for tc in tool_calls:
+            fn = tc.get("function", {})
+            if fn.get("name") != tool["name"]:
+                continue
+            terminal_output = self._parse_tool_arguments(
+                tool["name"],
+                fn.get("arguments", ""),
+            )
+            return ExchangeResult(
+                raw_output=terminal_surface_raw_output(
+                    terminal_surface,
+                    terminal_output,
+                ),
+                stop_reason=stop_reason,
+                input_tokens=usage.get("prompt_tokens", 0),
+                output_tokens=usage.get("completion_tokens", 0),
+            )
+        if tool_calls:
+            names = [tc.get("function", {}).get("name", "") for tc in tool_calls]
+            raise RuntimeError(
+                "OpenAI backend: tool_calls returned but missing terminal "
+                f"surface {tool['name']} (saw: {names})"
+            )
+
+        content = message.get("content", "")
+        if content:
+            terminal_output = self._extract_json(content)
+            if terminal_output is not None:
+                terminal_output = self._unwrap_tool_echo(terminal_output)
+                if (
+                    terminal_output.get("name") == tool["name"]
+                    and isinstance(terminal_output.get("parameters"), dict)
+                ):
+                    terminal_output = terminal_output["parameters"]
+                return ExchangeResult(
+                    raw_output=terminal_surface_raw_output(
+                        terminal_surface,
+                        terminal_output,
+                    ),
+                    stop_reason=stop_reason,
+                    input_tokens=usage.get("prompt_tokens", 0),
+                    output_tokens=usage.get("completion_tokens", 0),
+                )
+
+        raise RuntimeError(
+            f"OpenAI backend: no {tool['name']} terminal surface output"
+        )
 
     def _call_multi_turn(
         self,
@@ -1694,6 +1880,7 @@ class OpenTasteSession:
     def exchange(
         self, user_message: str, *,
         force_memory: tuple[int, dict] | None | _Unset = _UNSET,
+        terminal_surface: dict | None = None,
     ) -> str:
         """One cycle: user speaks, model responds + updates state.
 
@@ -1710,7 +1897,11 @@ class OpenTasteSession:
         """
         self._cycle += 1
         try:
-            return self._exchange_impl(user_message, force_memory=force_memory)
+            return self._exchange_impl(
+                user_message,
+                force_memory=force_memory,
+                terminal_surface=terminal_surface,
+            )
         except Exception:
             self._cycle -= 1
             raise
@@ -1718,6 +1909,7 @@ class OpenTasteSession:
     def _exchange_impl(
         self, user_message: str, *,
         force_memory: tuple[int, dict] | None | _Unset = _UNSET,
+        terminal_surface: dict | None = None,
     ) -> str:
         """Body of exchange(). Separated so exchange() can roll back the
         cycle counter on any exception without an inline try/finally
@@ -1737,7 +1929,7 @@ class OpenTasteSession:
             self._state, user_message, self._cycle,
             system_prefix=self._system_prompt_prefix,
             memory=memory,
-            tools_enabled=self._enable_tools,
+            tools_enabled=self._enable_tools and terminal_surface is None,
             curator_context=curator_context,
         )
 
@@ -1750,7 +1942,7 @@ class OpenTasteSession:
         # Tool wiring — only when enabled. Executor is scoped to this cycle.
         tool_executor = None
         extra_tools: list[dict] | None = None
-        if self._enable_tools:
+        if self._enable_tools and terminal_surface is None:
             from hamutay.tools import TOOL_SCHEMAS, ToolExecutor
             tool_executor = ToolExecutor(
                 project_root=self._project_root,
@@ -1765,14 +1957,27 @@ class OpenTasteSession:
             )
             extra_tools = list(TOOL_SCHEMAS.values())
 
-        result = self._backend.call(
-            model=self._model,
-            system=system,
-            messages=messages,
-            experiment_label=self._experiment_label,
-            extra_tools=extra_tools,
-            tool_executor=tool_executor,
-        )
+        if terminal_surface is not None:
+            if extra_tools:
+                raise RuntimeError(
+                    "terminal_surface wakeups cannot enable non-terminal tools"
+                )
+            result = self._backend.call_terminal_surface(
+                model=self._model,
+                system=system,
+                messages=messages,
+                experiment_label=self._experiment_label,
+                terminal_surface=terminal_surface,
+            )
+        else:
+            result = self._backend.call(
+                model=self._model,
+                system=system,
+                messages=messages,
+                experiment_label=self._experiment_label,
+                extra_tools=extra_tools,
+                tool_executor=tool_executor,
+            )
 
         if result.stop_reason == "max_tokens":
             print(f"  WARNING: cycle {self._cycle} hit max_tokens — truncated")

@@ -514,6 +514,36 @@ SCHEDULE_EVENT_SCHEMA = {
                 ),
                 "additionalProperties": True,
             },
+            "terminal_surface": {
+                "type": "object",
+                "description": (
+                    "Optional task-specific terminal completion surface for "
+                    "bounded wake work. When present, the future wake uses the "
+                    "declared terminal tool instead of broad think_and_respond; "
+                    "the substrate translates its output into durable state."
+                ),
+                "properties": {
+                    "tool_name": {"type": "string"},
+                    "description": {"type": "string"},
+                    "input_schema": {"type": "object"},
+                    "tool_choice": {
+                        "type": "string",
+                        "enum": ["auto", "required", "force"],
+                    },
+                    "state_update": {
+                        "type": "object",
+                        "properties": {
+                            "response_field": {"type": "string"},
+                            "copy": {"type": "object"},
+                            "set": {"type": "object"},
+                        },
+                        "required": ["copy"],
+                    },
+                    "label": {"type": "string"},
+                },
+                "required": ["tool_name", "input_schema", "state_update"],
+                "additionalProperties": False,
+            },
             "not_before": {
                 "type": "string",
                 "description": (

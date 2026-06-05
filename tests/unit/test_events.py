@@ -26,6 +26,7 @@ from hamutay.events import (
     summarize_event_log,
 )
 from hamutay.taste_open import ExchangeResult, OpenTasteSession
+from hamutay.terminal_surface import terminal_surface_raw_output
 from hamutay.tools.executor import ToolExecutor
 from hamutay.tools.schemas import TOOL_SCHEMAS
 
@@ -94,6 +95,46 @@ class _SequenceBackend:
         return self._results.pop(0)
 
 
+class _TerminalBackend:
+    def __init__(self, terminal_output: dict):
+        self.terminal_output = terminal_output
+        self.calls: list[dict] = []
+
+    def call(
+        self,
+        model,
+        system,
+        messages,
+        experiment_label,
+        extra_tools=None,
+        tool_executor=None,
+    ):
+        raise AssertionError("broad call should not be used for terminal surface")
+
+    def call_terminal_surface(
+        self,
+        model,
+        system,
+        messages,
+        experiment_label,
+        terminal_surface,
+    ):
+        self.calls.append({
+            "model": model,
+            "system": system,
+            "messages": messages,
+            "experiment_label": experiment_label,
+            "terminal_surface": terminal_surface,
+        })
+        return ExchangeResult(
+            raw_output=terminal_surface_raw_output(
+                terminal_surface,
+                self.terminal_output,
+            ),
+            stop_reason="tool_use",
+        )
+
+
 class _TaskStateValidator:
     def validate(
         self,
@@ -132,6 +173,39 @@ def _event_record(cycle: int = 1) -> dict:
         scheduled_by_cycle=cycle,
         scheduled_by_record_id=UUID("00000000-0000-0000-0000-000000000001"),
     )
+
+
+def _terminal_surface() -> dict:
+    return {
+        "tool_name": "complete_task",
+        "description": "Complete the bounded scheduled task.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "response": {"type": "string"},
+                "answer": {"type": "string"},
+                "evidence": {"type": "object"},
+            },
+            "required": ["response", "answer", "evidence"],
+            "additionalProperties": False,
+        },
+        "tool_choice": "auto",
+        "state_update": {
+            "response_field": "response",
+            "copy": {
+                "task_answer": "answer",
+                "task_evidence": "evidence",
+            },
+            "set": {
+                "task_status": "done",
+                "protocol_surface": {
+                    "kind": "narrow_task_completion",
+                    "terminal_tool": "complete_task",
+                },
+            },
+        },
+        "label": "bounded-task",
+    }
 
 
 def test_default_event_log_path_is_sidecar():
@@ -318,6 +392,32 @@ def test_build_pending_event_accepts_durable_update_example():
         )
 
 
+def test_build_pending_event_accepts_terminal_surface():
+    terminal_surface = _terminal_surface()
+    event = build_pending_event(
+        purpose="Complete bounded task.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=UUID("00000000-0000-0000-0000-000000000001"),
+        terminal_surface=terminal_surface,
+    )
+
+    assert event["terminal_surface"] == terminal_surface
+    terminal_surface["state_update"]["set"]["task_status"] = "changed"
+    assert event["terminal_surface"]["state_update"]["set"]["task_status"] == "done"
+
+    with pytest.raises(ValueError, match="terminal_surface"):
+        build_pending_event(
+            purpose="Bad surface.",
+            requested_context=[{"tool": "recall", "cycle": 1}],
+            scheduled_by_cycle=1,
+            scheduled_by_record_id=UUID(
+                "00000000-0000-0000-0000-000000000001"
+            ),
+            terminal_surface={"tool_name": "bad", "input_schema": {}},
+        )
+
+
 def test_build_pending_event_accepts_walk_context():
     event = build_pending_event(
         purpose="Inspect fork-run graph hub.",
@@ -465,9 +565,15 @@ def test_schedule_event_schema_exists():
     assert "not_before" in properties
     assert "durable_update_contract" in properties
     assert "durable_update_example" in properties
+    assert "terminal_surface" in properties
     context_item = properties["requested_context"]["items"]["properties"]
     assert context_item["tool"]["enum"] == ["recall", "compare", "walk"]
     assert context_item["mode"]["enum"] == ["path", "adjacent"]
+    assert properties["terminal_surface"]["properties"]["tool_choice"]["enum"] == [
+        "auto",
+        "required",
+        "force",
+    ]
 
 
 def test_executor_buffers_scheduled_event(tmp_path):
@@ -491,6 +597,7 @@ def test_executor_buffers_scheduled_event(tmp_path):
                 "response": "The claim still holds.",
                 "revision_decision": "preserve",
             },
+            "terminal_surface": _terminal_surface(),
             "reason": "future self needs evidence",
         },
     )
@@ -502,6 +609,7 @@ def test_executor_buffers_scheduled_event(tmp_path):
         "revision_decision": {"type": "non_empty_string"}
     }
     assert result["durable_update_example"]["revision_decision"] == "preserve"
+    assert result["terminal_surface"]["tool_name"] == "complete_task"
     assert len(executor.pending_events) == 1
     assert executor.pending_events[0]["scheduled_by_cycle"] == 4
     assert executor.pending_events[0]["not_before"] == (
@@ -512,6 +620,9 @@ def test_executor_buffers_scheduled_event(tmp_path):
     )
     assert executor.pending_events[0]["durable_update_example"] == (
         result["durable_update_example"]
+    )
+    assert executor.pending_events[0]["terminal_surface"] == (
+        result["terminal_surface"]
     )
     assert executor.activity_log[-1]["tool"] == "schedule_event"
     assert executor.activity_log[-1]["reason"] == "future self needs evidence"
@@ -768,10 +879,21 @@ def test_build_event_envelope_is_explicit():
     assert envelope["event_id"] == event["event_id"]
     assert envelope["durable_update_contract"] == event["durable_update_contract"]
     assert envelope["durable_update_example"] == event["durable_update_example"]
+    assert envelope["terminal_surface"] is None
     assert "self-scheduled reflection" in envelope["instruction"]
     assert "top-level fields" in envelope["instruction"]
     assert "Visible prose is not enough" in envelope["instruction"]
     assert "cycle and _activity_log are substrate-owned" in envelope["instruction"]
+
+
+def test_build_event_envelope_preserves_terminal_surface():
+    event = _event_record()
+    event["terminal_surface"] = _terminal_surface()
+
+    envelope = json.loads(build_event_envelope(event, [], "run-1"))
+
+    assert envelope["terminal_surface"]["tool_name"] == "complete_task"
+    assert "declared terminal surface" in envelope["instruction"]
 
 
 def test_build_event_envelope_preserves_walk_context():
@@ -846,6 +968,53 @@ def test_run_next_event_completes(tmp_path):
     assert observation["added_top_level_keys"] == ["event_reflection"]
     assert observation["no_durable_state_change"] is False
     assert "wake_validation" not in records[-1]
+
+
+def test_run_next_event_uses_terminal_surface(tmp_path):
+    log_path = tmp_path / "session.jsonl"
+    event_path = tmp_path / "session.events.jsonl"
+    session = OpenTasteSession(
+        backend=_FakeBackend(),
+        log_path=str(log_path),
+        event_log_path=str(event_path),
+        enable_tools=True,
+        project_root=tmp_path,
+    )
+    session.exchange("seed")
+    terminal_backend = _TerminalBackend(
+        {
+            "response": "task complete",
+            "answer": "answer-42",
+            "evidence": {"source": "recall"},
+        }
+    )
+    session._backend = terminal_backend
+    event = build_pending_event(
+        purpose="Complete bounded task.",
+        requested_context=[{"tool": "recall", "cycle": 1}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=session._prior_states[-1][1],
+        terminal_surface=_terminal_surface(),
+    )
+    store = EventStore(event_path)
+    store.append(event)
+
+    result = run_next_event(session, store)
+
+    assert result["status"] == "completed"
+    assert terminal_backend.calls[0]["terminal_surface"]["tool_name"] == (
+        "complete_task"
+    )
+    assert "Alongside think_and_respond" not in terminal_backend.calls[0]["system"]
+    assert session.state["task_status"] == "done"
+    assert session.state["task_answer"] == "answer-42"
+    assert session.state["task_evidence"] == {"source": "recall"}
+    assert session.state["protocol_surface"]["terminal_tool"] == "complete_task"
+    assert "deleted_regions" not in result
+    summary = summarize_event_log(store.read_records())
+    completed = summary["completed"][0]
+    assert completed["terminal_surface_tool"] == "complete_task"
+    assert completed["terminal_surface_label"] == "bounded-task"
 
 
 def test_run_next_event_records_first_pass_wake_validation(tmp_path):
