@@ -533,6 +533,39 @@ class ProtocolRecoveryBuilder(Protocol):
     ) -> dict: ...
 
 
+class StateValidator(Protocol):
+    """Post-update durable-state validator hook for taste_open sessions."""
+
+    def validate(
+        self,
+        *,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+        prior_state: dict | None,
+        raw_output: dict,
+        response_text: str,
+        state: dict,
+    ) -> dict: ...
+
+
+class StateRepairBuilder(Protocol):
+    """Build a bounded repair prompt after durable-state validation fails."""
+
+    def build_repair_prompt(
+        self,
+        *,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+        prior_state: dict | None,
+        raw_output: dict,
+        response_text: str,
+        state: dict,
+        validation: dict,
+    ) -> str: ...
+
+
 @dataclass
 class CapabilityProfile:
     """Provider/model capability hints for tool-call interoperability."""
@@ -1455,6 +1488,8 @@ class OpenTasteSession:
         event_log_path: str | None = None,
         continuity_curator: ContinuityCurator | None = None,
         protocol_recovery_builder: ProtocolRecoveryBuilder | None = None,
+        state_validator: StateValidator | None = None,
+        state_repair_builder: StateRepairBuilder | None = None,
     ):
         self._backend = backend or AnthropicTasteBackend(client)
         self._model = model
@@ -1485,6 +1520,9 @@ class OpenTasteSession:
         self._last_continuity_curation: dict | None = None
         self._protocol_recovery_builder = protocol_recovery_builder
         self._last_protocol_recovery: dict | None = None
+        self._state_validator = state_validator
+        self._state_repair_builder = state_repair_builder
+        self._last_state_validation: dict | None = None
         self._session_start = datetime.now(timezone.utc)
         self._last_cycle_time: datetime | None = None
         # Accumulated prior states for involuntary recall and memory tools:
@@ -1775,6 +1813,28 @@ class OpenTasteSession:
 
         self._last_cycle_time = datetime.now(timezone.utc)
 
+        state_validation, raw_output, response_text, repair_usage = (
+            self._run_state_validation_and_repair(
+                cycle=self._cycle,
+                record_id=record_id,
+                timestamp=self._last_cycle_time,
+                prior_state=prior_state_snapshot,
+                raw_output=raw_output,
+                response_text=response_text,
+            )
+        )
+        self._last_state_validation = state_validation
+        usage = {
+            "input_tokens": result.input_tokens + repair_usage["input_tokens"],
+            "output_tokens": result.output_tokens + repair_usage["output_tokens"],
+            "cache_read_input_tokens": result.cache_read_tokens,
+            "cache_creation_input_tokens": result.cache_creation_tokens,
+            "stop_reason": result.stop_reason,
+        }
+        if repair_usage["input_tokens"] or repair_usage["output_tokens"]:
+            usage["repair_input_tokens"] = repair_usage["input_tokens"]
+            usage["repair_output_tokens"] = repair_usage["output_tokens"]
+
         continuity_curation = self._run_continuity_curator(
             cycle=self._cycle,
             record_id=record_id,
@@ -1815,8 +1875,8 @@ class OpenTasteSession:
         )
 
         self._last_usage = {
-            "input_tokens": result.input_tokens,
-            "output_tokens": result.output_tokens,
+            "input_tokens": result.input_tokens + repair_usage["input_tokens"],
+            "output_tokens": result.output_tokens + repair_usage["output_tokens"],
         }
         self._log_entry(
             user_message=user_message,
@@ -1824,23 +1884,205 @@ class OpenTasteSession:
             raw_output=raw_output,
             prior_state=prior_state_snapshot,
             record_id=record_id,
-            usage={
-                "input_tokens": result.input_tokens,
-                "output_tokens": result.output_tokens,
-                "cache_read_input_tokens": result.cache_read_tokens,
-                "cache_creation_input_tokens": result.cache_creation_tokens,
-                "stop_reason": result.stop_reason,
-            },
+            usage=usage,
             scheduled_events=(
                 tool_executor.pending_events if tool_executor is not None else []
             ),
             continuity_curation=continuity_curation,
+            state_validation=state_validation,
         )
 
         if self._event_store is not None and tool_executor is not None:
             self._event_store.append_many(tool_executor.pending_events)
 
         return response_text
+
+    @staticmethod
+    def _state_validation_passed(validation: dict | None) -> bool:
+        if not validation:
+            return False
+        artifact = validation.get("artifact")
+        if not isinstance(artifact, dict):
+            return False
+        if artifact.get("valid") is True:
+            return True
+        status = str(artifact.get("status", "")).lower()
+        return status in {"valid", "passed", "pass", "success"}
+
+    def _run_state_validator(
+        self,
+        *,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+        prior_state: dict | None,
+        raw_output: dict,
+        response_text: str,
+        state: dict,
+    ) -> dict | None:
+        if self._state_validator is None:
+            return None
+        validation_record_id = str(uuid4())
+        try:
+            artifact = self._state_validator.validate(
+                cycle=cycle,
+                record_id=record_id,
+                timestamp=timestamp,
+                prior_state=(
+                    json.loads(json.dumps(prior_state, default=str))
+                    if prior_state is not None else None
+                ),
+                raw_output=json.loads(json.dumps(raw_output, default=str)),
+                response_text=response_text,
+                state=json.loads(json.dumps(state, default=str)),
+            )
+            if not isinstance(artifact, dict):
+                raise TypeError("state validator must return a dict")
+            artifact = json.loads(json.dumps(artifact, default=str))
+            status = "valid" if self._state_validation_passed({
+                "artifact": artifact
+            }) else "invalid"
+            return {
+                "record_type": "state_validation",
+                "record_id": validation_record_id,
+                "status": status,
+                "created_at": utc_now_iso(),
+                "source_cycle": cycle,
+                "source_record_id": str(record_id),
+                "artifact": artifact,
+            }
+        except Exception as e:  # noqa: BLE001 -- validator failure is data
+            return {
+                "record_type": "state_validation",
+                "record_id": validation_record_id,
+                "status": "validator_failed",
+                "created_at": utc_now_iso(),
+                "source_cycle": cycle,
+                "source_record_id": str(record_id),
+                "error_type": type(e).__name__,
+                "error": str(e),
+            }
+
+    def _run_state_validation_and_repair(
+        self,
+        *,
+        cycle: int,
+        record_id: UUID,
+        timestamp: datetime,
+        prior_state: dict | None,
+        raw_output: dict,
+        response_text: str,
+    ) -> tuple[dict | None, dict, str, dict]:
+        repair_usage = {"input_tokens": 0, "output_tokens": 0}
+        if self._state_validator is None or self._state is None:
+            return None, raw_output, response_text, repair_usage
+
+        first_pass = self._run_state_validator(
+            cycle=cycle,
+            record_id=record_id,
+            timestamp=timestamp,
+            prior_state=prior_state,
+            raw_output=raw_output,
+            response_text=response_text,
+            state=self._state,
+        )
+        if first_pass is None:
+            return None, raw_output, response_text, repair_usage
+
+        validation = {
+            "record_type": "state_validation",
+            "record_id": str(uuid4()),
+            "status": first_pass["status"],
+            "created_at": utc_now_iso(),
+            "source_cycle": cycle,
+            "source_record_id": str(record_id),
+            "first_pass": first_pass,
+            "repair_attempted": False,
+        }
+        if self._state_validation_passed(first_pass):
+            return validation, raw_output, response_text, repair_usage
+
+        if first_pass["status"] == "validator_failed":
+            validation["status"] = "validator_failed"
+            return validation, raw_output, response_text, repair_usage
+
+        if self._state_repair_builder is None:
+            validation["status"] = "unrepaired"
+            return validation, raw_output, response_text, repair_usage
+
+        validation["repair_attempted"] = True
+        try:
+            repair_prompt = self._state_repair_builder.build_repair_prompt(
+                cycle=cycle,
+                record_id=record_id,
+                timestamp=timestamp,
+                prior_state=(
+                    json.loads(json.dumps(prior_state, default=str))
+                    if prior_state is not None else None
+                ),
+                raw_output=json.loads(json.dumps(raw_output, default=str)),
+                response_text=response_text,
+                state=json.loads(json.dumps(self._state, default=str)),
+                validation=json.loads(json.dumps(first_pass, default=str)),
+            )
+            if not isinstance(repair_prompt, str) or not repair_prompt.strip():
+                raise TypeError("state repair builder must return a non-empty string")
+            messages, system = _build_messages(
+                self._state,
+                repair_prompt,
+                cycle,
+                system_prefix=self._system_prompt_prefix,
+                memory=None,
+                tools_enabled=False,
+                curator_context=None,
+            )
+            repair_result = self._backend.call(
+                model=self._model,
+                system=system,
+                messages=messages,
+                experiment_label=f"{self._experiment_label}_state_repair",
+                extra_tools=None,
+                tool_executor=None,
+            )
+            repair_usage["input_tokens"] = repair_result.input_tokens
+            repair_usage["output_tokens"] = repair_result.output_tokens
+            repair_raw_output = repair_result.raw_output
+            repair_response_text = repair_raw_output.get("response", "")
+            repaired_state = _apply_updates(self._state, repair_raw_output, cycle)
+            self._state = repaired_state
+            repair_validation = self._run_state_validator(
+                cycle=cycle,
+                record_id=record_id,
+                timestamp=timestamp,
+                prior_state=prior_state,
+                raw_output=repair_raw_output,
+                response_text=repair_response_text,
+                state=self._state,
+            )
+            repaired = self._state_validation_passed(repair_validation)
+            validation["status"] = "repaired" if repaired else "unrepaired"
+            validation["repair"] = {
+                "status": "valid" if repaired else "invalid",
+                "raw_output": json.loads(json.dumps(repair_raw_output, default=str)),
+                "response_text": repair_response_text,
+                "usage": {
+                    "input_tokens": repair_result.input_tokens,
+                    "output_tokens": repair_result.output_tokens,
+                    "cache_read_input_tokens": repair_result.cache_read_tokens,
+                    "cache_creation_input_tokens": repair_result.cache_creation_tokens,
+                    "stop_reason": repair_result.stop_reason,
+                },
+                "validation": repair_validation,
+            }
+            return validation, repair_raw_output, repair_response_text, repair_usage
+        except Exception as e:  # noqa: BLE001 -- failed repair is data
+            validation["status"] = "repair_failed"
+            validation["repair"] = {
+                "status": "failed",
+                "error_type": type(e).__name__,
+                "error": str(e),
+            }
+            return validation, raw_output, response_text, repair_usage
 
     def _run_continuity_curator(
         self,
@@ -1958,6 +2200,7 @@ class OpenTasteSession:
         continuity_curation: dict | None = None,
         failure_classification: dict | None = None,
         protocol_recovery: dict | None = None,
+        state_validation: dict | None = None,
     ) -> None:
         """Append full record to JSONL log. Captures everything."""
         if not self._log_path:
@@ -2018,6 +2261,8 @@ class OpenTasteSession:
             record["failure_classification"] = failure_classification
         if protocol_recovery is not None:
             record["protocol_recovery"] = protocol_recovery
+        if state_validation is not None:
+            record["state_validation"] = state_validation
         with open(self._log_path, "a") as f:
             f.write(json.dumps(record, default=str) + "\n")
 

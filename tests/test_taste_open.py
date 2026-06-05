@@ -295,6 +295,53 @@ class _FailingRecoveryBuilder:
         raise RuntimeError("repair boom")
 
 
+class _RequiredRepairStateValidator:
+    def __init__(self):
+        self.calls = []
+
+    def validate(
+        self,
+        *,
+        cycle,
+        record_id,
+        timestamp,
+        prior_state,
+        raw_output,
+        response_text,
+        state,
+    ):
+        del record_id, timestamp, prior_state, raw_output, response_text
+        missing = []
+        if state.get("task_status") != "done":
+            missing.append("task_status")
+        if state.get("evidence_count") != 4:
+            missing.append("evidence_count")
+        artifact = {
+            "valid": not missing,
+            "status": "valid" if not missing else "invalid",
+            "missing_fields": missing,
+            "cycle_seen": cycle,
+        }
+        self.calls.append(artifact)
+        return artifact
+
+
+class _StaticStateRepairBuilder:
+    def __init__(self, prompt: str = "Repair durable state now."):
+        self.prompt = prompt
+        self.calls = []
+
+    def build_repair_prompt(self, **kwargs):
+        self.calls.append(kwargs)
+        return self.prompt
+
+
+class _FailingStateValidator:
+    def validate(self, **kwargs):
+        del kwargs
+        raise RuntimeError("validator boom")
+
+
 class TestExchangeCycleRollback:
     """A failed API call must not leave self._cycle ahead of state["cycle"].
     Without rollback, the next successful exchange would skip a number and
@@ -476,6 +523,197 @@ class TestExchangeCycleRollback:
         assert failed["protocol_recovery"]["error"] == "repair boom"
         assert session.cycle == 0
         assert session.state is None
+
+
+class TestStateValidationRepairScaffold:
+    def test_no_validator_preserves_default_log_shape(self, tmp_path):
+        backend = _CannedBackend({"response": "ok"})
+        log_path = tmp_path / "session.jsonl"
+        session = OpenTasteSession(
+            backend=backend,
+            experiment_label="state_validation_default_test",
+            log_path=str(log_path),
+        )
+
+        assert session.exchange("first") == "ok"
+
+        records = [
+            json.loads(line)
+            for line in log_path.read_text().splitlines()
+            if line.strip()
+        ]
+        assert backend.calls == 1
+        assert "state_validation" not in records[0]
+        assert "repair_input_tokens" not in records[0]["usage"]
+        assert "repair_output_tokens" not in records[0]["usage"]
+
+    def test_first_pass_valid_state_logs_validation_without_repair(self, tmp_path):
+        backend = _SequenceBackend([
+            ExchangeResult(
+                raw_output={
+                    "response": "done",
+                    "task_status": "done",
+                    "evidence_count": 4,
+                },
+                stop_reason="tool_use",
+                input_tokens=11,
+                output_tokens=22,
+            )
+        ])
+        validator = _RequiredRepairStateValidator()
+        repair_builder = _StaticStateRepairBuilder()
+        log_path = tmp_path / "session.jsonl"
+        session = OpenTasteSession(
+            backend=backend,
+            experiment_label="state_validation_first_pass_test",
+            log_path=str(log_path),
+            state_validator=validator,
+            state_repair_builder=repair_builder,
+        )
+
+        assert session.exchange("first") == "done"
+
+        records = [
+            json.loads(line)
+            for line in log_path.read_text().splitlines()
+            if line.strip()
+        ]
+        validation = records[0]["state_validation"]
+        assert backend.calls == 1
+        assert repair_builder.calls == []
+        assert validation["status"] == "valid"
+        assert validation["repair_attempted"] is False
+        assert validation["first_pass"]["status"] == "valid"
+        assert session.state["task_status"] == "done"
+
+    def test_invalid_state_gets_one_model_authored_repair(self, tmp_path):
+        backend = _SequenceBackend([
+            ExchangeResult(
+                raw_output={"response": "I recorded it."},
+                stop_reason="tool_use",
+                input_tokens=11,
+                output_tokens=22,
+            ),
+            ExchangeResult(
+                raw_output={
+                    "response": "Repaired.",
+                    "task_status": "done",
+                    "evidence_count": 4,
+                },
+                stop_reason="tool_use",
+                input_tokens=33,
+                output_tokens=44,
+            ),
+        ])
+        validator = _RequiredRepairStateValidator()
+        repair_builder = _StaticStateRepairBuilder()
+        log_path = tmp_path / "session.jsonl"
+        session = OpenTasteSession(
+            backend=backend,
+            experiment_label="state_validation_repair_success_test",
+            log_path=str(log_path),
+            state_validator=validator,
+            state_repair_builder=repair_builder,
+        )
+
+        assert session.exchange("first") == "Repaired."
+
+        records = [
+            json.loads(line)
+            for line in log_path.read_text().splitlines()
+            if line.strip()
+        ]
+        record = records[0]
+        validation = record["state_validation"]
+        assert backend.calls == 2
+        assert len(repair_builder.calls) == 1
+        assert validation["status"] == "repaired"
+        assert validation["first_pass"]["status"] == "invalid"
+        assert validation["repair_attempted"] is True
+        assert validation["repair"]["status"] == "valid"
+        assert validation["repair"]["raw_output"]["task_status"] == "done"
+        assert record["raw_output"]["response"] == "Repaired."
+        assert record["prior_state"] is None
+        assert record["state"]["task_status"] == "done"
+        assert record["usage"]["input_tokens"] == 44
+        assert record["usage"]["output_tokens"] == 66
+        assert record["usage"]["repair_input_tokens"] == 33
+        assert record["usage"]["repair_output_tokens"] == 44
+
+    def test_failed_repair_is_logged_as_unrepaired_and_bounded(self, tmp_path):
+        backend = _SequenceBackend([
+            ExchangeResult(
+                raw_output={"response": "I recorded it."},
+                stop_reason="tool_use",
+                input_tokens=11,
+                output_tokens=22,
+            ),
+            ExchangeResult(
+                raw_output={"response": "Repair complete."},
+                stop_reason="tool_use",
+                input_tokens=33,
+                output_tokens=44,
+            ),
+        ])
+        validator = _RequiredRepairStateValidator()
+        repair_builder = _StaticStateRepairBuilder()
+        log_path = tmp_path / "session.jsonl"
+        session = OpenTasteSession(
+            backend=backend,
+            experiment_label="state_validation_unrepaired_test",
+            log_path=str(log_path),
+            state_validator=validator,
+            state_repair_builder=repair_builder,
+        )
+
+        assert session.exchange("first") == "Repair complete."
+
+        records = [
+            json.loads(line)
+            for line in log_path.read_text().splitlines()
+            if line.strip()
+        ]
+        record = records[0]
+        validation = record["state_validation"]
+        assert backend.calls == 2
+        assert len(repair_builder.calls) == 1
+        assert validation["status"] == "unrepaired"
+        assert validation["repair"]["status"] == "invalid"
+        assert record["state"] == {"cycle": 1}
+        assert record["raw_output"]["response"] == "Repair complete."
+
+    def test_validator_failure_is_logged_without_repair(self, tmp_path):
+        backend = _SequenceBackend([
+            ExchangeResult(
+                raw_output={"response": "ok"},
+                stop_reason="tool_use",
+                input_tokens=11,
+                output_tokens=22,
+            )
+        ])
+        repair_builder = _StaticStateRepairBuilder()
+        log_path = tmp_path / "session.jsonl"
+        session = OpenTasteSession(
+            backend=backend,
+            experiment_label="state_validation_validator_failure_test",
+            log_path=str(log_path),
+            state_validator=_FailingStateValidator(),
+            state_repair_builder=repair_builder,
+        )
+
+        assert session.exchange("first") == "ok"
+
+        records = [
+            json.loads(line)
+            for line in log_path.read_text().splitlines()
+            if line.strip()
+        ]
+        validation = records[0]["state_validation"]
+        assert backend.calls == 1
+        assert repair_builder.calls == []
+        assert validation["status"] == "validator_failed"
+        assert validation["first_pass"]["status"] == "validator_failed"
+        assert "repair" not in validation
 
 
 class TestContextLimitErrorDetection:
