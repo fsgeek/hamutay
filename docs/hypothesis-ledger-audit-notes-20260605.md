@@ -8,16 +8,16 @@ Validation status: `passed`.
 
 ## Extraction Coverage
 
-- `results.json` files seen: 117
-- result JSON shapes: {'list': 17, 'dict': 100}
-- result files with hypothesis maps: 31
+- `results.json` files seen: 118
+- result JSON shapes: {'list': 17, 'dict': 101}
+- result files with hypothesis maps: 32
 - result files without hypothesis maps: 69
 - non-dict result files: 17
-- Markdown sources scanned: 233
-- ledger entries emitted: 552
+- Markdown sources scanned: 235
+- ledger entries emitted: 557
 - entries with nearby raw trace links: 233
-- status counts: {'boundary': 67, 'contaminated': 4, 'unknown': 281, 'survived': 181, 'falsified': 19}
-- entry-type counts: {'confound': 41, 'falsification_criterion': 241, 'hypothesis': 223, 'paper_claim': 14, 'synthesis_reference': 33}
+- status counts: {'boundary': 67, 'contaminated': 4, 'unknown': 281, 'survived': 186, 'falsified': 19}
+- entry-type counts: {'confound': 41, 'falsification_criterion': 241, 'hypothesis': 228, 'paper_claim': 14, 'synthesis_reference': 33}
 
 ## Schema Gaps
 

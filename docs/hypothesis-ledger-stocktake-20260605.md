@@ -4,38 +4,38 @@ Date: 2026-06-05
 
 ## Summary
 
-The first-pass ledger contains 552 entries.
+The first-pass ledger contains 557 entries.
 
 Status counts:
 
 - `boundary`: 67
 - `contaminated`: 4
 - `falsified`: 19
-- `survived`: 181
+- `survived`: 186
 - `unknown`: 281
 
 Entry-type counts:
 
 - `confound`: 41
 - `falsification_criterion`: 241
-- `hypothesis`: 223
+- `hypothesis`: 228
 - `paper_claim`: 14
 - `synthesis_reference`: 33
 
 Limitation-axis counts:
 
-- `model`: 78
-- `protocol`: 69
-- `provider`: 53
+- `model`: 81
+- `protocol`: 73
+- `provider`: 58
 - `sample_size`: 30
 - `scope`: 52
-- `scorer`: 66
-- `substrate`: 244
+- `scorer`: 70
+- `substrate`: 246
 
 Source root references:
 
 - `docs`: 54
-- `experiments`: 674
+- `experiments`: 684
 
 ## What The Map Shows
 
@@ -113,11 +113,11 @@ This is a conservative first pass. Entries with clear result-map outcomes are cl
 
 ## Coverage Notes
 
-- `results.json` files seen: 117
-- result files with hypothesis maps: 31
+- `results.json` files seen: 118
+- result files with hypothesis maps: 32
 - non-dict result files: 17
 - result files without hypothesis maps: 69
-- Markdown sources scanned: 233
+- Markdown sources scanned: 235
 - entries with nearby raw trace links: 233
 
 ## Use

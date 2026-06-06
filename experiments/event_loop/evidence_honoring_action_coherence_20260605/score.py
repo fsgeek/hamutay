@@ -70,7 +70,7 @@ def evidence_content(row: dict[str, Any]) -> str:
         "multiple_requests_overclaimed",
     }:
         return "overclaimed"
-    if "fabricat" in json.dumps(row, sort_keys=True, default=str).lower():
+    if evidence_use == "missing_evidence_fabricated":
         return "fabricated"
     return "ignored"
 
@@ -119,6 +119,13 @@ def action_artifact_coherence(row: dict[str, Any]) -> str:
 
 
 def failure_layer(row: dict[str, Any]) -> str:
+    if evidence_content(row) in {"ignored", "fabricated", "overclaimed"}:
+        return "model"
+    if action_artifact_coherence(row) != "coherent" or policy_action(row) in {
+        "invalid",
+        "missing",
+    }:
+        return "model"
     if scoreable(row) and action_artifact_coherence(row) == "coherent":
         return "none"
     message = _error_message(row).lower()
@@ -137,12 +144,6 @@ def failure_layer(row: dict[str, Any]) -> str:
         return "scorer"
     if not scoreable(row) and row.get("log_path"):
         return "substrate"
-    if action_artifact_coherence(row) != "coherent" or evidence_content(row) in {
-        "ignored",
-        "fabricated",
-        "overclaimed",
-    }:
-        return "model"
     return "scope"
 
 
