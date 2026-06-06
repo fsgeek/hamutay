@@ -28,21 +28,40 @@ semantic/episodic maps, graph edges, evidence records, and recall surfaces.
 
 ## Core Requirements
 
-### 1. Episodic Records
+### 1. Episodic Records And Layered Facets
 
 Each meaningful cycle, event, tool result, artifact, evidence request,
 fulfillment, scorer result, repair, and state transition should be storable as
 an episode with structured metadata.
 
-Minimum episode facets:
+The classic episodic facets are useful, but they are not homogeneous write-time
+metadata. The substrate must keep their layers distinct.
+
+Production-time episode coordinates:
 
 - who: instance, model, session, author, provider, tool, or scorer;
 - what: artifact, state fields, claims, evidence, action, decision, or result;
 - when: cycle, event time, logical clock, scheduled time, causal order;
-- where: project, run, file, tool surface, memory collection, or context site;
-- why: goal, evidence request, retrieval reason, policy rationale, hypothesis;
-- how: protocol path, provider path, tool path, validation path, repair path,
-  scorer path.
+- where: project, run, file, tool surface, memory collection, or context site.
+
+Contestable attestations:
+
+- why-as-objective: a declared goal, hypothesis, evidence request, or policy
+  reason supplied by an instance, harness, user, tool, or scorer.
+
+Execution trace:
+
+- how-as-trace: provider path, protocol path, tool invocation, validation path,
+  repair path, scorer path, and observed terminal or tool outputs.
+
+Consumption-time derivations:
+
+- why-as-proxy: the reason a later query retrieves or uses a record.
+
+Why-as-objective is an attestation: timestamped, attributable, and contestable,
+not verified truth. Why-as-proxy is derived at retrieval time and should not be
+stored as episode truth. How is admissible only when grounded in trace; stored
+rationale must not be allowed to masquerade as execution evidence.
 
 The clock is not incidental. Hamut'ay needs temporal and causal structure, not
 only semantic similarity.
@@ -110,7 +129,7 @@ The model should not have unchecked authority to corrupt durable memory, but it
 should be a first-class participant in indexing, tagging, retrieval requests,
 and loss declarations.
 
-### 5. Provenance And Audit
+### 5. Provenance, Audit, And Retrieval Telemetry
 
 Every stored and retrieved item must carry provenance.
 
@@ -130,18 +149,27 @@ Retrieval provenance should include:
 
 - retrieval tool;
 - query or coordinate;
-- retrieval reason supplied by the model or caller;
+- retrieval reason supplied by the model or caller as a consumption-time
+  attestation, not a stored property of the retrieved episode;
 - cycle/event when retrieved;
 - records returned;
 - fields returned;
 - detail level returned;
 - records intentionally omitted or truncated;
-- context budget used where available.
+- context budget used where available;
+- candidate counts, scan depth, index path, graph depth, fallback path, and
+  latency/cost where available.
 
 The system must make it possible to audit what information was available, what
 was actually shown to the model, and what the model did with it.
 
-### 6. Loss And Confidence Tracking
+Per-retrieval provenance is necessary but not sufficient. The substrate must
+also retain aggregate query-path telemetry so an Archivist or maintenance agent
+can detect population-level anomalies such as records that are consistently
+expensive to find, labels that route queries poorly, indexes that miss a needed
+axis, or retrieval paths that behave differently from their declared labels.
+
+### 6. Attestation Chains, Loss, And Confidence Tracking
 
 Memory must represent uncertainty and loss explicitly.
 
@@ -161,6 +189,23 @@ Required status concepts:
 
 The system should track these at the claim/evidence level where possible, not
 only at the document level.
+
+Status must be represented as an append-only attestation chain, not only as an
+end-state label. The substrate must preserve transitions such as:
+
+- claimed;
+- supported;
+- contested;
+- corrected;
+- relabeled;
+- superseded;
+- invalidated;
+- declared lost.
+
+Each transition needs timestamp, actor, provenance, evidence basis, and scope.
+The original claim or label must remain legible after correction. A wrong label
+that can be contested and repaired is more useful than a blank because it gives
+the maintenance system something falsifiable to inspect.
 
 Declared losses are load-bearing. Forgetting should be visible when it affects
 future cognition.
@@ -222,7 +267,28 @@ When records conflict, retrieval should expose:
 Returning a blended answer without surfacing conflict is a memory failure for
 Hamut'ay's purposes.
 
-### 10. Stable IDs And Addressability
+### 10. Memory Maintenance And Relabel Discipline
+
+The memory system needs a first-class maintenance path, provisionally called an
+Archivist, that can inspect retrieval behavior and propose repairs.
+
+The Archivist should use aggregate retrieval telemetry, graph behavior, and
+record-level evidence to detect possible mislabels or impoverished indexes. It
+must not relabel records authoritatively from ambiguous evidence.
+
+A relabel proposal must distinguish at least four possible causes:
+
+- the stored label is wrong;
+- the query was malformed or underspecified;
+- the index is missing a needed axis;
+- the substrate, tool, or graph path failed.
+
+Relabeling must itself be an append-only, contestable attestation. The apparatus
+must point at itself: memory operations, repair proposals, rejected relabels,
+accepted relabels, and later contests of those relabels should be stored with
+the same provenance and audit discipline as ordinary records.
+
+### 11. Stable IDs And Addressability
 
 Hamut'ay needs durable, stable, public-facing IDs that work across tools.
 
@@ -243,31 +309,54 @@ At minimum, Hamut'ay needs tool surfaces equivalent to:
 
 - `memory_schema`: inspect available structure without loading full content;
 - `recall`: retrieve by record, cycle, field, or bounded coordinate;
-- `find`: goal-focused search over semantic and episodic facets;
+- `find`: goal-focused search over semantic and episodic facets, with scope
+  unresolved as described below;
 - `walk`: graph traversal from a known record;
 - `compare`: compare records, claims, or states;
 - `open_items`: retrieve unresolved questions, evidence requests, declared
   losses, and pending commitments;
 - `what_changed`: retrieve deltas since a cycle, event, or record;
-- `retrieval_log`: inspect what was retrieved, why, and when.
+- `retrieval_log`: inspect what was retrieved, why, and when;
+- `maintenance_log`: inspect proposed relabels, repair decisions, rejected
+  repairs, and aggregate retrieval anomalies.
 
 Tool names may change, but the capabilities are required.
+
+`find` is required as a capability, but its scope is not settled. The design
+must explicitly decide what `find` ranges over before it is implemented as a
+stable public tool. Open scoping questions include:
+
+- all episodes or only records visible to the current goal;
+- current labels only or full attestation history;
+- post-supersession records only or superseded records with status exposed;
+- raw semantic neighborhood or semantic search constrained by episodic facets;
+- current instance records only or cross-instance memory;
+- whether stale, contaminated, declared-lost, or contested records are included
+  by default.
+
+An unscoped `find` risks reintroducing stale-label dominance and
+conflict-collapse through retrieval behavior.
 
 ## Minimum Viable Memory
 
 A first useful version for Hamut'ay should support:
 
-1. storing event-loop episodes with who/what/when/where/why/how metadata;
+1. storing event-loop episodes with production-time coordinates, contestable
+   objective attestations, trace-grounded execution facts, and consumption-time
+   retrieval reasons kept separate;
 2. recalling exact records by stable public ID;
 3. inspecting record schemas before content recall;
-4. finding records by semantic query plus temporal/status filters;
+4. finding records by semantic query plus temporal/status filters under an
+   explicit, documented scope;
 5. retrieving unresolved evidence requests and fulfillments;
 6. graph-walking from an event/result record to related evidence and follow-up
    wakes;
 7. recording retrieval reason and retrieval provenance;
-8. exposing conflicts and declared losses;
+8. exposing conflicts, declared losses, and attestation chains;
 9. returning bounded payloads with explicit truncation;
-10. producing audit logs sufficient to reconstruct what the model saw.
+10. producing audit logs sufficient to reconstruct what the model saw;
+11. recording query-path telemetry sufficient to support later mislabel and
+    index-anomaly detection.
 
 ## Non-Goals
 
@@ -284,16 +373,25 @@ A first useful version for Hamut'ay should support:
 
 Once the substrate exists, Hamut'ay can test:
 
-- whether model-participatory working-set management improves evidence use;
-- whether models retrieve better when given map-before-recall tools;
-- whether episodic facets improve over flat semantic search;
-- whether declared-loss tracking reduces unsupported claims;
-- whether scheduled recall improves long-horizon task continuity;
-- whether self-curated state plus episodic memory outperforms self-curated
-  state alone;
-- whether different models use the memory substrate differently;
-- whether error-correction agents can detect and repair retrieval or
-  evidence-use failures.
+- whether model-participatory working-set management can be made observable and
+  non-inferior to externally managed working sets for bounded tasks;
+- whether map-before-recall reduces unnecessary context loading while
+  preserving task-relevant evidence;
+- whether episodic facets reduce retrieval cost or conflict-collapse compared
+  with flat semantic search for Hamut'ay tasks;
+- whether declared-loss tracking reduces unsupported claims within this
+  substrate;
+- whether scheduled recall improves long-horizon task continuity under the
+  event-loop scaffold;
+- whether self-curated state plus episodic memory is non-inferior or superior
+  to self-curated state alone for task continuity and evidence use;
+- whether error-correction agents can detect and repair retrieval,
+  evidence-use, labeling, or index failures.
+
+Cross-model capability comparisons are out of scope for this requirements
+document except as diagnostic checks of substrate behavior. If run, they should
+be framed as compatibility or substrate-stress tests, not as broad claims about
+model capability.
 
 ## Summary Requirement
 
@@ -301,5 +399,5 @@ The memory system Hamut'ay needs is:
 
 > an episodic, provenance-rich, graph-addressable memory substrate that lets the
 > model inspect the map, request bounded recall, preserve uncertainty, bind
-> memory to scheduled events, and audit what was retrieved or ignored.
-
+> memory to scheduled events, preserve contestable attestation chains, and audit
+> what was retrieved, ignored, relabeled, or repaired.
