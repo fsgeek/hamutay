@@ -1,0 +1,275 @@
+from uuid import UUID
+
+from hamutay.memory.bridge import LocalMemorySubstrate
+
+
+RID_1 = UUID("00000000-0000-0000-0000-000000000101")
+RID_2 = UUID("00000000-0000-0000-0000-000000000102")
+RID_3 = UUID("00000000-0000-0000-0000-000000000103")
+
+
+def _substrate_with_records() -> LocalMemorySubstrate:
+    substrate = LocalMemorySubstrate()
+    first = substrate.store_episode(
+        record_id=RID_1,
+        record_type="cycle",
+        content={
+            "claim": "first claim",
+            "nested": {"field": "nested value"},
+            "open_items": [{"kind": "question", "text": "what changed?"}],
+            "declared_losses": [{"what": "detail", "why": "budget"}],
+            "body": "alpha " * 40,
+        },
+        production={
+            "who": {"instance": "test-instance"},
+            "what": {"artifact": "cycle-state"},
+            "when": {"cycle": 1},
+            "where": {"project": "hamutay"},
+        },
+        objective_attestations=[
+            {"kind": "goal", "text": "test bridge contract"}
+        ],
+        execution_trace={"tool_path": "local-test"},
+    )
+    assert first.ok
+    second = substrate.store_episode(
+        record_id=RID_2,
+        record_type="cycle",
+        content={"claim": "second claim", "evidence_requests": [{"id": "req-1"}]},
+        production={"who": {"instance": "test-instance"}, "when": {"cycle": 2}},
+        execution_trace={"tool_path": "local-test"},
+    )
+    assert second.ok
+    linked = substrate.link_records(
+        from_record_id=RID_1,
+        to_record_id=RID_2,
+        relation_type="refines",
+        provenance={"source": "test"},
+    )
+    assert linked.ok
+    return substrate
+
+
+def test_exact_record_recall_by_uuid_and_field_level_recall():
+    substrate = _substrate_with_records()
+
+    full = substrate.recall(record_id=RID_1, reason="load full record")
+    field = substrate.recall(
+        record_id=str(RID_1),
+        field="nested.field",
+        reason={"purpose": "surgical recall"},
+    )
+
+    assert full.ok
+    assert full.data["content"]["record_id"] == str(RID_1)
+    assert field.ok
+    assert field.data["content"] == "nested value"
+    assert field.data["field"] == "nested.field"
+
+
+def test_invalid_uuid_and_missing_record_fail_explicitly_and_are_logged():
+    substrate = _substrate_with_records()
+
+    invalid = substrate.recall(record_id="not-a-uuid", reason="bad id")
+    missing = substrate.recall(record_id=RID_3, reason="missing id")
+    log = substrate.retrieval_log()
+
+    assert not invalid.ok
+    assert invalid.error is not None
+    assert invalid.error.code == "invalid_record_id"
+    assert not missing.ok
+    assert missing.error is not None
+    assert missing.error.code == "record_not_found"
+    assert log.ok
+    failures = [entry for entry in log.data["retrievals"] if not entry["success"]]
+    assert [entry["error"]["code"] for entry in failures] == [
+        "invalid_record_id",
+        "record_not_found",
+    ]
+    assert all(entry["reason"]["layer"] == "consumption_time" for entry in failures)
+
+
+def test_schema_map_returns_structure_without_full_content():
+    substrate = _substrate_with_records()
+
+    schema = substrate.schema(record_id=RID_1, reason="inspect before recall")
+
+    assert schema.ok
+    assert set(schema.data["field_names"]) >= {"claim", "nested", "body"}
+    assert "content" not in schema.data
+    assert schema.data["field_types"]["nested"] == "dict"
+
+
+def test_graph_walk_from_known_anchor():
+    substrate = _substrate_with_records()
+
+    walked = substrate.walk(from_record_id=RID_1, direction="forward", depth=1)
+
+    assert walked.ok
+    assert len(walked.data["path"]) == 1
+    assert walked.data["path"][0]["record_id"] == str(RID_2)
+    assert walked.data["path"][0]["edge"]["relation_type"] == "refines"
+
+
+def test_open_items_include_declared_losses_and_open_evidence_requests():
+    substrate = _substrate_with_records()
+    attested = substrate.write_attestation(
+        subject_record_id=RID_1,
+        kind="status",
+        status="open",
+        content={"claim": "still unresolved"},
+        provenance={"actor": "test"},
+        scope="claim",
+    )
+    assert attested.ok
+
+    open_items = substrate.open_items(reason="resume open work")
+
+    assert open_items.ok
+    sources = {item["source"] for item in open_items.data["items"]}
+    assert {"open_items", "declared_losses", "evidence_requests", "attestation"} <= sources
+
+
+def test_attestation_chain_is_append_only_and_preserves_declared_loss():
+    substrate = _substrate_with_records()
+
+    supported = substrate.write_attestation(
+        subject_record_id=RID_1,
+        kind="status",
+        status="supported",
+        content={"claim": "first claim"},
+        provenance={"actor": "scorer"},
+        scope="claim",
+    )
+    invalidated = substrate.write_attestation(
+        subject_record_id=RID_1,
+        kind="status",
+        status="invalidated",
+        content={"claim": "first claim", "reason": "new evidence"},
+        provenance={"actor": "scorer"},
+        scope="claim",
+    )
+    items = substrate.open_items()
+
+    assert supported.ok
+    assert invalidated.ok
+    changed = substrate.what_changed(since_record_id=RID_1)
+    assert changed.ok
+    statuses = [a["status"] for a in changed.data["attestations"]]
+    assert statuses == ["supported", "invalidated"]
+    assert any(item["source"] == "declared_losses" for item in items.data["items"])
+
+
+def test_successful_recall_logs_consumption_time_reason():
+    substrate = _substrate_with_records()
+
+    result = substrate.recall(record_id=RID_1, field="claim", reason="answer user")
+    log = substrate.retrieval_log()
+
+    assert result.ok
+    assert log.ok
+    last = log.data["retrievals"][-1]
+    assert last["success"] is True
+    assert last["records_returned"] == [str(RID_1)]
+    assert last["fields_returned"] == ["claim"]
+    assert last["reason"] == {"layer": "consumption_time", "text": "answer user"}
+
+
+def test_bounded_payload_reports_truncation_and_omission_metadata():
+    substrate = _substrate_with_records()
+
+    result = substrate.recall(record_id=RID_1, field="body", max_chars=20)
+    log = substrate.retrieval_log()
+
+    assert result.ok
+    assert result.data["truncated"] is True
+    assert result.data["omitted"] == ["payload_truncated"]
+    assert len(result.data["content"]) == 20
+    assert log.data["retrievals"][-1]["truncated"] is True
+
+
+def test_production_and_consumption_layers_remain_separate():
+    substrate = _substrate_with_records()
+
+    recalled = substrate.recall(record_id=RID_1, reason="consumer query")
+    log = substrate.retrieval_log()
+
+    assert recalled.ok
+    record = recalled.data["content"]
+    assert record["production"]["layer"] == "production_time"
+    assert record["objective_attestations"][0]["layer"] == "contestable_attestation"
+    assert record["execution_trace"]["layer"] == "execution_trace"
+    assert "reason" not in record["production"]
+    assert log.data["retrievals"][-1]["reason"]["layer"] == "consumption_time"
+
+
+def test_relabel_requires_disambiguating_cause_and_does_not_overwrite():
+    substrate = _substrate_with_records()
+
+    ambiguous = substrate.write_attestation(
+        subject_record_id=RID_1,
+        kind="relabel",
+        status="contested",
+        content={"from": "X", "to": "Y"},
+        provenance={"actor": "archivist"},
+        scope="label",
+    )
+    relabel = substrate.write_attestation(
+        subject_record_id=RID_1,
+        kind="relabel",
+        status="contested",
+        content={"from": "X", "to": "Y"},
+        provenance={"actor": "archivist"},
+        scope="label",
+        cause="wrong_label",
+    )
+    recalled = substrate.recall(record_id=RID_1)
+
+    assert not ambiguous.ok
+    assert ambiguous.error is not None
+    assert ambiguous.error.code == "ambiguous_relabel"
+    assert relabel.ok
+    assert relabel.data["attestation"]["cause"] == "wrong_label"
+    assert recalled.data["content"]["content"]["claim"] == "first claim"
+
+
+def test_semantic_conflict_write_down_is_attestation_edge_not_truth():
+    substrate = _substrate_with_records()
+
+    conflict = substrate.write_attestation(
+        subject_record_id=RID_1,
+        target_record_id=RID_2,
+        kind="semantic_conflict",
+        status="contested",
+        content={"basis": "consumer semantic judgment"},
+        provenance={"actor": "consumer-layer"},
+        scope="claim",
+    )
+    walked = substrate.walk(from_record_id=RID_1, direction="forward", depth=1)
+    recalled = substrate.recall(record_id=RID_1)
+
+    assert conflict.ok
+    assert conflict.data["attestation"]["layer"] == "contestable_attestation"
+    edge_types = {step["edge"]["relation_type"] for step in walked.data["path"]}
+    assert "semantic_conflict" in edge_types
+    assert "semantic_conflict" not in recalled.data["content"]["content"]
+
+
+def test_unsupported_semantic_find_and_substrate_unavailable_fail_explicitly():
+    substrate = _substrate_with_records()
+    unavailable = LocalMemorySubstrate(available=False)
+
+    find = substrate.find(query="meaning")
+    failed_store = unavailable.store_episode(
+        record_id=RID_1,
+        record_type="cycle",
+        content={},
+        production={},
+    )
+
+    assert not find.ok
+    assert find.error is not None
+    assert find.error.code == "unsupported_operation"
+    assert not failed_store.ok
+    assert failed_store.error is not None
+    assert failed_store.error.code == "substrate_unavailable"
