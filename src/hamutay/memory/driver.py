@@ -153,9 +153,17 @@ class AutonomousDriver:
         if self._cycle == 0:
             # The seed wake reads no memory, but is logged for provenance parity
             # with memory wakes — otherwise cycle 1 is the one unprovenanced wake.
-            self._substrate.open_items(
+            # A failure here is a real block, with the SAME discipline as the
+            # memory wake below: a provenance write that silently fails would
+            # leave cycle 1 unprovenanced after claiming it was logged.
+            seed_log = self._substrate.open_items(
                 reason="autonomous seed wake: cold start (reads nothing)"
             )
+            if not seed_log.ok:
+                raise DriverBlocked(
+                    "seed-wake open_items failed: "
+                    f"{seed_log.error.code if seed_log.error else 'unknown'}"
+                )
             return (self._seed, "cold start from seed intention", "seed", {})
 
         items = self._substrate.open_items(
