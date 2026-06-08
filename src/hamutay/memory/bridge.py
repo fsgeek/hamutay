@@ -231,6 +231,16 @@ class MemoryPort(Protocol):
     ) -> MemoryResponse:
         ...
 
+    def link_records(
+        self,
+        *,
+        from_record_id: UUID | str,
+        to_record_id: UUID | str,
+        relation_type: str,
+        provenance: JsonDict | None = None,
+    ) -> MemoryResponse:
+        ...
+
     def open_items(self, *, reason: str | JsonDict | None = None) -> MemoryResponse:
         ...
 
