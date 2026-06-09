@@ -670,9 +670,18 @@ class AutonomousActionApplier:
     def _find_duplicate_schedule(self, fingerprint: str) -> JsonDict | None:
         if self._event_store is None:
             return None
+        histories: dict[str, list[JsonDict]] = {}
         for record in self._event_store.read_records():
-            if record.get("schedule_fingerprint") == fingerprint:
-                return record
+            event_id = record.get("event_id")
+            if event_id:
+                histories.setdefault(str(event_id), []).append(record)
+        for history in histories.values():
+            latest = history[-1]
+            if latest.get("status") == "suppressed":
+                continue
+            for record in history:
+                if record.get("schedule_fingerprint") == fingerprint:
+                    return record
         return None
 
     @staticmethod

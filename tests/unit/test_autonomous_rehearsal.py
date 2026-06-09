@@ -1,64 +1,119 @@
-from hamutay.memory.rehearsal import run_fake_autonomy_rehearsal
+import pytest
+
+from hamutay.memory.action_ledger import ActionLedger
+from hamutay.memory.rehearsal import (
+    RehearsalInterrupted,
+    RehearsalPaths,
+    RestartableAutonomyRehearsal,
+    reconstruct_rehearsal_report,
+    run_fake_autonomy_rehearsal,
+)
 
 
-def test_fake_autonomy_rehearsal_runs_scheduler_driver_closure_and_idle():
-    result = run_fake_autonomy_rehearsal()
+def _operation_statuses(report: dict) -> set[tuple[str, str]]:
+    return {
+        (item["operation_type"], item["result_status"])
+        for item in report["operation_statuses"]
+    }
 
-    assert result.dispatch.status == "completed"
-    assert result.handler.last_report is not None
-    assert result.handler.last_report.ran == 2
-    assert result.handler.last_report.stopped_because == "idle: no open work remained"
-    assert [cycle.woke_on for cycle in result.handler.last_report.cycles] == [
-        "seed",
-        "open_items",
+
+def test_restartable_rehearsal_uses_action_pipeline_and_reconstructs_report(
+    tmp_path,
+):
+    result = run_fake_autonomy_rehearsal(output_dir=tmp_path)
+    report = result.to_dict()
+    reconstructed = reconstruct_rehearsal_report(result.paths)
+
+    assert report["ledger_verification"]["ok"] is True
+    assert reconstructed["ledger_verification"]["ok"] is True
+    assert report["frontier"]["cycle_id"] == 2
+    assert report["frontier"]["next_cycle_id"] == 3
+    assert report["action_trace_count"] == 2
+    assert report["action_responses"] == [
+        "I found one bounded item and scheduled the next wake.",
+        "I closed the scheduled rehearsal item and can stop.",
     ]
-    assert result.memory.closed_handles == [
-        {
-            "record_id": result.handler.last_report.cycles[0].record_id,
-            "source": "open_items",
-            "index": 0,
-        }
+    assert {
+        ("store_autonomous_action_record", "applied"),
+        ("apply_schedule_request", "applied"),
+        ("apply_closure", "applied"),
+        ("apply_policy_disposition", "applied"),
+        ("complete_rehearsal_event", "applied"),
+    }.issubset(_operation_statuses(report))
+    assert report["open_items_after"]["ok"] is True
+    assert report["open_items_after"]["items"] == []
+    assert report["no_open_items_due_to_model_authored_closure"] is True
+    assert report["stopped_because"] == "idle: no open work remained"
+    assert report == reconstructed
+
+
+def test_restartable_rehearsal_event_log_runs_seed_schedule_closure_idle(tmp_path):
+    result = run_fake_autonomy_rehearsal(output_dir=tmp_path)
+    statuses = [
+        item["status"] for item in result.report["event_statuses"]
+        if item["record_type"] == "event_status"
+    ]
+    policy_actions = [
+        item["policy_action"] for item in result.report["event_statuses"]
+        if item["record_type"] == "policy_disposition"
     ]
 
-    open_items = result.memory.open_items(reason="test final open check")
-    assert open_items.ok
-    assert open_items.data["items"] == []
+    assert statuses == ["pending", "running", "completed"]
+    assert policy_actions == ["stop_complete"]
+    assert result.report["suppressed_event_count"] == 0
+    assert result.report["recovered_event_count"] == 0
 
 
-def test_fake_autonomy_rehearsal_persists_scheduler_result_and_auditable_closure():
-    result = run_fake_autonomy_rehearsal()
-    assert result.dispatch.lifecycle_record is not None
+def test_restartable_rehearsal_resume_after_seed_apply_retries_without_duplicates(
+    tmp_path,
+):
+    paths = RehearsalPaths.from_root(tmp_path)
+    runner = RestartableAutonomyRehearsal(paths=paths)
 
-    scheduled_result = result.memory.recall(
-        record_id=result.dispatch.lifecycle_record["result_record_id"]
-    )
-    changed = result.memory.what_changed(
-        since_record_id=result.handler.last_report.cycles[0].record_id
-    )
-    retrieval_log = result.memory.retrieval_log()
+    with pytest.raises(RehearsalInterrupted, match="after_seed_apply"):
+        runner.run(interrupt_after="after_seed_apply")
 
-    assert scheduled_result.ok
-    content = scheduled_result.data["content"]["content"]
-    assert content["event_id"] == result.dispatch.event_id
-    assert content["handler_result"]["driver_report"]["ran"] == 2
-    assert content["handler_result"]["driver_report"]["stopped_because"] == (
-        "idle: no open work remained"
-    )
-
-    assert changed.ok
-    assert any(
-        attestation["kind"] == "closure"
-        and attestation["status"] == "resolved"
-        and attestation["content"]["target_handle"] == result.memory.closed_handles[0]
-        for attestation in changed.data["attestations"]
-    )
-
-    assert retrieval_log.ok
-    recall_entries = [
-        entry for entry in retrieval_log.data["retrievals"] if entry["tool"] == "recall"
+    resumed = RestartableAutonomyRehearsal(paths=paths).run()
+    report = resumed.to_dict()
+    ledger = ActionLedger(paths.ledger_path)
+    operations = [
+        record["payload"]
+        for record in ledger.read_records()
+        if record["record_type"] == "operation"
     ]
-    assert any(
-        entry["reason"].get("text") == "scheduler context resolution"
-        and entry["reason"].get("event_id") == result.dispatch.event_id
-        for entry in recall_entries
-    )
+
+    assert report["frontier"]["cycle_id"] == 2
+    assert report["no_open_items_due_to_model_authored_closure"] is True
+    assert report["stopped_because"] == "idle: no open work remained"
+    assert any(item["status"] == "suppressed" for item in report["event_statuses"])
+    assert sum(
+        1 for item in report["event_statuses"]
+        if item["record_type"] == "event_status"
+        and item["status"] == "completed"
+    ) == 1
+    assert sum(
+        1 for op in operations
+        if op["operation_type"] == "apply_schedule_request"
+        and op["result_status"] == "applied"
+    ) == 2
+
+
+def test_restartable_rehearsal_resume_after_event_claim_recovers_pending_wake(
+    tmp_path,
+):
+    paths = RehearsalPaths.from_root(tmp_path)
+    runner = RestartableAutonomyRehearsal(paths=paths)
+
+    with pytest.raises(RehearsalInterrupted, match="after_event_claim"):
+        runner.run(interrupt_after="after_event_claim")
+
+    report = RestartableAutonomyRehearsal(paths=paths).run().to_dict()
+    statuses = [
+        item["status"] for item in report["event_statuses"]
+        if item["record_type"] == "event_status"
+    ]
+
+    assert report["frontier"]["cycle_id"] == 2
+    assert report["no_open_items_due_to_model_authored_closure"] is True
+    assert report["stopped_because"] == "idle: no open work remained"
+    assert statuses == ["pending", "running", "pending", "running", "completed"]
