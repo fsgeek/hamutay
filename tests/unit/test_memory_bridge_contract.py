@@ -130,6 +130,144 @@ def test_open_items_include_declared_losses_and_open_evidence_requests():
     assert {"open_items", "declared_losses", "evidence_requests", "attestation"} <= sources
 
 
+def test_open_content_items_can_be_closed_by_exact_append_only_attestation():
+    substrate = _substrate_with_records()
+    before = substrate.open_items(reason="find closure target")
+    assert before.ok
+    target = next(item for item in before.data["items"] if item["source"] == "open_items")
+
+    closed = substrate.write_attestation(
+        subject_record_id=RID_1,
+        kind="closure",
+        status="resolved",
+        content={
+            "target_handle": target["handle"],
+            "basis": "test resolved the outstanding question",
+        },
+        provenance={"actor": "test"},
+        scope="open_items",
+    )
+    after = substrate.open_items(reason="resume after closure")
+    recalled = substrate.recall(record_id=RID_1)
+    changed = substrate.what_changed(since_record_id=RID_1)
+
+    assert closed.ok
+    assert after.ok
+    assert not any(
+        item["source"] == "open_items" and item["record_id"] == str(RID_1)
+        for item in after.data["items"]
+    )
+    assert recalled.data["content"]["content"]["open_items"] == [
+        {"kind": "question", "text": "what changed?"}
+    ]
+    assert any(
+        attestation["status"] == "resolved"
+        and attestation["content"]["target_handle"] == target["handle"]
+        for attestation in changed.data["attestations"]
+    )
+
+
+def test_ambiguous_or_contested_targeted_attestation_does_not_close_open_content():
+    substrate = _substrate_with_records()
+    before = substrate.open_items()
+    assert before.ok
+    target = next(item for item in before.data["items"] if item["source"] == "open_items")
+
+    malformed = substrate.write_attestation(
+        subject_record_id=RID_1,
+        kind="closure",
+        status="resolved",
+        content={"target_handle": {"record_id": str(RID_1), "source": "open_items"}},
+        provenance={"actor": "test"},
+        scope="open_items",
+    )
+    contested = substrate.write_attestation(
+        subject_record_id=RID_1,
+        kind="closure",
+        status="contested",
+        content={"target_handle": target["handle"]},
+        provenance={"actor": "test"},
+        scope="open_items",
+    )
+    after = substrate.open_items(reason="ambiguous closure should not hide work")
+
+    assert malformed.ok
+    assert contested.ok
+    assert after.ok
+    assert any(
+        item["source"] == "open_items" and item["record_id"] == str(RID_1)
+        for item in after.data["items"]
+    )
+
+
+def test_attestation_open_items_collapse_to_latest_status_per_chain():
+    substrate = _substrate_with_records()
+    opened = substrate.write_attestation(
+        subject_record_id=RID_1,
+        kind="status",
+        status="open",
+        content={"claim": "needs follow-up"},
+        provenance={"actor": "test"},
+        scope="claim",
+    )
+    resolved = substrate.write_attestation(
+        subject_record_id=RID_1,
+        kind="status",
+        status="resolved",
+        content={"claim": "follow-up complete"},
+        provenance={"actor": "test"},
+        scope="claim",
+    )
+    open_items = substrate.open_items(reason="latest status should govern")
+    changed = substrate.what_changed(since_record_id=RID_1)
+
+    assert opened.ok
+    assert resolved.ok
+    assert not any(
+        item["source"] == "attestation"
+        and item["item"]["kind"] == "status"
+        and item["item"]["scope"] == "claim"
+        for item in open_items.data["items"]
+    )
+    statuses = [
+        attestation["status"]
+        for attestation in changed.data["attestations"]
+        if attestation["kind"] == "status" and attestation["scope"] == "claim"
+    ]
+    assert statuses == ["open", "resolved"]
+
+
+def test_contested_latest_attestation_remains_live_open_work():
+    substrate = _substrate_with_records()
+    resolved = substrate.write_attestation(
+        subject_record_id=RID_1,
+        kind="status",
+        status="resolved",
+        content={"claim": "initially resolved"},
+        provenance={"actor": "test"},
+        scope="claim",
+    )
+    contested = substrate.write_attestation(
+        subject_record_id=RID_1,
+        kind="status",
+        status="contested",
+        content={"claim": "resolution was challenged"},
+        provenance={"actor": "test"},
+        scope="claim",
+    )
+    open_items = substrate.open_items(reason="contested claims remain live")
+
+    assert resolved.ok
+    assert contested.ok
+    assert any(
+        item["source"] == "attestation"
+        and item["item"]["kind"] == "status"
+        and item["item"]["scope"] == "claim"
+        and item["item"]["status"] == "contested"
+        for item in open_items.data["items"]
+    )
+
+
 def test_attestation_chain_is_append_only_and_preserves_declared_loss():
     substrate = _substrate_with_records()
 

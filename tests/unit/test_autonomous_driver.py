@@ -138,6 +138,57 @@ def test_open_work_from_one_cycle_becomes_later_stimulus_without_human_input():
     assert report.cycles[1].woke_on == "open_items"
 
 
+def test_resolved_open_work_allows_next_wake_to_idle_without_driver_state():
+    class ClosingSubstrate(LocalMemorySubstrate):
+        def store_episode(self, **kwargs):
+            response = super().store_episode(**kwargs)
+            if response.ok and kwargs.get("content", {}).get("open_items"):
+                record_id = response.data["record_id"]
+                closed = self.write_attestation(
+                    subject_record_id=record_id,
+                    kind="closure",
+                    status="resolved",
+                    content={
+                        "target_handle": {
+                            "record_id": record_id,
+                            "source": "open_items",
+                            "index": 0,
+                        },
+                        "basis": "test substrate closed the work item",
+                    },
+                    provenance={"actor": "test-substrate"},
+                    scope="open_items",
+                )
+                assert closed.ok
+            return response
+
+    substrate = ClosingSubstrate()
+    calls: list[str] = []
+    driver = AutonomousDriver(
+        substrate,
+        lambda stimulus: calls.append(stimulus) or "ack",
+        seed_intention="start",
+        open_item_extractor=lambda _s, _r: [{"kind": "todo", "text": "close me"}],
+    )
+
+    report = driver.run(max_cycles=3)
+    recalled = substrate.recall(record_id=report.cycles[0].record_id)
+    changed = substrate.what_changed(since_record_id=report.cycles[0].record_id)
+
+    assert report.ran == 1
+    assert report.stopped_because == "idle: no open work remained"
+    assert calls == ["start"]
+    assert recalled.ok
+    assert recalled.data["content"]["content"]["open_items"] == [
+        {"kind": "todo", "text": "close me"}
+    ]
+    assert any(
+        attestation["kind"] == "closure"
+        and attestation["status"] == "resolved"
+        for attestation in changed.data["attestations"]
+    )
+
+
 def test_driver_records_walkable_chain_and_link_failures_block():
     substrate = LocalMemorySubstrate()
 

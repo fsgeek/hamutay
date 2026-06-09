@@ -32,22 +32,13 @@ process restarts — that is substrate-side (Yanantin) and gated. What it proves
 today is the closed cognition↔memory loop against the local substrate: the
 instance's stored state shapes its next thought without a human in between.
 
-TWO TERMINATIONS, both real and tested:
+THREE TERMINATIONS, all real and tested:
 - IDLE — a cycle wakes, finds nothing open, and ends the run. Reachable today
   whenever the instance surfaces no open work.
+- RESOLUTION-IDLE — accumulated open work is explicitly closed by append-only
+  attestations in the substrate, so the next wake sees no live open items while
+  the original work and its closure chain remain recallable.
 - BUDGET — max_cycles guillotine; the loop never runs unbounded.
-
-KNOWN GAP (found by the loop, not assumed) — RESOLUTION-driven idle (run until
-accumulated work is *finished*) is NOT yet reachable, because nothing CLOSES an
-open item once surfaced. open_items() accumulates: it reports every record whose
-content carries open work, and content is append-only/immutable, so an item
-written this cycle is visible forever. An attestation can carry a resolving
-status, but the current bridge's open_items() does not honor status SUPERSESSION
-(it counts each open-status attestation independently rather than collapsing to
-the latest status per subject). So an instance can stop by surfacing nothing, but
-cannot yet stop by *resolving* what it surfaced. Closing that needs either the
-bridge collapsing attestation chains to latest-status, or the driver tracking
-closure itself. Surfaced as a named seam rather than faked.
 """
 from __future__ import annotations
 

@@ -22,7 +22,18 @@ ATTESTATION_LAYER = "contestable_attestation"
 EXECUTION_TRACE_LAYER = "execution_trace"
 PRODUCTION_LAYER = "production_time"
 
-OPEN_STATUSES = {"open", "partial", "uncertain", "declared_lost"}
+OPEN_STATUSES = {"open", "partial", "uncertain", "declared_lost", "contested"}
+CLOSING_STATUSES = {
+    "closed",
+    "complete",
+    "completed",
+    "invalidated",
+    "resolved",
+    "supported",
+    "superseded",
+}
+OPEN_CONTENT_FIELDS = ("open_items", "evidence_requests", "declared_losses")
+OPEN_CONTENT_TARGET_KEYS = ("target_handle", "target", "closes")
 ALLOWED_RELABEL_CAUSES = {
     "wrong_label",
     "malformed_query",
@@ -644,21 +655,27 @@ class LocalMemorySubstrate(MemoryPort):
             )
             return unavailable
         items: list[JsonDict] = []
+        content_closures = self._latest_targeted_closures()
         for record in self._records.values():
-            for key in ("open_items", "evidence_requests", "declared_losses"):
+            for key in OPEN_CONTENT_FIELDS:
                 value = record.content.get(key)
                 if not value:
                     continue
                 entries = value if isinstance(value, list) else [value]
-                for entry in entries:
+                for index, entry in enumerate(entries):
+                    handle = self._open_content_handle(record.record_id, key, index)
+                    closure = content_closures.get(self._handle_key(handle))
+                    if closure is not None and closure.status in CLOSING_STATUSES:
+                        continue
                     items.append(
                         {
                             "record_id": str(record.record_id),
                             "source": key,
+                            "handle": handle,
                             "item": deepcopy(entry),
                         }
                     )
-        for attestation in self._attestations:
+        for attestation in self._latest_attestations_by_chain().values():
             if attestation.status in OPEN_STATUSES:
                 items.append(
                     {
@@ -914,6 +931,56 @@ class LocalMemorySubstrate(MemoryPort):
         if isinstance(value, (dict, list, tuple, set, str)):
             return len(value)
         return 1
+
+    def _open_content_handle(
+        self, record_id: UUID, source: str, index: int
+    ) -> JsonDict:
+        return {"record_id": str(record_id), "source": source, "index": index}
+
+    def _handle_key(self, handle: JsonDict) -> tuple[str, str, int] | None:
+        try:
+            record_id = str(handle["record_id"])
+            source = str(handle["source"])
+            index = int(handle["index"])
+        except (KeyError, TypeError, ValueError):
+            return None
+        if source not in OPEN_CONTENT_FIELDS:
+            return None
+        return (record_id, source, index)
+
+    def _target_handle(self, attestation: MemoryAttestation) -> JsonDict | None:
+        for key in OPEN_CONTENT_TARGET_KEYS:
+            value = attestation.content.get(key)
+            if isinstance(value, dict):
+                return value
+        return None
+
+    def _latest_targeted_closures(self) -> dict[tuple[str, str, int], MemoryAttestation]:
+        latest: dict[tuple[str, str, int], MemoryAttestation] = {}
+        for attestation in sorted(self._attestations, key=lambda item: item.sequence):
+            target = self._target_handle(attestation)
+            if target is None:
+                continue
+            key = self._handle_key(target)
+            if key is None:
+                continue
+            latest[key] = attestation
+        return latest
+
+    def _latest_attestations_by_chain(
+        self,
+    ) -> dict[tuple[UUID, str, str], MemoryAttestation]:
+        latest: dict[tuple[UUID, str, str], MemoryAttestation] = {}
+        for attestation in sorted(self._attestations, key=lambda item: item.sequence):
+            if self._target_handle(attestation) is not None:
+                continue
+            key = (
+                attestation.subject_record_id,
+                attestation.kind,
+                attestation.scope,
+            )
+            latest[key] = attestation
+        return latest
 
     def _resolve_field(self, content: JsonDict, field: str) -> Any:
         if field in content:
