@@ -335,27 +335,37 @@ def test_dispatch_order_is_deterministic_for_replay():
     assert run_once() == ["a", "m", "z"]
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Found-by: Claude (adversarial pass against Codex's fused build, 2026-06-08). "
-        "The kernel docstring claims 'deterministic ... and replay' unconditionally, but "
-        "dispatch order is only deterministic when the caller injects every event_id. "
-        "When two events tie on (not_before, priority, created_at), _sort_key falls "
-        "through to event_id; append_pending mints that with uuid4() if the caller omits "
-        "it, so identical events dispatch in random order across runs. The existing "
-        "determinism test gives every event a distinct priority, so the sort never reaches "
-        "the event_id tie-breaker, and _event() makes event_id a required kwarg, so the "
-        "auto-mint path is structurally unreachable by the suite that guards determinism. "
-        "INTENT IS CODEX'S CALL: either (a) declare+enforce the 'caller injects all IDs' "
-        "precondition, or (b) make the tie-break fall through to the already-recorded "
-        "monotonic _scheduler_sequence. Flip this xfail to a passing assertion once decided."
-    ),
-    strict=True,
-)
+def test_queue_mints_deterministic_local_ids_for_replay_without_caller_ids():
+    def run_once() -> list[tuple[str, str]]:
+        queue = EventQueue()
+        for purpose in ["first", "second"]:
+            queue.append_pending(
+                {
+                    "status": "pending",
+                    "event_type": "reflection",
+                    "not_before": BASE_TIME,
+                    "created_at": BASE_TIME,
+                    "purpose": purpose,
+                }
+            )
+
+        claims = []
+        now = SchedulerClock.start(BASE_TIME).now()
+        while claim := queue.claim_next_due(now=now):
+            claims.append((claim.event["event_id"], claim.running["run_id"]))
+        return claims
+
+    first = run_once()
+    second = run_once()
+
+    assert first == second
+    assert len({event_id for event_id, _run_id in first}) == 2
+    assert len({run_id for _event_id, run_id in first}) == 2
+
+
 def test_tied_events_with_minted_ids_dispatch_deterministically():
     """Two events identical in every ordering field must dispatch in a stable
-    order across constructions. They currently do not, because the tie-break is
-    seeded by uuid4(). See xfail reason."""
+    order across constructions."""
     tie = {
         "status": "pending",
         "event_type": "reflection",

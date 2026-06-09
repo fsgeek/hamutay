@@ -282,24 +282,32 @@ def test_zero_cycle_budget_does_not_wake_or_call_cognition():
     assert substrate.retrieval_log().data["retrievals"] == []
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Found-by: Claude (adversarial pass against Codex's fused build, 2026-06-08). "
-        "driver.run() does `self._cycle += 1` then `self._cognition(stimulus)` with no "
-        "try/except rollback (driver.py:269-270). taste_open.exchange (1899-1908) — which "
-        "this driver's docstring says it mirrors — wraps the same eager increment and rolls "
-        "back `self._cycle -= 1` on any exception, precisely so a transient failure does not "
-        "leave the counter ahead. The driver drops that guard. When cognition raises on the "
-        "seed cycle, _cycle sticks at 1; a retry of the same driver skips the seed branch "
-        "(gated on _cycle == 0), reads empty open_items, and reports 'idle: no open work "
-        "remained' — a confident lie: the seeded work never started and the loss is silent. "
-        "Untested because every cognition in the suite returns normally; the failing regime "
-        "is unreachable through the existing fixtures. INTENT IS CODEX'S CALL: add the "
-        "rollback (mirror taste_open) or document that a raised cognition invalidates the "
-        "driver. Flip this xfail to a passing assertion once decided."
-    ),
-    strict=True,
-)
+def test_seed_cognition_exception_retries_as_cycle_one():
+    substrate = LocalMemorySubstrate()
+    stimuli: list[str] = []
+
+    def fails_once(stimulus: str) -> str:
+        stimuli.append(stimulus)
+        if len(stimuli) == 1:
+            raise RuntimeError("temporary cognition failure")
+        return "seed completed"
+
+    driver = AutonomousDriver(substrate, fails_once, seed_intention="seed task")
+
+    with pytest.raises(RuntimeError, match="temporary cognition failure"):
+        driver.run(max_cycles=1)
+
+    report = driver.run(max_cycles=1)
+    recalled = substrate.recall(record_id=report.cycles[0].record_id)
+
+    assert stimuli == ["seed task", "seed task"]
+    assert report.ran == 1
+    assert report.cycles[0].cycle == 1
+    assert report.cycles[0].woke_on == "seed"
+    assert recalled.ok
+    assert recalled.data["content"]["production"]["when"]["cycle"] == 1
+
+
 def test_cognition_failure_on_seed_does_not_silently_strand_the_driver():
     substrate = LocalMemorySubstrate()
     calls = {"n": 0}

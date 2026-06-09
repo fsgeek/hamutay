@@ -413,25 +413,30 @@ def test_unsupported_semantic_find_and_substrate_unavailable_fail_explicitly():
     assert failed_store.error.code == "substrate_unavailable"
 
 
-import pytest
+def test_what_changed_unavailable_failure_is_logged():
+    substrate = _substrate_with_records()
+    substrate.available = False
+
+    response = substrate.what_changed(
+        since_record_id=RID_1,
+        reason="resume from anchor",
+    )
+    log = substrate.retrieval_log()
+
+    assert not response.ok
+    assert response.error is not None
+    assert response.error.code == "substrate_unavailable"
+    assert log.ok
+    entry = log.data["retrievals"][-1]
+    assert entry["tool"] == "what_changed"
+    assert entry["success"] is False
+    assert entry["error"]["code"] == "substrate_unavailable"
+    assert entry["reason"] == {
+        "layer": "consumption_time",
+        "text": "resume from anchor",
+    }
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Found-by: Claude (adversarial pass against Codex's fused build, 2026-06-08). "
-        "Module docstring (bridge.py:4-6): 'missing data return explicit failures.' Seven "
-        "read/write methods guard on self._unavailable() (lines 305, 361, 409, 498, 561, "
-        "646, 767). what_changed (bridge.py:697) does NOT — when the substrate is down it "
-        "returns ok=True with an empty diff, i.e. 'nothing changed' instead of 'I cannot "
-        "answer.' what_changed is the wake-resumption surface (substrate-position MVP #11); "
-        "a false 'nothing changed' is exactly the masked fault the contract forbids. The "
-        "unavailable-path test (test:396-413) only exercises store_episode, so the sibling "
-        "read methods on the same contract are structurally untested under available=False. "
-        "INTENT IS CODEX'S CALL: add the _unavailable() guard (retrieval_log may stay exempt "
-        "as the audit surface). Flip once decided."
-    ),
-    strict=True,
-)
 def test_what_changed_fails_explicitly_when_substrate_unavailable():
     substrate = _substrate_with_records()
     substrate.available = False
@@ -442,23 +447,39 @@ def test_what_changed_fails_explicitly_when_substrate_unavailable():
     )
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Found-by: Claude (adversarial pass against Codex's fused build, 2026-06-08). "
-        "open_items() decides closure by the SHAPE of an attestation's content, not its "
-        "declared intent. _target_handle (bridge.py:951) reads content keys "
-        "target_handle/target/closes and never reads attestation.kind; 'supported' is in "
-        "CLOSING_STATUSES (bridge.py:32). So a kind='evidence' attestation that merely CITES "
-        "an open item's handle with status='supported' silently removes it from open_items. "
-        "The autonomous driver terminates on 'no open work', so this lets an offhand citation "
-        "mark real work finished and strand the loop in a false idle. The closure tests "
-        "(test:133, 170) only ever use kind='closure' or a malformed/non-closing handle, so "
-        "'closes by shape, not intent' is never separated from 'closes by being a closure.' "
-        "INTENT IS CODEX'S CALL: gate closure on kind=='closure' (or drop 'supported' from "
-        "the closing set). Flip once decided."
-    ),
-    strict=True,
-)
+def test_target_handle_only_closes_when_attestation_declares_closure():
+    substrate = _substrate_with_records()
+    before = substrate.open_items()
+    assert before.ok
+    target = next(item for item in before.data["items"] if item["source"] == "open_items")
+
+    citation = substrate.write_attestation(
+        subject_record_id=RID_1,
+        kind="evidence",
+        status="supported",
+        content={"target_handle": target["handle"], "note": "supports a nearby claim"},
+        provenance={"actor": "test"},
+        scope="claim",
+    )
+    still_open = substrate.open_items()
+    closure = substrate.write_attestation(
+        subject_record_id=RID_1,
+        kind="closure",
+        status="resolved",
+        content={"target_handle": target["handle"], "basis": "actual closure"},
+        provenance={"actor": "test"},
+        scope="open_items",
+    )
+    closed = substrate.open_items()
+
+    assert citation.ok
+    assert still_open.ok
+    assert any(item["handle"] == target["handle"] for item in still_open.data["items"])
+    assert closure.ok
+    assert closed.ok
+    assert not any(item["handle"] == target["handle"] for item in closed.data["items"])
+
+
 def test_non_closure_citation_does_not_silently_close_open_item():
     substrate = LocalMemorySubstrate()
     rid = UUID("00000000-0000-0000-0000-0000000009c1")
