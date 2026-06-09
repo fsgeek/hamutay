@@ -267,10 +267,14 @@ class AutonomousDriver:
                 return report
 
             self._cycle += 1
-            response = self._cognition(stimulus)
-            record_id, surfaced = self._store_cycle(
-                stimulus, response, wake_reason, woke_on, wake_omission
-            )
+            try:
+                response = self._cognition(stimulus)
+                record_id, surfaced = self._store_cycle(
+                    stimulus, response, wake_reason, woke_on, wake_omission
+                )
+            except Exception:
+                self._cycle -= 1
+                raise
             self._last_record_id = record_id
             report.cycles.append(
                 CycleResult(

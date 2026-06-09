@@ -14,7 +14,7 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from hamutay.events import (
     EVENT_TYPE_REFLECTION,
@@ -90,7 +90,7 @@ class EventQueue:
         if record.get("status") != "pending":
             raise ValueError("event.status must be pending")
         if not record.get("event_id"):
-            record["event_id"] = str(uuid4())
+            record["event_id"] = f"scheduler-event-{self._sequence + 1:08d}"
         record.setdefault("event_type", EVENT_TYPE_REFLECTION)
         record.setdefault("created_at", "1970-01-01T00:00:00+00:00")
         record["priority"] = int(priority if record.get("priority") is None else record["priority"])
@@ -136,7 +136,7 @@ class EventQueue:
             "event_id": event["event_id"],
             "event_type": event.get("event_type", EVENT_TYPE_REFLECTION),
             "status": "running",
-            "run_id": str(run_id or uuid4()),
+            "run_id": str(run_id or f"scheduler-run-{self._sequence + 1:08d}"),
             "started_at": now.isoformat(),
         }
         self._append(running)
@@ -213,13 +213,14 @@ class EventQueue:
         stored["_scheduler_sequence"] = self._sequence
         self.records.append(stored)
 
-    def _sort_key(self, event: JsonDict) -> tuple[str, int, str, str]:
+    def _sort_key(self, event: JsonDict) -> tuple[str, int, str, int, str]:
         not_before = event.get("not_before") or event.get("created_at", "")
         created_at = str(event.get("created_at", ""))
         return (
             str(not_before),
             int(event.get("priority", 0)),
             created_at,
+            int(event.get("_scheduler_sequence", 0)),
             str(event.get("event_id", "")),
         )
 

@@ -711,6 +711,17 @@ class LocalMemorySubstrate(MemoryPort):
                 error=parsed.error,
             )
             return parsed
+        unavailable = self._unavailable()
+        if unavailable is not None:
+            self._log_retrieval(
+                tool="what_changed",
+                coordinate={"since_record_id": str(parsed)},
+                reason=reason,
+                success=False,
+                detail_level="summary",
+                error=unavailable.error,
+            )
+            return unavailable
         if parsed not in self._records:
             failure = MemoryResponse.failure(
                 "record_not_found",
@@ -949,6 +960,8 @@ class LocalMemorySubstrate(MemoryPort):
         return (record_id, source, index)
 
     def _target_handle(self, attestation: MemoryAttestation) -> JsonDict | None:
+        if attestation.kind != "closure":
+            return None
         for key in OPEN_CONTENT_TARGET_KEYS:
             value = attestation.content.get(key)
             if isinstance(value, dict):
