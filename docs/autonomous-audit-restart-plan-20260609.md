@@ -42,6 +42,12 @@ Known baseline limitation:
 - The current no-token rehearsal uses a rehearsal-only closure shim. It proves
   substrate flow, not model-authored action application.
 - The live model-facing action surface is not yet specified or enforced.
+- `schedule_event` already exists as a model tool path that buffers pending
+  events through `ToolExecutor`, while this plan proposes model-authored
+  `schedule_requests` in an action object. That is a blocking collision until
+  the implementation either disables one path for autonomy runs or defines a
+  single correlation/precedence rule that prevents duplicate or untraced event
+  creation.
 - Tool activity is durable in cycle logs, but not yet a separate tamper-evident
   action ledger with per-operation before/after checkpoints.
 - The current local rehearsal is in-memory. A live autonomy run must be
@@ -75,10 +81,16 @@ Every cycle must produce an append-only trace row for:
 - accepted actions;
 - rejected actions;
 - rejection reasons;
-- normalization or repair applied, if any;
+- normalization or repair proposal, if any;
 - schema version.
 
 Rejected actions are first-class observations, not absent operations.
+
+Repair is off by default. When enabled by preregistration, repair must be
+logged as a rejected candidate plus suggested repair unless the run explicitly
+declares a repair-and-accept policy. The harness must not silently repair an
+invalid model action and then treat the repaired object as if the model authored
+it.
 
 ### R3. Exact operation log
 
@@ -116,9 +128,13 @@ model mutation. At minimum:
 - explicit redaction policy for secrets;
 - no write path exposed through model tools.
 
-Future hardening may move the ledger to a container/VM boundary, append-only
-filesystem, or Yanantin/Apacheta-backed immutable records. The first live pilot
-does not require a VM, but it must not allow the agent to alter its audit log.
+Phase-1 immutability is detective, not preventive: a hash chain can reveal
+post-hoc tampering, but an in-process harness cannot honestly claim the same
+enforcement boundary as a separate VM, append-only filesystem, or immutable
+substrate. Future hardening should move the ledger to a container/VM boundary,
+append-only filesystem, or Yanantin/Apacheta-backed immutable records. The first
+live pilot does not require a VM, but it must describe the enforcement level
+plainly and must not expose a model tool that can write or rewrite the ledger.
 
 ### R5. Restart boundary
 
@@ -223,6 +239,10 @@ Deliverables:
 - apply accepted open items to memory;
 - apply accepted closures as closure attestations;
 - apply accepted schedule requests as pending events;
+- resolve the `schedule_event` tool/action-object collision before live use:
+  either disable the existing `schedule_event` tool for autonomy runs, or route
+  tool-originated and action-originated schedule attempts through one audited
+  operation path with stable operation IDs and duplicate detection;
 - apply policy disposition records;
 - log exact parameters/results for each application operation;
 - refuse invalid operations without mutating substrate state.
@@ -231,6 +251,8 @@ Completion evidence:
 
 - live-equivalent fake run can create open work, close it, schedule a wake, and
   stop from model-authored action objects only;
+- no event can be created through a scheduling path absent from the action
+  ledger;
 - no rehearsal-only closure shim is needed.
 
 ### Phase 4. Restart frontier
@@ -297,3 +319,22 @@ Completion evidence:
 Implement Phase 1 and Phase 2 together. The action schema without a ledger would
 create unobservable control, and the ledger without a model-facing action schema
 would only log the old harness-controlled path.
+
+## Review Notes
+
+### 2026-06-09 Claude review incorporated
+
+Found-by-Claude review identified three seams after the first version of this
+plan:
+
+1. `schedule_event` collision: existing tool-originated scheduling and planned
+   action-object scheduling would create two event creation paths. This is now
+   blocking for Phase 3 until one path is disabled or both are routed through a
+   single audited operation path.
+2. Ledger immutability: in-process hash chaining is detective, not preventive.
+   The plan now distinguishes the first pilot's enforcement level from later
+   VM/container/immutable-substrate hardening.
+3. Repair semantics: repair before validation can become hidden intent
+   inference. The plan now makes repair off by default and requires repair to
+   be logged as rejection-with-suggested-repair unless a preregistered
+   repair-and-accept policy is active.
