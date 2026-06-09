@@ -763,6 +763,105 @@ class LocalMemorySubstrate(MemoryPort):
             retrievals=[entry.public_view() for entry in self._retrievals]
         )
 
+    def snapshot(self) -> JsonDict:
+        """Return a replayable JSON-safe snapshot of the local substrate."""
+        return {
+            "schema_version": "local_memory_substrate.v1",
+            "available": self.available,
+            "sequence": self._sequence,
+            "records": [
+                record.public_view()
+                for record in sorted(
+                    self._records.values(), key=lambda item: item.sequence
+                )
+            ],
+            "edges": [edge.public_view() for edge in self._edges],
+            "attestations": [
+                attestation.public_view() for attestation in self._attestations
+            ],
+            "retrievals": [
+                retrieval.public_view() for retrieval in self._retrievals
+            ],
+        }
+
+    def load_snapshot(self, snapshot: JsonDict) -> None:
+        """Replace local substrate state from ``snapshot``."""
+        if not isinstance(snapshot, dict):
+            raise ValueError("snapshot must be an object")
+        if snapshot.get("schema_version") != "local_memory_substrate.v1":
+            raise ValueError("unsupported local memory substrate snapshot")
+        self.available = bool(snapshot.get("available", True))
+        self._sequence = int(snapshot.get("sequence", 0))
+        self._records = {}
+        for record in snapshot.get("records", []):
+            record_id = UUID(str(record["record_id"]))
+            self._records[record_id] = MemoryRecord(
+                record_id=record_id,
+                record_type=str(record["record_type"]),
+                content=deepcopy(record.get("content", {})),
+                production=deepcopy(record.get("production", {})),
+                objective_attestations=deepcopy(
+                    record.get("objective_attestations", [])
+                ),
+                execution_trace=deepcopy(record.get("execution_trace", {})),
+                sequence=int(record["sequence"]),
+            )
+        self._edges = [
+            MemoryEdge(
+                edge_id=UUID(str(edge["edge_id"])),
+                from_record_id=UUID(str(edge["from_record_id"])),
+                to_record_id=UUID(str(edge["to_record_id"])),
+                relation_type=str(edge["relation_type"]),
+                provenance=deepcopy(edge.get("provenance", {})),
+                sequence=int(edge["sequence"]),
+            )
+            for edge in snapshot.get("edges", [])
+        ]
+        self._attestations = []
+        for attestation in snapshot.get("attestations", []):
+            target_record_id = attestation.get("target_record_id")
+            self._attestations.append(
+                MemoryAttestation(
+                    attestation_id=UUID(str(attestation["attestation_id"])),
+                    subject_record_id=UUID(str(attestation["subject_record_id"])),
+                    target_record_id=(
+                        UUID(str(target_record_id))
+                        if target_record_id is not None else None
+                    ),
+                    kind=str(attestation["kind"]),
+                    status=str(attestation["status"]),
+                    content=deepcopy(attestation.get("content", {})),
+                    provenance=deepcopy(attestation.get("provenance", {})),
+                    scope=str(attestation["scope"]),
+                    layer=str(attestation.get("layer", ATTESTATION_LAYER)),
+                    cause=attestation.get("cause"),
+                    sequence=int(attestation["sequence"]),
+                )
+            )
+        self._retrievals = [
+            RetrievalLogEntry(
+                retrieval_id=UUID(str(retrieval["retrieval_id"])),
+                tool=str(retrieval["tool"]),
+                coordinate=deepcopy(retrieval.get("coordinate", {})),
+                reason=deepcopy(retrieval.get("reason", {})),
+                success=bool(retrieval["success"]),
+                records_returned=list(retrieval.get("records_returned", [])),
+                fields_returned=list(retrieval.get("fields_returned", [])),
+                detail_level=str(retrieval["detail_level"]),
+                omitted=list(retrieval.get("omitted", [])),
+                truncated=bool(retrieval.get("truncated", False)),
+                error=deepcopy(retrieval.get("error")),
+                sequence=int(retrieval["sequence"]),
+            )
+            for retrieval in snapshot.get("retrievals", [])
+        ]
+
+    @classmethod
+    def from_snapshot(cls, snapshot: JsonDict) -> "LocalMemorySubstrate":
+        substrate = cls()
+        substrate.load_snapshot(snapshot)
+        return substrate
+
     def write_attestation(
         self,
         *,
