@@ -52,8 +52,11 @@ If `open_items`/`store_episode`/`link_records` fails, the driver raises
 husk this project exists to prevent. (Drive with `LocalMemorySubstrate(available
 =False)` to force it.)
 
-### P5 — Two terminations, both real
+### P5 — Three terminations, all real
 IDLE: a cycle finds nothing open → run stops, `stopped_because` starts "idle".
+RESOLUTION-IDLE: accumulated open work is closed by append-only attestation;
+the next wake sees no live open items, while the original work and closure
+chain remain recallable.
 BUDGET: `max_cycles` reached → run stops, `stopped_because` starts "budget".
 
 ### P6 — Omission is observable, never silent  ← Codex named this as the FIRST adversarial test
@@ -71,18 +74,39 @@ The cold-start (seed) wake reads no memory but still emits a consumption-time
 retrieval-log entry, so cycle 1 is not the one unprovenanced wake. Assert the
 log contains a seed-wake `open_items` entry distinct from memory-wake entries.
 
-## Known limitation to assert as a limitation, not a feature
+## Former limitation closed by Codex
 
-RESOLUTION-driven idle (stop when accumulated work is *finished*) is NOT
-reachable: `open_items()` accumulates and does not honor attestation status
-supersession, so surfaced work stays visible forever. The driver can stop by
-surfacing nothing, not by resolving what it surfaced. A test may pin this
-current behavior so a future supersession fix is a deliberate, visible change.
+RESOLUTION-driven idle was originally identified as unreachable because
+`open_items()` accumulated immutable content fields and did not honor
+attestation status supersession. That limitation is now closed.
 
-## Validation already run (by the implementer — NOT a substitute for P6/P7)
+Current behavior:
+
+- content open items receive stable handles;
+- exact targeted closure attestations remove only the live open-work view;
+- original records and closure attestations remain recallable;
+- attestation chains collapse to the latest status per subject/kind/scope;
+- `contested` remains live open work.
+
+Relevant independent tests:
+
+- `tests/unit/test_memory_bridge_contract.py`
+  - `test_open_content_items_can_be_closed_by_exact_append_only_attestation`
+  - `test_ambiguous_or_contested_targeted_attestation_does_not_close_open_content`
+  - `test_attestation_open_items_collapse_to_latest_status_per_chain`
+  - `test_contested_latest_attestation_remains_live_open_work`
+- `tests/unit/test_autonomous_driver.py`
+  - `test_resolved_open_work_allows_next_wake_to_idle_without_driver_state`
+
+## Validation already run
 
 `uv run pytest tests/unit/test_autonomous_driver.py
-tests/unit/test_memory_bridge_contract.py -q` → 16 passed. This includes the
-implementer's scaffolding (P1–P5) but NOT adversarial coverage of P6 (omission
-recording) or P7 (seed provenance) — those are the gaps Codex's review surfaced
-and are the test author's to author and sign.
+tests/unit/test_memory_bridge_contract.py -q` covered the independent driver
+and bridge contracts after Codex added omission, seed-provenance, and
+resolution-idle coverage.
+
+The broader scheduler/memory slice also passed after closure semantics landed:
+
+`uv run pytest tests/unit/test_scheduler.py tests/unit/test_autonomous_driver.py
+tests/unit/test_memory_bridge_contract.py tests/unit/test_events.py
+tests/unit/test_memory_tools.py tests/unit/test_apacheta_bridge.py -q`
