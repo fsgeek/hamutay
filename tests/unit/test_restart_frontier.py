@@ -1,8 +1,11 @@
+import json
 from uuid import UUID
+
+import pytest
 
 from hamutay.events import EventStore, build_pending_event
 from hamutay.memory.action_application import AutonomousActionApplier
-from hamutay.memory.action_ledger import ActionLedger
+from hamutay.memory.action_ledger import ActionLedger, canonical_hash
 from hamutay.memory.actions import parse_autonomous_action
 from hamutay.memory.bridge import LocalMemorySubstrate
 from hamutay.memory.restart_frontier import RestartFrontierStore
@@ -142,6 +145,18 @@ def test_run_manifest_and_completion_frontier_are_persisted_and_reloaded(tmp_pat
     assert len(manifests) == 1
     assert open_items.ok
     assert open_items.data["items"][0]["item"]["text"] == "persist me"
+
+
+def test_restart_load_fails_loudly_when_ledger_verification_fails(tmp_path):
+    paths, _memory, ledger, _events, _frontier = _make_frontier(tmp_path)
+    records = ledger.read_records()
+    records[0]["payload"]["manifest"]["model"] = "tampered"
+    paths["ledger"].write_text(
+        "\n".join(json.dumps(record) for record in records) + "\n"
+    )
+
+    with pytest.raises(ValueError, match="action ledger verification failed"):
+        _reload(paths)
 
 
 def test_interruption_before_parse_retries_from_prior_frontier(tmp_path):
@@ -315,6 +330,59 @@ def test_uncommitted_scheduled_event_is_suppressed_on_resume(tmp_path):
     assert reloaded_events.next_pending() is None
     assert any(record.get("status") == "suppressed" for record in records)
     assert next(iter(latest.values()))["status"] == "suppressed"
+
+
+def test_event_appended_before_applied_ledger_row_is_suppressed_on_resume(
+    tmp_path,
+):
+    paths, _memory, ledger, events, _frontier = _make_frontier(tmp_path)
+    params = _raw_schedule_action()["schedule_requests"][0]
+    event = build_pending_event(
+        purpose=params["purpose"],
+        requested_context=params["requested_context"],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=_record_id(1),
+    )
+    event["audit_operation_id"] = "cycle-1:apply-schedule-request:1"
+    event["schedule_fingerprint"] = canonical_hash(
+        {
+            "purpose": params["purpose"],
+            "requested_context": params["requested_context"],
+            "not_before": None,
+            "expires_at": None,
+            "label": None,
+            "durable_update_contract": None,
+            "durable_update_example": None,
+            "terminal_surface": None,
+            "scheduled_by_record_id": str(_record_id(1)),
+        }
+    )
+    prepared = ledger.append_operation(
+        run_id=RUN_ID,
+        cycle_id=1,
+        operation_id="cycle-1:apply-schedule-request:1",
+        operation_type="apply_schedule_request",
+        actor="harness",
+        raw_parameters={"accepted_action": {"parameters": params}},
+        validated_parameters=params,
+        reason=params["purpose"],
+        precondition_checks=[
+            {"name": "event_store_available", "ok": True},
+            {"name": "duplicate_schedule_fingerprint_absent", "ok": True},
+        ],
+        result_status="accepted",
+        result={"event_to_append": event, "commit_status": "pending"},
+    )
+    event["audit_ledger_sequence"] = prepared["sequence"]
+    event["audit_ledger_record_hash"] = prepared["record_hash"]
+    events.append(event)
+
+    _memory, _ledger, reloaded_events, _frontier, loaded = _reload(paths)
+    latest = reloaded_events.latest_by_event_id()
+
+    assert len(loaded.suppressed_event_records) == 1
+    assert reloaded_events.next_pending() is None
+    assert latest[event["event_id"]]["status"] == "suppressed"
 
 
 def test_resume_after_completion_uses_new_frontier_not_prior_boundary(tmp_path):

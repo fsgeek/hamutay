@@ -43,6 +43,8 @@ def test_restartable_rehearsal_uses_action_pipeline_and_reconstructs_report(
     assert report["open_items_after"]["ok"] is True
     assert report["open_items_after"]["items"] == []
     assert report["no_open_items_due_to_model_authored_closure"] is True
+    assert report["invariant_failures"] == []
+    assert all(report["invariants"].values())
     assert report["stopped_because"] == "idle: no open work remained"
     assert report == reconstructed
 
@@ -84,6 +86,9 @@ def test_restartable_rehearsal_resume_after_seed_apply_retries_without_duplicate
 
     assert report["frontier"]["cycle_id"] == 2
     assert report["no_open_items_due_to_model_authored_closure"] is True
+    assert report["invariant_failures"] == []
+    assert report["invariants"]["restart_frontier_clean"] is True
+    assert report["invariants"]["no_pending_or_running_events"] is True
     assert report["stopped_because"] == "idle: no open work remained"
     assert any(item["status"] == "suppressed" for item in report["event_statuses"])
     assert sum(
@@ -115,5 +120,7 @@ def test_restartable_rehearsal_resume_after_event_claim_recovers_pending_wake(
 
     assert report["frontier"]["cycle_id"] == 2
     assert report["no_open_items_due_to_model_authored_closure"] is True
+    assert report["invariant_failures"] == []
+    assert report["invariants"]["event_reached_completed"] is True
     assert report["stopped_because"] == "idle: no open work remained"
     assert statuses == ["pending", "running", "pending", "running", "completed"]

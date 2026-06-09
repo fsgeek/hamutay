@@ -192,6 +192,11 @@ class RestartFrontierStore:
     ) -> FrontierLoadResult:
         """Load the latest committed frontier and repair uncommitted events."""
         verification = ledger.verify()
+        if not verification.ok:
+            raise ValueError(
+                "action ledger verification failed during restart frontier load: "
+                f"{verification.errors}"
+            )
         frontier = self.latest(run_id=run_id)
         if frontier is not None:
             snapshot = self._read_snapshot()

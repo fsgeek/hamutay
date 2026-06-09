@@ -21,7 +21,11 @@ from hamutay.events import EventStore
 from hamutay.memory.action_application import AutonomousActionApplier
 from hamutay.memory.action_ledger import ActionLedger
 from hamutay.memory.actions import parse_autonomous_action
-from hamutay.memory.bridge import JsonDict, LocalMemorySubstrate
+from hamutay.memory.bridge import (
+    OPEN_CONTENT_FIELDS,
+    JsonDict,
+    LocalMemorySubstrate,
+)
 from hamutay.memory.restart_frontier import RestartFrontierStore
 
 
@@ -376,6 +380,31 @@ def reconstruct_rehearsal_report(
         and attestation.get("status") == "resolved"
     ]
     event_records = event_store.read_records()
+    latest_events = _latest_event_records(event_records)
+    open_item_handle_keys = _open_item_handle_keys(memory_snapshot)
+    closed_handle_keys = [
+        key for key in (
+            _handle_key(
+                op.get("validated_parameters", {}).get("target_handle")
+            )
+            for op in closure_operations
+        )
+        if key is not None
+    ]
+    closure_attestation_handle_keys = [
+        key for key in (
+            _handle_key(
+                attestation.get("content", {}).get("target_handle")
+            )
+            for attestation in closure_attestations
+        )
+        if key is not None
+    ]
+    stop_policies = [
+        record for record in event_records
+        if record.get("record_type") == "policy_disposition"
+        and record.get("policy_action") == "stop_complete"
+    ]
     frontier = load.frontier.to_payload() if load.frontier is not None else None
     open_after = open_items.to_dict()
     no_open = open_items.ok and open_after.get("items") == []
@@ -384,6 +413,31 @@ def reconstruct_rehearsal_report(
         "idle: no open work remained"
         if no_open else "not idle: open work remains"
     )
+    invariants = {
+        "ledger_verified": load.ledger_verification.ok,
+        "restart_frontier_clean": len(load.ignored_ledger_records) == 0,
+        "open_items_empty": no_open,
+        "closure_operation_applied": bool(closure_operations),
+        "closure_attestation_present": bool(closure_attestations),
+        "closed_handle_had_prior_open_item": bool(closed_handle_keys)
+        and all(key in open_item_handle_keys for key in closed_handle_keys),
+        "closure_attestation_matches_closed_handle": bool(closed_handle_keys)
+        and set(closed_handle_keys).issubset(closure_attestation_handle_keys),
+        "open_item_handles_unique": (
+            len(open_item_handle_keys) == len(set(open_item_handle_keys))
+        ),
+        "stop_policy_recorded": bool(stop_policies),
+        "stop_policy_consistent_with_idle": bool(stop_policies) and no_open,
+        "event_reached_completed": any(
+            record.get("status") == "completed"
+            for record in latest_events.values()
+        ),
+        "no_pending_or_running_events": not any(
+            record.get("status") in {"pending", "running"}
+            for record in latest_events.values()
+        ),
+        "no_open_items_due_to_model_authored_closure": no_open_due_to_closure,
+    }
     return {
         "schema_version": "restartable_rehearsal_report.v1",
         "run_id": run_id,
@@ -418,7 +472,58 @@ def reconstruct_rehearsal_report(
         "closure_attestations": _json_copy(closure_attestations),
         "no_open_items_due_to_model_authored_closure": no_open_due_to_closure,
         "stopped_because": stopped_because,
+        "invariants": invariants,
+        "invariant_failures": [
+            name for name, ok in invariants.items() if not ok
+        ],
     }
+
+
+def _latest_event_records(event_records: list[JsonDict]) -> dict[str, JsonDict]:
+    latest: dict[str, JsonDict] = {}
+    for record in event_records:
+        event_id = record.get("event_id")
+        if event_id is not None:
+            latest[str(event_id)] = record
+    return latest
+
+
+def _open_item_handle_keys(memory_snapshot: JsonDict) -> list[str]:
+    handles: list[str] = []
+    for record in memory_snapshot.get("records", []):
+        content = record.get("content", {})
+        if not isinstance(content, dict):
+            continue
+        for source in OPEN_CONTENT_FIELDS:
+            value = content.get(source)
+            if not value:
+                continue
+            entries = value if isinstance(value, list) else [value]
+            for index, _entry in enumerate(entries):
+                handle_key = _handle_key(
+                    {
+                        "record_id": record.get("record_id"),
+                        "source": source,
+                        "index": index,
+                    }
+                )
+                if handle_key is not None:
+                    handles.append(handle_key)
+    return handles
+
+
+def _handle_key(handle: Any) -> str | None:
+    if not isinstance(handle, dict):
+        return None
+    try:
+        record_id = str(handle["record_id"])
+        source = str(handle["source"])
+        index = int(handle["index"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if source not in OPEN_CONTENT_FIELDS:
+        return None
+    return f"{record_id}:{source}:{index}"
 
 
 def run_fake_autonomy_rehearsal(

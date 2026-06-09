@@ -187,6 +187,81 @@ def test_schedule_requests_create_pending_events_only_through_ledger_and_dedupe(
     assert ledger.verify().ok
 
 
+def test_schedule_dedupe_fingerprint_includes_mutable_schedule_semantics(
+    tmp_path,
+):
+    applier, _memory, ledger, events = _make_applier(tmp_path)
+    base_schedule = {
+        "purpose": "resume work",
+        "requested_context": [
+            {"tool": "recall", "record_id": str(_record_id(1))}
+        ],
+        "not_before": "2026-06-10T12:00:00+00:00",
+    }
+    first_trace = parse_autonomous_action(
+        {
+            "response": "I will resume with one contract.",
+            "schedule_requests": [
+                {
+                    **base_schedule,
+                    "durable_update_contract": {
+                        "required_fields": ["short_terminal_note"]
+                    },
+                }
+            ],
+        }
+    ).to_dict()
+    second_trace = parse_autonomous_action(
+        {
+            "response": "I will resume with a changed contract.",
+            "schedule_requests": [
+                {
+                    **base_schedule,
+                    "durable_update_contract": {
+                        "required_fields": ["detailed_terminal_note"]
+                    },
+                    "terminal_surface": {
+                        "tool_name": "complete_followup",
+                        "input_schema": {
+                            "type": "object",
+                            "properties": {
+                                "response": {"type": "string"},
+                            },
+                        },
+                        "state_update": {"response_field": "response"},
+                    },
+                }
+            ],
+        }
+    ).to_dict()
+
+    first = applier.apply_trace(
+        first_trace,
+        run_id=RUN_ID,
+        cycle_id=1,
+        result_record_id=_record_id(1),
+    )
+    second = applier.apply_trace(
+        second_trace,
+        run_id=RUN_ID,
+        cycle_id=1,
+        result_record_id=_record_id(1),
+    )
+    pending = [
+        record for record in events.read_records()
+        if record.get("status") == "pending"
+    ]
+    fingerprints = {
+        record.get("schedule_fingerprint") for record in pending
+    }
+
+    assert first.status == "applied"
+    assert second.status == "applied"
+    assert len(pending) == 2
+    assert len(fingerprints) == 2
+    assert ledger.verify().ok
+
+
 def test_tool_originated_schedule_events_are_refused_for_autonomy_runs(tmp_path):
     applier, _memory, ledger, events = _make_applier(tmp_path)
     tool_event = build_pending_event(
@@ -253,6 +328,12 @@ def test_policy_action_appends_policy_disposition_when_source_event_is_available
     assert len(dispositions) == 1
     assert dispositions[0]["policy_action"] == "stop_complete"
     assert dispositions[0]["classification"] == "complete"
+    assert dispositions[0]["policy_result"]["rationale_selection"] == {
+        "authored_rationale_fields": [],
+        "selected_rationale_field": None,
+        "expected_rationale_field": None,
+        "selection_policy": "policy_action_compatible_single_field",
+    }
     assert policy_operations[0]["result_status"] == "applied"
     assert policy_operations[0]["created_records"] == [
         {
@@ -260,6 +341,93 @@ def test_policy_action_appends_policy_disposition_when_source_event_is_available
             "disposition_id": dispositions[0]["disposition_id"],
         }
     ]
+    assert ledger.verify().ok
+
+
+def test_policy_action_with_ambiguous_rationale_fields_is_refused(tmp_path):
+    applier, _memory, ledger, events = _make_applier(tmp_path)
+    source_event = build_pending_event(
+        purpose="wake for policy",
+        requested_context=[{"tool": "recall", "record_id": str(_record_id(1))}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=_record_id(1),
+    )
+    events.append(source_event)
+
+    result = applier.apply_trace(
+        parse_autonomous_action(
+            {
+                "response": "I am unsure and abandoning.",
+                "policy_action": "abandon",
+                "abandonment_reason": "not viable",
+                "defer_reason": "wait for later",
+            }
+        ).to_dict(),
+        run_id=RUN_ID,
+        cycle_id=2,
+        result_record_id=_record_id(2),
+        event=source_event,
+    )
+    policy_operations = [
+        op for op in _ledger_operations(ledger)
+        if op["operation_type"] == "apply_policy_disposition"
+    ]
+
+    assert result.status == "applied_with_refusals"
+    assert not any(
+        record.get("record_type") == "policy_disposition"
+        for record in events.read_records()
+    )
+    assert policy_operations[0]["result_status"] == "refused"
+    assert policy_operations[0]["error"]["code"] == (
+        "ambiguous_policy_rationale"
+    )
+    assert policy_operations[0]["validated_parameters"][
+        "rationale_selection"
+    ]["authored_rationale_fields"] == [
+        "abandonment_reason",
+        "defer_reason",
+    ]
+    assert ledger.verify().ok
+
+
+def test_policy_action_with_incompatible_rationale_field_is_refused(tmp_path):
+    applier, _memory, ledger, events = _make_applier(tmp_path)
+    source_event = build_pending_event(
+        purpose="wake for policy",
+        requested_context=[{"tool": "recall", "record_id": str(_record_id(1))}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=_record_id(1),
+    )
+    events.append(source_event)
+
+    result = applier.apply_trace(
+        parse_autonomous_action(
+            {
+                "response": "This is done but with the wrong rationale field.",
+                "policy_action": "stop_complete",
+                "abandonment_reason": "not viable",
+            }
+        ).to_dict(),
+        run_id=RUN_ID,
+        cycle_id=2,
+        result_record_id=_record_id(2),
+        event=source_event,
+    )
+    policy_operation = next(
+        op for op in _ledger_operations(ledger)
+        if op["operation_type"] == "apply_policy_disposition"
+    )
+
+    assert result.status == "applied_with_refusals"
+    assert policy_operation["result_status"] == "refused"
+    assert policy_operation["error"]["code"] == (
+        "policy_rationale_action_mismatch"
+    )
+    assert not any(
+        record.get("record_type") == "policy_disposition"
+        for record in events.read_records()
+    )
     assert ledger.verify().ok
 
 

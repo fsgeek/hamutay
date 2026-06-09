@@ -539,10 +539,31 @@ class AutonomousActionApplier:
                 message="policy disposition requires an EventStore and source event",
             )
         parsed = trace.get("parsed_action") or {}
-        policy_decision = {
-            "action": params["policy_action"],
-            "rationale": _policy_rationale(parsed),
-        }
+        policy_decision, rationale_meta, rationale_error = (
+            _build_policy_decision(parsed, params["policy_action"])
+        )
+        if rationale_error is not None:
+            return self._append_refusal(
+                run_id=run_id,
+                cycle_id=cycle_id,
+                wake_id=wake_id,
+                operation_id=operation_id,
+                operation_type="apply_policy_disposition",
+                raw_parameters={
+                    "accepted_action": action,
+                    "event": event,
+                    "parsed_policy_fields": _authored_policy_rationale_fields(
+                        parsed
+                    ),
+                },
+                validated_parameters={
+                    "policy_action": params["policy_action"],
+                    "rationale_selection": rationale_meta,
+                },
+                reason=params.get("policy_action"),
+                code=rationale_error["code"],
+                message=rationale_error["message"],
+            )
         try:
             disposition = self._event_store.append_policy_disposition(
                 event=event,
@@ -553,6 +574,7 @@ class AutonomousActionApplier:
                 policy_result={
                     "source": "autonomous_action",
                     "source_path": action.get("source_path"),
+                    "rationale_selection": rationale_meta,
                 },
             )
         except (TypeError, ValueError, KeyError) as exc:
@@ -578,6 +600,7 @@ class AutonomousActionApplier:
             raw_parameters={"accepted_action": action, "event": event},
             validated_parameters={
                 "policy_decision": policy_decision,
+                "rationale_selection": rationale_meta,
                 "result_record_id": result_record_id,
             },
             reason=policy_decision["rationale"],
@@ -663,6 +686,13 @@ class AutonomousActionApplier:
                 "not_before": params.get("not_before"),
                 "expires_at": params.get("expires_at"),
                 "label": params.get("label"),
+                "durable_update_contract": params.get(
+                    "durable_update_contract"
+                ),
+                "durable_update_example": params.get(
+                    "durable_update_example"
+                ),
+                "terminal_surface": params.get("terminal_surface"),
                 "scheduled_by_record_id": scheduled_by_record_id,
             }
         )
@@ -699,14 +729,64 @@ class AutonomousActionApplier:
             refused.append(payload)
 
 
-def _policy_rationale(parsed: JsonDict) -> Any:
-    if parsed.get("abandonment_reason"):
-        return parsed["abandonment_reason"]
-    if parsed.get("defer_reason"):
-        return parsed["defer_reason"]
-    if parsed.get("uncertainty"):
-        return parsed["uncertainty"]
-    return None
+POLICY_RATIONALE_FIELD_BY_ACTION = {
+    "abandon": "abandonment_reason",
+    "defer": "defer_reason",
+    "ask_external_evidence": "uncertainty",
+}
+POLICY_RATIONALE_FIELDS = tuple(POLICY_RATIONALE_FIELD_BY_ACTION.values())
+
+
+def _authored_policy_rationale_fields(parsed: JsonDict) -> JsonDict:
+    return {
+        field: deepcopy(parsed[field])
+        for field in POLICY_RATIONALE_FIELDS
+        if field in parsed
+    }
+
+
+def _build_policy_decision(
+    parsed: JsonDict,
+    policy_action: str,
+) -> tuple[JsonDict, JsonDict, JsonDict | None]:
+    authored = _authored_policy_rationale_fields(parsed)
+    authored_field_names = sorted(authored)
+    selected_field = (
+        authored_field_names[0] if len(authored_field_names) == 1 else None
+    )
+    expected_field = POLICY_RATIONALE_FIELD_BY_ACTION.get(policy_action)
+    rationale_meta = {
+        "authored_rationale_fields": authored_field_names,
+        "selected_rationale_field": selected_field,
+        "expected_rationale_field": expected_field,
+        "selection_policy": "policy_action_compatible_single_field",
+    }
+    if len(authored_field_names) > 1:
+        return (
+            {"action": policy_action, "rationale": None},
+            rationale_meta,
+            {
+                "code": "ambiguous_policy_rationale",
+                "message": (
+                    "policy disposition rationale is ambiguous because more "
+                    "than one rationale-like field was authored"
+                ),
+            },
+        )
+    if selected_field is not None and selected_field != expected_field:
+        return (
+            {"action": policy_action, "rationale": None},
+            rationale_meta,
+            {
+                "code": "policy_rationale_action_mismatch",
+                "message": (
+                    "authored rationale field is not compatible with the "
+                    "selected policy_action"
+                ),
+            },
+        )
+    rationale = authored[selected_field] if selected_field is not None else None
+    return {"action": policy_action, "rationale": rationale}, rationale_meta, None
 
 
 def _memory_error(result: JsonDict) -> JsonDict | None:
