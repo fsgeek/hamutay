@@ -411,3 +411,76 @@ def test_unsupported_semantic_find_and_substrate_unavailable_fail_explicitly():
     assert not failed_store.ok
     assert failed_store.error is not None
     assert failed_store.error.code == "substrate_unavailable"
+
+
+import pytest
+
+
+@pytest.mark.xfail(
+    reason=(
+        "Found-by: Claude (adversarial pass against Codex's fused build, 2026-06-08). "
+        "Module docstring (bridge.py:4-6): 'missing data return explicit failures.' Seven "
+        "read/write methods guard on self._unavailable() (lines 305, 361, 409, 498, 561, "
+        "646, 767). what_changed (bridge.py:697) does NOT — when the substrate is down it "
+        "returns ok=True with an empty diff, i.e. 'nothing changed' instead of 'I cannot "
+        "answer.' what_changed is the wake-resumption surface (substrate-position MVP #11); "
+        "a false 'nothing changed' is exactly the masked fault the contract forbids. The "
+        "unavailable-path test (test:396-413) only exercises store_episode, so the sibling "
+        "read methods on the same contract are structurally untested under available=False. "
+        "INTENT IS CODEX'S CALL: add the _unavailable() guard (retrieval_log may stay exempt "
+        "as the audit surface). Flip once decided."
+    ),
+    strict=True,
+)
+def test_what_changed_fails_explicitly_when_substrate_unavailable():
+    substrate = _substrate_with_records()
+    substrate.available = False
+    response = substrate.what_changed(since_record_id=RID_1)
+    assert not response.ok, (
+        "what_changed returned ok=True with a downed substrate — masked the fault "
+        "as 'nothing changed' instead of failing explicitly"
+    )
+
+
+@pytest.mark.xfail(
+    reason=(
+        "Found-by: Claude (adversarial pass against Codex's fused build, 2026-06-08). "
+        "open_items() decides closure by the SHAPE of an attestation's content, not its "
+        "declared intent. _target_handle (bridge.py:951) reads content keys "
+        "target_handle/target/closes and never reads attestation.kind; 'supported' is in "
+        "CLOSING_STATUSES (bridge.py:32). So a kind='evidence' attestation that merely CITES "
+        "an open item's handle with status='supported' silently removes it from open_items. "
+        "The autonomous driver terminates on 'no open work', so this lets an offhand citation "
+        "mark real work finished and strand the loop in a false idle. The closure tests "
+        "(test:133, 170) only ever use kind='closure' or a malformed/non-closing handle, so "
+        "'closes by shape, not intent' is never separated from 'closes by being a closure.' "
+        "INTENT IS CODEX'S CALL: gate closure on kind=='closure' (or drop 'supported' from "
+        "the closing set). Flip once decided."
+    ),
+    strict=True,
+)
+def test_non_closure_citation_does_not_silently_close_open_item():
+    substrate = LocalMemorySubstrate()
+    rid = UUID("00000000-0000-0000-0000-0000000009c1")
+    substrate.store_episode(
+        record_id=rid, record_type="work",
+        content={"open_items": [{"text": "todo NEVER RESOLVED", "status": "open"}]},
+        production={"who": {"instance": "x"}, "what": {"artifact": "x"},
+                    "when": {"cycle": 1}, "where": {"project": "hamutay"}},
+        execution_trace={"tool_path": "t"},
+    )
+    before = substrate.open_items()
+    handle = before.data["items"][0]["handle"]
+
+    # A citation, not a closure: kind='evidence', status='supported'.
+    substrate.write_attestation(
+        subject_record_id=str(rid), kind="evidence", status="supported",
+        content={"note": "citing prior item as support", "target": handle},
+        provenance={"who": {"instance": "x"}}, scope="claim",
+    )
+
+    after = substrate.open_items()
+    assert len(after.data["items"]) == 1, (
+        "a kind='evidence' citation with status='supported' silently closed an open "
+        f"item: open_items went {len(before.data['items'])} -> {len(after.data['items'])}"
+    )

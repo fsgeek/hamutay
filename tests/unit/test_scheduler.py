@@ -333,3 +333,50 @@ def test_dispatch_order_is_deterministic_for_replay():
 
     assert run_once() == ["a", "m", "z"]
     assert run_once() == ["a", "m", "z"]
+
+
+@pytest.mark.xfail(
+    reason=(
+        "Found-by: Claude (adversarial pass against Codex's fused build, 2026-06-08). "
+        "The kernel docstring claims 'deterministic ... and replay' unconditionally, but "
+        "dispatch order is only deterministic when the caller injects every event_id. "
+        "When two events tie on (not_before, priority, created_at), _sort_key falls "
+        "through to event_id; append_pending mints that with uuid4() if the caller omits "
+        "it, so identical events dispatch in random order across runs. The existing "
+        "determinism test gives every event a distinct priority, so the sort never reaches "
+        "the event_id tie-breaker, and _event() makes event_id a required kwarg, so the "
+        "auto-mint path is structurally unreachable by the suite that guards determinism. "
+        "INTENT IS CODEX'S CALL: either (a) declare+enforce the 'caller injects all IDs' "
+        "precondition, or (b) make the tie-break fall through to the already-recorded "
+        "monotonic _scheduler_sequence. Flip this xfail to a passing assertion once decided."
+    ),
+    strict=True,
+)
+def test_tied_events_with_minted_ids_dispatch_deterministically():
+    """Two events identical in every ordering field must dispatch in a stable
+    order across constructions. They currently do not, because the tie-break is
+    seeded by uuid4(). See xfail reason."""
+    tie = {
+        "status": "pending",
+        "event_type": "reflection",
+        "not_before": BASE_TIME,
+        "created_at": BASE_TIME,
+        "purpose": "tie",
+    }
+    orders = set()
+    for _ in range(64):
+        queue = EventQueue()
+        first = queue.append_pending(dict(tie))
+        second = queue.append_pending(dict(tie))
+        position = {
+            first["event_id"]: "first_appended",
+            second["event_id"]: "second_appended",
+        }
+        dispatched = tuple(
+            position[event["event_id"]] for event in queue.pending_events()
+        )
+        orders.add(dispatched)
+    assert len(orders) == 1, (
+        f"tied events dispatched in {len(orders)} distinct orders across "
+        f"identical constructions: {orders}"
+    )

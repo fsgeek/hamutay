@@ -280,3 +280,49 @@ def test_zero_cycle_budget_does_not_wake_or_call_cognition():
     assert report.stopped_because == "budget: reached max_cycles=0"
     assert calls == []
     assert substrate.retrieval_log().data["retrievals"] == []
+
+
+@pytest.mark.xfail(
+    reason=(
+        "Found-by: Claude (adversarial pass against Codex's fused build, 2026-06-08). "
+        "driver.run() does `self._cycle += 1` then `self._cognition(stimulus)` with no "
+        "try/except rollback (driver.py:269-270). taste_open.exchange (1899-1908) — which "
+        "this driver's docstring says it mirrors — wraps the same eager increment and rolls "
+        "back `self._cycle -= 1` on any exception, precisely so a transient failure does not "
+        "leave the counter ahead. The driver drops that guard. When cognition raises on the "
+        "seed cycle, _cycle sticks at 1; a retry of the same driver skips the seed branch "
+        "(gated on _cycle == 0), reads empty open_items, and reports 'idle: no open work "
+        "remained' — a confident lie: the seeded work never started and the loss is silent. "
+        "Untested because every cognition in the suite returns normally; the failing regime "
+        "is unreachable through the existing fixtures. INTENT IS CODEX'S CALL: add the "
+        "rollback (mirror taste_open) or document that a raised cognition invalidates the "
+        "driver. Flip this xfail to a passing assertion once decided."
+    ),
+    strict=True,
+)
+def test_cognition_failure_on_seed_does_not_silently_strand_the_driver():
+    substrate = LocalMemorySubstrate()
+    calls = {"n": 0}
+
+    def flaky(stimulus: str) -> str:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            raise RuntimeError("transient model failure on seed cycle")
+        return "did the work"
+
+    driver = AutonomousDriver(substrate, flaky, seed_intention="START THE WORK")
+
+    try:
+        driver.run(max_cycles=3)
+    except RuntimeError:
+        pass
+
+    # A retry of the same driver must not report a clean idle while the seeded
+    # work has never run. Either the seed re-fires, or the driver refuses to
+    # claim idle — but "idle: no open work remained" with zero cycles is a lie.
+    report = driver.run(max_cycles=3)
+    stranded = report.ran == 0 and "idle" in (report.stopped_because or "")
+    assert not stranded, (
+        "driver reported clean idle after a stranded seed: "
+        f"ran={report.ran} stopped_because={report.stopped_because!r}"
+    )
