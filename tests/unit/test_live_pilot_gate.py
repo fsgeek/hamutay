@@ -1,15 +1,79 @@
 import json
+import re
+from uuid import UUID
 
 from hamutay.memory.live_pilot import (
     REQUIRED_FAILURE_LAYERS,
+    ProviderActionResponse,
     _has_running_to_pending_recovery,
     classify_report_failures,
     evaluate_pilot_report,
+    execute_live_pilot,
     failure_taxonomy,
     run_no_token_dry_run_gate,
     sandbox_manifest,
     token_cycle_budget,
 )
+
+
+class ScriptedPilotClient:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def generate_action(self, *, messages: list[dict], max_output_tokens: int):
+        self.calls += 1
+        assert max_output_tokens == token_cycle_budget()["max_output_tokens_per_cycle"]
+        if self.calls == 1:
+            action = {
+                "response": "I opened one bounded pilot item and scheduled the wake.",
+                "open_items": [
+                    {
+                        "kind": "todo",
+                        "text": "resolve the first tiny live autonomy pilot",
+                    }
+                ],
+                "schedule_requests": [
+                    {
+                        "purpose": "resume and close the tiny live pilot item",
+                        "requested_context": [
+                            {
+                                "tool": "recall",
+                                "record_id": "70000000-0000-0000-0000-000000000001",
+                            }
+                        ],
+                    }
+                ],
+            }
+        else:
+            open_item = _extract_open_item(messages[-1]["content"])
+            action = {
+                "response": "I closed the bounded pilot item and can stop.",
+                "closures": [
+                    {
+                        "target_handle": open_item["handle"],
+                        "status": "resolved",
+                        "basis": "the tiny live pilot wake was resolved",
+                    }
+                ],
+                "policy_action": "stop_complete",
+            }
+        return ProviderActionResponse(
+            action_object=action,
+            raw_content=json.dumps(action),
+            request_payload={"messages": messages},
+            response_payload={
+                "choices": [{"message": {"content": json.dumps(action)}}],
+                "usage": {"total_tokens": 123},
+            },
+            elapsed_seconds=0.01,
+            usage={"total_tokens": 123},
+        )
+
+
+def _extract_open_item(content: str) -> dict:
+    match = re.search(r"Open item:\n(.*?)\nReturn one JSON object", content, re.S)
+    assert match is not None
+    return json.loads(match.group(1))
 
 
 def test_no_token_dry_run_gate_writes_artifacts_and_passes(tmp_path):
@@ -54,6 +118,51 @@ def test_no_token_dry_run_gate_writes_artifacts_and_passes(tmp_path):
         if item["record_type"] == "event_status"
     ]
     assert statuses == ["pending", "running", "pending", "running", "completed"]
+
+
+def test_execute_live_pilot_with_scripted_client_preserves_artifacts(tmp_path):
+    run_id = UUID("70000000-0000-0000-0000-000000000099")
+    client = ScriptedPilotClient()
+
+    result = execute_live_pilot(
+        runs_root=tmp_path,
+        run_id=run_id,
+        action_client=client,
+    )
+    run_root = tmp_path / str(run_id)
+    report = json.loads((run_root / "reconstructed_report.json").read_text())
+    evaluation = json.loads((run_root / "evaluation.json").read_text())
+
+    assert result["passed"] is True
+    assert result["outcome_layer"] == "passed"
+    assert client.calls == 2
+    assert evaluation["passed"] is True
+    assert report["invariant_failures"] == []
+    assert all(report["invariants"].values())
+    assert (run_root / "cycle_01_provider_request.json").exists()
+    assert (run_root / "cycle_01_provider_response.json").exists()
+    assert (run_root / "cycle_02_provider_request.json").exists()
+    assert (run_root / "cycle_02_provider_response.json").exists()
+    assert "live_model_call" in {
+        item["operation_type"] for item in report["operation_statuses"]
+    }
+
+
+def test_execute_live_pilot_without_api_key_writes_provider_failure(tmp_path):
+    run_id = UUID("70000000-0000-0000-0000-000000000100")
+
+    result = execute_live_pilot(
+        runs_root=tmp_path,
+        run_id=run_id,
+        api_key="",
+    )
+    run_root = tmp_path / str(run_id)
+    evaluation = json.loads((run_root / "evaluation.json").read_text())
+
+    assert result["passed"] is False
+    assert result["outcome_layer"] == "provider"
+    assert evaluation["failures"][0]["layer"] == "provider"
+    assert evaluation["failures"][0]["code"] == "provider_api_error"
 
 
 def test_failure_taxonomy_covers_required_layers():
