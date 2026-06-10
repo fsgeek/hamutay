@@ -2,6 +2,7 @@ import json
 
 from hamutay.memory.live_pilot import (
     REQUIRED_FAILURE_LAYERS,
+    _has_running_to_pending_recovery,
     classify_report_failures,
     evaluate_pilot_report,
     failure_taxonomy,
@@ -39,6 +40,8 @@ def test_no_token_dry_run_gate_writes_artifacts_and_passes(tmp_path):
     assert budget == token_cycle_budget()
     assert taxonomy == failure_taxonomy()
     assert manifest["live_model_calls"] is False
+    assert manifest["enforcement_level"] == "in_process_detective"
+    assert "not OS-level containment" in manifest["enforcement_note"]
     assert manifest["tools"]["shell"] == "disabled"
     assert budget["max_cycles"] == 2
 
@@ -65,7 +68,7 @@ def test_evaluator_classifies_report_failures_by_layer():
         "ignored_ledger_count": 2,
         "invariant_failures": ["stop_policy_consistent_with_idle"],
         "action_trace_count": 1,
-        "stopped_because": "not idle: open work remains",
+        "stopped_because": "wording should not drive classification",
         "invariants": {
             "ledger_verified": False,
             "restart_frontier_clean": False,
@@ -91,6 +94,29 @@ def test_evaluator_classifies_report_failures_by_layer():
         "model_policy_incoherent",
     } <= codes
     assert evaluation["required_layers_available"] is True
+
+
+def test_stop_message_wording_does_not_create_model_failure():
+    report = {
+        "ledger_verification": {"ok": True, "errors": []},
+        "ignored_ledger_count": 0,
+        "invariant_failures": [],
+        "action_trace_count": 2,
+        "stopped_because": "idle with alternate human-readable phrasing",
+        "invariants": {
+            "ledger_verified": True,
+            "restart_frontier_clean": True,
+            "closed_handle_had_prior_open_item": True,
+            "stop_policy_consistent_with_idle": True,
+            "event_reached_completed": True,
+            "no_pending_or_running_events": True,
+        },
+    }
+
+    assert classify_report_failures(report) == []
+    assert evaluate_pilot_report(report, case_id="alternate_stop")[
+        "passed"
+    ] is True
 
 
 def test_evaluator_marks_missing_invariants_unscoreable():
@@ -121,3 +147,68 @@ def test_evaluator_marks_missing_invariants_unscoreable():
             },
         }
     ]
+
+
+def test_recovery_detection_is_event_id_aware():
+    assert _has_running_to_pending_recovery(
+        {
+            "event_statuses": [
+                {
+                    "record_type": "event_status",
+                    "event_id": "a",
+                    "status": "pending",
+                },
+                {
+                    "record_type": "event_status",
+                    "event_id": "a",
+                    "status": "running",
+                },
+                {
+                    "record_type": "event_status",
+                    "event_id": "b",
+                    "status": "pending",
+                },
+                {
+                    "record_type": "event_status",
+                    "event_id": "a",
+                    "status": "completed",
+                },
+            ]
+        }
+    ) is False
+    assert _has_running_to_pending_recovery(
+        {
+            "event_statuses": [
+                {
+                    "record_type": "event_status",
+                    "event_id": "a",
+                    "status": "pending",
+                },
+                {
+                    "record_type": "event_status",
+                    "event_id": "a",
+                    "status": "running",
+                },
+                {
+                    "record_type": "event_status",
+                    "event_id": "b",
+                    "status": "pending",
+                },
+                {
+                    "record_type": "event_status",
+                    "event_id": "a",
+                    "status": "pending",
+                },
+                {
+                    "record_type": "event_status",
+                    "event_id": "a",
+                    "status": "running",
+                },
+                {
+                    "record_type": "event_status",
+                    "event_id": "a",
+                    "status": "completed",
+                },
+            ]
+        }
+    ) is True

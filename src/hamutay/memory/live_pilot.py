@@ -64,6 +64,11 @@ def sandbox_manifest(*, live_model_calls: bool = False) -> JsonDict:
         "pilot_id": PILOT_ID,
         "live_model_calls": live_model_calls,
         "enforcement_level": "in_process_detective",
+        "enforcement_note": (
+            "Disabled shell/network/filesystem entries mean those surfaces are "
+            "not exposed through model-visible harness APIs. This is detective "
+            "auditability, not OS-level containment."
+        ),
         "filesystem": {
             "repo_access": "read_only_for_model",
             "allowed_write_roots": [
@@ -259,12 +264,19 @@ def classify_report_failures(report: JsonDict) -> list[JsonDict]:
                 },
             }
         )
-    if report.get("stopped_because") != "idle: no open work remained":
+    invariants = report.get("invariants")
+    if (
+        isinstance(invariants, dict)
+        and invariants.get("stop_policy_consistent_with_idle") is False
+    ):
         failures.append(
             {
                 "layer": "model",
                 "code": "model_policy_incoherent",
-                "evidence": {"stopped_because": report.get("stopped_because")},
+                "evidence": {
+                    "invariant": "stop_policy_consistent_with_idle",
+                    "value": False,
+                },
             }
         )
     return failures
@@ -387,13 +399,18 @@ def _run_resume_case(root: Path) -> PilotGateResult:
 
 
 def _has_running_to_pending_recovery(report: JsonDict) -> bool:
-    statuses = [
-        item.get("status")
-        for item in report.get("event_statuses", [])
-        if item.get("record_type") == "event_status"
-    ]
+    statuses_by_event: dict[str, list[str]] = {}
+    for item in report.get("event_statuses", []):
+        if item.get("record_type") != "event_status":
+            continue
+        event_id = item.get("event_id")
+        status = item.get("status")
+        if event_id is None or status is None:
+            continue
+        statuses_by_event.setdefault(str(event_id), []).append(str(status))
     return any(
         current == "running" and next_status == "pending"
+        for statuses in statuses_by_event.values()
         for current, next_status in zip(statuses, statuses[1:])
     )
 

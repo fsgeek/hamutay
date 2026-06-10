@@ -82,6 +82,10 @@ Summary:
 - action ledger tamper resistance is detective hash chaining, not preventive
   VM/container isolation.
 
+The sandbox posture is therefore a model-facing surface restriction plus an
+audit camera, not an OS-level containment wall. Any later claim of preventive
+containment requires a separate VM/container or append-only substrate boundary.
+
 ## Budget
 
 The run uses `token_cycle_budget.json`.
