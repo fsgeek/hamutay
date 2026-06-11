@@ -20,6 +20,15 @@ Experiment ID: `action_object_contract_salience_cross_model_20260611`
 | gpt_5_1 | 0/3 | 3/3 | 3 | 0 |
 | kimi_k2_6 | 0/0 | 3/3 | 0 | 0 |
 
+## Protocol Recovery Audit
+
+- Protocol failures: `3`
+- Recoverable protocol failures: `0`
+- Unrecoverable protocol failures: `3`
+- Strict pass if recovered: `0`
+- Relaxed pass if recovered: `0`
+- Recovery methods: `{}`
+
 ## Hypothesis Assessment
 
 - Primary pattern: `cross_model_contract_salience_boundary`
@@ -29,8 +38,10 @@ Experiment ID: `action_object_contract_salience_cross_model_20260611`
 
 Evidence lists:
 
-- Models with original-prompt failure: `['deepseek_v4_pro', 'gpt_5_1']`
-- Models rescued by example prompt: `['deepseek_v4_pro', 'gpt_5_1']`
+- Models with original-prompt failure: `['gpt_5_1']`
+- Models rescued by example prompt: `['gpt_5_1']`
+- Source-reference models with original-prompt failure: `['deepseek_v4_pro']`
+- Source-reference models rescued by example prompt: `['deepseek_v4_pro']`
 - Models failing the example prompt: `[]`
 - Models unscoreable under original prompt: `['claude_sonnet_4_6', 'deepseek_v4_pro', 'kimi_k2_6']`
 - Models unscoreable under example prompt: `['claude_sonnet_4_6', 'deepseek_v4_pro']`
@@ -50,6 +61,8 @@ Provider/protocol failures are not counted as model contract failures. Original-
 - `analysis.md` is this analysis artifact.
 - `rows/<row_id>/provider_request.json` preserves each request.
 - `rows/<row_id>/provider_response.json` preserves each response.
+- `rows/<row_id>/provider_attempts.json` preserves retry/attempt telemetry.
+- `rows/<row_id>/recovery_evaluation.json` preserves secondary recovery audits for invalid_action_schema rows.
 - `rows/<row_id>/strict_evaluation.json` preserves strict scoring.
 - `rows/<row_id>/relaxed_evaluation.json` preserves relaxed scoring.
 - `rows/<row_id>/row_result.json` ties each row together.

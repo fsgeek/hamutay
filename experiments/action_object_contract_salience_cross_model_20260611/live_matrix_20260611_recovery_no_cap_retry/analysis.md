@@ -20,6 +20,15 @@ Experiment ID: `action_object_contract_salience_cross_model_20260611`
 | gpt_5_1 | 0/3 | 3/3 | 2 | 0 |
 | kimi_k2_6 | 0/3 | 3/3 | 2 | 0 |
 
+## Protocol Recovery Audit
+
+- Protocol failures: `6`
+- Recoverable protocol failures: `6`
+- Unrecoverable protocol failures: `0`
+- Strict pass if recovered: `3`
+- Relaxed pass if recovered: `6`
+- Recovery methods: `{'fenced_json': 6}`
+
 ## Hypothesis Assessment
 
 - Primary pattern: `cross_model_contract_salience_boundary`
@@ -52,6 +61,8 @@ Provider/protocol failures are not counted as model contract failures. Original-
 - `analysis.md` is this analysis artifact.
 - `rows/<row_id>/provider_request.json` preserves each request.
 - `rows/<row_id>/provider_response.json` preserves each response.
+- `rows/<row_id>/provider_attempts.json` preserves retry/attempt telemetry.
+- `rows/<row_id>/recovery_evaluation.json` preserves secondary recovery audits for invalid_action_schema rows.
 - `rows/<row_id>/strict_evaluation.json` preserves strict scoring.
 - `rows/<row_id>/relaxed_evaluation.json` preserves relaxed scoring.
 - `rows/<row_id>/row_result.json` ties each row together.

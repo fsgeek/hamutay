@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from copy import deepcopy
 from datetime import datetime, timezone
 from pathlib import Path
@@ -39,6 +40,7 @@ SOURCE_LIVE_RESULTS_PATH = (
     / "results.json"
 )
 LIVE_REPETITIONS_PER_CONDITION = 3
+FENCED_JSON_PATTERN = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
 
 MODEL_SET: tuple[JsonDict, ...] = (
     {
@@ -519,10 +521,116 @@ def _write_evaluated_row(
         "strict_evaluation": strict_evaluation,
         "relaxed_evaluation": relaxed_evaluation,
     }
+    recovery_evaluation = secondary_recovery_evaluation(row_result)
+    if recovery_evaluation["recovery_attempted"]:
+        row_result["recovery_evaluation"] = recovery_evaluation
+        _write_json(row_dir / "recovery_evaluation.json", recovery_evaluation)
     _write_json(row_dir / "strict_evaluation.json", strict_evaluation)
     _write_json(row_dir / "relaxed_evaluation.json", relaxed_evaluation)
     _write_json(row_dir / "row_result.json", row_result)
     return row_result
+
+
+def secondary_recovery_evaluation(row: JsonDict) -> JsonDict:
+    """Secondary-only recovery for protocol-wrapper artifacts.
+
+    This does not alter primary provider/protocol classification. It only asks
+    whether a row rejected as invalid_action_schema contains a recoverable
+    JSON object and how the unmodified evaluators score that recovered object.
+    """
+
+    failure = row.get("provider_failure")
+    attempted = (
+        isinstance(failure, dict)
+        and failure.get("layer") == "protocol"
+        and failure.get("code") == "invalid_action_schema"
+    )
+    result: JsonDict = {
+        "schema_version": "hamutay.protocol_recovery_evaluation.v1",
+        "recovery_attempted": attempted,
+        "recovered": False,
+        "method": None,
+        "primary_provider_failure": deepcopy(failure) if isinstance(failure, dict) else None,
+        "primary_classification_preserved": True,
+    }
+    if not attempted:
+        result["reason"] = "primary_failure_was_not_invalid_action_schema"
+        return result
+
+    recovered_object, method = recover_embedded_action_object(row.get("raw_content"))
+    if recovered_object is None:
+        result["reason"] = "no_recoverable_json_object"
+        return result
+
+    base_condition_id = str(row["condition"]["base_evaluator_condition_id"])
+    strict = evaluate_cycle1_action_object(
+        recovered_object,
+        condition_id=base_condition_id,
+        relaxed_open_item_contract=False,
+    )
+    relaxed = evaluate_cycle1_action_object(
+        recovered_object,
+        condition_id=base_condition_id,
+        relaxed_open_item_contract=True,
+    )
+    result.update(
+        {
+            "recovered": True,
+            "method": method,
+            "recovered_action_object": recovered_object,
+            "strict_evaluation": strict,
+            "relaxed_evaluation": relaxed,
+            "strict_pass_if_recovered": strict["strict_required_actions_valid"],
+            "relaxed_pass_if_recovered": relaxed["relaxed_required_actions_valid"],
+        }
+    )
+    return result
+
+
+def recover_embedded_action_object(raw: Any) -> tuple[JsonDict | None, str | None]:
+    if not isinstance(raw, str):
+        return None, None
+    seen: set[str] = set()
+    for method, candidate in _recovery_candidates(raw):
+        candidate = candidate.strip()
+        if not candidate or candidate in seen:
+            continue
+        seen.add(candidate)
+        try:
+            parsed = json.loads(candidate)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            return parsed, method
+    return None, None
+
+
+def _recovery_candidates(raw: str) -> list[tuple[str, str]]:
+    candidates = [("raw_json", raw)]
+    candidates.extend(
+        ("fenced_json", match.group(1))
+        for match in FENCED_JSON_PATTERN.finditer(raw)
+    )
+    candidates.extend(
+        ("embedded_json_object", candidate)
+        for candidate in _embedded_json_object_candidates(raw)
+    )
+    return candidates
+
+
+def _embedded_json_object_candidates(raw: str) -> list[str]:
+    decoder = json.JSONDecoder()
+    candidates: list[str] = []
+    for index, char in enumerate(raw):
+        if char != "{":
+            continue
+        try:
+            parsed, end = decoder.raw_decode(raw[index:])
+        except json.JSONDecodeError:
+            continue
+        if isinstance(parsed, dict):
+            candidates.append(raw[index : index + end])
+    return candidates
 
 
 def summarize_results(
@@ -596,6 +704,7 @@ def summarize_results(
         "row_count": len(row_results),
         "usage_totals": _usage_totals(row_results),
         "failure_totals": _failure_totals(row_results),
+        "protocol_recovery_totals": _protocol_recovery_totals(row_results),
         "budget": budget_manifest(),
         "by_model_prompt": by_model_prompt,
         "by_model": by_model,
@@ -757,6 +866,28 @@ def render_analysis(summary: JsonDict) -> str:
             )
         )
 
+    recovery_totals = summary.get("protocol_recovery_totals", {})
+    if recovery_totals:
+        lines.extend(
+            [
+                "",
+                "## Protocol Recovery Audit",
+                "",
+                "- Protocol failures: "
+                f"`{recovery_totals['protocol_failures']}`",
+                "- Recoverable protocol failures: "
+                f"`{recovery_totals['recoverable_protocol_failures']}`",
+                "- Unrecoverable protocol failures: "
+                f"`{recovery_totals['unrecoverable_protocol_failures']}`",
+                "- Strict pass if recovered: "
+                f"`{recovery_totals['strict_pass_if_recovered']}`",
+                "- Relaxed pass if recovered: "
+                f"`{recovery_totals['relaxed_pass_if_recovered']}`",
+                "- Recovery methods: "
+                f"`{recovery_totals['recovery_methods']}`",
+            ]
+        )
+
     assessment = summary["hypothesis_assessment"]
     lines.extend(
         [
@@ -805,6 +936,7 @@ def render_analysis(summary: JsonDict) -> str:
             "- `rows/<row_id>/provider_request.json` preserves each request.",
             "- `rows/<row_id>/provider_response.json` preserves each response.",
             "- `rows/<row_id>/provider_attempts.json` preserves retry/attempt telemetry.",
+            "- `rows/<row_id>/recovery_evaluation.json` preserves secondary recovery audits for invalid_action_schema rows.",
             "- `rows/<row_id>/strict_evaluation.json` preserves strict scoring.",
             "- `rows/<row_id>/relaxed_evaluation.json` preserves relaxed scoring.",
             "- `rows/<row_id>/row_result.json` ties each row together.",
@@ -925,15 +1057,21 @@ def _limitations_summary(summary: JsonDict) -> str:
     unscoreable_original = assessment["models_with_unscoreable_original"]
     unscoreable_example = assessment["models_with_unscoreable_example"]
     failure_totals = summary.get("failure_totals", {})
+    recovery_totals = summary.get("protocol_recovery_totals", {})
     provider_rows = int(failure_totals.get("provider_failures", 0) or 0)
     protocol_rows = int(failure_totals.get("protocol_failures", 0) or 0)
+    recoverable_rows = int(
+        recovery_totals.get("recoverable_protocol_failures", 0) or 0
+    )
     if not unscoreable_original and not unscoreable_example:
         if provider_rows or protocol_rows:
             return (
                 "No provider/protocol unscoreable model conditions were observed. "
                 "Row-level residuals remain: "
                 f"{provider_rows} provider failure rows and "
-                f"{protocol_rows} protocol failure rows."
+                f"{protocol_rows} protocol failure rows. "
+                f"{recoverable_rows} protocol failure rows were recoverable by "
+                "secondary audit without changing primary scoring."
             )
         return "No provider/protocol unscoreable model conditions were observed."
     return (
@@ -956,6 +1094,41 @@ def _failure_totals(row_results: list[JsonDict]) -> JsonDict:
             totals["provider_failures"] += 1
         if failure.get("layer") == "protocol":
             totals["protocol_failures"] += 1
+    return totals
+
+
+def _protocol_recovery_totals(row_results: list[JsonDict]) -> JsonDict:
+    totals: JsonDict = {
+        "protocol_failures": 0,
+        "recoverable_protocol_failures": 0,
+        "unrecoverable_protocol_failures": 0,
+        "strict_pass_if_recovered": 0,
+        "relaxed_pass_if_recovered": 0,
+        "recovery_methods": {},
+    }
+    for row in row_results:
+        failure = row.get("provider_failure")
+        if not (
+            isinstance(failure, dict)
+            and failure.get("layer") == "protocol"
+            and failure.get("code") == "invalid_action_schema"
+        ):
+            continue
+        totals["protocol_failures"] += 1
+        recovery = row.get("recovery_evaluation")
+        if not isinstance(recovery, dict):
+            recovery = secondary_recovery_evaluation(row)
+        if recovery.get("recovered"):
+            totals["recoverable_protocol_failures"] += 1
+            if recovery.get("strict_pass_if_recovered"):
+                totals["strict_pass_if_recovered"] += 1
+            if recovery.get("relaxed_pass_if_recovered"):
+                totals["relaxed_pass_if_recovered"] += 1
+            method = str(recovery.get("method") or "unknown")
+            methods = totals["recovery_methods"]
+            methods[method] = int(methods.get(method, 0)) + 1
+        else:
+            totals["unrecoverable_protocol_failures"] += 1
     return totals
 
 

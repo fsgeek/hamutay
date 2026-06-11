@@ -7,6 +7,7 @@ from hamutay.memory.contract_salience import (
     endpoint_recovery_matrix,
     failure_taxonomy,
     render_analysis,
+    secondary_recovery_evaluation,
     summarize_results,
     write_preregistration_artifacts,
 )
@@ -188,6 +189,64 @@ def test_summary_counts_model_prompt_rows_and_renders_analysis(tmp_path):
     assert "Cross-Model Action-Object Contract Salience Analysis" in analysis
 
 
+def test_secondary_recovery_scores_fenced_json_without_mutating_primary_failure():
+    row = _protocol_failure_row(
+        raw_content=(
+            '```json\n{"response":"ok","open_items":[{"kind":"todo","text":"x"}],'
+            '"schedule_requests":[{"purpose":"resolve",'
+            '"requested_context":[{"tool":"recall","record_id":"r1"}]}]}\n```'
+        )
+    )
+
+    recovery = secondary_recovery_evaluation(row)
+
+    assert row["provider_failure"] == {
+        "layer": "protocol",
+        "code": "invalid_action_schema",
+        "message": "provider content was not JSON",
+    }
+    assert recovery["primary_classification_preserved"] is True
+    assert recovery["recovered"] is True
+    assert recovery["method"] == "fenced_json"
+    assert recovery["strict_pass_if_recovered"] is True
+    assert recovery["relaxed_pass_if_recovered"] is True
+
+
+def test_summary_counts_recoverable_protocol_failures_without_rescoring_primary(tmp_path):
+    rows = [
+        _protocol_failure_row(
+            raw_content=(
+                'prefix {"response":"ok","open_items":[{"kind":"todo","text":"x"}],'
+                '"schedule_requests":[{"purpose":"resolve",'
+                '"requested_context":[{"tool":"recall","record_id":"r1"}]}]} suffix'
+            )
+        ),
+        _protocol_failure_row(raw_content="not recoverable"),
+    ]
+
+    summary = summarize_results(
+        row_results=rows,
+        started_at="2026-06-11T00:00:00+00:00",
+        finished_at="2026-06-11T00:01:00+00:00",
+        output_dir=tmp_path,
+        endpoint="test",
+    )
+
+    assert summary["failure_totals"] == {
+        "provider_failures": 0,
+        "protocol_failures": 2,
+    }
+    assert summary["protocol_recovery_totals"] == {
+        "protocol_failures": 2,
+        "recoverable_protocol_failures": 1,
+        "unrecoverable_protocol_failures": 1,
+        "strict_pass_if_recovered": 1,
+        "relaxed_pass_if_recovered": 1,
+        "recovery_methods": {"embedded_json_object": 1},
+    }
+    assert summary["by_model"]["deepseek_v4_pro"]["original_scorable_count"] == 0
+
+
 def _model_bucket(
     *,
     original: int,
@@ -205,6 +264,31 @@ def _model_bucket(
         "original_strict_fail_relaxed_pass_count": original_relaxed,
         "example_strict_fail_relaxed_pass_count": example_relaxed,
     }
+
+
+def _protocol_failure_row(raw_content: str) -> dict:
+    row = _row("deepseek_v4_pro", "deepseek/deepseek-v4-pro", "original_strict", False)
+    row.update(
+        {
+            "condition": {
+                "base_evaluator_condition_id": "A_original_prompt_strict_contract"
+            },
+            "provider_failure": {
+                "layer": "protocol",
+                "code": "invalid_action_schema",
+                "message": "provider content was not JSON",
+            },
+            "provider_ok": False,
+            "raw_content": raw_content,
+        }
+    )
+    row["strict_evaluation"] = {
+        "strict_required_actions_valid": False,
+        "rejection_paths": ["$"],
+        "explanation_candidates": ["protocol_or_provider_artifact_failure"],
+    }
+    row["relaxed_evaluation"] = {"relaxed_required_actions_valid": False}
+    return row
 
 
 def _row(

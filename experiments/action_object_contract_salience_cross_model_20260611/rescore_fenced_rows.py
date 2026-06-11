@@ -35,45 +35,15 @@ Run:
 from __future__ import annotations
 
 import json
-import re
 from pathlib import Path
-from typing import Any
 
-from hamutay.memory.contract_literacy import evaluate_cycle1_action_object
+from hamutay.memory.contract_salience import secondary_recovery_evaluation
 
-JsonDict = dict[str, Any]
+JsonDict = dict[str, object]
 
 EXPERIMENT_DIR = Path(__file__).resolve().parent
 RUN_DIR = EXPERIMENT_DIR / "live_matrix_20260611_recovery_no_cap_retry"
 ROWS_DIR = RUN_DIR / "rows"
-
-_FENCE = re.compile(r"```(?:json)?\s*(.*?)```", re.DOTALL)
-
-
-def strip_fence(raw: str | None) -> str | None:
-    """Return fenced inner content if present, else the input unchanged."""
-    if not isinstance(raw, str):
-        return raw
-    match = _FENCE.search(raw)
-    return match.group(1) if match else raw
-
-
-def recover_object(raw: str | None) -> JsonDict | None:
-    """Parse raw content tolerantly: try bare, then fence-stripped."""
-    if not isinstance(raw, str):
-        return None
-    candidates = [raw]
-    fenced = strip_fence(raw)
-    if isinstance(fenced, str) and fenced != raw:
-        candidates.append(fenced)
-    for candidate in candidates:
-        try:
-            obj = json.loads(candidate)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(obj, dict):
-            return obj
-    return None
 
 
 def main() -> None:
@@ -93,9 +63,9 @@ def main() -> None:
 
         code = failure.get("code")
         raw = row.get("raw_content")
-        obj = recover_object(raw)
+        recovery = secondary_recovery_evaluation(row)
 
-        if obj is None:
+        if not recovery["recovered"]:
             # No recoverable content -- a genuine hole (e.g. provider_api_error
             # where raw_content is null, or content that is not JSON even after
             # fence stripping).
@@ -104,14 +74,9 @@ def main() -> None:
             )
             continue
 
-        # Recovered. Re-run the UNMODIFIED evaluators.
-        base = str(row["condition"]["base_evaluator_condition_id"])
-        strict = evaluate_cycle1_action_object(
-            obj, condition_id=base, relaxed_open_item_contract=False
-        )
-        relaxed = evaluate_cycle1_action_object(
-            obj, condition_id=base, relaxed_open_item_contract=True
-        )
+        obj = recovery["recovered_action_object"]
+        strict = recovery["strict_evaluation"]
+        relaxed = recovery["relaxed_evaluation"]
         open_items = obj.get("open_items") or []
         item_keys = sorted(open_items[0].keys()) if open_items else []
         forbidden = sorted(
@@ -135,7 +100,7 @@ def main() -> None:
     report = {
         "run_dir": str(RUN_DIR.relative_to(EXPERIMENT_DIR.parent.parent)),
         "rows_already_scored_by_harness": already_scored,
-        "rows_recovered_by_fence_strip": len(recovered),
+        "rows_recovered_by_secondary_audit": len(recovered),
         "rows_genuinely_unscoreable": len(genuine_failures),
         "recovered": recovered,
         "genuine_failures": genuine_failures,
@@ -161,7 +126,7 @@ def main() -> None:
         return
     print(
         f"{len(recovered)} rows the harness labeled '{recovered[0]['mislabeled_code']}' "
-        "are in fact scorable model behavior recovered by fence-stripping alone."
+        "are in fact scorable model behavior recovered by secondary audit."
     )
     for model, b in sorted(by_model.items()):
         print(

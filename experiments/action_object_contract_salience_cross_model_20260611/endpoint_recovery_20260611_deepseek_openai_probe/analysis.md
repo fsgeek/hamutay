@@ -23,6 +23,15 @@ Endpoint families:
 | claude_sonnet_4_6 | 0/3 | 3/3 | 3 | 0 |
 | deepseek_v4_pro | 0/1 | 2/2 | 1 | 0 |
 
+## Protocol Recovery Audit
+
+- Protocol failures: `3`
+- Recoverable protocol failures: `2`
+- Unrecoverable protocol failures: `1`
+- Strict pass if recovered: `0`
+- Relaxed pass if recovered: `1`
+- Recovery methods: `{'embedded_json_object': 2}`
+
 ## Hypothesis Assessment
 
 - Primary pattern: `cross_model_contract_salience_boundary`
@@ -56,6 +65,7 @@ Provider/protocol failures are not counted as model contract failures. Original-
 - `rows/<row_id>/provider_request.json` preserves each request.
 - `rows/<row_id>/provider_response.json` preserves each response.
 - `rows/<row_id>/provider_attempts.json` preserves retry/attempt telemetry.
+- `rows/<row_id>/recovery_evaluation.json` preserves secondary recovery audits for invalid_action_schema rows.
 - `rows/<row_id>/strict_evaluation.json` preserves strict scoring.
 - `rows/<row_id>/relaxed_evaluation.json` preserves relaxed scoring.
 - `rows/<row_id>/row_result.json` ties each row together.
