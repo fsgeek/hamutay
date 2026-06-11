@@ -155,6 +155,8 @@ def projector_forget(secret: str, *, api_key: str, endpoint: str) -> tuple[JsonD
         "post_tensor": json.loads(post.model_dump_json()),
         "declared_losses": [json.loads(dl.model_dump_json()) for dl in post.declared_losses],
         "stop_reason": projector.last_stop_reason,
+        # on_tensor discipline: persist every tensor the projector emitted.
+        "captured_tensors": [json.loads(t.model_dump_json()) for t in captured],
     }
     return writer_state, projector_meta
 
@@ -249,18 +251,35 @@ def _post_chat(
         "provider": {"allow_fallbacks": False},
     }
     started = time.monotonic()
-    response = httpx.post(
-        f"{endpoint.rstrip('/')}/chat/completions",
-        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
-        json=payload,
-        timeout=timeout,
-    )
-    elapsed = time.monotonic() - started
-    response.raise_for_status()
-    data = response.json()
-    content = data["choices"][0]["message"]["content"]
-    usage = data.get("usage", {})
-    return {"content": content, "usage": usage, "elapsed": elapsed, "raw": data}
+    # Six sibling Claude/Codex sessions share this API key -- 429s are routine.
+    # Retry with exponential backoff on rate-limit / transient 5xx.
+    last_exc: Exception | None = None
+    for attempt in range(6):
+        try:
+            response = httpx.post(
+                f"{endpoint.rstrip('/')}/chat/completions",
+                headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+                json=payload,
+                timeout=timeout,
+            )
+            if response.status_code in (429, 500, 502, 503, 529):
+                last_exc = httpx.HTTPStatusError(
+                    f"transient {response.status_code}", request=response.request, response=response
+                )
+                time.sleep(min(2 ** attempt * 3, 60))
+                continue
+            response.raise_for_status()
+            data = response.json()
+            content = data["choices"][0]["message"]["content"]
+            usage = data.get("usage", {})
+            return {
+                "content": content, "usage": usage,
+                "elapsed": time.monotonic() - started, "raw": data,
+            }
+        except httpx.TimeoutException as exc:
+            last_exc = exc
+            time.sleep(min(2 ** attempt * 3, 60))
+    raise last_exc if last_exc else RuntimeError("chat call failed with no exception")
 
 
 def write_story(
@@ -394,9 +413,11 @@ def _write_json(path: Path, payload: Any) -> None:
 def run_live(*, output_dir: Path, api_key: str, endpoint: str) -> JsonDict:
     if not api_key:
         raise ValueError("OPENROUTER_API_KEY required for --run-live")
-    output_dir.mkdir(parents=True, exist_ok=False)
+    # Resumable: tolerate an existing dir (rate-limit retries leave partial work)
+    # and skip rows already complete. Preserves prior spend under shared-key 429s.
+    output_dir.mkdir(parents=True, exist_ok=True)
     cells_dir = output_dir / "cells"
-    cells_dir.mkdir()
+    cells_dir.mkdir(exist_ok=True)
 
     rows: list[JsonDict] = []
     stories_by_cell_trial: dict[str, str] = {}
@@ -406,7 +427,17 @@ def run_live(*, output_dir: Path, api_key: str, endpoint: str) -> JsonDict:
         for cell in CELLS:
             row_id = f"{cell}__{secret}"
             row_dir = cells_dir / row_id
-            row_dir.mkdir()
+
+            # Resume: if this row is already fully scored, reload it and skip.
+            row_json = row_dir / "row.json"
+            if row_json.exists() and (row_dir / "story.json").exists():
+                cached = json.loads(row_json.read_text())
+                rows.append(cached)
+                story_doc = json.loads((row_dir / "story.json").read_text())
+                stories_by_cell_trial[row_id] = story_doc["content"]
+                continue
+
+            row_dir.mkdir(exist_ok=True)
 
             # Build the state the writer reads, per verb.
             log_record: JsonDict | None = None
@@ -458,7 +489,7 @@ def run_live(*, output_dir: Path, api_key: str, endpoint: str) -> JsonDict:
             if log_record is not None:
                 ledger_leak = literal_scan(json.dumps(log_record, default=str), secret)
 
-            rows.append({
+            row = {
                 "row_id": row_id,
                 "cell": cell,
                 "secret": secret,
@@ -476,7 +507,9 @@ def run_live(*, output_dir: Path, api_key: str, endpoint: str) -> JsonDict:
                     "free_response": fr.get("usage", {}),
                     "avoidance": av.get("usage", {}),
                 },
-            })
+            }
+            _write_json(row_json, row)  # enables resume
+            rows.append(row)
 
     # 2AFC calibration on suppress/decoy: pair each secret-cell story against a
     # story written around the paired secret, ask the guesser to pick.
