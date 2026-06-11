@@ -406,13 +406,13 @@ def assess_cross_model_salience(
     *,
     source_deepseek_reference: JsonDict | None = None,
 ) -> JsonDict:
-    models_with_original_failure = [
+    current_models_with_original_failure = [
         key
         for key, bucket in by_model.items()
         if int(bucket.get("original_scorable_count", 0)) >= 2
         and int(bucket.get("original_strict_pass_count", 0)) < 2
     ]
-    models_with_example_rescue = [
+    current_models_with_example_rescue = [
         key
         for key, bucket in by_model.items()
         if int(bucket.get("original_scorable_count", 0)) >= 2
@@ -442,19 +442,27 @@ def assess_cross_model_salience(
         and source_deepseek_reference.get("original_strict_pass_count") == 0
         and source_deepseek_reference.get("example_strict_pass_count") == 3
     )
-    if source_deepseek_rescued and "deepseek_v4_pro" not in models_with_example_rescue:
-        models_with_example_rescue = ["deepseek_v4_pro", *models_with_example_rescue]
-    if source_deepseek_rescued and "deepseek_v4_pro" not in models_with_original_failure:
-        models_with_original_failure = ["deepseek_v4_pro", *models_with_original_failure]
+    source_models_with_original_failure = (
+        ["deepseek_v4_pro"] if source_deepseek_rescued else []
+    )
+    source_models_with_example_rescue = (
+        ["deepseek_v4_pro"] if source_deepseek_rescued else []
+    )
 
+    deepseek_rescued = (
+        "deepseek_v4_pro" in current_models_with_example_rescue
+        or source_deepseek_rescued
+    )
     deepseek_specific = (
-        models_with_original_failure == ["deepseek_v4_pro"]
-        and "deepseek_v4_pro" in models_with_example_rescue
+        deepseek_rescued
+        and all(
+            key == "deepseek_v4_pro" for key in current_models_with_original_failure
+        )
     )
     non_deepseek_reproduction = any(
-        key != "deepseek_v4_pro" for key in models_with_example_rescue
+        key != "deepseek_v4_pro" for key in current_models_with_example_rescue
     )
-    cross_model = source_deepseek_rescued and non_deepseek_reproduction
+    cross_model = deepseek_rescued and non_deepseek_reproduction
     general_literacy_failure = len(models_with_example_failure) >= 2
     if deepseek_specific:
         primary = "deepseek_specific_contract_salience_boundary"
@@ -470,8 +478,12 @@ def assess_cross_model_salience(
         "deepseek_specific_boundary": deepseek_specific,
         "cross_model_contract_salience": cross_model,
         "general_action_contract_literacy_failure": general_literacy_failure,
-        "models_with_original_failure": models_with_original_failure,
-        "models_with_example_rescue": models_with_example_rescue,
+        "models_with_original_failure": current_models_with_original_failure,
+        "models_with_example_rescue": current_models_with_example_rescue,
+        "source_reference_models_with_original_failure": (
+            source_models_with_original_failure
+        ),
+        "source_reference_models_with_example_rescue": source_models_with_example_rescue,
         "models_with_example_failure": models_with_example_failure,
         "models_with_unscoreable_original": models_with_unscoreable_original,
         "models_with_unscoreable_example": models_with_unscoreable_example,
@@ -540,6 +552,10 @@ def render_analysis(summary: JsonDict) -> str:
             f"`{assessment['models_with_original_failure']}`",
             "- Models rescued by example prompt: "
             f"`{assessment['models_with_example_rescue']}`",
+            "- Source-reference models with original-prompt failure: "
+            f"`{assessment['source_reference_models_with_original_failure']}`",
+            "- Source-reference models rescued by example prompt: "
+            f"`{assessment['source_reference_models_with_example_rescue']}`",
             "- Models failing the example prompt: "
             f"`{assessment['models_with_example_failure']}`",
             "- Models unscoreable under original prompt: "

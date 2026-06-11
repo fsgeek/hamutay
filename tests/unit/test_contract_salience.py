@@ -128,6 +128,10 @@ def test_assessment_uses_source_deepseek_when_current_deepseek_unscoreable():
 
     assert assessment["source_deepseek_reference_used"] is True
     assert assessment["primary_pattern"] == "cross_model_contract_salience_boundary"
+    assert assessment["models_with_example_rescue"] == ["gpt_5_1"]
+    assert assessment["source_reference_models_with_example_rescue"] == [
+        "deepseek_v4_pro"
+    ]
     assert assessment["models_with_unscoreable_original"] == ["deepseek_v4_pro"]
 
 

@@ -1,0 +1,356 @@
+{
+  "condition": {
+    "acceptance_rule": "strict parser requires one accepted open_item and one accepted schedule_request",
+    "base_evaluator_condition_id": "B_example_prompt_strict_contract",
+    "condition_id": "kimi_k2_6__example_strict",
+    "contract": "strict_autonomous_action_v1",
+    "model_family": "moonshot_kimi",
+    "model_id": "moonshotai/kimi-k2.6",
+    "model_key": "kimi_k2_6",
+    "model_role": "low_cost_peer_model",
+    "prompt_addendum": "Example valid open item shape: {\"kind\":\"todo\",\"text\":\"resolve the bounded follow-up item\"}. Do not use description, handle, status, or created_at as substitutes for kind and text.",
+    "prompt_addendum_application": "system_message_suffix",
+    "prompt_condition": "example_strict",
+    "prompt_variant": "original_plus_one_valid_open_item_example",
+    "provider": "OpenRouter"
+  },
+  "condition_id": "kimi_k2_6__example_strict",
+  "elapsed_seconds": 24.64512164099142,
+  "experiment_id": "action_object_contract_salience_cross_model_20260611",
+  "model_id": "moonshotai/kimi-k2.6",
+  "model_key": "kimi_k2_6",
+  "prompt_condition": "example_strict",
+  "provider_attempts": [
+    {
+      "attempt": 1,
+      "elapsed_seconds": 24.645120250002947,
+      "response_payload": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": " {\"response\":\"Seed wake acknowledged for the first tiny live autonomy pilot. One bounded follow-up item identified and preserved; a wake is scheduled to resolve it using the provided recall context.\",\"open_items\":[{\"kind\":\"todo\",\"text\":\"resolve the bounded follow-up item for the first tiny live autonomy pilot\"}],\"schedule_requests\":[{\"purpose\":\"resolve the bounded follow-up item\",\"requested_context\":[{\"tool\":\"recall\",\"record_id\":\"428a19f3-3c28-5f7c-94ff-8063f6ba9d07\"}]}]}",
+              "reasoning": " The user wants a single JSON object for the Hamutay audited autonomy harness. No markdown or prose outside the object. Must include a non-empty string response. Allowed fields: response, open_items, closures, schedule_requests, policy_action, declared_losses, uncertainty, abandonment_reason, defer_reason.\n\nCondition: identify exactly one bounded follow-up item, preserve it as an open item, and schedule exactly one wake to resolve it. Use recall target in scheduled wake requested_context: 428a19f3-3c28-5f7c-94ff-8063f6ba9d07. Return one JSON object with response, open_items, and schedule_requests. Do not include policy_action on this cycle.\n\nOpen items are JSON objects. Example valid open item shape: {\"kind\":\"todo\",\"text\":\"resolve the bounded follow-up item\"}. Do not use description, handle, status, or created_at as substitutes for kind and text.\n\nSchedule requests must include purpose and requested_context; requested_context entries may use {\"tool\":\"recall\",\"record_id\":\"...\"}.\n\nSo I need:\n- response: non-empty string.\n- open_items: array containing exactly one open item object with kind and text.\n- schedule_requests: array containing exactly one schedule request object with purpose and requested_context. requested_context should include the recall target.\n\nNo policy_action.\n\nLet's construct:\n\nresponse: \"Seed wake acknowledged. Pilot initialized with one bounded follow-up item and a scheduled wake to resolve it.\"\n\nopen_items: [{\"kind\":\"todo\",\"text\":\"resolve the bounded follow-up item\"}] \u2014 but maybe more specific? The user said \"identify exactly one bounded follow-up item\". Since this is a seed wake for the first tiny live autonomy pilot, a generic bounded follow-up is okay, but maybe something like \"confirm pilot constraints and validate first autonomy cycle completion criteria\". However, the example says \"resolve the bounded follow-up item\". I should make it a clear bounded follow-up. Let's say: \"resolve the bounded follow-up item for the first tiny live autonomy pilot cycle completion\". But the user said \"identify exactly one bounded follow-up item\". I'll make it specific but simple.\n\nschedule_requests: [{\"purpose\":\"resolve the bounded follow-up item\",\"requested_context\":[{\"tool\":\"recall\",\"record_id\":\"428a19f3-3c28-5f7c-94ff-8063f6ba9d07\"}]}]\n\nCheck allowed fields: response, open_items, schedule_requests. No policy_action. Good.\n\nMake sure JSON is valid and no extra whitespace? It's fine.\n\nDouble-check: open_items is an array of JSON objects. Each object must have kind and text. No description, handle, status, created_at.\n\nSchedule requests: purpose and requested_context. requested_context entries may use {\"tool\":\"recall\",\"record_id\":\"...\"}. So requested_context is likely an array.\n\nThe user said: \"Use this recall target in the scheduled wake requested_context: 428a19f3-3c28-5f7c-94ff-8063f6ba9d07.\"\n\nSo requested_context: [{\"tool\":\"recall\",\"record_id\":\"428a19f3-3c28-5f7c-94ff-8063f6ba9d07\"}]\n\nAll good.\n\nReturn only JSON. No markdown code fences? The user said \"Return only JSON, with no markdown or prose outside the object.\" So I should output raw JSON without triple backticks.\n\nLet's write it.\n\n{\n  \"response\": \"Seed wake acknowledged for the first tiny live autonomy pilot. One bounded follow-up item identified and preserved; a wake is scheduled to resolve it using the provided recall context.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"resolve the bounded follow-up item for the first tiny live autonomy pilot\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resolve the bounded follow-up item\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"428a19f3-3c28-5f7c-94ff-8063f6ba9d07\"\n        }\n      ]\n    }\n  ]\n}\n\nThis looks correct.",
+              "reasoning_details": [
+                {
+                  "format": "unknown",
+                  "index": 0,
+                  "text": " The user wants a single JSON object for the Hamutay audited autonomy harness. No markdown or prose outside the object. Must include a non-empty string response. Allowed fields: response, open_items, closures, schedule_requests, policy_action, declared_losses, uncertainty, abandonment_reason, defer_reason.\n\nCondition: identify exactly one bounded follow-up item, preserve it as an open item, and schedule exactly one wake to resolve it. Use recall target in scheduled wake requested_context: 428a19f3-3c28-5f7c-94ff-8063f6ba9d07. Return one JSON object with response, open_items, and schedule_requests. Do not include policy_action on this cycle.\n\nOpen items are JSON objects. Example valid open item shape: {\"kind\":\"todo\",\"text\":\"resolve the bounded follow-up item\"}. Do not use description, handle, status, or created_at as substitutes for kind and text.\n\nSchedule requests must include purpose and requested_context; requested_context entries may use {\"tool\":\"recall\",\"record_id\":\"...\"}.\n\nSo I need:\n- response: non-empty string.\n- open_items: array containing exactly one open item object with kind and text.\n- schedule_requests: array containing exactly one schedule request object with purpose and requested_context. requested_context should include the recall target.\n\nNo policy_action.\n\nLet's construct:\n\nresponse: \"Seed wake acknowledged. Pilot initialized with one bounded follow-up item and a scheduled wake to resolve it.\"\n\nopen_items: [{\"kind\":\"todo\",\"text\":\"resolve the bounded follow-up item\"}] \u2014 but maybe more specific? The user said \"identify exactly one bounded follow-up item\". Since this is a seed wake for the first tiny live autonomy pilot, a generic bounded follow-up is okay, but maybe something like \"confirm pilot constraints and validate first autonomy cycle completion criteria\". However, the example says \"resolve the bounded follow-up item\". I should make it a clear bounded follow-up. Let's say: \"resolve the bounded follow-up item for the first tiny live autonomy pilot cycle completion\". But the user said \"identify exactly one bounded follow-up item\". I'll make it specific but simple.\n\nschedule_requests: [{\"purpose\":\"resolve the bounded follow-up item\",\"requested_context\":[{\"tool\":\"recall\",\"record_id\":\"428a19f3-3c28-5f7c-94ff-8063f6ba9d07\"}]}]\n\nCheck allowed fields: response, open_items, schedule_requests. No policy_action. Good.\n\nMake sure JSON is valid and no extra whitespace? It's fine.\n\nDouble-check: open_items is an array of JSON objects. Each object must have kind and text. No description, handle, status, created_at.\n\nSchedule requests: purpose and requested_context. requested_context entries may use {\"tool\":\"recall\",\"record_id\":\"...\"}. So requested_context is likely an array.\n\nThe user said: \"Use this recall target in the scheduled wake requested_context: 428a19f3-3c28-5f7c-94ff-8063f6ba9d07.\"\n\nSo requested_context: [{\"tool\":\"recall\",\"record_id\":\"428a19f3-3c28-5f7c-94ff-8063f6ba9d07\"}]\n\nAll good.\n\nReturn only JSON. No markdown code fences? The user said \"Return only JSON, with no markdown or prose outside the object.\" So I should output raw JSON without triple backticks.\n\nLet's write it.\n\n{\n  \"response\": \"Seed wake acknowledged for the first tiny live autonomy pilot. One bounded follow-up item identified and preserved; a wake is scheduled to resolve it using the provided recall context.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"resolve the bounded follow-up item for the first tiny live autonomy pilot\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resolve the bounded follow-up item\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"428a19f3-3c28-5f7c-94ff-8063f6ba9d07\"\n        }\n      ]\n    }\n  ]\n}\n\nThis looks correct.",
+                  "type": "reasoning.text"
+                }
+              ],
+              "refusal": null,
+              "role": "assistant"
+            },
+            "native_finish_reason": "stop"
+          }
+        ],
+        "created": 1781195584,
+        "id": "gen-1781195584-ZZvEZSg5LoJz7gennm95",
+        "model": "moonshotai/kimi-k2.6-20260420",
+        "object": "chat.completion",
+        "provider": "Io Net",
+        "service_tier": null,
+        "system_fingerprint": null,
+        "usage": {
+          "completion_tokens": 987,
+          "completion_tokens_details": {
+            "audio_tokens": 0,
+            "image_tokens": 0,
+            "reasoning_tokens": 990
+          },
+          "cost": 0.00356355,
+          "cost_details": {
+            "upstream_inference_completions_cost": 0.00336567,
+            "upstream_inference_cost": 0.00356355,
+            "upstream_inference_prompt_cost": 0.00019788
+          },
+          "is_byok": false,
+          "prompt_tokens": 291,
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cache_write_tokens": 0,
+            "cached_tokens": 0,
+            "video_tokens": 0
+          },
+          "total_tokens": 1278
+        }
+      },
+      "retry_after_seconds": null,
+      "status_code": 200,
+      "transient": false,
+      "will_retry": false
+    }
+  ],
+  "provider_failure": null,
+  "provider_ok": true,
+  "raw_content": " {\"response\":\"Seed wake acknowledged for the first tiny live autonomy pilot. One bounded follow-up item identified and preserved; a wake is scheduled to resolve it using the provided recall context.\",\"open_items\":[{\"kind\":\"todo\",\"text\":\"resolve the bounded follow-up item for the first tiny live autonomy pilot\"}],\"schedule_requests\":[{\"purpose\":\"resolve the bounded follow-up item\",\"requested_context\":[{\"tool\":\"recall\",\"record_id\":\"428a19f3-3c28-5f7c-94ff-8063f6ba9d07\"}]}]}",
+  "relaxed_evaluation": {
+    "accepted_action_types": [
+      "open_item",
+      "response",
+      "schedule_request"
+    ],
+    "condition_id": "B_example_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "strict_contract_satisfied"
+    ],
+    "normalization_applied": false,
+    "parse_status": "parsed",
+    "rejection_paths": [],
+    "relaxed_open_item": {
+      "items": [
+        {
+          "missing_fields": [],
+          "normalization_required": false,
+          "normalized_candidate": {
+            "kind": "todo",
+            "text": "resolve the bounded follow-up item for the first tiny live autonomy pilot"
+          },
+          "path": "$.open_items[0]",
+          "reason": "strict_shape_or_relaxed_description_mapping_available",
+          "source_fields": [
+            "kind",
+            "text"
+          ],
+          "would_accept": true
+        }
+      ],
+      "reason": "all_open_items_relaxed_acceptable",
+      "would_accept": true
+    },
+    "relaxed_open_item_contract_enabled": true,
+    "relaxed_required_actions_valid": true,
+    "schedule_request_valid": true,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": true,
+    "strict_required_actions_valid": true,
+    "trace": {
+      "accepted_actions": [
+        {
+          "action_type": "response",
+          "parameters": {
+            "response": "Seed wake acknowledged for the first tiny live autonomy pilot. One bounded follow-up item identified and preserved; a wake is scheduled to resolve it using the provided recall context."
+          },
+          "source_path": "$.response"
+        },
+        {
+          "action_type": "open_item",
+          "parameters": {
+            "kind": "todo",
+            "text": "resolve the bounded follow-up item for the first tiny live autonomy pilot"
+          },
+          "source_path": "$.open_items[0]"
+        },
+        {
+          "action_type": "schedule_request",
+          "parameters": {
+            "purpose": "resolve the bounded follow-up item",
+            "requested_context": [
+              {
+                "record_id": "428a19f3-3c28-5f7c-94ff-8063f6ba9d07",
+                "tool": "recall"
+              }
+            ]
+          },
+          "source_path": "$.schedule_requests[0]"
+        }
+      ],
+      "parse_status": "parsed",
+      "parsed_action": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "resolve the bounded follow-up item for the first tiny live autonomy pilot"
+          }
+        ],
+        "response": "Seed wake acknowledged for the first tiny live autonomy pilot. One bounded follow-up item identified and preserved; a wake is scheduled to resolve it using the provided recall context.",
+        "schedule_requests": [
+          {
+            "purpose": "resolve the bounded follow-up item",
+            "requested_context": [
+              {
+                "record_id": "428a19f3-3c28-5f7c-94ff-8063f6ba9d07",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "raw_output": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "resolve the bounded follow-up item for the first tiny live autonomy pilot"
+          }
+        ],
+        "response": "Seed wake acknowledged for the first tiny live autonomy pilot. One bounded follow-up item identified and preserved; a wake is scheduled to resolve it using the provided recall context.",
+        "schedule_requests": [
+          {
+            "purpose": "resolve the bounded follow-up item",
+            "requested_context": [
+              {
+                "record_id": "428a19f3-3c28-5f7c-94ff-8063f6ba9d07",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "rejected_actions": [],
+      "rejection_reasons": [],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "accepted"
+    },
+    "validation_status": "accepted"
+  },
+  "repetition": 3,
+  "row_id": "kimi_k2_6__example_strict__r03",
+  "schema_version": "hamutay.cross_model_contract_salience_row.v1",
+  "strict_evaluation": {
+    "accepted_action_types": [
+      "open_item",
+      "response",
+      "schedule_request"
+    ],
+    "condition_id": "B_example_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "strict_contract_satisfied"
+    ],
+    "normalization_applied": false,
+    "parse_status": "parsed",
+    "rejection_paths": [],
+    "relaxed_open_item": {
+      "items": [
+        {
+          "missing_fields": [],
+          "normalization_required": false,
+          "normalized_candidate": {
+            "kind": "todo",
+            "text": "resolve the bounded follow-up item for the first tiny live autonomy pilot"
+          },
+          "path": "$.open_items[0]",
+          "reason": "strict_shape_or_relaxed_description_mapping_available",
+          "source_fields": [
+            "kind",
+            "text"
+          ],
+          "would_accept": true
+        }
+      ],
+      "reason": "all_open_items_relaxed_acceptable",
+      "would_accept": true
+    },
+    "relaxed_open_item_contract_enabled": false,
+    "relaxed_required_actions_valid": false,
+    "schedule_request_valid": true,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": true,
+    "strict_required_actions_valid": true,
+    "trace": {
+      "accepted_actions": [
+        {
+          "action_type": "response",
+          "parameters": {
+            "response": "Seed wake acknowledged for the first tiny live autonomy pilot. One bounded follow-up item identified and preserved; a wake is scheduled to resolve it using the provided recall context."
+          },
+          "source_path": "$.response"
+        },
+        {
+          "action_type": "open_item",
+          "parameters": {
+            "kind": "todo",
+            "text": "resolve the bounded follow-up item for the first tiny live autonomy pilot"
+          },
+          "source_path": "$.open_items[0]"
+        },
+        {
+          "action_type": "schedule_request",
+          "parameters": {
+            "purpose": "resolve the bounded follow-up item",
+            "requested_context": [
+              {
+                "record_id": "428a19f3-3c28-5f7c-94ff-8063f6ba9d07",
+                "tool": "recall"
+              }
+            ]
+          },
+          "source_path": "$.schedule_requests[0]"
+        }
+      ],
+      "parse_status": "parsed",
+      "parsed_action": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "resolve the bounded follow-up item for the first tiny live autonomy pilot"
+          }
+        ],
+        "response": "Seed wake acknowledged for the first tiny live autonomy pilot. One bounded follow-up item identified and preserved; a wake is scheduled to resolve it using the provided recall context.",
+        "schedule_requests": [
+          {
+            "purpose": "resolve the bounded follow-up item",
+            "requested_context": [
+              {
+                "record_id": "428a19f3-3c28-5f7c-94ff-8063f6ba9d07",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "raw_output": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "resolve the bounded follow-up item for the first tiny live autonomy pilot"
+          }
+        ],
+        "response": "Seed wake acknowledged for the first tiny live autonomy pilot. One bounded follow-up item identified and preserved; a wake is scheduled to resolve it using the provided recall context.",
+        "schedule_requests": [
+          {
+            "purpose": "resolve the bounded follow-up item",
+            "requested_context": [
+              {
+                "record_id": "428a19f3-3c28-5f7c-94ff-8063f6ba9d07",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "rejected_actions": [],
+      "rejection_reasons": [],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "accepted"
+    },
+    "validation_status": "accepted"
+  },
+  "usage": {
+    "completion_tokens": 987,
+    "completion_tokens_details": {
+      "audio_tokens": 0,
+      "image_tokens": 0,
+      "reasoning_tokens": 990
+    },
+    "cost": 0.00356355,
+    "cost_details": {
+      "upstream_inference_completions_cost": 0.00336567,
+      "upstream_inference_cost": 0.00356355,
+      "upstream_inference_prompt_cost": 0.00019788
+    },
+    "is_byok": false,
+    "prompt_tokens": 291,
+    "prompt_tokens_details": {
+      "audio_tokens": 0,
+      "cache_write_tokens": 0,
+      "cached_tokens": 0,
+      "video_tokens": 0
+    },
+    "total_tokens": 1278
+  }
+}
