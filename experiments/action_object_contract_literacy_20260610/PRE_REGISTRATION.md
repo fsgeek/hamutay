@@ -153,6 +153,27 @@ The evaluator command is:
 uv run python -m hamutay.memory.contract_literacy
 ```
 
+## Artifact Paths
+
+Preregistered artifacts:
+
+- `experiments/action_object_contract_literacy_20260610/PRE_REGISTRATION.md`;
+- `experiments/action_object_contract_literacy_20260610/matrix.json`;
+- `experiments/action_object_contract_literacy_20260610/prompt_variants.json`;
+- `experiments/action_object_contract_literacy_20260610/budget.json`;
+- `experiments/action_object_contract_literacy_20260610/failure_taxonomy.json`;
+- `experiments/action_object_contract_literacy_20260610/fixture_failed_live_run_cycle1_evaluation.json`.
+
+Evaluator and tests:
+
+- `src/hamutay/memory/contract_literacy.py`;
+- `tests/unit/test_contract_literacy.py`.
+
+Source failure fixture:
+
+- `experiments/live_autonomy_pilot_20260609/runs/c39ba9a3-9dda-48f2-82f6-cb90f8229bae/cycle_01_provider_response.json`;
+- `experiments/live_autonomy_pilot_20260609/runs/c39ba9a3-9dda-48f2-82f6-cb90f8229bae/evaluation.json`.
+
 ## Non-Goals
 
 - broad model comparison;
