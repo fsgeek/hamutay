@@ -25,6 +25,12 @@ JsonDict = dict[str, Any]
 EXPERIMENT_ID = "action_object_contract_salience_cross_model_20260611"
 DEFAULT_EXPERIMENT_DIR = Path("experiments") / EXPERIMENT_ID
 DEFAULT_LIVE_OUTPUT_DIR = DEFAULT_EXPERIMENT_DIR / "live_matrix_20260611"
+SOURCE_LIVE_RESULTS_PATH = (
+    Path("experiments")
+    / SOURCE_EXPERIMENT_ID
+    / "live_matrix_20260610"
+    / "results.json"
+)
 LIVE_REPETITIONS_PER_CONDITION = 3
 
 MODEL_SET: tuple[JsonDict, ...] = (
@@ -332,6 +338,8 @@ def summarize_results(
                 "model_key": row["model_key"],
                 "model_id": row["model_id"],
                 "rows": 0,
+                "original_scorable_count": 0,
+                "example_scorable_count": 0,
                 "original_strict_pass_count": 0,
                 "example_strict_pass_count": 0,
                 "original_strict_fail_relaxed_pass_count": 0,
@@ -340,19 +348,29 @@ def summarize_results(
         )
         _accumulate_bucket(prompt_bucket, row)
         model_bucket["rows"] += 1
+        provider_failure = row.get("provider_failure")
+        scorable = not isinstance(provider_failure, dict)
         strict = row["strict_evaluation"]["strict_required_actions_valid"]
         relaxed = row["relaxed_evaluation"]["relaxed_required_actions_valid"]
         prompt_condition = row["prompt_condition"]
-        if prompt_condition == "original_strict" and strict:
+        if prompt_condition == "original_strict" and scorable:
+            model_bucket["original_scorable_count"] += 1
+        if prompt_condition == "example_strict" and scorable:
+            model_bucket["example_scorable_count"] += 1
+        if prompt_condition == "original_strict" and scorable and strict:
             model_bucket["original_strict_pass_count"] += 1
-        if prompt_condition == "example_strict" and strict:
+        if prompt_condition == "example_strict" and scorable and strict:
             model_bucket["example_strict_pass_count"] += 1
-        if prompt_condition == "original_strict" and not strict and relaxed:
+        if prompt_condition == "original_strict" and scorable and not strict and relaxed:
             model_bucket["original_strict_fail_relaxed_pass_count"] += 1
-        if prompt_condition == "example_strict" and not strict and relaxed:
+        if prompt_condition == "example_strict" and scorable and not strict and relaxed:
             model_bucket["example_strict_fail_relaxed_pass_count"] += 1
 
-    hypothesis_assessment = assess_cross_model_salience(by_model)
+    source_reference = load_source_deepseek_reference()
+    hypothesis_assessment = assess_cross_model_salience(
+        by_model,
+        source_deepseek_reference=source_reference,
+    )
     return {
         "schema_version": "hamutay.cross_model_contract_salience_results.v1",
         "experiment_id": EXPERIMENT_ID,
@@ -367,6 +385,7 @@ def summarize_results(
         "budget": budget_manifest(),
         "by_model_prompt": by_model_prompt,
         "by_model": by_model,
+        "source_deepseek_reference": source_reference,
         "hypothesis_assessment": hypothesis_assessment,
         "row_result_paths": [
             str(Path("rows") / row["row_id"] / "row_result.json")
@@ -375,28 +394,60 @@ def summarize_results(
     }
 
 
-def assess_cross_model_salience(by_model: dict[str, JsonDict]) -> JsonDict:
+def assess_cross_model_salience(
+    by_model: dict[str, JsonDict],
+    *,
+    source_deepseek_reference: JsonDict | None = None,
+) -> JsonDict:
     models_with_original_failure = [
         key
         for key, bucket in by_model.items()
-        if int(bucket.get("original_strict_pass_count", 0)) < 2
+        if int(bucket.get("original_scorable_count", 0)) >= 2
+        and int(bucket.get("original_strict_pass_count", 0)) < 2
     ]
     models_with_example_rescue = [
         key
         for key, bucket in by_model.items()
-        if int(bucket.get("original_strict_pass_count", 0)) < 2
+        if int(bucket.get("original_scorable_count", 0)) >= 2
+        and int(bucket.get("original_strict_pass_count", 0)) < 2
+        and int(bucket.get("example_scorable_count", 0)) >= 2
         and int(bucket.get("example_strict_pass_count", 0)) >= 2
     ]
     models_with_example_failure = [
         key
         for key, bucket in by_model.items()
-        if int(bucket.get("example_strict_pass_count", 0)) < 2
+        if int(bucket.get("example_scorable_count", 0)) >= 2
+        and int(bucket.get("example_strict_pass_count", 0)) < 2
     ]
+    models_with_unscoreable_original = [
+        key
+        for key, bucket in by_model.items()
+        if int(bucket.get("original_scorable_count", 0)) < 2
+    ]
+    models_with_unscoreable_example = [
+        key
+        for key, bucket in by_model.items()
+        if int(bucket.get("example_scorable_count", 0)) < 2
+    ]
+
+    source_deepseek_rescued = bool(
+        source_deepseek_reference
+        and source_deepseek_reference.get("original_strict_pass_count") == 0
+        and source_deepseek_reference.get("example_strict_pass_count") == 3
+    )
+    if source_deepseek_rescued and "deepseek_v4_pro" not in models_with_example_rescue:
+        models_with_example_rescue = ["deepseek_v4_pro", *models_with_example_rescue]
+    if source_deepseek_rescued and "deepseek_v4_pro" not in models_with_original_failure:
+        models_with_original_failure = ["deepseek_v4_pro", *models_with_original_failure]
+
     deepseek_specific = (
         models_with_original_failure == ["deepseek_v4_pro"]
         and "deepseek_v4_pro" in models_with_example_rescue
     )
-    cross_model = len(models_with_example_rescue) >= 2
+    non_deepseek_reproduction = any(
+        key != "deepseek_v4_pro" for key in models_with_example_rescue
+    )
+    cross_model = source_deepseek_rescued and non_deepseek_reproduction
     general_literacy_failure = len(models_with_example_failure) >= 2
     if deepseek_specific:
         primary = "deepseek_specific_contract_salience_boundary"
@@ -415,6 +466,9 @@ def assess_cross_model_salience(by_model: dict[str, JsonDict]) -> JsonDict:
         "models_with_original_failure": models_with_original_failure,
         "models_with_example_rescue": models_with_example_rescue,
         "models_with_example_failure": models_with_example_failure,
+        "models_with_unscoreable_original": models_with_unscoreable_original,
+        "models_with_unscoreable_example": models_with_unscoreable_example,
+        "source_deepseek_reference_used": source_deepseek_rescued,
     }
 
 
@@ -442,8 +496,14 @@ def render_analysis(summary: JsonDict) -> str:
         lines.append(
             "| {model} | {orig} | {example} | {orig_relaxed} | {example_relaxed} |".format(
                 model=model_key,
-                orig=bucket["original_strict_pass_count"],
-                example=bucket["example_strict_pass_count"],
+                orig=(
+                    f"{bucket['original_strict_pass_count']}/"
+                    f"{bucket['original_scorable_count']}"
+                ),
+                example=(
+                    f"{bucket['example_strict_pass_count']}/"
+                    f"{bucket['example_scorable_count']}"
+                ),
                 orig_relaxed=bucket[
                     "original_strict_fail_relaxed_pass_count"
                 ],
@@ -475,10 +535,20 @@ def render_analysis(summary: JsonDict) -> str:
             f"`{assessment['models_with_example_rescue']}`",
             "- Models failing the example prompt: "
             f"`{assessment['models_with_example_failure']}`",
+            "- Models unscoreable under original prompt: "
+            f"`{assessment['models_with_unscoreable_original']}`",
+            "- Models unscoreable under example prompt: "
+            f"`{assessment['models_with_unscoreable_example']}`",
+            "- Source DeepSeek reference used: "
+            f"`{assessment['source_deepseek_reference_used']}`",
             "",
             "## Interpretation",
             "",
             _interpret_summary(summary),
+            "",
+            "## Limitations",
+            "",
+            _limitations_summary(summary),
             "",
             "## Artifact Trail",
             "",
@@ -493,6 +563,28 @@ def render_analysis(summary: JsonDict) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def load_source_deepseek_reference(
+    path: Path = SOURCE_LIVE_RESULTS_PATH,
+) -> JsonDict | None:
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text())
+    conditions = data.get("by_condition", {})
+    original = conditions.get("A_original_prompt_strict_contract", {})
+    example = conditions.get("B_example_prompt_strict_contract", {})
+    return {
+        "source_path": str(path),
+        "original_strict_pass_count": int(original.get("strict_pass_count", 0)),
+        "example_strict_pass_count": int(example.get("strict_pass_count", 0)),
+        "original_strict_fail_relaxed_pass_count": int(
+            original.get("strict_fail_relaxed_pass_count", 0)
+        ),
+        "example_strict_fail_relaxed_pass_count": int(
+            example.get("strict_fail_relaxed_pass_count", 0)
+        ),
+    }
 
 
 def _messages_for_condition(condition: JsonDict, *, repetition: int) -> list[JsonDict]:
@@ -576,6 +668,22 @@ def _interpret_summary(summary: JsonDict) -> str:
     return (
         "The pattern is mixed or ambiguous. Inspect row-level provider responses "
         "before choosing a harness fix."
+    )
+
+
+def _limitations_summary(summary: JsonDict) -> str:
+    assessment = summary["hypothesis_assessment"]
+    unscoreable_original = assessment["models_with_unscoreable_original"]
+    unscoreable_example = assessment["models_with_unscoreable_example"]
+    if not unscoreable_original and not unscoreable_example:
+        return "No provider/protocol unscoreable model conditions were observed."
+    return (
+        "Provider/protocol failures are not counted as model contract failures. "
+        f"Original-prompt unscoreable models: `{unscoreable_original}`. "
+        f"Example-prompt unscoreable models: `{unscoreable_example}`. "
+        "DeepSeek and Claude current-run rows were therefore not used as direct "
+        "current-run model evidence; the DeepSeek side of the cross-model "
+        "comparison uses the prior committed source experiment reference."
     )
 
 

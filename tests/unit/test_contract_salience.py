@@ -68,7 +68,13 @@ def test_assessment_detects_deepseek_specific_boundary():
         "gpt_5_1": _model_bucket(original=3, example=3),
     }
 
-    assessment = assess_cross_model_salience(by_model)
+    assessment = assess_cross_model_salience(
+        by_model,
+        source_deepseek_reference={
+            "original_strict_pass_count": 0,
+            "example_strict_pass_count": 3,
+        },
+    )
 
     assert assessment["primary_pattern"] == (
         "deepseek_specific_contract_salience_boundary"
@@ -85,11 +91,42 @@ def test_assessment_detects_cross_model_contract_salience():
         "gpt_5_1": _model_bucket(original=3, example=3),
     }
 
-    assessment = assess_cross_model_salience(by_model)
+    assessment = assess_cross_model_salience(
+        by_model,
+        source_deepseek_reference={
+            "original_strict_pass_count": 0,
+            "example_strict_pass_count": 3,
+        },
+    )
 
     assert assessment["primary_pattern"] == "cross_model_contract_salience_boundary"
     assert assessment["deepseek_specific_boundary"] is False
     assert assessment["cross_model_contract_salience"] is True
+
+
+def test_assessment_uses_source_deepseek_when_current_deepseek_unscoreable():
+    by_model = {
+        "deepseek_v4_pro": _model_bucket(
+            original=0,
+            example=0,
+            original_scorable=0,
+            example_scorable=0,
+        ),
+        "gpt_5_1": _model_bucket(original=0, example=3, original_relaxed=3),
+    }
+    source = {
+        "original_strict_pass_count": 0,
+        "example_strict_pass_count": 3,
+    }
+
+    assessment = assess_cross_model_salience(
+        by_model,
+        source_deepseek_reference=source,
+    )
+
+    assert assessment["source_deepseek_reference_used"] is True
+    assert assessment["primary_pattern"] == "cross_model_contract_salience_boundary"
+    assert assessment["models_with_unscoreable_original"] == ["deepseek_v4_pro"]
 
 
 def test_summary_counts_model_prompt_rows_and_renders_analysis(tmp_path):
@@ -123,8 +160,12 @@ def _model_bucket(
     example: int,
     original_relaxed: int = 0,
     example_relaxed: int = 0,
+    original_scorable: int = 3,
+    example_scorable: int = 3,
 ) -> dict:
     return {
+        "original_scorable_count": original_scorable,
+        "example_scorable_count": example_scorable,
         "original_strict_pass_count": original,
         "example_strict_pass_count": example,
         "original_strict_fail_relaxed_pass_count": original_relaxed,

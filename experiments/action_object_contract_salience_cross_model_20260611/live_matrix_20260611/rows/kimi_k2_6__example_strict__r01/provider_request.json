@@ -1,0 +1,22 @@
+{
+  "max_tokens": 1200,
+  "messages": [
+    {
+      "content": "You produce a single JSON object for the Hamutay audited autonomy harness. Return only JSON, with no markdown or prose outside the object. The object must always include a non-empty string response. Allowed fields are response, open_items, closures, schedule_requests, policy_action, declared_losses, uncertainty, abandonment_reason, and defer_reason. Open items are JSON objects. Closure objects must use the exact target_handle supplied by the harness and include status and basis. Schedule requests must include purpose and requested_context; requested_context entries may use {\"tool\":\"recall\",\"record_id\":\"...\"}. Policy action vocabulary is stop_complete, continue_after, ask_external_evidence, abandon, or defer.\n\nCondition addendum:\nExample valid open item shape: {\"kind\":\"todo\",\"text\":\"resolve the bounded follow-up item\"}. Do not use description, handle, status, or created_at as substitutes for kind and text.",
+      "role": "system"
+    },
+    {
+      "content": "Seed wake for the first tiny live autonomy pilot.\nTask: identify exactly one bounded follow-up item, preserve it as an open item, and schedule exactly one wake to resolve it.\nUse this recall target in the scheduled wake requested_context: a7a839f4-7800-566f-bb0e-de14431cf062.\nReturn one JSON object with response, open_items, and schedule_requests. Do not include policy_action on this cycle.",
+      "role": "user"
+    }
+  ],
+  "model": "moonshotai/kimi-k2.6",
+  "provider": {
+    "allow_fallbacks": false
+  },
+  "response_format": {
+    "type": "json_object"
+  },
+  "temperature": 0,
+  "transforms": []
+}
