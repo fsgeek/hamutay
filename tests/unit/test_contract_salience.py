@@ -21,6 +21,8 @@ def test_cross_model_matrix_is_fixed_and_budgeted():
     assert len(matrix["conditions"]) == 8
     assert budget["max_live_calls"] == 24
     assert budget["max_estimated_cost_usd"] == 2.0
+    assert budget["max_output_tokens_per_call"] is None
+    assert "No artificial per-call output cap" in budget["output_cap_policy"]
     assert {condition["model_id"] for condition in matrix["conditions"]} == {
         "deepseek/deepseek-v4-pro",
         "moonshotai/kimi-k2.6",

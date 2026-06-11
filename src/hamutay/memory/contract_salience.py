@@ -125,6 +125,11 @@ def budget_manifest() -> JsonDict:
         "max_live_calls": 24,
         "max_calls_per_condition": LIVE_REPETITIONS_PER_CONDITION,
         "max_cycles_per_call": 1,
+        "max_output_tokens_per_call": None,
+        "output_cap_policy": (
+            "No artificial per-call output cap for research matrix calls; "
+            "provider/model limits still apply."
+        ),
         "max_total_tokens": 60000,
         "max_estimated_cost_usd": 2.00,
         "stop_rule": (
@@ -270,6 +275,7 @@ def execute_live_row(
     )
     _write_json(row_dir / "provider_request.json", provider["request_payload"])
     _write_json(row_dir / "provider_response.json", provider["response_payload"])
+    _write_json(row_dir / "provider_attempts.json", {"attempts": provider["attempts"]})
 
     if provider["action_object"] is not None:
         raw_output: Any = provider["action_object"]
@@ -303,6 +309,7 @@ def execute_live_row(
         "raw_content": provider.get("raw_content"),
         "usage": provider.get("usage", {}),
         "elapsed_seconds": provider.get("elapsed_seconds"),
+        "provider_attempts": provider.get("attempts", []),
         "strict_evaluation": strict_evaluation,
         "relaxed_evaluation": relaxed_evaluation,
     }

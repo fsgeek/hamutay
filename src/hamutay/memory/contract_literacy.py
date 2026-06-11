@@ -27,7 +27,9 @@ FAILED_RUN_RESPONSE_PATH = Path(
 ) / FAILED_RUN_ID / "cycle_01_provider_response.json"
 DEFAULT_EXPERIMENT_DIR = Path("experiments") / EXPERIMENT_ID
 DEFAULT_LIVE_OUTPUT_DIR = DEFAULT_EXPERIMENT_DIR / "live_matrix_20260610"
-MAX_OUTPUT_TOKENS_PER_CALL = 1200
+DEFAULT_PROVIDER_RETRY_ATTEMPTS = 3
+DEFAULT_PROVIDER_RETRY_SLEEP_CAP_SECONDS = 20.0
+TRANSIENT_PROVIDER_STATUS_CODES = {429, 500, 502, 503, 504, 529}
 
 CONDITION_IDS = (
     "A_original_prompt_strict_contract",
@@ -167,6 +169,11 @@ def budget_manifest() -> JsonDict:
         "max_live_calls_if_later_authorized": 12,
         "max_calls_per_condition": 3,
         "max_cycles_per_call": 1,
+        "max_output_tokens_per_call": None,
+        "output_cap_policy": (
+            "No artificial per-call output cap for research matrix calls; "
+            "provider/model limits still apply."
+        ),
         "max_total_tokens": 30000,
         "max_estimated_cost_usd": 1.00,
         "stop_rule": (
@@ -558,6 +565,7 @@ def execute_live_matrix_row(
 
     _write_json(row_dir / "provider_request.json", provider["request_payload"])
     _write_json(row_dir / "provider_response.json", provider["response_payload"])
+    _write_json(row_dir / "provider_attempts.json", {"attempts": provider["attempts"]})
 
     if provider["action_object"] is not None:
         raw_output: Any = provider["action_object"]
@@ -587,6 +595,7 @@ def execute_live_matrix_row(
         "raw_content": provider.get("raw_content"),
         "usage": provider.get("usage", {}),
         "elapsed_seconds": provider.get("elapsed_seconds"),
+        "provider_attempts": provider.get("attempts", []),
         "strict_evaluation": strict_evaluation,
         "relaxed_evaluation": relaxed_evaluation,
     }
@@ -603,59 +612,115 @@ def call_openrouter_action(
     model: str,
     messages: list[JsonDict],
     timeout_seconds: float,
+    max_attempts: int = DEFAULT_PROVIDER_RETRY_ATTEMPTS,
+    retry_sleep_cap_seconds: float = DEFAULT_PROVIDER_RETRY_SLEEP_CAP_SECONDS,
+    sleep: Any = time.sleep,
 ) -> JsonDict:
     payload: JsonDict = {
         "model": model,
         "messages": deepcopy(messages),
-        "max_tokens": MAX_OUTPUT_TOKENS_PER_CALL,
         "temperature": 0,
         "response_format": {"type": "json_object"},
         "provider": {"allow_fallbacks": False},
         "transforms": [],
     }
     started = time.monotonic()
-    try:
-        response = httpx.post(
-            f"{endpoint.rstrip('/')}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {api_key}",
-                "Content-Type": "application/json",
-            },
-            json=payload,
-            timeout=timeout_seconds,
-        )
-        elapsed = time.monotonic() - started
+    attempts: list[JsonDict] = []
+    response_payload: JsonDict = {}
+    elapsed = 0.0
+    max_attempts = max(1, int(max_attempts))
+
+    for attempt_index in range(1, max_attempts + 1):
+        attempt_started = time.monotonic()
         try:
-            response_payload: JsonDict = response.json()
-        except json.JSONDecodeError:
-            response_payload = {"raw_text": response.text}
-        if response.status_code >= 400:
-            return {
-                "ok": False,
-                "failure": {
-                    "layer": "provider",
-                    "code": "provider_api_error",
-                    "status_code": response.status_code,
+            response = httpx.post(
+                f"{endpoint.rstrip('/')}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
                 },
-                "request_payload": payload,
-                "response_payload": response_payload,
-                "raw_content": None,
-                "action_object": None,
-                "elapsed_seconds": elapsed,
-                "usage": {},
-            }
-    except httpx.TimeoutException as exc:
-        return _provider_failure_result(
-            payload=payload,
-            code="provider_budget_or_timeout",
-            message=str(exc),
-        )
-    except httpx.HTTPError as exc:
-        return _provider_failure_result(
-            payload=payload,
-            code="provider_api_error",
-            message=str(exc),
-        )
+                json=payload,
+                timeout=timeout_seconds,
+            )
+            attempt_elapsed = time.monotonic() - attempt_started
+            elapsed = time.monotonic() - started
+            try:
+                response_payload = response.json()
+            except json.JSONDecodeError:
+                response_payload = {"raw_text": response.text}
+            retry_after = _retry_after_seconds(response, response_payload)
+            transient = response.status_code in TRANSIENT_PROVIDER_STATUS_CODES
+            attempts.append(
+                {
+                    "attempt": attempt_index,
+                    "status_code": response.status_code,
+                    "elapsed_seconds": attempt_elapsed,
+                    "transient": transient,
+                    "retry_after_seconds": retry_after,
+                    "will_retry": (
+                        response.status_code >= 400
+                        and transient
+                        and attempt_index < max_attempts
+                    ),
+                    "response_payload": response_payload,
+                }
+            )
+            if response.status_code < 400:
+                break
+            if transient and attempt_index < max_attempts:
+                sleep(_bounded_retry_delay(attempt_index, retry_after, retry_sleep_cap_seconds))
+                continue
+            return _provider_failure_result(
+                payload=payload,
+                code="provider_api_error",
+                message="provider returned HTTP error",
+                response_payload=response_payload,
+                elapsed_seconds=elapsed,
+                attempts=attempts,
+                status_code=response.status_code,
+            )
+        except httpx.TimeoutException as exc:
+            elapsed = time.monotonic() - started
+            attempts.append(
+                {
+                    "attempt": attempt_index,
+                    "exception_type": type(exc).__name__,
+                    "message": str(exc),
+                    "transient": True,
+                    "will_retry": attempt_index < max_attempts,
+                }
+            )
+            if attempt_index < max_attempts:
+                sleep(_bounded_retry_delay(attempt_index, None, retry_sleep_cap_seconds))
+                continue
+            return _provider_failure_result(
+                payload=payload,
+                code="provider_budget_or_timeout",
+                message=str(exc),
+                elapsed_seconds=elapsed,
+                attempts=attempts,
+            )
+        except httpx.HTTPError as exc:
+            elapsed = time.monotonic() - started
+            attempts.append(
+                {
+                    "attempt": attempt_index,
+                    "exception_type": type(exc).__name__,
+                    "message": str(exc),
+                    "transient": True,
+                    "will_retry": attempt_index < max_attempts,
+                }
+            )
+            if attempt_index < max_attempts:
+                sleep(_bounded_retry_delay(attempt_index, None, retry_sleep_cap_seconds))
+                continue
+            return _provider_failure_result(
+                payload=payload,
+                code="provider_api_error",
+                message=str(exc),
+                elapsed_seconds=elapsed,
+                attempts=attempts,
+            )
 
     raw_content = extract_openai_content(response_payload)
     action_object: JsonDict | None = None
@@ -686,6 +751,7 @@ def call_openrouter_action(
         "raw_content": raw_content,
         "action_object": action_object,
         "elapsed_seconds": elapsed,
+        "attempts": attempts,
         "usage": deepcopy(usage if isinstance(usage, dict) else {}),
     }
 
@@ -965,21 +1031,79 @@ def _provider_failure_result(
     payload: JsonDict,
     code: str,
     message: str,
+    response_payload: JsonDict | None = None,
+    elapsed_seconds: float | None = None,
+    attempts: list[JsonDict] | None = None,
+    status_code: int | None = None,
 ) -> JsonDict:
+    failure: JsonDict = {
+        "layer": "provider",
+        "code": code,
+        "message": message,
+    }
+    if status_code is not None:
+        failure["status_code"] = status_code
     return {
         "ok": False,
-        "failure": {
-            "layer": "provider",
-            "code": code,
-            "message": message,
-        },
+        "failure": failure,
         "request_payload": payload,
-        "response_payload": {},
+        "response_payload": response_payload or {},
         "raw_content": None,
         "action_object": None,
-        "elapsed_seconds": None,
+        "elapsed_seconds": elapsed_seconds,
+        "attempts": attempts or [],
         "usage": {},
     }
+
+
+def _retry_after_seconds(response: httpx.Response, response_payload: JsonDict) -> float | None:
+    header_value = response.headers.get("Retry-After")
+    if header_value is not None:
+        parsed = _parse_retry_after_seconds(header_value)
+        if parsed is not None:
+            return parsed
+
+    error = response_payload.get("error")
+    if not isinstance(error, dict):
+        return None
+    metadata = error.get("metadata")
+    if not isinstance(metadata, dict):
+        return None
+
+    for key in ("retry_after_seconds", "retry_after_seconds_raw"):
+        value = metadata.get(key)
+        if value is not None:
+            parsed = _parse_retry_after_seconds(value)
+            if parsed is not None:
+                return parsed
+
+    headers = metadata.get("headers")
+    if isinstance(headers, dict):
+        for key, value in headers.items():
+            if str(key).lower() == "retry-after":
+                return _parse_retry_after_seconds(value)
+    return None
+
+
+def _parse_retry_after_seconds(value: Any) -> float | None:
+    try:
+        seconds = float(value)
+    except (TypeError, ValueError):
+        return None
+    if seconds < 0:
+        return None
+    return seconds
+
+
+def _bounded_retry_delay(
+    attempt_index: int,
+    retry_after_seconds: float | None,
+    cap_seconds: float,
+) -> float:
+    cap_seconds = max(0.0, float(cap_seconds))
+    if retry_after_seconds is not None:
+        return min(retry_after_seconds, cap_seconds)
+    return min(float(2 ** max(0, attempt_index - 1)), cap_seconds)
 
 
 def _usage_totals(row_results: list[JsonDict]) -> JsonDict:

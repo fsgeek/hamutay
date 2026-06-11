@@ -1,9 +1,12 @@
 import json
 
+import httpx
+
 from hamutay.memory.contract_literacy import (
     CONDITION_IDS,
     build_condition_messages,
     budget_manifest,
+    call_openrouter_action,
     condition_matrix,
     evaluate_cycle1_action_object,
     evaluate_failed_run_fixture,
@@ -36,6 +39,8 @@ def test_condition_matrix_is_fixed_and_no_live():
     assert all("prompt_addendum" in condition for condition in matrix["conditions"])
     assert budget["live_execution_status"] == "not_authorized_by_this_artifact"
     assert budget["max_live_calls_if_later_authorized"] == 12
+    assert budget["max_output_tokens_per_call"] is None
+    assert "No artificial per-call output cap" in budget["output_cap_policy"]
     assert {entry["layer"] for entry in taxonomy["entries"]} == {
         "model",
         "prompt_schema",
@@ -176,6 +181,130 @@ def test_condition_messages_apply_addendum_as_system_suffix():
     assert "Example valid open item shape" in messages[0]["content"]
     assert messages[1]["role"] == "user"
     assert "Return one JSON object" in messages[1]["content"]
+
+
+def test_openrouter_research_call_does_not_set_max_tokens(monkeypatch):
+    captured_payload = {}
+
+    def fake_post(_url, *, headers, json, timeout):
+        captured_payload.update(json)
+        assert headers["Authorization"] == "Bearer test-key"
+        assert timeout == 1
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"response":"ok","open_items":[{"kind":"todo",'
+                                '"text":"x"}],"schedule_requests":[]}'
+                            )
+                        }
+                    }
+                ],
+                "usage": {"total_tokens": 10, "cost": 0.001},
+            },
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    result = call_openrouter_action(
+        api_key="test-key",
+        endpoint="https://example.test/api/v1",
+        model="test/model",
+        messages=[{"role": "user", "content": "return json"}],
+        timeout_seconds=1,
+    )
+
+    assert result["ok"] is True
+    assert len(result["attempts"]) == 1
+    assert "max_tokens" not in captured_payload
+    assert captured_payload["response_format"] == {"type": "json_object"}
+    assert captured_payload["provider"] == {"allow_fallbacks": False}
+
+
+def test_openrouter_retries_transient_provider_errors(monkeypatch):
+    captured_payloads = []
+    slept = []
+
+    def fake_post(_url, *, headers, json, timeout):
+        captured_payloads.append(dict(json))
+        if len(captured_payloads) == 1:
+            return httpx.Response(
+                529,
+                headers={"Retry-After": "7"},
+                json={"error": {"message": "upstream overloaded"}},
+            )
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"response":"ok","open_items":[{"kind":"todo",'
+                                '"text":"x"}],"schedule_requests":[]}'
+                            )
+                        }
+                    }
+                ],
+                "usage": {"total_tokens": 12, "cost": 0.002},
+            },
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    result = call_openrouter_action(
+        api_key="test-key",
+        endpoint="https://example.test/api/v1",
+        model="test/model",
+        messages=[{"role": "user", "content": "return json"}],
+        timeout_seconds=1,
+        max_attempts=2,
+        sleep=slept.append,
+    )
+
+    assert result["ok"] is True
+    assert len(captured_payloads) == 2
+    assert all("max_tokens" not in payload for payload in captured_payloads)
+    assert slept == [7.0]
+    assert [attempt.get("status_code") for attempt in result["attempts"]] == [529, 200]
+    assert result["attempts"][0]["will_retry"] is True
+    assert result["attempts"][0]["transient"] is True
+    assert result["attempts"][1]["will_retry"] is False
+
+
+def test_openrouter_does_not_retry_protocol_failures(monkeypatch):
+    calls = 0
+
+    def fake_post(_url, *, headers, json, timeout):
+        nonlocal calls
+        calls += 1
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "not json"}}]},
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    result = call_openrouter_action(
+        api_key="test-key",
+        endpoint="https://example.test/api/v1",
+        model="test/model",
+        messages=[{"role": "user", "content": "return json"}],
+        timeout_seconds=1,
+        max_attempts=3,
+    )
+
+    assert calls == 1
+    assert len(result["attempts"]) == 1
+    assert result["ok"] is False
+    assert result["failure"] == {
+        "layer": "protocol",
+        "code": "invalid_action_schema",
+        "message": "provider content was not JSON",
+    }
 
 
 def test_matrix_summary_distinguishes_presentation_sensitive_pattern(tmp_path):
