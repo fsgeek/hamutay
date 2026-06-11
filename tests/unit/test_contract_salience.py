@@ -4,6 +4,7 @@ from hamutay.memory.contract_salience import (
     assess_cross_model_salience,
     budget_manifest,
     cross_model_matrix,
+    endpoint_recovery_matrix,
     failure_taxonomy,
     render_analysis,
     summarize_results,
@@ -33,6 +34,29 @@ def test_cross_model_matrix_is_fixed_and_budgeted():
         "original_strict",
         "example_strict",
     }
+
+
+def test_endpoint_recovery_matrix_targets_only_unscoreable_model_rows():
+    matrix = endpoint_recovery_matrix()
+
+    assert matrix["live_calls_per_condition"] == 3
+    assert len(matrix["conditions"]) == 4
+    assert {condition["model_key"] for condition in matrix["conditions"]} == {
+        "claude_sonnet_4_6",
+        "deepseek_v4_pro",
+    }
+    by_model = {condition["model_key"]: condition for condition in matrix["conditions"]}
+    assert by_model["claude_sonnet_4_6"]["endpoint_family"] == "anthropic_messages"
+    assert by_model["claude_sonnet_4_6"]["endpoint_default"] == (
+        "https://openrouter.ai/api"
+    )
+    assert by_model["deepseek_v4_pro"]["endpoint_family"] == (
+        "deepseek_anthropic_messages"
+    )
+    assert by_model["deepseek_v4_pro"]["endpoint_default"] == (
+        "https://api.deepseek.com/anthropic"
+    )
+    assert by_model["deepseek_v4_pro"]["model_id"] == "deepseek-v4-pro"
 
 
 def test_failure_taxonomy_includes_cross_model_layers():
@@ -156,6 +180,10 @@ def test_summary_counts_model_prompt_rows_and_renders_analysis(tmp_path):
 
     assert summary["by_model"]["deepseek_v4_pro"]["original_strict_pass_count"] == 0
     assert summary["by_model"]["deepseek_v4_pro"]["example_strict_pass_count"] == 3
+    assert summary["failure_totals"] == {
+        "provider_failures": 0,
+        "protocol_failures": 0,
+    }
     assert summary["usage_totals"]["total_tokens"] == 600
     assert "Cross-Model Action-Object Contract Salience Analysis" in analysis
 

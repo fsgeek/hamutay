@@ -12,6 +12,7 @@ from typing import Any
 
 from hamutay.memory.contract_literacy import (
     EXPERIMENT_ID as SOURCE_EXPERIMENT_ID,
+    call_anthropic_messages_action,
     call_openrouter_action,
     evaluate_cycle1_action_object,
     failure_taxonomy as literacy_failure_taxonomy,
@@ -25,6 +26,12 @@ JsonDict = dict[str, Any]
 EXPERIMENT_ID = "action_object_contract_salience_cross_model_20260611"
 DEFAULT_EXPERIMENT_DIR = Path("experiments") / EXPERIMENT_ID
 DEFAULT_LIVE_OUTPUT_DIR = DEFAULT_EXPERIMENT_DIR / "live_matrix_20260611"
+DEFAULT_ENDPOINT_RECOVERY_OUTPUT_DIR = (
+    DEFAULT_EXPERIMENT_DIR / "endpoint_recovery_20260611"
+)
+DEFAULT_OPENROUTER_ANTHROPIC_ENDPOINT = "https://openrouter.ai/api"
+DEFAULT_DEEPSEEK_ENDPOINT = "https://api.deepseek.com"
+DEFAULT_DEEPSEEK_ANTHROPIC_ENDPOINT = "https://api.deepseek.com/anthropic"
 SOURCE_LIVE_RESULTS_PATH = (
     Path("experiments")
     / SOURCE_EXPERIMENT_ID
@@ -193,6 +200,57 @@ def write_preregistration_artifacts(output_dir: Path) -> JsonDict:
     }
 
 
+def endpoint_recovery_matrix() -> JsonDict:
+    conditions = [
+        _endpoint_recovery_condition(condition)
+        for condition in cross_model_matrix()["conditions"]
+        if condition["model_key"] in {"claude_sonnet_4_6", "deepseek_v4_pro"}
+    ]
+    return {
+        "experiment_id": EXPERIMENT_ID,
+        "recovery_scope": (
+            "Rerun only rows that were unscoreable in "
+            "live_matrix_20260611_recovery_no_cap_retry because of "
+            "endpoint/protocol/provider confounds."
+        ),
+        "live_calls_per_condition": LIVE_REPETITIONS_PER_CONDITION,
+        "conditions": conditions,
+    }
+
+
+def _endpoint_recovery_condition(condition: JsonDict) -> JsonDict:
+    recovered = deepcopy(condition)
+    if condition["model_key"] == "claude_sonnet_4_6":
+        recovered.update(
+            {
+                "provider": "OpenRouter Anthropic-compatible",
+                "endpoint_family": "anthropic_messages",
+                "endpoint_default": DEFAULT_OPENROUTER_ANTHROPIC_ENDPOINT,
+                "request_shape": (
+                    "POST /v1/messages with forced loose submit_action_object "
+                    "tool input; response object comes from tool_use.input."
+                ),
+            }
+        )
+    elif condition["model_key"] == "deepseek_v4_pro":
+        recovered.update(
+            {
+                "provider": "DeepSeek direct Anthropic-compatible",
+                "endpoint_family": "deepseek_anthropic_messages",
+                "endpoint_default": DEFAULT_DEEPSEEK_ANTHROPIC_ENDPOINT,
+                "model_id": "deepseek-v4-pro",
+                "request_shape": (
+                    "POST /v1/messages with loose submit_action_object tool "
+                    "input and tool_choice=auto because DeepSeek thinking mode "
+                    "rejects forced tool choice."
+                ),
+            }
+        )
+    else:
+        raise ValueError(f"unsupported endpoint recovery condition: {condition}")
+    return recovered
+
+
 def execute_live_matrix(
     *,
     output_dir: Path = DEFAULT_LIVE_OUTPUT_DIR,
@@ -253,6 +311,134 @@ def execute_live_matrix(
     return summary
 
 
+def execute_endpoint_recovery_matrix(
+    *,
+    output_dir: Path = DEFAULT_ENDPOINT_RECOVERY_OUTPUT_DIR,
+    openrouter_api_key: str,
+    deepseek_api_key: str,
+    openrouter_anthropic_endpoint: str = DEFAULT_OPENROUTER_ANTHROPIC_ENDPOINT,
+    deepseek_endpoint: str = DEFAULT_DEEPSEEK_ENDPOINT,
+    deepseek_anthropic_endpoint: str = DEFAULT_DEEPSEEK_ANTHROPIC_ENDPOINT,
+    timeout_seconds: float = 120.0,
+) -> JsonDict:
+    if not openrouter_api_key:
+        raise ValueError("openrouter_api_key is required for Claude recovery rows")
+    if not deepseek_api_key:
+        raise ValueError("deepseek_api_key is required for DeepSeek recovery rows")
+
+    output_dir.mkdir(parents=True, exist_ok=False)
+    rows_dir = output_dir / "rows"
+    rows_dir.mkdir()
+
+    matrix = endpoint_recovery_matrix()
+    budget = {
+        **budget_manifest(),
+        "max_live_calls": len(matrix["conditions"]) * LIVE_REPETITIONS_PER_CONDITION,
+        "recovery_scope": matrix["recovery_scope"],
+        "endpoint_recovery": True,
+    }
+    for name, payload in {
+        "matrix.json": matrix,
+        "budget.json": budget,
+        "failure_taxonomy.json": failure_taxonomy(),
+    }.items():
+        _write_json(output_dir / name, payload)
+
+    endpoint_by_family = {
+        "anthropic_messages": openrouter_anthropic_endpoint,
+        "openai_chat": deepseek_endpoint,
+        "deepseek_anthropic_messages": deepseek_anthropic_endpoint,
+    }
+    row_results: list[JsonDict] = []
+    started_at = _now_iso()
+    for condition in matrix["conditions"]:
+        for repetition in range(1, LIVE_REPETITIONS_PER_CONDITION + 1):
+            row = execute_endpoint_recovery_row(
+                condition=condition,
+                repetition=repetition,
+                rows_dir=rows_dir,
+                openrouter_api_key=openrouter_api_key,
+                deepseek_api_key=deepseek_api_key,
+                openrouter_anthropic_endpoint=openrouter_anthropic_endpoint,
+                deepseek_endpoint=deepseek_endpoint,
+                deepseek_anthropic_endpoint=deepseek_anthropic_endpoint,
+                timeout_seconds=timeout_seconds,
+            )
+            row_results.append(row)
+            totals = _usage_totals(row_results)
+            if totals["total_tokens"] > int(budget["max_total_tokens"]):
+                break
+            if totals["estimated_cost_usd"] > float(budget["max_estimated_cost_usd"]):
+                break
+
+    summary = summarize_results(
+        row_results=row_results,
+        started_at=started_at,
+        finished_at=_now_iso(),
+        output_dir=output_dir,
+        endpoint="endpoint-family-aware",
+    )
+    summary["endpoint_recovery"] = True
+    summary["endpoint_by_family"] = endpoint_by_family
+    _write_json(output_dir / "results.json", summary)
+    (output_dir / "analysis.md").write_text(render_analysis(summary))
+    return summary
+
+
+def execute_endpoint_recovery_row(
+    *,
+    condition: JsonDict,
+    repetition: int,
+    rows_dir: Path,
+    openrouter_api_key: str,
+    deepseek_api_key: str,
+    openrouter_anthropic_endpoint: str,
+    deepseek_endpoint: str,
+    deepseek_anthropic_endpoint: str,
+    timeout_seconds: float,
+) -> JsonDict:
+    endpoint_family = str(condition["endpoint_family"])
+    if endpoint_family == "anthropic_messages":
+        provider = call_anthropic_messages_action(
+            api_key=openrouter_api_key,
+            endpoint=openrouter_anthropic_endpoint,
+            model=str(condition["model_id"]),
+            messages=_messages_for_condition(condition, repetition=repetition),
+            timeout_seconds=timeout_seconds,
+        )
+        endpoint = openrouter_anthropic_endpoint
+    elif endpoint_family == "deepseek_anthropic_messages":
+        provider = call_anthropic_messages_action(
+            api_key=deepseek_api_key,
+            endpoint=deepseek_anthropic_endpoint,
+            model=str(condition["model_id"]),
+            messages=_messages_for_condition(condition, repetition=repetition),
+            timeout_seconds=timeout_seconds,
+            tool_choice={"type": "auto"},
+        )
+        endpoint = deepseek_anthropic_endpoint
+    elif endpoint_family == "openai_chat":
+        provider = call_openrouter_action(
+            api_key=deepseek_api_key,
+            endpoint=deepseek_endpoint,
+            model=str(condition["model_id"]),
+            messages=_messages_for_condition(condition, repetition=repetition),
+            timeout_seconds=timeout_seconds,
+            include_openrouter_options=False,
+        )
+        endpoint = deepseek_endpoint
+    else:
+        raise ValueError(f"unsupported endpoint_family: {endpoint_family}")
+    return _write_evaluated_row(
+        condition=condition,
+        repetition=repetition,
+        rows_dir=rows_dir,
+        provider=provider,
+        endpoint=endpoint,
+        endpoint_family=endpoint_family,
+    )
+
+
 def execute_live_row(
     *,
     condition: JsonDict,
@@ -262,17 +448,35 @@ def execute_live_row(
     endpoint: str,
     timeout_seconds: float,
 ) -> JsonDict:
-    row_id = f"{condition['condition_id']}__r{repetition:02d}"
-    row_dir = rows_dir / row_id
-    row_dir.mkdir()
-    messages = _messages_for_condition(condition, repetition=repetition)
     provider = call_openrouter_action(
         api_key=api_key,
         endpoint=endpoint,
         model=str(condition["model_id"]),
-        messages=messages,
+        messages=_messages_for_condition(condition, repetition=repetition),
         timeout_seconds=timeout_seconds,
     )
+    return _write_evaluated_row(
+        condition=condition,
+        repetition=repetition,
+        rows_dir=rows_dir,
+        provider=provider,
+        endpoint=endpoint,
+        endpoint_family="openai_chat_openrouter",
+    )
+
+
+def _write_evaluated_row(
+    *,
+    condition: JsonDict,
+    repetition: int,
+    rows_dir: Path,
+    provider: JsonDict,
+    endpoint: str,
+    endpoint_family: str,
+) -> JsonDict:
+    row_id = f"{condition['condition_id']}__r{repetition:02d}"
+    row_dir = rows_dir / row_id
+    row_dir.mkdir()
     _write_json(row_dir / "provider_request.json", provider["request_payload"])
     _write_json(row_dir / "provider_response.json", provider["response_payload"])
     _write_json(row_dir / "provider_attempts.json", {"attempts": provider["attempts"]})
@@ -304,6 +508,8 @@ def execute_live_row(
         "prompt_condition": condition["prompt_condition"],
         "repetition": repetition,
         "condition": deepcopy(condition),
+        "endpoint": endpoint,
+        "endpoint_family": endpoint_family,
         "provider_ok": provider["ok"],
         "provider_failure": provider.get("failure"),
         "raw_content": provider.get("raw_content"),
@@ -389,6 +595,7 @@ def summarize_results(
         "output_dir": str(output_dir),
         "row_count": len(row_results),
         "usage_totals": _usage_totals(row_results),
+        "failure_totals": _failure_totals(row_results),
         "budget": budget_manifest(),
         "by_model_prompt": by_model_prompt,
         "by_model": by_model,
@@ -506,11 +713,29 @@ def render_analysis(summary: JsonDict) -> str:
         f"- Total tokens: {summary['usage_totals']['total_tokens']}",
         f"- Estimated cost USD: {summary['usage_totals']['estimated_cost_usd']:.6f}",
         "",
-        "## Model Counts",
-        "",
-        "| Model | Original strict pass | Example strict pass | Original strict fail / relaxed pass | Example strict fail / relaxed pass |",
-        "| --- | ---: | ---: | ---: | ---: |",
     ]
+    if summary.get("endpoint_by_family"):
+        lines.extend(
+            [
+                "Endpoint families:",
+                "",
+                *[
+                    f"- `{family}`: `{endpoint}`"
+                    for family, endpoint in sorted(
+                        summary["endpoint_by_family"].items()
+                    )
+                ],
+                "",
+            ]
+        )
+    lines.extend(
+        [
+            "## Model Counts",
+            "",
+            "| Model | Original strict pass | Example strict pass | Original strict fail / relaxed pass | Example strict fail / relaxed pass |",
+            "| --- | ---: | ---: | ---: | ---: |",
+        ]
+    )
     for model_key, bucket in summary["by_model"].items():
         lines.append(
             "| {model} | {orig} | {example} | {orig_relaxed} | {example_relaxed} |".format(
@@ -579,6 +804,7 @@ def render_analysis(summary: JsonDict) -> str:
             "- `analysis.md` is this analysis artifact.",
             "- `rows/<row_id>/provider_request.json` preserves each request.",
             "- `rows/<row_id>/provider_response.json` preserves each response.",
+            "- `rows/<row_id>/provider_attempts.json` preserves retry/attempt telemetry.",
             "- `rows/<row_id>/strict_evaluation.json` preserves strict scoring.",
             "- `rows/<row_id>/relaxed_evaluation.json` preserves relaxed scoring.",
             "- `rows/<row_id>/row_result.json` ties each row together.",
@@ -698,7 +924,17 @@ def _limitations_summary(summary: JsonDict) -> str:
     assessment = summary["hypothesis_assessment"]
     unscoreable_original = assessment["models_with_unscoreable_original"]
     unscoreable_example = assessment["models_with_unscoreable_example"]
+    failure_totals = summary.get("failure_totals", {})
+    provider_rows = int(failure_totals.get("provider_failures", 0) or 0)
+    protocol_rows = int(failure_totals.get("protocol_failures", 0) or 0)
     if not unscoreable_original and not unscoreable_example:
+        if provider_rows or protocol_rows:
+            return (
+                "No provider/protocol unscoreable model conditions were observed. "
+                "Row-level residuals remain: "
+                f"{provider_rows} provider failure rows and "
+                f"{protocol_rows} protocol failure rows."
+            )
         return "No provider/protocol unscoreable model conditions were observed."
     return (
         "Provider/protocol failures are not counted as model contract failures. "
@@ -708,6 +944,19 @@ def _limitations_summary(summary: JsonDict) -> str:
         "current-run model evidence; the DeepSeek side of the cross-model "
         "comparison uses the prior committed source experiment reference."
     )
+
+
+def _failure_totals(row_results: list[JsonDict]) -> JsonDict:
+    totals = {"provider_failures": 0, "protocol_failures": 0}
+    for row in row_results:
+        failure = row.get("provider_failure")
+        if not isinstance(failure, dict):
+            continue
+        if failure.get("layer") == "provider":
+            totals["provider_failures"] += 1
+        if failure.get("layer") == "protocol":
+            totals["protocol_failures"] += 1
+    return totals
 
 
 def _usage_totals(row_results: list[JsonDict]) -> JsonDict:
@@ -741,12 +990,32 @@ def _write_json(path: Path, payload: JsonDict) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-live", action="store_true")
+    parser.add_argument("--run-endpoint-recovery", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=None)
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
+    parser.add_argument(
+        "--openrouter-anthropic-endpoint",
+        default=DEFAULT_OPENROUTER_ANTHROPIC_ENDPOINT,
+    )
+    parser.add_argument("--deepseek-endpoint", default=DEFAULT_DEEPSEEK_ENDPOINT)
+    parser.add_argument(
+        "--deepseek-anthropic-endpoint",
+        default=DEFAULT_DEEPSEEK_ANTHROPIC_ENDPOINT,
+    )
     parser.add_argument("--api-key-env", default="OPENROUTER_API_KEY")
+    parser.add_argument("--deepseek-api-key-env", default="DEEPSEEK_API_KEY")
     args = parser.parse_args()
 
-    if args.run_live:
+    if args.run_endpoint_recovery:
+        result = execute_endpoint_recovery_matrix(
+            output_dir=args.output_dir or DEFAULT_ENDPOINT_RECOVERY_OUTPUT_DIR,
+            openrouter_api_key=os.environ.get(args.api_key_env, ""),
+            deepseek_api_key=os.environ.get(args.deepseek_api_key_env, ""),
+            openrouter_anthropic_endpoint=args.openrouter_anthropic_endpoint,
+            deepseek_endpoint=args.deepseek_endpoint,
+            deepseek_anthropic_endpoint=args.deepseek_anthropic_endpoint,
+        )
+    elif args.run_live:
         result = execute_live_matrix(
             output_dir=args.output_dir or DEFAULT_LIVE_OUTPUT_DIR,
             api_key=os.environ.get(args.api_key_env, ""),

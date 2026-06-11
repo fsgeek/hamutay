@@ -29,6 +29,7 @@ DEFAULT_EXPERIMENT_DIR = Path("experiments") / EXPERIMENT_ID
 DEFAULT_LIVE_OUTPUT_DIR = DEFAULT_EXPERIMENT_DIR / "live_matrix_20260610"
 DEFAULT_PROVIDER_RETRY_ATTEMPTS = 3
 DEFAULT_PROVIDER_RETRY_SLEEP_CAP_SECONDS = 20.0
+DEFAULT_ANTHROPIC_MESSAGES_MAX_TOKENS = 8192
 TRANSIENT_PROVIDER_STATUS_CODES = {429, 500, 502, 503, 504, 529}
 
 CONDITION_IDS = (
@@ -615,15 +616,17 @@ def call_openrouter_action(
     max_attempts: int = DEFAULT_PROVIDER_RETRY_ATTEMPTS,
     retry_sleep_cap_seconds: float = DEFAULT_PROVIDER_RETRY_SLEEP_CAP_SECONDS,
     sleep: Any = time.sleep,
+    include_openrouter_options: bool = True,
 ) -> JsonDict:
     payload: JsonDict = {
         "model": model,
         "messages": deepcopy(messages),
         "temperature": 0,
         "response_format": {"type": "json_object"},
-        "provider": {"allow_fallbacks": False},
-        "transforms": [],
     }
+    if include_openrouter_options:
+        payload["provider"] = {"allow_fallbacks": False}
+        payload["transforms"] = []
     started = time.monotonic()
     attempts: list[JsonDict] = []
     response_payload: JsonDict = {}
@@ -756,6 +759,192 @@ def call_openrouter_action(
     }
 
 
+def call_anthropic_messages_action(
+    *,
+    api_key: str,
+    endpoint: str,
+    model: str,
+    messages: list[JsonDict],
+    timeout_seconds: float,
+    max_attempts: int = DEFAULT_PROVIDER_RETRY_ATTEMPTS,
+    retry_sleep_cap_seconds: float = DEFAULT_PROVIDER_RETRY_SLEEP_CAP_SECONDS,
+    sleep: Any = time.sleep,
+    max_tokens: int = DEFAULT_ANTHROPIC_MESSAGES_MAX_TOKENS,
+    tool_choice: JsonDict | None = None,
+) -> JsonDict:
+    system_parts = [
+        str(message.get("content", ""))
+        for message in messages
+        if message.get("role") == "system"
+    ]
+    anthropic_messages = [
+        {"role": message.get("role"), "content": str(message.get("content", ""))}
+        for message in messages
+        if message.get("role") in {"user", "assistant"}
+    ]
+    payload: JsonDict = {
+        "model": model,
+        "max_tokens": int(max_tokens),
+        "temperature": 0,
+        "system": "\n\n".join(system_parts),
+        "messages": anthropic_messages,
+        "tools": [
+            {
+                "name": "submit_action_object",
+                "description": (
+                    "Submit the single structured action object requested by "
+                    "the harness."
+                ),
+                "input_schema": {
+                    "type": "object",
+                    "properties": {
+                        "response": {
+                            "type": "string",
+                            "description": "The response visible to the user.",
+                        }
+                    },
+                    "required": ["response"],
+                    "additionalProperties": True,
+                },
+            }
+        ],
+    }
+    if tool_choice is None:
+        payload["tool_choice"] = {"type": "tool", "name": "submit_action_object"}
+    elif tool_choice:
+        payload["tool_choice"] = deepcopy(tool_choice)
+    started = time.monotonic()
+    attempts: list[JsonDict] = []
+    response_payload: JsonDict = {}
+    elapsed = 0.0
+    max_attempts = max(1, int(max_attempts))
+
+    for attempt_index in range(1, max_attempts + 1):
+        attempt_started = time.monotonic()
+        try:
+            response = httpx.post(
+                f"{endpoint.rstrip('/')}/v1/messages",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json",
+                    "anthropic-version": "2023-06-01",
+                },
+                json=payload,
+                timeout=timeout_seconds,
+            )
+            attempt_elapsed = time.monotonic() - attempt_started
+            elapsed = time.monotonic() - started
+            try:
+                response_payload = response.json()
+            except json.JSONDecodeError:
+                response_payload = {"raw_text": response.text}
+            retry_after = _retry_after_seconds(response, response_payload)
+            transient = response.status_code in TRANSIENT_PROVIDER_STATUS_CODES
+            attempts.append(
+                {
+                    "attempt": attempt_index,
+                    "status_code": response.status_code,
+                    "elapsed_seconds": attempt_elapsed,
+                    "transient": transient,
+                    "retry_after_seconds": retry_after,
+                    "will_retry": (
+                        response.status_code >= 400
+                        and transient
+                        and attempt_index < max_attempts
+                    ),
+                    "response_payload": response_payload,
+                }
+            )
+            if response.status_code < 400:
+                break
+            if transient and attempt_index < max_attempts:
+                sleep(_bounded_retry_delay(attempt_index, retry_after, retry_sleep_cap_seconds))
+                continue
+            return _provider_failure_result(
+                payload=payload,
+                code="provider_api_error",
+                message="provider returned HTTP error",
+                response_payload=response_payload,
+                elapsed_seconds=elapsed,
+                attempts=attempts,
+                status_code=response.status_code,
+            )
+        except httpx.TimeoutException as exc:
+            elapsed = time.monotonic() - started
+            attempts.append(
+                {
+                    "attempt": attempt_index,
+                    "exception_type": type(exc).__name__,
+                    "message": str(exc),
+                    "transient": True,
+                    "will_retry": attempt_index < max_attempts,
+                }
+            )
+            if attempt_index < max_attempts:
+                sleep(_bounded_retry_delay(attempt_index, None, retry_sleep_cap_seconds))
+                continue
+            return _provider_failure_result(
+                payload=payload,
+                code="provider_budget_or_timeout",
+                message=str(exc),
+                elapsed_seconds=elapsed,
+                attempts=attempts,
+            )
+        except httpx.HTTPError as exc:
+            elapsed = time.monotonic() - started
+            attempts.append(
+                {
+                    "attempt": attempt_index,
+                    "exception_type": type(exc).__name__,
+                    "message": str(exc),
+                    "transient": True,
+                    "will_retry": attempt_index < max_attempts,
+                }
+            )
+            if attempt_index < max_attempts:
+                sleep(_bounded_retry_delay(attempt_index, None, retry_sleep_cap_seconds))
+                continue
+            return _provider_failure_result(
+                payload=payload,
+                code="provider_api_error",
+                message=str(exc),
+                elapsed_seconds=elapsed,
+                attempts=attempts,
+            )
+
+    action_object, raw_content = extract_anthropic_tool_action(response_payload)
+    failure: JsonDict | None = None
+    if action_object is None:
+        try:
+            candidate = json.loads(raw_content)
+            if isinstance(candidate, dict):
+                action_object = candidate
+            else:
+                failure = {
+                    "layer": "protocol",
+                    "code": "invalid_action_schema",
+                    "message": "provider JSON content was not an object",
+                }
+        except json.JSONDecodeError:
+            failure = {
+                "layer": "protocol",
+                "code": "invalid_action_schema",
+                "message": "provider content was not JSON or tool input",
+            }
+
+    return {
+        "ok": failure is None,
+        "failure": failure,
+        "request_payload": payload,
+        "response_payload": response_payload,
+        "raw_content": raw_content,
+        "action_object": action_object,
+        "elapsed_seconds": elapsed,
+        "attempts": attempts,
+        "usage": _normalize_anthropic_usage(response_payload.get("usage")),
+    }
+
+
 def extract_openai_content(response_payload: JsonDict) -> str:
     choices = response_payload.get("choices")
     if not isinstance(choices, list) or not choices:
@@ -776,6 +965,37 @@ def extract_openai_content(response_payload: JsonDict) -> str:
             if isinstance(part, dict) and part.get("type") in {"text", "output_text"}
         )
     return ""
+
+
+def extract_anthropic_tool_action(
+    response_payload: JsonDict,
+) -> tuple[JsonDict | None, str]:
+    content = response_payload.get("content")
+    text_parts: list[str] = []
+    if not isinstance(content, list):
+        return None, ""
+    for part in content:
+        if not isinstance(part, dict):
+            continue
+        if part.get("type") == "tool_use" and part.get("name") == "submit_action_object":
+            tool_input = part.get("input")
+            if isinstance(tool_input, dict):
+                return deepcopy(tool_input), json.dumps(tool_input, sort_keys=True)
+        if part.get("type") == "text" and isinstance(part.get("text"), str):
+            text_parts.append(str(part["text"]))
+    return None, "".join(text_parts)
+
+
+def _normalize_anthropic_usage(usage: Any) -> JsonDict:
+    if not isinstance(usage, dict):
+        return {}
+    normalized = deepcopy(usage)
+    input_tokens = int(normalized.get("input_tokens", 0) or 0)
+    output_tokens = int(normalized.get("output_tokens", 0) or 0)
+    normalized["prompt_tokens"] = input_tokens
+    normalized["completion_tokens"] = output_tokens
+    normalized["total_tokens"] = input_tokens + output_tokens
+    return normalized
 
 
 def summarize_matrix_results(

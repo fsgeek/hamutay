@@ -1,0 +1,380 @@
+{
+  "condition": {
+    "acceptance_rule": "strict parser requires one accepted open_item and one accepted schedule_request",
+    "base_evaluator_condition_id": "A_original_prompt_strict_contract",
+    "condition_id": "deepseek_v4_pro__original_strict",
+    "contract": "strict_autonomous_action_v1",
+    "endpoint_default": "https://api.deepseek.com/anthropic",
+    "endpoint_family": "deepseek_anthropic_messages",
+    "model_family": "deepseek",
+    "model_id": "deepseek-v4-pro",
+    "model_key": "deepseek_v4_pro",
+    "model_role": "source_failure_model",
+    "prompt_addendum": "",
+    "prompt_addendum_application": "system_message_suffix",
+    "prompt_condition": "original_strict",
+    "prompt_variant": "original_live_pilot_seed_prompt",
+    "provider": "DeepSeek direct Anthropic-compatible",
+    "request_shape": "POST /v1/messages with loose submit_action_object tool input and tool_choice=auto because DeepSeek thinking mode rejects forced tool choice."
+  },
+  "condition_id": "deepseek_v4_pro__original_strict",
+  "elapsed_seconds": 6.19970301000285,
+  "endpoint": "https://api.deepseek.com/anthropic",
+  "endpoint_family": "deepseek_anthropic_messages",
+  "experiment_id": "action_object_contract_salience_cross_model_20260611",
+  "model_id": "deepseek-v4-pro",
+  "model_key": "deepseek_v4_pro",
+  "prompt_condition": "original_strict",
+  "provider_attempts": [
+    {
+      "attempt": 1,
+      "elapsed_seconds": 6.1997011069906875,
+      "response_payload": {
+        "content": [
+          {
+            "signature": "afa4adf3-fc7c-4b1a-a33e-eebd8657f4cc",
+            "thinking": "The user wants me to produce a JSON object with:\n- response: a non-empty string\n- open_items: JSON objects\n- schedule_requests: must include purpose and requested_context; requested_context entries may use {\"tool\":\"recall\",\"record_id\":\"...\"}\n- No policy_action on this cycle\n\nThe recall target is: 79b15dfe-ce94-5ab0-aa62-55aa16c0814c\n\nI need to identify one bounded follow-up item, preserve it as an open item, and schedule one wake to resolve it.\n\nLet me construct this:\n\n- response: acknowledge the seed wake and identify the follow-up item\n- open_items: the one bounded follow-up item\n- schedule_requests: one wake with the recall target in requested_context\n\nLet me think about a plausible autonomy pilot scenario. This is a seed wake for a \"first tiny live autonomy pilot.\" A reasonable bounded follow-up might be something like \"verify initial state integrity\" or \"confirm connectivity to primary datastore\" or something similar.\n\nLet me craft the JSON carefully.\n\nFor open_items, I need to make it a JSON object with a handle/key and details. The structure should include an id/handle and relevant fields.\n\nFor schedule_requests, I need:\n- purpose: string describing why the wake is being scheduled\n- requested_context: array with the recall entry\n\nLet me create this properly.",
+            "type": "thinking"
+          },
+          {
+            "id": "call_00_1D7U92sMPcScAOKZWWbv3061",
+            "input": {
+              "open_items": [
+                {
+                  "created_at": "2025-06-16T00:00:00Z",
+                  "description": "Confirm that the pilot's initial state snapshot is internally consistent and matches the declared boot manifest before any autonomous actions are permitted.",
+                  "handle": "oi-001",
+                  "label": "Verify initial state snapshot against boot manifest",
+                  "status": "open"
+                }
+              ],
+              "response": "Seed wake acknowledged. One bounded follow\u2011up item identified: verify that the autonomy pilot's initial state snapshot is consistent with the declared boot manifest. This item is now preserved as an open item and one wake has been scheduled to resolve it.",
+              "schedule_requests": [
+                {
+                  "purpose": "Resolve open item oi-001: cross-check the initial state snapshot with the boot manifest and confirm consistency.",
+                  "requested_context": [
+                    {
+                      "record_id": "79b15dfe-ce94-5ab0-aa62-55aa16c0814c",
+                      "tool": "recall"
+                    }
+                  ]
+                }
+              ]
+            },
+            "name": "submit_action_object",
+            "type": "tool_use"
+          }
+        ],
+        "id": "afa4adf3-fc7c-4b1a-a33e-eebd8657f4cc",
+        "model": "deepseek-v4-pro",
+        "role": "assistant",
+        "stop_reason": "tool_use",
+        "stop_sequence": null,
+        "type": "message",
+        "usage": {
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 384,
+          "input_tokens": 151,
+          "output_tokens": 560,
+          "service_tier": "standard"
+        }
+      },
+      "retry_after_seconds": null,
+      "status_code": 200,
+      "transient": false,
+      "will_retry": false
+    }
+  ],
+  "provider_failure": null,
+  "provider_ok": true,
+  "raw_content": "{\"open_items\": [{\"created_at\": \"2025-06-16T00:00:00Z\", \"description\": \"Confirm that the pilot's initial state snapshot is internally consistent and matches the declared boot manifest before any autonomous actions are permitted.\", \"handle\": \"oi-001\", \"label\": \"Verify initial state snapshot against boot manifest\", \"status\": \"open\"}], \"response\": \"Seed wake acknowledged. One bounded follow\\u2011up item identified: verify that the autonomy pilot's initial state snapshot is consistent with the declared boot manifest. This item is now preserved as an open item and one wake has been scheduled to resolve it.\", \"schedule_requests\": [{\"purpose\": \"Resolve open item oi-001: cross-check the initial state snapshot with the boot manifest and confirm consistency.\", \"requested_context\": [{\"record_id\": \"79b15dfe-ce94-5ab0-aa62-55aa16c0814c\", \"tool\": \"recall\"}]}]}",
+  "relaxed_evaluation": {
+    "accepted_action_types": [
+      "response",
+      "schedule_request"
+    ],
+    "condition_id": "A_original_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "contract_underspecification_candidate"
+    ],
+    "normalization_applied": false,
+    "parse_status": "parsed",
+    "rejection_paths": [
+      "$.open_items[0].kind"
+    ],
+    "relaxed_open_item": {
+      "items": [
+        {
+          "missing_fields": [
+            "kind",
+            "text"
+          ],
+          "normalization_required": true,
+          "normalized_candidate": {
+            "created_at": "2025-06-16T00:00:00Z",
+            "description": "Confirm that the pilot's initial state snapshot is internally consistent and matches the declared boot manifest before any autonomous actions are permitted.",
+            "handle": "oi-001",
+            "kind": "todo",
+            "label": "Verify initial state snapshot against boot manifest",
+            "status": "open",
+            "text": "Confirm that the pilot's initial state snapshot is internally consistent and matches the declared boot manifest before any autonomous actions are permitted."
+          },
+          "path": "$.open_items[0]",
+          "reason": "strict_shape_or_relaxed_description_mapping_available",
+          "source_fields": [
+            "created_at",
+            "description",
+            "handle",
+            "label",
+            "status"
+          ],
+          "would_accept": true
+        }
+      ],
+      "reason": "all_open_items_relaxed_acceptable",
+      "would_accept": true
+    },
+    "relaxed_open_item_contract_enabled": true,
+    "relaxed_required_actions_valid": true,
+    "schedule_request_valid": true,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": false,
+    "strict_required_actions_valid": false,
+    "trace": {
+      "accepted_actions": [
+        {
+          "action_type": "response",
+          "parameters": {
+            "response": "Seed wake acknowledged. One bounded follow\u2011up item identified: verify that the autonomy pilot's initial state snapshot is consistent with the declared boot manifest. This item is now preserved as an open item and one wake has been scheduled to resolve it."
+          },
+          "source_path": "$.response"
+        },
+        {
+          "action_type": "schedule_request",
+          "parameters": {
+            "purpose": "Resolve open item oi-001: cross-check the initial state snapshot with the boot manifest and confirm consistency.",
+            "requested_context": [
+              {
+                "record_id": "79b15dfe-ce94-5ab0-aa62-55aa16c0814c",
+                "tool": "recall"
+              }
+            ]
+          },
+          "source_path": "$.schedule_requests[0]"
+        }
+      ],
+      "parse_status": "parsed",
+      "parsed_action": {
+        "open_items": [],
+        "response": "Seed wake acknowledged. One bounded follow\u2011up item identified: verify that the autonomy pilot's initial state snapshot is consistent with the declared boot manifest. This item is now preserved as an open item and one wake has been scheduled to resolve it.",
+        "schedule_requests": [
+          {
+            "purpose": "Resolve open item oi-001: cross-check the initial state snapshot with the boot manifest and confirm consistency.",
+            "requested_context": [
+              {
+                "record_id": "79b15dfe-ce94-5ab0-aa62-55aa16c0814c",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "raw_output": {
+        "open_items": [
+          {
+            "created_at": "2025-06-16T00:00:00Z",
+            "description": "Confirm that the pilot's initial state snapshot is internally consistent and matches the declared boot manifest before any autonomous actions are permitted.",
+            "handle": "oi-001",
+            "label": "Verify initial state snapshot against boot manifest",
+            "status": "open"
+          }
+        ],
+        "response": "Seed wake acknowledged. One bounded follow\u2011up item identified: verify that the autonomy pilot's initial state snapshot is consistent with the declared boot manifest. This item is now preserved as an open item and one wake has been scheduled to resolve it.",
+        "schedule_requests": [
+          {
+            "purpose": "Resolve open item oi-001: cross-check the initial state snapshot with the boot manifest and confirm consistency.",
+            "requested_context": [
+              {
+                "record_id": "79b15dfe-ce94-5ab0-aa62-55aa16c0814c",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "rejected_actions": [
+        {
+          "action_type": "open_item",
+          "code": "invalid_field",
+          "message": "expected non-empty string",
+          "source_path": "$.open_items[0].kind",
+          "value": null
+        }
+      ],
+      "rejection_reasons": [
+        {
+          "action_type": "open_item",
+          "code": "invalid_field",
+          "message": "expected non-empty string",
+          "source_path": "$.open_items[0].kind",
+          "value": null
+        }
+      ],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "accepted_with_rejections"
+    },
+    "validation_status": "accepted_with_rejections"
+  },
+  "repetition": 3,
+  "row_id": "deepseek_v4_pro__original_strict__r03",
+  "schema_version": "hamutay.cross_model_contract_salience_row.v1",
+  "strict_evaluation": {
+    "accepted_action_types": [
+      "response",
+      "schedule_request"
+    ],
+    "condition_id": "A_original_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "contract_underspecification_candidate"
+    ],
+    "normalization_applied": false,
+    "parse_status": "parsed",
+    "rejection_paths": [
+      "$.open_items[0].kind"
+    ],
+    "relaxed_open_item": {
+      "items": [
+        {
+          "missing_fields": [
+            "kind",
+            "text"
+          ],
+          "normalization_required": true,
+          "normalized_candidate": {
+            "created_at": "2025-06-16T00:00:00Z",
+            "description": "Confirm that the pilot's initial state snapshot is internally consistent and matches the declared boot manifest before any autonomous actions are permitted.",
+            "handle": "oi-001",
+            "kind": "todo",
+            "label": "Verify initial state snapshot against boot manifest",
+            "status": "open",
+            "text": "Confirm that the pilot's initial state snapshot is internally consistent and matches the declared boot manifest before any autonomous actions are permitted."
+          },
+          "path": "$.open_items[0]",
+          "reason": "strict_shape_or_relaxed_description_mapping_available",
+          "source_fields": [
+            "created_at",
+            "description",
+            "handle",
+            "label",
+            "status"
+          ],
+          "would_accept": true
+        }
+      ],
+      "reason": "all_open_items_relaxed_acceptable",
+      "would_accept": true
+    },
+    "relaxed_open_item_contract_enabled": false,
+    "relaxed_required_actions_valid": false,
+    "schedule_request_valid": true,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": false,
+    "strict_required_actions_valid": false,
+    "trace": {
+      "accepted_actions": [
+        {
+          "action_type": "response",
+          "parameters": {
+            "response": "Seed wake acknowledged. One bounded follow\u2011up item identified: verify that the autonomy pilot's initial state snapshot is consistent with the declared boot manifest. This item is now preserved as an open item and one wake has been scheduled to resolve it."
+          },
+          "source_path": "$.response"
+        },
+        {
+          "action_type": "schedule_request",
+          "parameters": {
+            "purpose": "Resolve open item oi-001: cross-check the initial state snapshot with the boot manifest and confirm consistency.",
+            "requested_context": [
+              {
+                "record_id": "79b15dfe-ce94-5ab0-aa62-55aa16c0814c",
+                "tool": "recall"
+              }
+            ]
+          },
+          "source_path": "$.schedule_requests[0]"
+        }
+      ],
+      "parse_status": "parsed",
+      "parsed_action": {
+        "open_items": [],
+        "response": "Seed wake acknowledged. One bounded follow\u2011up item identified: verify that the autonomy pilot's initial state snapshot is consistent with the declared boot manifest. This item is now preserved as an open item and one wake has been scheduled to resolve it.",
+        "schedule_requests": [
+          {
+            "purpose": "Resolve open item oi-001: cross-check the initial state snapshot with the boot manifest and confirm consistency.",
+            "requested_context": [
+              {
+                "record_id": "79b15dfe-ce94-5ab0-aa62-55aa16c0814c",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "raw_output": {
+        "open_items": [
+          {
+            "created_at": "2025-06-16T00:00:00Z",
+            "description": "Confirm that the pilot's initial state snapshot is internally consistent and matches the declared boot manifest before any autonomous actions are permitted.",
+            "handle": "oi-001",
+            "label": "Verify initial state snapshot against boot manifest",
+            "status": "open"
+          }
+        ],
+        "response": "Seed wake acknowledged. One bounded follow\u2011up item identified: verify that the autonomy pilot's initial state snapshot is consistent with the declared boot manifest. This item is now preserved as an open item and one wake has been scheduled to resolve it.",
+        "schedule_requests": [
+          {
+            "purpose": "Resolve open item oi-001: cross-check the initial state snapshot with the boot manifest and confirm consistency.",
+            "requested_context": [
+              {
+                "record_id": "79b15dfe-ce94-5ab0-aa62-55aa16c0814c",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "rejected_actions": [
+        {
+          "action_type": "open_item",
+          "code": "invalid_field",
+          "message": "expected non-empty string",
+          "source_path": "$.open_items[0].kind",
+          "value": null
+        }
+      ],
+      "rejection_reasons": [
+        {
+          "action_type": "open_item",
+          "code": "invalid_field",
+          "message": "expected non-empty string",
+          "source_path": "$.open_items[0].kind",
+          "value": null
+        }
+      ],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "accepted_with_rejections"
+    },
+    "validation_status": "accepted_with_rejections"
+  },
+  "usage": {
+    "cache_creation_input_tokens": 0,
+    "cache_read_input_tokens": 384,
+    "completion_tokens": 560,
+    "input_tokens": 151,
+    "output_tokens": 560,
+    "prompt_tokens": 151,
+    "service_tier": "standard",
+    "total_tokens": 711
+  }
+}

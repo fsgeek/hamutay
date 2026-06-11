@@ -1,0 +1,195 @@
+{
+  "condition": {
+    "acceptance_rule": "strict parser requires one accepted open_item and one accepted schedule_request",
+    "base_evaluator_condition_id": "B_example_prompt_strict_contract",
+    "condition_id": "deepseek_v4_pro__example_strict",
+    "contract": "strict_autonomous_action_v1",
+    "endpoint_default": "https://api.deepseek.com",
+    "endpoint_family": "openai_chat",
+    "model_family": "deepseek",
+    "model_id": "deepseek-v4-pro",
+    "model_key": "deepseek_v4_pro",
+    "model_role": "source_failure_model",
+    "prompt_addendum": "Example valid open item shape: {\"kind\":\"todo\",\"text\":\"resolve the bounded follow-up item\"}. Do not use description, handle, status, or created_at as substitutes for kind and text.",
+    "prompt_addendum_application": "system_message_suffix",
+    "prompt_condition": "example_strict",
+    "prompt_variant": "original_plus_one_valid_open_item_example",
+    "provider": "DeepSeek direct OpenAI-compatible",
+    "request_shape": "POST /chat/completions without OpenRouter provider routing fields."
+  },
+  "condition_id": "deepseek_v4_pro__example_strict",
+  "elapsed_seconds": 5.783761327009415,
+  "endpoint": "https://api.deepseek.com",
+  "endpoint_family": "openai_chat",
+  "experiment_id": "action_object_contract_salience_cross_model_20260611",
+  "model_id": "deepseek-v4-pro",
+  "model_key": "deepseek_v4_pro",
+  "prompt_condition": "example_strict",
+  "provider_attempts": [
+    {
+      "attempt": 1,
+      "elapsed_seconds": 5.783757772995159,
+      "response_payload": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "               ",
+              "reasoning_content": "We are asked to output JSON only. The task: \"identify exactly one bounded follow-up item, preserve it as an open item, and schedule exactly one wake to resolve it. Use this recall target in the scheduled wake requested_context: 7aa43a8a-0c83-5660-b57d-2216f963075d. Return one JSON object with response, open_items, and schedule_requests. Do not include policy_action on this cycle.\"\n\nSo we need to produce a JSON object with fields: response (non-empty string), open_items (list of open items), schedule_requests (list of schedule requests). No policy_action.\n\nThe open item must have shape: {\"kind\":\"todo\",\"text\":\"...\"}. Kind and text required. No other fields like description, handle, etc.\n\nThe schedule request must include purpose and requested_context. The requested_context entries may use recall tool with record_id \"7aa43a8a-0c83-5660-b57d-2216f963075d\". So we need to schedule a wake to resolve the open item, and its requested_context should include something like [{\"tool\":\"recall\",\"record_id\":\"7aa43a8a-0c83-5660-b57d-2216f963075d\"}].\n\nThe response string is just the assistant's message, perhaps indicating that it has identified a follow-up item and scheduled a wake.\n\nLet's craft an open item: e.g., \"Review the recall evidence to determine next steps.\" But it should be bounded. The task says \"exactly one bounded follow-up item\". I'll make it specific: \"Verify integrity of seed wake for autonomy pilot using recall 7aa43a8a.\"\n\nThen schedule a wake with purpose \"resolve open item\" and requested_context containing the recall tool.\n\nMake sure no other fields.\n\nSo final JSON:\n\n{\n  \"response\": \"Identified a bounded follow-up item and scheduled a wake to resolve it.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Verify integrity of seed wake for autonomy pilot using recall 7aa43a8a\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"Resolve the open follow-up item: Verify integrity of seed wake for autonomy pilot\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"7aa43a8a-0c83-5660-b57d-2216f963075d\"\n        }\n      ]\n    }\n  ]\n}",
+              "role": "assistant"
+            }
+          }
+        ],
+        "created": 1781205337,
+        "id": "c6c0e8a7-f454-4093-a3e5-0d7a2eee9ee8",
+        "model": "deepseek-v4-pro",
+        "object": "chat.completion",
+        "system_fingerprint": "fp_9954b31ca7_prod0820_fp8_kvcache_20260402",
+        "usage": {
+          "completion_tokens": 553,
+          "completion_tokens_details": {
+            "reasoning_tokens": 537
+          },
+          "prompt_cache_hit_tokens": 256,
+          "prompt_cache_miss_tokens": 55,
+          "prompt_tokens": 311,
+          "prompt_tokens_details": {
+            "cached_tokens": 256
+          },
+          "total_tokens": 864
+        }
+      },
+      "retry_after_seconds": null,
+      "status_code": 200,
+      "transient": false,
+      "will_retry": false
+    }
+  ],
+  "provider_failure": {
+    "code": "invalid_action_schema",
+    "layer": "protocol",
+    "message": "provider content was not JSON"
+  },
+  "provider_ok": false,
+  "raw_content": "               ",
+  "relaxed_evaluation": {
+    "accepted_action_types": [],
+    "condition_id": "B_example_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "protocol_or_provider_artifact_failure"
+    ],
+    "normalization_applied": false,
+    "parse_status": "failed",
+    "rejection_paths": [
+      "$"
+    ],
+    "relaxed_open_item": {
+      "items": [],
+      "reason": "raw_output_not_object",
+      "would_accept": false
+    },
+    "relaxed_open_item_contract_enabled": true,
+    "relaxed_required_actions_valid": false,
+    "schedule_request_valid": false,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": false,
+    "strict_required_actions_valid": false,
+    "trace": {
+      "accepted_actions": [],
+      "parse_status": "failed",
+      "parsed_action": null,
+      "raw_output": "               ",
+      "rejected_actions": [
+        {
+          "action_type": "action_object",
+          "code": "not_object",
+          "message": "autonomous action output must be an object",
+          "source_path": "$",
+          "value": "               "
+        }
+      ],
+      "rejection_reasons": [
+        {
+          "action_type": "action_object",
+          "code": "not_object",
+          "message": "autonomous action output must be an object",
+          "source_path": "$",
+          "value": "               "
+        }
+      ],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "rejected"
+    },
+    "validation_status": "rejected"
+  },
+  "repetition": 3,
+  "row_id": "deepseek_v4_pro__example_strict__r03",
+  "schema_version": "hamutay.cross_model_contract_salience_row.v1",
+  "strict_evaluation": {
+    "accepted_action_types": [],
+    "condition_id": "B_example_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "protocol_or_provider_artifact_failure"
+    ],
+    "normalization_applied": false,
+    "parse_status": "failed",
+    "rejection_paths": [
+      "$"
+    ],
+    "relaxed_open_item": {
+      "items": [],
+      "reason": "raw_output_not_object",
+      "would_accept": false
+    },
+    "relaxed_open_item_contract_enabled": false,
+    "relaxed_required_actions_valid": false,
+    "schedule_request_valid": false,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": false,
+    "strict_required_actions_valid": false,
+    "trace": {
+      "accepted_actions": [],
+      "parse_status": "failed",
+      "parsed_action": null,
+      "raw_output": "               ",
+      "rejected_actions": [
+        {
+          "action_type": "action_object",
+          "code": "not_object",
+          "message": "autonomous action output must be an object",
+          "source_path": "$",
+          "value": "               "
+        }
+      ],
+      "rejection_reasons": [
+        {
+          "action_type": "action_object",
+          "code": "not_object",
+          "message": "autonomous action output must be an object",
+          "source_path": "$",
+          "value": "               "
+        }
+      ],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "rejected"
+    },
+    "validation_status": "rejected"
+  },
+  "usage": {
+    "completion_tokens": 553,
+    "completion_tokens_details": {
+      "reasoning_tokens": 537
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 55,
+    "prompt_tokens": 311,
+    "prompt_tokens_details": {
+      "cached_tokens": 256
+    },
+    "total_tokens": 864
+  }
+}

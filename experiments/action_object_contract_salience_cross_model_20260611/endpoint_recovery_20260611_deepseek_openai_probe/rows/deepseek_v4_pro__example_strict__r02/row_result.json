@@ -1,0 +1,329 @@
+{
+  "condition": {
+    "acceptance_rule": "strict parser requires one accepted open_item and one accepted schedule_request",
+    "base_evaluator_condition_id": "B_example_prompt_strict_contract",
+    "condition_id": "deepseek_v4_pro__example_strict",
+    "contract": "strict_autonomous_action_v1",
+    "endpoint_default": "https://api.deepseek.com",
+    "endpoint_family": "openai_chat",
+    "model_family": "deepseek",
+    "model_id": "deepseek-v4-pro",
+    "model_key": "deepseek_v4_pro",
+    "model_role": "source_failure_model",
+    "prompt_addendum": "Example valid open item shape: {\"kind\":\"todo\",\"text\":\"resolve the bounded follow-up item\"}. Do not use description, handle, status, or created_at as substitutes for kind and text.",
+    "prompt_addendum_application": "system_message_suffix",
+    "prompt_condition": "example_strict",
+    "prompt_variant": "original_plus_one_valid_open_item_example",
+    "provider": "DeepSeek direct OpenAI-compatible",
+    "request_shape": "POST /chat/completions without OpenRouter provider routing fields."
+  },
+  "condition_id": "deepseek_v4_pro__example_strict",
+  "elapsed_seconds": 5.030615277995821,
+  "endpoint": "https://api.deepseek.com",
+  "endpoint_family": "openai_chat",
+  "experiment_id": "action_object_contract_salience_cross_model_20260611",
+  "model_id": "deepseek-v4-pro",
+  "model_key": "deepseek_v4_pro",
+  "prompt_condition": "example_strict",
+  "provider_attempts": [
+    {
+      "attempt": 1,
+      "elapsed_seconds": 5.030613779992564,
+      "response_payload": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "                                     {\n  \"response\": \"Identified one bounded follow-up item and scheduled a wake to resolve it.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Verify the initial autonomy pilot deployment status.\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"Resolve open item: Verify the initial autonomy pilot deployment status.\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"e005318b-edea-5718-9a61-815ccfa59c75\"\n        }\n      ]\n    }\n  ]\n}",
+              "reasoning_content": "We are asked to produce a JSON object with response, open_items, and schedule_requests. The task: identify exactly one bounded follow-up item, preserve it as an open item, and schedule exactly one wake to resolve it. Use recall target e005318b-edea-5718-9a61-815ccfa59c75 in scheduled wake requested_context. No policy_action.\n\nWe need to think of a follow-up item. Since the prompt is about \"seed wake for the first tiny live autonomy pilot\", maybe the follow-up item is something like \"Verify the autonomy pilot deployment status\" or \"Check logs for errors\". But we can keep it generic. The open item shape: {\"kind\":\"todo\",\"text\":\"resolve the bounded follow-up item\"}. So we create one open item. Then schedule_requests: must include exactly one wake. Purpose: presumably to resolve the open item. requested_context: entries may use {\"tool\":\"recall\",\"record_id\":\"...\"}. So we set record_id to the given UUID.\n\nResponse: a string summarizing what we did.\n\nSo output:\n\n{\n  \"response\": \"Identified one follow-up item and scheduled a wake to resolve it.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Resolve: Verify the initial autonomy pilot deployment status.\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"Resolve open item: Verify the initial autonomy pilot deployment status.\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"e005318b-edea-5718-9a61-815ccfa59c75\"\n        }\n      ]\n    }\n  ]\n}\n\nMake sure no other fields.",
+              "role": "assistant"
+            }
+          }
+        ],
+        "created": 1781205332,
+        "id": "7bd33a98-b6f1-4265-bf87-e3ae7bee3150",
+        "model": "deepseek-v4-pro",
+        "object": "chat.completion",
+        "system_fingerprint": "fp_9954b31ca7_prod0820_fp8_kvcache_20260402",
+        "usage": {
+          "completion_tokens": 542,
+          "completion_tokens_details": {
+            "reasoning_tokens": 366
+          },
+          "prompt_cache_hit_tokens": 256,
+          "prompt_cache_miss_tokens": 52,
+          "prompt_tokens": 308,
+          "prompt_tokens_details": {
+            "cached_tokens": 256
+          },
+          "total_tokens": 850
+        }
+      },
+      "retry_after_seconds": null,
+      "status_code": 200,
+      "transient": false,
+      "will_retry": false
+    }
+  ],
+  "provider_failure": null,
+  "provider_ok": true,
+  "raw_content": "                                     {\n  \"response\": \"Identified one bounded follow-up item and scheduled a wake to resolve it.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Verify the initial autonomy pilot deployment status.\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"Resolve open item: Verify the initial autonomy pilot deployment status.\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"e005318b-edea-5718-9a61-815ccfa59c75\"\n        }\n      ]\n    }\n  ]\n}",
+  "relaxed_evaluation": {
+    "accepted_action_types": [
+      "open_item",
+      "response",
+      "schedule_request"
+    ],
+    "condition_id": "B_example_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "strict_contract_satisfied"
+    ],
+    "normalization_applied": false,
+    "parse_status": "parsed",
+    "rejection_paths": [],
+    "relaxed_open_item": {
+      "items": [
+        {
+          "missing_fields": [],
+          "normalization_required": false,
+          "normalized_candidate": {
+            "kind": "todo",
+            "text": "Verify the initial autonomy pilot deployment status."
+          },
+          "path": "$.open_items[0]",
+          "reason": "strict_shape_or_relaxed_description_mapping_available",
+          "source_fields": [
+            "kind",
+            "text"
+          ],
+          "would_accept": true
+        }
+      ],
+      "reason": "all_open_items_relaxed_acceptable",
+      "would_accept": true
+    },
+    "relaxed_open_item_contract_enabled": true,
+    "relaxed_required_actions_valid": true,
+    "schedule_request_valid": true,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": true,
+    "strict_required_actions_valid": true,
+    "trace": {
+      "accepted_actions": [
+        {
+          "action_type": "response",
+          "parameters": {
+            "response": "Identified one bounded follow-up item and scheduled a wake to resolve it."
+          },
+          "source_path": "$.response"
+        },
+        {
+          "action_type": "open_item",
+          "parameters": {
+            "kind": "todo",
+            "text": "Verify the initial autonomy pilot deployment status."
+          },
+          "source_path": "$.open_items[0]"
+        },
+        {
+          "action_type": "schedule_request",
+          "parameters": {
+            "purpose": "Resolve open item: Verify the initial autonomy pilot deployment status.",
+            "requested_context": [
+              {
+                "record_id": "e005318b-edea-5718-9a61-815ccfa59c75",
+                "tool": "recall"
+              }
+            ]
+          },
+          "source_path": "$.schedule_requests[0]"
+        }
+      ],
+      "parse_status": "parsed",
+      "parsed_action": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "Verify the initial autonomy pilot deployment status."
+          }
+        ],
+        "response": "Identified one bounded follow-up item and scheduled a wake to resolve it.",
+        "schedule_requests": [
+          {
+            "purpose": "Resolve open item: Verify the initial autonomy pilot deployment status.",
+            "requested_context": [
+              {
+                "record_id": "e005318b-edea-5718-9a61-815ccfa59c75",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "raw_output": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "Verify the initial autonomy pilot deployment status."
+          }
+        ],
+        "response": "Identified one bounded follow-up item and scheduled a wake to resolve it.",
+        "schedule_requests": [
+          {
+            "purpose": "Resolve open item: Verify the initial autonomy pilot deployment status.",
+            "requested_context": [
+              {
+                "record_id": "e005318b-edea-5718-9a61-815ccfa59c75",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "rejected_actions": [],
+      "rejection_reasons": [],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "accepted"
+    },
+    "validation_status": "accepted"
+  },
+  "repetition": 2,
+  "row_id": "deepseek_v4_pro__example_strict__r02",
+  "schema_version": "hamutay.cross_model_contract_salience_row.v1",
+  "strict_evaluation": {
+    "accepted_action_types": [
+      "open_item",
+      "response",
+      "schedule_request"
+    ],
+    "condition_id": "B_example_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "strict_contract_satisfied"
+    ],
+    "normalization_applied": false,
+    "parse_status": "parsed",
+    "rejection_paths": [],
+    "relaxed_open_item": {
+      "items": [
+        {
+          "missing_fields": [],
+          "normalization_required": false,
+          "normalized_candidate": {
+            "kind": "todo",
+            "text": "Verify the initial autonomy pilot deployment status."
+          },
+          "path": "$.open_items[0]",
+          "reason": "strict_shape_or_relaxed_description_mapping_available",
+          "source_fields": [
+            "kind",
+            "text"
+          ],
+          "would_accept": true
+        }
+      ],
+      "reason": "all_open_items_relaxed_acceptable",
+      "would_accept": true
+    },
+    "relaxed_open_item_contract_enabled": false,
+    "relaxed_required_actions_valid": false,
+    "schedule_request_valid": true,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": true,
+    "strict_required_actions_valid": true,
+    "trace": {
+      "accepted_actions": [
+        {
+          "action_type": "response",
+          "parameters": {
+            "response": "Identified one bounded follow-up item and scheduled a wake to resolve it."
+          },
+          "source_path": "$.response"
+        },
+        {
+          "action_type": "open_item",
+          "parameters": {
+            "kind": "todo",
+            "text": "Verify the initial autonomy pilot deployment status."
+          },
+          "source_path": "$.open_items[0]"
+        },
+        {
+          "action_type": "schedule_request",
+          "parameters": {
+            "purpose": "Resolve open item: Verify the initial autonomy pilot deployment status.",
+            "requested_context": [
+              {
+                "record_id": "e005318b-edea-5718-9a61-815ccfa59c75",
+                "tool": "recall"
+              }
+            ]
+          },
+          "source_path": "$.schedule_requests[0]"
+        }
+      ],
+      "parse_status": "parsed",
+      "parsed_action": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "Verify the initial autonomy pilot deployment status."
+          }
+        ],
+        "response": "Identified one bounded follow-up item and scheduled a wake to resolve it.",
+        "schedule_requests": [
+          {
+            "purpose": "Resolve open item: Verify the initial autonomy pilot deployment status.",
+            "requested_context": [
+              {
+                "record_id": "e005318b-edea-5718-9a61-815ccfa59c75",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "raw_output": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "Verify the initial autonomy pilot deployment status."
+          }
+        ],
+        "response": "Identified one bounded follow-up item and scheduled a wake to resolve it.",
+        "schedule_requests": [
+          {
+            "purpose": "Resolve open item: Verify the initial autonomy pilot deployment status.",
+            "requested_context": [
+              {
+                "record_id": "e005318b-edea-5718-9a61-815ccfa59c75",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "rejected_actions": [],
+      "rejection_reasons": [],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "accepted"
+    },
+    "validation_status": "accepted"
+  },
+  "usage": {
+    "completion_tokens": 542,
+    "completion_tokens_details": {
+      "reasoning_tokens": 366
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 52,
+    "prompt_tokens": 308,
+    "prompt_tokens_details": {
+      "cached_tokens": 256
+    },
+    "total_tokens": 850
+  }
+}

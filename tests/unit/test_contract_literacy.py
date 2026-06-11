@@ -6,6 +6,7 @@ from hamutay.memory.contract_literacy import (
     CONDITION_IDS,
     build_condition_messages,
     budget_manifest,
+    call_anthropic_messages_action,
     call_openrouter_action,
     condition_matrix,
     evaluate_cycle1_action_object,
@@ -222,6 +223,96 @@ def test_openrouter_research_call_does_not_set_max_tokens(monkeypatch):
     assert "max_tokens" not in captured_payload
     assert captured_payload["response_format"] == {"type": "json_object"}
     assert captured_payload["provider"] == {"allow_fallbacks": False}
+
+
+def test_openai_compatible_direct_call_omits_openrouter_routing_fields(monkeypatch):
+    captured_payload = {}
+
+    def fake_post(_url, *, headers, json, timeout):
+        captured_payload.update(json)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": (
+                                '{"response":"ok","open_items":[{"kind":"todo",'
+                                '"text":"x"}],"schedule_requests":[]}'
+                            )
+                        }
+                    }
+                ],
+                "usage": {"total_tokens": 10},
+            },
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    result = call_openrouter_action(
+        api_key="test-key",
+        endpoint="https://api.deepseek.test",
+        model="deepseek-v4-pro",
+        messages=[{"role": "user", "content": "return json"}],
+        timeout_seconds=1,
+        include_openrouter_options=False,
+    )
+
+    assert result["ok"] is True
+    assert "provider" not in captured_payload
+    assert "transforms" not in captured_payload
+    assert "max_tokens" not in captured_payload
+    assert captured_payload["response_format"] == {"type": "json_object"}
+
+
+def test_anthropic_messages_call_extracts_tool_input(monkeypatch):
+    captured = {}
+
+    def fake_post(url, *, headers, json, timeout):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["payload"] = json
+        return httpx.Response(
+            200,
+            json={
+                "content": [
+                    {
+                        "type": "tool_use",
+                        "name": "submit_action_object",
+                        "input": {
+                            "response": "ok",
+                            "open_items": [{"kind": "todo", "text": "x"}],
+                            "schedule_requests": [],
+                        },
+                    }
+                ],
+                "usage": {"input_tokens": 4, "output_tokens": 6},
+            },
+        )
+
+    monkeypatch.setattr(httpx, "post", fake_post)
+
+    result = call_anthropic_messages_action(
+        api_key="test-key",
+        endpoint="https://openrouter.ai/api",
+        model="anthropic/claude-sonnet-4.6",
+        messages=[
+            {"role": "system", "content": "system prompt"},
+            {"role": "user", "content": "return json"},
+        ],
+        timeout_seconds=1,
+    )
+
+    assert result["ok"] is True
+    assert captured["url"] == "https://openrouter.ai/api/v1/messages"
+    assert captured["headers"]["anthropic-version"] == "2023-06-01"
+    assert captured["payload"]["tool_choice"] == {
+        "type": "tool",
+        "name": "submit_action_object",
+    }
+    assert captured["payload"]["system"] == "system prompt"
+    assert result["action_object"]["open_items"][0]["kind"] == "todo"
+    assert result["usage"]["total_tokens"] == 10
 
 
 def test_openrouter_retries_transient_provider_errors(monkeypatch):
