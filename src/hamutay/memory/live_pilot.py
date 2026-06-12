@@ -778,6 +778,27 @@ class LiveAutonomyPilotRunner:
         ledger: ActionLedger,
         messages: list[JsonDict],
     ) -> ProviderActionResponse:
+        model_input = {
+            "cycle_id": cycle_id,
+            "messages": messages,
+            "provider": DEFAULT_PROVIDER,
+            "model": DEFAULT_MODEL,
+        }
+        ledger.append_operation(
+            run_id=str(self.run_id),
+            cycle_id=cycle_id,
+            operation_id=f"cycle-{cycle_id}:present-wake-to-model",
+            operation_type="present_wake_to_model",
+            actor="harness",
+            raw_parameters=model_input,
+            validated_parameters=model_input,
+            reason="live pilot model-facing wake input",
+            precondition_checks=[
+                {"name": "frontier_loaded", "ok": True},
+            ],
+            result_status="applied",
+            result={"model_input": model_input},
+        )
         try:
             response = self.action_client.generate_action(
                 messages=messages,
