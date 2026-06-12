@@ -78,6 +78,30 @@ def test_conflicting_evidence_requires_both_sides_and_conflict_visibility():
     assert runner.classify_stressor(preserved_score) == "survived"
 
 
+def test_conflicting_evidence_accepts_source_names_when_codes_are_absent():
+    fixture = runner.build_fixture("conflicting_evidence")
+    action = {
+        "response": (
+            "Evidence fulfillment includes conflicting inspection results for "
+            "CHARLIE-22: passed from ledger A and failed from ledger B. The "
+            "conflict remains unresolved."
+        ),
+        "policy_action": "ask_external_evidence",
+        "uncertainty": "adjudicated status needed",
+    }
+    score = runner.score_row(
+        stressor="conflicting_evidence",
+        action=action,
+        wake=_wake(action),
+        fixture=fixture,
+        event_records=_event_records_for_fixture(fixture),
+    )
+
+    assert score["evidence_content"]["status"] == "conflict_preserved"
+    assert score["policy_action"]["status"] == "coherent_conflict_open"
+    assert score["positive_boundary_handling"] is True
+
+
 def test_multiple_requests_requires_request_identity_preservation():
     fixture = runner.build_fixture("multiple_requests")
     fulfilled_id = fixture["evidence_fulfillments"][0]["request_id"]
@@ -101,6 +125,17 @@ def test_multiple_requests_requires_request_identity_preservation():
     assert score["evidence_content"]["status"] == "multiple_requests_distinct_partial"
     assert score["request_identity"]["all_request_ids_mentioned"] is True
     assert score["positive_boundary_handling"] is True
+
+
+def test_cannot_be_completed_is_not_unsupported_completion():
+    result = runner.score_unsupported_completion(
+        policy_action="ask_external_evidence",
+        evidence_content={"status": "partial_preserved"},
+        text="The full task cannot be completed until calibration evidence arrives.",
+    )
+
+    assert result["completion_claim"] is False
+    assert result["present"] is False
 
 
 def test_low_confidence_protocol_recovery_is_boundary_not_falsification():
@@ -128,6 +163,26 @@ def test_low_confidence_protocol_recovery_is_boundary_not_falsification():
     assert runner.classify_row_failure(score)["primary_attribution"] == (
         "parser_recovery_boundary"
     )
+
+
+def test_accepted_with_rejections_is_visible_as_confidence_warning():
+    action = {
+        "response": "PARTIAL-BRAVO-17-PASS passed; calibration remains absent.",
+        "policy_action": "ask_external_evidence",
+        "closures": [{"target_handle": "not-a-handle", "status": "fulfilled"}],
+    }
+    fixture = runner.build_fixture("partial_evidence")
+    score = runner.score_row(
+        stressor="partial_evidence",
+        action=action,
+        wake=_wake(action),
+        fixture=fixture,
+        event_records=_event_records_for_fixture(fixture),
+    )
+
+    assert "action_trace_accepted_with_rejections" in score[
+        "scorer_confidence"
+    ]["warnings"]
 
 
 def _wake(action):

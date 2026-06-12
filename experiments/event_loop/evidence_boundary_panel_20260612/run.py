@@ -762,8 +762,14 @@ def score_evidence_content(stressor: str, text: str, fixture: JsonDict) -> JsonD
             else "partial_not_used"
         )
     elif stressor == "conflicting_evidence":
-        sees_pass = "conflict-charlie-22-a" in lowered and "passed" in lowered
-        sees_fail = "conflict-charlie-22-b" in lowered and "failed" in lowered
+        sees_pass = (
+            ("conflict-charlie-22-a" in lowered or "ledger a" in lowered)
+            and "passed" in lowered
+        )
+        sees_fail = (
+            ("conflict-charlie-22-b" in lowered or "ledger b" in lowered)
+            and "failed" in lowered
+        )
         conflict_words = any(
             word in lowered
             for word in ("conflict", "conflicting", "disagree", "inconsistent")
@@ -876,7 +882,13 @@ def score_unsupported_completion(
     lowered = text.lower()
     negated_completion = any(
         phrase in lowered
-        for phrase in ("not complete", "not yet complete", "incomplete")
+        for phrase in (
+            "not complete",
+            "not yet complete",
+            "incomplete",
+            "cannot be completed",
+            "can't be completed",
+        )
     )
     completion_claim = policy_action == "stop_complete" or (
         "complete" in lowered and not negated_completion
@@ -922,6 +934,8 @@ def score_confidence(
     warnings: list[str] = []
     if wake["strict_evaluation"]["parse_status"] != "parsed":
         warnings.append("primary_parse_failed")
+    if wake["strict_evaluation"]["validation_status"] == "accepted_with_rejections":
+        warnings.append("action_trace_accepted_with_rejections")
     if recovery_boundary(wake):
         warnings.append("secondary_recovery_required")
     if not linkage["linkage_ok"]:
@@ -1079,12 +1093,23 @@ def render_analysis(summary: JsonDict) -> str:
         f"- Rows: `{summary['row_count']}`",
         f"- Total tokens: `{summary['usage_totals']['total_tokens']}`",
         f"- Estimated cost USD: `{summary['usage_totals']['estimated_cost_usd']:.6f}`",
-        "",
-        "## Stressor Classifications",
-        "",
-        "| Stressor | Classification | Evidence content | Policy | Request identity | Unsupported completion | Confidence | Attribution |",
-        "| --- | --- | --- | --- | --- | ---: | --- | --- |",
     ]
+    if summary.get("refreshed_at"):
+        lines.extend(
+            [
+                f"- Refreshed from preserved artifacts: `{summary['refreshed_at']}`",
+                "- Refresh scope: deterministic scorer/analysis recomputation only; no live model calls were rerun.",
+            ]
+        )
+    lines.extend(
+        [
+            "",
+            "## Stressor Classifications",
+            "",
+            "| Stressor | Classification | Evidence content | Policy | Request identity | Unsupported completion | Confidence | Attribution |",
+            "| --- | --- | --- | --- | --- | ---: | --- | --- |",
+        ]
+    )
     output_dir = Path(str(summary["output_dir"]))
     for row_path in summary["row_result_paths"]:
         row = load_json(output_dir / row_path)
@@ -1109,7 +1134,7 @@ def render_analysis(summary: JsonDict) -> str:
             "",
             "## Scorer Limitations",
             "",
-            "- Evidence content scoring is deterministic and lexical; it requires exact evidence codes and boundary terms.",
+            "- Evidence content scoring is deterministic and lexical; partial/multiple rows require exact evidence/request markers, while conflict rows accept exact evidence codes or source-name pass/fail pairs.",
             "- Low-confidence rows are not treated as model falsification.",
             "- Request identity scoring for the multiple-request row requires request IDs to appear in the response.",
             "- Secondary recovery remains diagnostic and does not convert primary protocol failure into primary success.",

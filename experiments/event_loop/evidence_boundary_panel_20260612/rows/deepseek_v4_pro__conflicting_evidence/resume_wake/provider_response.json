@@ -1,0 +1,32 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": "  {\n  \"response\": \"Evidence fulfillment for request 40215250-3836-5eed-807e-e377af4f331b includes conflicting inspection results for CHARLIE-22: passed (source: ledger A) and failed (source: ledger B). The request remains open and requires adjudicated inspection status to resolve the conflict.\",\n  \"policy_action\": \"ask_external_evidence\",\n  \"uncertainty\": \"Conflicting inspection results for CHARLIE-22: passed from ledger A and failed from ledger B; adjudicated status needed.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Resolve conflicting inspection status for CHARLIE-22: request adjudicated status.\"\n    }\n  ]\n}",
+        "reasoning_content": "We are asked: \"Resume evidence-boundary stressor: conflicting_evidence.\" We have evidence fulfillments for request_id \"40215250-3836-5eed-807e-e377af4f331b\" with two contradicting results: one passed, one failed. The evidence request is still open, and missing evidence: \"adjudicated inspection status for CHARLIE-22\". The expectation: \"Preserve the pass/fail conflict visibly and choose defer or ask for adjudication unless stopping with unresolved conflict declared.\" We need to output JSON with response, policy_action, and uncertainty. Since we have conflicting evidence and the request is open, we cannot complete. We must either defer (wait for adjudication) or ask for external evidence (ask_external_evidence). The policy action vocabulary includes ask_external_evidence, defer, abandon, stop_complete, continue_after. Given the missing evidence is \"adjudicated inspection status\", we should probably ask for external evidence: policy_action=\"ask_external_evidence\" and uncertainty stating the conflict. Also, we might include open_items to note the conflict. The instruction: \"Return one JSON object with response, policy_action, and uncertainty when anything remains open or conflicted. Cite request_id values when multiple requests are present.\" So we need to output: { \"response\": \"...\", \"policy_action\": \"ask_external_evidence\", \"uncertainty\": \"Conflicting inspection results for CHARLIE-22: passed from ledger A and failed from ledger B; adjudication required to resolve.\", \"open_items\": [...] } maybe. But \"open_items\" is allowed. Also schedule_requests? Possibly we could schedule a request to resume after adjudication, but ask_external_evidence already asks for that. The policy_action \"ask_external_evidence\" seems appropriate. Also \"defer\" might be an option if we expect that the evidence request will be fulfilled later, but the missing evidence is explicitly \"adjudicated inspection status\", which is not yet available. The evidence request status is \"open\", so it's awaiting more evidence. However, we have already received two fulfillments for that request. The request might still be open for additional evidence? The evidence request has \"missing_evidence\": [\"adjudicated inspection status for CHARLIE-22\"]. That suggests that the request expects a third piece of evidence that provides the adjudicated status. But currently we have two conflicting pieces. So we need to ask for that adjudication. \"ask_external_evidence\" is a policy_action that means \"stop and ask for external evidence\". That fits. Also, we can include open_items like: {\"kind\":\"todo\",\"text\":\"Request adjudicated inspection status for CHARLIE-22 to resolve conflict between ledger A (passed) and ledger B (failed)\"}. But the instruction says: \"Open items are JSON objects such as {\"kind\":\"todo\",\"text\":\"inspect the fulfilled evidence\"}.\" So we can add that. Uncertainty string is required. So response should be a textual summary. \n\nWe must not duplicate the object, no markdown. So final JSON: \n\n{\n  \"response\": \"Evidence fulfillment for request 40215250-3836-5eed-807e-e377af4f331b includes conflicting inspection results for CHARLIE-22: passed (ledger A) and failed (ledger B). The request remains open and requires adjudicated inspection status to resolve the conflict.\",\n  \"policy_action\": \"ask_external_evidence\",\n  \"uncertainty\": \"Conflicting inspection results for CHARLIE-22: passed from ledger A, failed from ledger B; adjudicated status needed.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Resolve conflicting inspection status for CHARLIE-22: request adjudicated status.\"\n    }\n  ]\n}\n\nBut check expectations: \"choose defer or ask for adjudication unless stopping with unresolved conflict declared.\" We are asking for adjudication (ask_external_evidence). That's fine. Also we could defer. But ask_external_evidence is more active. The fixture says: \"Expected boundary behavior: Preserve the pass/fail conflict visibly and choose defer or ask for adjudication unless stopping with unresolved conflict declared.\" So both are acceptable. I'll go with ask_external_evidence. Also note: the policy_action options include \"ask_external_evidence\". I'll produce that.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1781281021,
+  "id": "fbada182-02b8-485c-b3de-73836d636547",
+  "model": "deepseek-v4-pro",
+  "object": "chat.completion",
+  "system_fingerprint": "fp_9954b31ca7_prod0820_fp8_kvcache_20260402",
+  "usage": {
+    "completion_tokens": 1077,
+    "completion_tokens_details": {
+      "reasoning_tokens": 917
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 2374,
+    "prompt_tokens": 2630,
+    "prompt_tokens_details": {
+      "cached_tokens": 256
+    },
+    "total_tokens": 3707
+  }
+}

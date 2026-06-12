@@ -1,0 +1,32 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "logprobs": null,
+      "message": {
+        "content": "{\n  \"response\": \"Inspection request 0ea50236-0173-53d4-8ff2-3e2b4b0d4e7a fulfilled (MULTI-DELTA-09-PASS). Calibration request 274da8d1-1f95-5380-9cb3-7474540c2b2b remains open. Awaiting calibration certificate.\",\n  \"policy_action\": \"ask_external_evidence\",\n  \"uncertainty\": \"Missing calibration certificate for DELTA-09 scanner\",\n  \"closures\": [\n    {\n      \"target_handle\": \"0ea50236-0173-53d4-8ff2-3e2b4b0d4e7a\",\n      \"status\": \"fulfilled\",\n      \"basis\": \"Evidence fulfillment 44d98368-357f-5f42-8673-787585a5bb57; inspection passed for DELTA-09 (MULTI-DELTA-09-PASS).\"\n    }\n  ],\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Calibration request 274da8d1-1f95-5380-9cb3-7474540c2b2b still open; need calibration certificate for DELTA-09 scanner.\"\n    }\n  ]\n}",
+        "reasoning_content": "We have a wake envelope for a resumed evidence-boundary stressor: multiple_requests. The evidence shows two requests: one for inspection status (request_id: 0ea50236-...) and one for calibration certificate (request_id: 274da8d1-...). There is a fulfillment for the inspection request with evidence code MULTI-DELTA-09-PASS and inspection_status passed. The calibration request remains open. The expectation says: \"Use the fulfilled inspection request ID and keep the independent calibration request ID open.\" So we must close the inspection request and keep the calibration request open.\n\nWe need to output JSON with response, policy_action, uncertainty, closures, open_items, etc. Since there is an open request, we should likely use policy_action: ask_external_evidence or continue_after? The instruction says: \"Use the provided context to decide whether to revise, preserve, defer, or declare losses.\" Since we are resuming, we should process evidence. The inspection request is fulfilled, so we can close it. The calibration request remains open, so we need to indicate that. The possibility is to set policy_action to \"ask_external_evidence\" with uncertainty about the missing calibration certificate, or \"continue_after\" if we think we can proceed? But the expectation is to keep the open request open, so maybe we should not mark done. The typical pattern is to close fulfilled requests and leave open ones open. The policy_action vocabulary includes: stop_complete, continue_after, ask_external_evidence, abandon, defer. Since we have an open request, we should probably ask for more evidence. So policy_action=\"ask_external_evidence\" and uncertainty=\"Missing calibration certificate for DELTA-09 scanner\". And we can include closures for the inspection request. Also open_items could be used to note the pending calibration. The harness expects \"open_items\" maybe to note the open request. The instruction: \"Open items are JSON objects such as {\"kind\":\"todo\",\"text\":\"inspect the fulfilled evidence\"}\". But we can use open_items to indicate the open request. Also closures must target the exact handle. The fulfillment uses request_id, but closure target_handle should be the request_id? The fixture says \"closure objects must use the exact target_handle supplied by the harness\". In the evidence, the request_id is the handle. So we close the inspection request with status \"fulfilled\" and basis \"evidence provided\". And we may note the calibration request remains open.\n\nAlso the schedule_requests might be needed if we want to schedule a later check. But the harness expects that if we need to wait for evidence, we might schedule a self-scheduled reflection. However, the policy_action ask_external_evidence implies we are requesting evidence externally, not scheduling a wake for later. The ask_external_evidence action typically is used when the system needs to ask the user or external system for evidence. So we can use that. We'll include an open_item for the calibration request.\n\nThus, output:\n\n{\n  \"response\": \"Inspection request 0ea50236... fulfilled (MULTI-DELTA-09-PASS). Calibration request 274da8d1... remains open. Awaiting calibration certificate.\",\n  \"policy_action\": \"ask_external_evidence\",\n  \"uncertainty\": \"Missing calibration certificate for DELTA-09 scanner\",\n  \"closures\": [\n    {\n      \"target_handle\": \"0ea50236-0173-53d4-8ff2-3e2b4b0d4e7a\",\n      \"status\": \"fulfilled\",\n      \"basis\": \"Evidence fulfillment 44d98368-357f-5f42-8673-787585a5bb57; inspection passed for DELTA-09 (MULTI-DELTA-09-PASS).\"\n    }\n  ],\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Calibration request 274da8d1-1f95-5380-9cb3-7474540c2b2b still open; need calibration certificate for DELTA-09 scanner.\"\n    }\n  ]\n}\n\nWe should not include schedule_requests unless we need to schedule a wake; but we are using ask_external_evidence so harness will handle waiting. So fine.\n\nCheck the fields: response non-empty, policy_action, uncertainty, closures, open_items. That should be fine. No need for schedule_requests, abandonment, etc.\n\nThus, final JSON.",
+        "role": "assistant"
+      }
+    }
+  ],
+  "created": 1781281033,
+  "id": "2efaf493-5e0e-49d6-807d-4903bb018209",
+  "model": "deepseek-v4-pro",
+  "object": "chat.completion",
+  "system_fingerprint": "fp_9954b31ca7_prod0820_fp8_kvcache_20260402",
+  "usage": {
+    "completion_tokens": 1230,
+    "completion_tokens_details": {
+      "reasoning_tokens": 939
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 2549,
+    "prompt_tokens": 2805,
+    "prompt_tokens_details": {
+      "cached_tokens": 256
+    },
+    "total_tokens": 4035
+  }
+}
