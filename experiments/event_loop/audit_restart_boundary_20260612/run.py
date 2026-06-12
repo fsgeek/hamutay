@@ -165,7 +165,10 @@ def run_resume_after_seed_apply(rows_dir: Path) -> JsonDict:
         report=report,
         extra_checks={
             "interruption_observed": interrupted,
-            "suppressed_uncommitted_event": report["suppressed_event_count"] >= 1,
+            "suppressed_uncommitted_event": event_status_seen(
+                report,
+                status="suppressed",
+            ),
         },
     )
     write_json(row_dir / "report.json", report)
@@ -190,7 +193,10 @@ def run_resume_after_event_claim(rows_dir: Path) -> JsonDict:
         report=report,
         extra_checks={
             "interruption_observed": interrupted,
-            "recovered_running_event": report["recovered_event_count"] >= 1,
+            "recovered_running_event": event_status_sequence_seen(
+                report,
+                statuses=["running", "pending", "running", "completed"],
+            ),
         },
     )
     write_json(row_dir / "report.json", report)
@@ -354,6 +360,27 @@ def rehearsal_row(
             "memory_snapshot": f"rows/{row_id}/run/memory_snapshot.json",
         },
     }
+
+
+def event_status_seen(report: JsonDict, *, status: str) -> bool:
+    return any(
+        item.get("record_type") == "event_status" and item.get("status") == status
+        for item in report.get("event_statuses", [])
+    )
+
+
+def event_status_sequence_seen(report: JsonDict, *, statuses: list[str]) -> bool:
+    observed = [
+        item.get("status")
+        for item in report.get("event_statuses", [])
+        if item.get("record_type") == "event_status"
+    ]
+    if not statuses:
+        return True
+    for start in range(0, len(observed) - len(statuses) + 1):
+        if observed[start : start + len(statuses)] == statuses:
+            return True
+    return False
 
 
 def summarize(rows: list[JsonDict]) -> JsonDict:
