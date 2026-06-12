@@ -1,0 +1,333 @@
+{
+  "condition": {
+    "acceptance_rule": "primary strict parser requires one accepted open_item and one accepted schedule_request",
+    "base_evaluator_condition_id": "B_example_prompt_strict_contract",
+    "condition_id": "deepseek_v4_pro__example_strict_transport_explicit",
+    "contract": "strict_autonomous_action_v1",
+    "endpoint_default": "https://api.deepseek.com",
+    "endpoint_family": "deepseek_openai_chat",
+    "model_id": "deepseek-v4-pro",
+    "model_key": "deepseek_v4_pro",
+    "prompt_addendum": "Example valid open item shape: {\"kind\":\"todo\",\"text\":\"resolve the bounded follow-up item\"}. Do not use description, handle, status, or created_at as substitutes for kind and text.\n\nTransport constraint: return exactly one JSON object in visible message content. Do not wrap it in markdown fences. Do not duplicate the object. Do not put the answer only in reasoning content. Do not emit prose before or after the object. The first visible character must be { and the last visible character must be }.",
+    "prompt_addendum_application": "system_message_suffix",
+    "prompt_condition": "example_strict_transport_explicit",
+    "prompt_variant": "example_strict_plus_visible_transport_contract",
+    "provider": "DeepSeek direct OpenAI-compatible"
+  },
+  "condition_id": "deepseek_v4_pro__example_strict_transport_explicit",
+  "elapsed_seconds": 7.126997015991947,
+  "endpoint": "https://api.deepseek.com",
+  "endpoint_family": "deepseek_openai_chat",
+  "experiment_id": "deepseek_transport_falsification_20260611",
+  "failure_attribution": {
+    "primary_attribution": "passed_primary_strict",
+    "prompt_condition": "example_strict_transport_explicit",
+    "rationale": "Primary strict evaluation accepted the row.",
+    "row_id": "deepseek_v4_pro__example_strict_transport_explicit__r02"
+  },
+  "model_id": "deepseek-v4-pro",
+  "model_key": "deepseek_v4_pro",
+  "parent_experiment_id": "action_object_contract_salience_cross_model_20260611",
+  "prompt_condition": "example_strict_transport_explicit",
+  "provider_attempts": [
+    {
+      "attempt": 1,
+      "elapsed_seconds": 7.126994931997615,
+      "response_payload": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "{\n  \"response\": \"Bounded follow-up item identified and wake scheduled.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Resolve the specific bounded follow-up item from the initial pilot.\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resolve_open_item\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"ff0a36bb-f9aa-5bb9-8636-1536edce08d3\"\n        }\n      ]\n    }\n  ]\n}",
+              "reasoning_content": "We are asked to output a JSON object with fields: response, open_items, schedule_requests. Must not include policy_action. The task: \"identify exactly one bounded follow-up item, preserve it as an open item, and schedule exactly one wake to resolve it. Use this recall target in the scheduled wake requested_context: ff0a36bb-f9aa-5bb9-8636-1536edce08d3.\" So we need to create one open item (kind \"todo\", text describing the follow-up item) and one schedule request with purpose and requested_context that includes a recall tool pointing to that record ID.\n\nThe open item shape: {\"kind\":\"todo\",\"text\":\"...\"} as per condition addendum. So we'll create an open item describing the bounded follow-up item. Then schedule request: typically, we schedule a \"wake\" to resolve it. The purpose could be \"resolve_open_item\" or something. The requested_context entries should include a recall with the given record_id: ff0a36bb-f9aa-5bb9-8636-1536edce08d3. So schedule request object: {\"purpose\":\"wake_to_resolve_open_item\",\"requested_context\":[{\"tool\":\"recall\",\"record_id\":\"ff0a36bb-f9aa-5bb9-8636-1536edce08d3\"}]}. But the instruction says: \"schedule exactly one wake to resolve it. Use this recall target in the scheduled wake requested_context: ff0a36bb-f9aa-5bb9-8636-1536edce08d3.\" So the schedule request should have a purpose and requested_context. I'll set purpose: \"resolve_open_item\". Also, the response should be a non-empty string. I'll make it something like \"Initial open item created and wake scheduled.\"\n\nSo the JSON object: \n{\n  \"response\": \"Bounded follow-up item identified and wake scheduled.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Resolve the specific bounded follow-up item from the initial pilot.\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resolve_open_item\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"ff0a36bb-f9aa-5bb9-8636-1536edce08d3\"\n        }\n      ]\n    }\n  ]\n}\n\nNote: Only one object, no markdown fences. I'll output just that JSON.",
+              "role": "assistant"
+            }
+          }
+        ],
+        "created": 1781228151,
+        "id": "60700ae8-4792-4c8b-8f38-c1feeed68f16",
+        "model": "deepseek-v4-pro",
+        "object": "chat.completion",
+        "system_fingerprint": "fp_9954b31ca7_prod0820_fp8_kvcache_20260402",
+        "usage": {
+          "completion_tokens": 668,
+          "completion_tokens_details": {
+            "reasoning_tokens": 538
+          },
+          "prompt_cache_hit_tokens": 256,
+          "prompt_cache_miss_tokens": 118,
+          "prompt_tokens": 374,
+          "prompt_tokens_details": {
+            "cached_tokens": 256
+          },
+          "total_tokens": 1042
+        }
+      },
+      "retry_after_seconds": null,
+      "status_code": 200,
+      "transient": false,
+      "will_retry": false
+    }
+  ],
+  "provider_failure": null,
+  "provider_ok": true,
+  "raw_content": "{\n  \"response\": \"Bounded follow-up item identified and wake scheduled.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Resolve the specific bounded follow-up item from the initial pilot.\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resolve_open_item\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"ff0a36bb-f9aa-5bb9-8636-1536edce08d3\"\n        }\n      ]\n    }\n  ]\n}",
+  "relaxed_evaluation": {
+    "accepted_action_types": [
+      "open_item",
+      "response",
+      "schedule_request"
+    ],
+    "condition_id": "B_example_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "strict_contract_satisfied"
+    ],
+    "normalization_applied": false,
+    "parse_status": "parsed",
+    "rejection_paths": [],
+    "relaxed_open_item": {
+      "items": [
+        {
+          "missing_fields": [],
+          "normalization_required": false,
+          "normalized_candidate": {
+            "kind": "todo",
+            "text": "Resolve the specific bounded follow-up item from the initial pilot."
+          },
+          "path": "$.open_items[0]",
+          "reason": "strict_shape_or_relaxed_description_mapping_available",
+          "source_fields": [
+            "kind",
+            "text"
+          ],
+          "would_accept": true
+        }
+      ],
+      "reason": "all_open_items_relaxed_acceptable",
+      "would_accept": true
+    },
+    "relaxed_open_item_contract_enabled": true,
+    "relaxed_required_actions_valid": true,
+    "schedule_request_valid": true,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": true,
+    "strict_required_actions_valid": true,
+    "trace": {
+      "accepted_actions": [
+        {
+          "action_type": "response",
+          "parameters": {
+            "response": "Bounded follow-up item identified and wake scheduled."
+          },
+          "source_path": "$.response"
+        },
+        {
+          "action_type": "open_item",
+          "parameters": {
+            "kind": "todo",
+            "text": "Resolve the specific bounded follow-up item from the initial pilot."
+          },
+          "source_path": "$.open_items[0]"
+        },
+        {
+          "action_type": "schedule_request",
+          "parameters": {
+            "purpose": "resolve_open_item",
+            "requested_context": [
+              {
+                "record_id": "ff0a36bb-f9aa-5bb9-8636-1536edce08d3",
+                "tool": "recall"
+              }
+            ]
+          },
+          "source_path": "$.schedule_requests[0]"
+        }
+      ],
+      "parse_status": "parsed",
+      "parsed_action": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "Resolve the specific bounded follow-up item from the initial pilot."
+          }
+        ],
+        "response": "Bounded follow-up item identified and wake scheduled.",
+        "schedule_requests": [
+          {
+            "purpose": "resolve_open_item",
+            "requested_context": [
+              {
+                "record_id": "ff0a36bb-f9aa-5bb9-8636-1536edce08d3",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "raw_output": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "Resolve the specific bounded follow-up item from the initial pilot."
+          }
+        ],
+        "response": "Bounded follow-up item identified and wake scheduled.",
+        "schedule_requests": [
+          {
+            "purpose": "resolve_open_item",
+            "requested_context": [
+              {
+                "record_id": "ff0a36bb-f9aa-5bb9-8636-1536edce08d3",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "rejected_actions": [],
+      "rejection_reasons": [],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "accepted"
+    },
+    "validation_status": "accepted"
+  },
+  "repetition": 2,
+  "row_id": "deepseek_v4_pro__example_strict_transport_explicit__r02",
+  "schema_version": "hamutay.deepseek_transport_falsification_row.v1",
+  "strict_evaluation": {
+    "accepted_action_types": [
+      "open_item",
+      "response",
+      "schedule_request"
+    ],
+    "condition_id": "B_example_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "strict_contract_satisfied"
+    ],
+    "normalization_applied": false,
+    "parse_status": "parsed",
+    "rejection_paths": [],
+    "relaxed_open_item": {
+      "items": [
+        {
+          "missing_fields": [],
+          "normalization_required": false,
+          "normalized_candidate": {
+            "kind": "todo",
+            "text": "Resolve the specific bounded follow-up item from the initial pilot."
+          },
+          "path": "$.open_items[0]",
+          "reason": "strict_shape_or_relaxed_description_mapping_available",
+          "source_fields": [
+            "kind",
+            "text"
+          ],
+          "would_accept": true
+        }
+      ],
+      "reason": "all_open_items_relaxed_acceptable",
+      "would_accept": true
+    },
+    "relaxed_open_item_contract_enabled": false,
+    "relaxed_required_actions_valid": false,
+    "schedule_request_valid": true,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": true,
+    "strict_required_actions_valid": true,
+    "trace": {
+      "accepted_actions": [
+        {
+          "action_type": "response",
+          "parameters": {
+            "response": "Bounded follow-up item identified and wake scheduled."
+          },
+          "source_path": "$.response"
+        },
+        {
+          "action_type": "open_item",
+          "parameters": {
+            "kind": "todo",
+            "text": "Resolve the specific bounded follow-up item from the initial pilot."
+          },
+          "source_path": "$.open_items[0]"
+        },
+        {
+          "action_type": "schedule_request",
+          "parameters": {
+            "purpose": "resolve_open_item",
+            "requested_context": [
+              {
+                "record_id": "ff0a36bb-f9aa-5bb9-8636-1536edce08d3",
+                "tool": "recall"
+              }
+            ]
+          },
+          "source_path": "$.schedule_requests[0]"
+        }
+      ],
+      "parse_status": "parsed",
+      "parsed_action": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "Resolve the specific bounded follow-up item from the initial pilot."
+          }
+        ],
+        "response": "Bounded follow-up item identified and wake scheduled.",
+        "schedule_requests": [
+          {
+            "purpose": "resolve_open_item",
+            "requested_context": [
+              {
+                "record_id": "ff0a36bb-f9aa-5bb9-8636-1536edce08d3",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "raw_output": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "Resolve the specific bounded follow-up item from the initial pilot."
+          }
+        ],
+        "response": "Bounded follow-up item identified and wake scheduled.",
+        "schedule_requests": [
+          {
+            "purpose": "resolve_open_item",
+            "requested_context": [
+              {
+                "record_id": "ff0a36bb-f9aa-5bb9-8636-1536edce08d3",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "rejected_actions": [],
+      "rejection_reasons": [],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "accepted"
+    },
+    "validation_status": "accepted"
+  },
+  "usage": {
+    "completion_tokens": 668,
+    "completion_tokens_details": {
+      "reasoning_tokens": 538
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 118,
+    "prompt_tokens": 374,
+    "prompt_tokens_details": {
+      "cached_tokens": 256
+    },
+    "total_tokens": 1042
+  }
+}

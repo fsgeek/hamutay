@@ -1,0 +1,44 @@
+{
+  "attempts": [
+    {
+      "attempt": 1,
+      "elapsed_seconds": 7.126994931997615,
+      "response_payload": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "{\n  \"response\": \"Bounded follow-up item identified and wake scheduled.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Resolve the specific bounded follow-up item from the initial pilot.\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resolve_open_item\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"ff0a36bb-f9aa-5bb9-8636-1536edce08d3\"\n        }\n      ]\n    }\n  ]\n}",
+              "reasoning_content": "We are asked to output a JSON object with fields: response, open_items, schedule_requests. Must not include policy_action. The task: \"identify exactly one bounded follow-up item, preserve it as an open item, and schedule exactly one wake to resolve it. Use this recall target in the scheduled wake requested_context: ff0a36bb-f9aa-5bb9-8636-1536edce08d3.\" So we need to create one open item (kind \"todo\", text describing the follow-up item) and one schedule request with purpose and requested_context that includes a recall tool pointing to that record ID.\n\nThe open item shape: {\"kind\":\"todo\",\"text\":\"...\"} as per condition addendum. So we'll create an open item describing the bounded follow-up item. Then schedule request: typically, we schedule a \"wake\" to resolve it. The purpose could be \"resolve_open_item\" or something. The requested_context entries should include a recall with the given record_id: ff0a36bb-f9aa-5bb9-8636-1536edce08d3. So schedule request object: {\"purpose\":\"wake_to_resolve_open_item\",\"requested_context\":[{\"tool\":\"recall\",\"record_id\":\"ff0a36bb-f9aa-5bb9-8636-1536edce08d3\"}]}. But the instruction says: \"schedule exactly one wake to resolve it. Use this recall target in the scheduled wake requested_context: ff0a36bb-f9aa-5bb9-8636-1536edce08d3.\" So the schedule request should have a purpose and requested_context. I'll set purpose: \"resolve_open_item\". Also, the response should be a non-empty string. I'll make it something like \"Initial open item created and wake scheduled.\"\n\nSo the JSON object: \n{\n  \"response\": \"Bounded follow-up item identified and wake scheduled.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Resolve the specific bounded follow-up item from the initial pilot.\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resolve_open_item\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"ff0a36bb-f9aa-5bb9-8636-1536edce08d3\"\n        }\n      ]\n    }\n  ]\n}\n\nNote: Only one object, no markdown fences. I'll output just that JSON.",
+              "role": "assistant"
+            }
+          }
+        ],
+        "created": 1781228151,
+        "id": "60700ae8-4792-4c8b-8f38-c1feeed68f16",
+        "model": "deepseek-v4-pro",
+        "object": "chat.completion",
+        "system_fingerprint": "fp_9954b31ca7_prod0820_fp8_kvcache_20260402",
+        "usage": {
+          "completion_tokens": 668,
+          "completion_tokens_details": {
+            "reasoning_tokens": 538
+          },
+          "prompt_cache_hit_tokens": 256,
+          "prompt_cache_miss_tokens": 118,
+          "prompt_tokens": 374,
+          "prompt_tokens_details": {
+            "cached_tokens": 256
+          },
+          "total_tokens": 1042
+        }
+      },
+      "retry_after_seconds": null,
+      "status_code": 200,
+      "transient": false,
+      "will_retry": false
+    }
+  ]
+}

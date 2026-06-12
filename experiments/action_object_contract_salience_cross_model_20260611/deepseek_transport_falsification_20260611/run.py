@@ -273,6 +273,7 @@ def write_evaluated_row(
     if recovery_evaluation["recovery_attempted"]:
         row_result["recovery_evaluation"] = recovery_evaluation
         _write_json(row_dir / "recovery_evaluation.json", recovery_evaluation)
+    row_result["failure_attribution"] = classify_row_failure(row_result)
     _write_json(row_dir / "strict_evaluation.json", strict_evaluation)
     _write_json(row_dir / "relaxed_evaluation.json", relaxed_evaluation)
     _write_json(row_dir / "row_result.json", row_result)
@@ -321,6 +322,11 @@ def summarize_results(
         "failure_totals": failure_totals(row_results),
         "protocol_recovery_totals": protocol_recovery_totals(row_results),
         "by_condition": by_condition,
+        "row_failure_attributions": [
+            row["failure_attribution"]
+            for row in row_results
+            if not row["strict_evaluation"]["strict_required_actions_valid"]
+        ],
         "attribution": attribute_outcome(by_condition),
         "row_result_paths": [
             str(Path("rows") / str(row["row_id"]) / "row_result.json")
@@ -328,6 +334,84 @@ def summarize_results(
         ],
     }
     return summary
+
+
+def classify_row_failure(row: JsonDict) -> JsonDict:
+    strict_pass = bool(row["strict_evaluation"]["strict_required_actions_valid"])
+    relaxed_pass = bool(row["relaxed_evaluation"]["relaxed_required_actions_valid"])
+    failure = row.get("provider_failure")
+    recovery = row.get("recovery_evaluation")
+    if strict_pass:
+        return {
+            "row_id": row["row_id"],
+            "prompt_condition": row["prompt_condition"],
+            "primary_attribution": "passed_primary_strict",
+            "rationale": "Primary strict evaluation accepted the row.",
+        }
+    if isinstance(failure, dict) and failure.get("layer") == "provider":
+        return {
+            "row_id": row["row_id"],
+            "prompt_condition": row["prompt_condition"],
+            "primary_attribution": "provider_substrate_failure",
+            "rationale": "Provider error prevented model-authored content from being preserved.",
+        }
+    if isinstance(failure, dict) and failure.get("layer") == "protocol":
+        if isinstance(recovery, dict) and recovery.get("strict_pass_if_recovered"):
+            return {
+                "row_id": row["row_id"],
+                "prompt_condition": row["prompt_condition"],
+                "primary_attribution": "parser_recovery_boundary",
+                "rationale": (
+                    "Primary parser rejected the visible content, but secondary "
+                    "recovery found a strict-valid action object."
+                ),
+            }
+        raw = row.get("raw_content")
+        if isinstance(raw, str) and not raw.strip():
+            return {
+                "row_id": row["row_id"],
+                "prompt_condition": row["prompt_condition"],
+                "primary_attribution": "prompt_transport_contract",
+                "rationale": (
+                    "Provider returned no visible JSON content even though the "
+                    "call completed; this is a visible-channel transport failure."
+                ),
+            }
+        if isinstance(recovery, dict) and recovery.get("recovered"):
+            return {
+                "row_id": row["row_id"],
+                "prompt_condition": row["prompt_condition"],
+                "primary_attribution": "prompt_transport_contract",
+                "rationale": (
+                    "Secondary recovery found only an embedded JSON fragment, "
+                    "not a complete strict-valid action object."
+                ),
+            }
+        return {
+            "row_id": row["row_id"],
+            "prompt_condition": row["prompt_condition"],
+            "primary_attribution": "inconclusive",
+            "rationale": "Protocol failure did not preserve enough structure for sharper attribution.",
+        }
+    if not relaxed_pass:
+        return {
+            "row_id": row["row_id"],
+            "prompt_condition": row["prompt_condition"],
+            "primary_attribution": "model_contract_boundary",
+            "rationale": (
+                "The model returned parseable JSON, but it failed the required "
+                "action contract under both strict and relaxed scoring."
+            ),
+        }
+    return {
+        "row_id": row["row_id"],
+        "prompt_condition": row["prompt_condition"],
+        "primary_attribution": "model_contract_boundary",
+        "rationale": (
+            "The model returned parseable JSON with usable partial structure, "
+            "but not the strict action-object shape."
+        ),
+    }
 
 
 def accumulate_condition(bucket: JsonDict, row: JsonDict) -> None:
@@ -485,6 +569,28 @@ def render_analysis(summary: JsonDict) -> str:
     for key, value in sorted(attribution["decision_inputs"].items()):
         lines.append(f"- `{key}`: `{value}`")
 
+    failures = summary["row_failure_attributions"]
+    lines.extend(
+        [
+            "",
+            "## Row Failure Attribution",
+            "",
+            "| Row | Condition | Attribution | Rationale |",
+            "| --- | --- | --- | --- |",
+        ]
+    )
+    if failures:
+        for failure in failures:
+            lines.append(
+                "| "
+                f"{failure['row_id']} | "
+                f"{failure['prompt_condition']} | "
+                f"`{failure['primary_attribution']}` | "
+                f"{failure['rationale']} |"
+            )
+    else:
+        lines.append("| none | n/a | `passed_primary_strict` | No failed rows. |")
+
     recovery = summary["protocol_recovery_totals"]
     lines.extend(
         [
@@ -554,6 +660,33 @@ def interpretation_for_attribution(primary: str) -> str:
             "training, schema changes, or a different model."
         )
     return "The rows do not isolate a dominant cause."
+
+
+def refresh_existing(output_dir: Path = DEFAULT_OUTPUT_DIR) -> JsonDict:
+    rows_dir = output_dir / "rows"
+    if not rows_dir.exists():
+        raise FileNotFoundError(rows_dir)
+    row_results = []
+    for row_path in sorted(rows_dir.glob("*/row_result.json")):
+        row = json.loads(row_path.read_text())
+        row["failure_attribution"] = classify_row_failure(row)
+        _write_json(row_path, row)
+        row_results.append(row)
+
+    existing_results = {}
+    results_path = output_dir / "results.json"
+    if results_path.exists():
+        existing_results = json.loads(results_path.read_text())
+    summary = summarize_results(
+        row_results=row_results,
+        output_dir=output_dir,
+        endpoint=str(existing_results.get("endpoint") or DEFAULT_ENDPOINT),
+        started_at=str(existing_results.get("started_at") or _now_iso()),
+        finished_at=str(existing_results.get("finished_at") or _now_iso()),
+    )
+    _write_json(results_path, summary)
+    (output_dir / "analysis.md").write_text(render_analysis(summary) + "\n")
+    return summary
 
 
 def usage_totals(row_results: list[JsonDict]) -> JsonDict:
@@ -630,12 +763,15 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--write-preregistration", action="store_true")
     parser.add_argument("--run-live", action="store_true")
+    parser.add_argument("--refresh-analysis", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=DEFAULT_OUTPUT_DIR)
     parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
     parser.add_argument("--api-key-env", default="DEEPSEEK_API_KEY")
     args = parser.parse_args()
 
-    if args.run_live:
+    if args.refresh_analysis:
+        result = refresh_existing(output_dir=args.output_dir)
+    elif args.run_live:
         result = execute_live(
             output_dir=args.output_dir,
             api_key=os.environ.get(args.api_key_env, ""),

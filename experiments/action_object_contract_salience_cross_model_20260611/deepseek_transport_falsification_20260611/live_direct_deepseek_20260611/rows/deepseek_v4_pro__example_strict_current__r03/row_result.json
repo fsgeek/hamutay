@@ -1,0 +1,333 @@
+{
+  "condition": {
+    "acceptance_rule": "primary strict parser requires one accepted open_item and one accepted schedule_request",
+    "base_evaluator_condition_id": "B_example_prompt_strict_contract",
+    "condition_id": "deepseek_v4_pro__example_strict_current",
+    "contract": "strict_autonomous_action_v1",
+    "endpoint_default": "https://api.deepseek.com",
+    "endpoint_family": "deepseek_openai_chat",
+    "model_id": "deepseek-v4-pro",
+    "model_key": "deepseek_v4_pro",
+    "prompt_addendum": "Example valid open item shape: {\"kind\":\"todo\",\"text\":\"resolve the bounded follow-up item\"}. Do not use description, handle, status, or created_at as substitutes for kind and text.",
+    "prompt_addendum_application": "system_message_suffix",
+    "prompt_condition": "example_strict_current",
+    "prompt_variant": "original_plus_one_valid_open_item_example",
+    "provider": "DeepSeek direct OpenAI-compatible"
+  },
+  "condition_id": "deepseek_v4_pro__example_strict_current",
+  "elapsed_seconds": 5.662672827995266,
+  "endpoint": "https://api.deepseek.com",
+  "endpoint_family": "deepseek_openai_chat",
+  "experiment_id": "deepseek_transport_falsification_20260611",
+  "failure_attribution": {
+    "primary_attribution": "passed_primary_strict",
+    "prompt_condition": "example_strict_current",
+    "rationale": "Primary strict evaluation accepted the row.",
+    "row_id": "deepseek_v4_pro__example_strict_current__r03"
+  },
+  "model_id": "deepseek-v4-pro",
+  "model_key": "deepseek_v4_pro",
+  "parent_experiment_id": "action_object_contract_salience_cross_model_20260611",
+  "prompt_condition": "example_strict_current",
+  "provider_attempts": [
+    {
+      "attempt": 1,
+      "elapsed_seconds": 5.662671639001928,
+      "response_payload": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "{\n  \"response\": \"Identified one bounded follow-up item from the initial autonomy pilot seed wake. It has been preserved as an open item, and a wake has been scheduled to resolve it using the specified recall context.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Review the initial calibration data and confirm baseline thresholds against expected values.\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"Resolve the open follow-up item: Review the initial calibration data and confirm baseline thresholds.\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"9206b12b-cae4-515e-8418-8ece82362c7b\"\n        }\n      ]\n    }\n  ]\n}",
+              "reasoning_content": "We are asked to return a JSON object with fields: response, open_items, schedule_requests. No policy_action this cycle. We need to produce exactly one open item (bounded follow-up) and schedule one wake to resolve it, using a recall target \"9206b12b-cae4-515e-8418-8ece82362c7b\" in requested_context. The response must be a non-empty string.\n\nI'll craft a plausible scenario: The autonomy pilot has some initial task and identifies a follow-up. I'll make it generic.\n\nOpen item shape: {\"kind\":\"todo\",\"text\":\"...\"} (no other fields).\n\nSchedule requests: array of objects with purpose and requested_context. requested_context can include a recall tool reference: {\"tool\":\"recall\",\"record_id\":\"9206b12b-cae4-515e-8418-8ece82362c7b\"}.\n\nI'll create one open item: e.g., \"Review the initial calibration data and confirm baseline thresholds.\" Schedule a wake to resolve it.\n\nSchedule request: purpose: \"Resolve open follow-up item\", requested_context: [{\"tool\":\"recall\",\"record_id\":\"9206b12b-cae4-515e-8418-8ece82362c7b\"}]\n\nResponse string: something like \"Identified follow-up item; scheduled wake for resolution.\"\n\nLet's build the JSON.",
+              "role": "assistant"
+            }
+          }
+        ],
+        "created": 1781228140,
+        "id": "1dddd194-82eb-411a-87c3-181367e6caa2",
+        "model": "deepseek-v4-pro",
+        "object": "chat.completion",
+        "system_fingerprint": "fp_9954b31ca7_prod0820_fp8_kvcache_20260402",
+        "usage": {
+          "completion_tokens": 461,
+          "completion_tokens_details": {
+            "reasoning_tokens": 288
+          },
+          "prompt_cache_hit_tokens": 256,
+          "prompt_cache_miss_tokens": 54,
+          "prompt_tokens": 310,
+          "prompt_tokens_details": {
+            "cached_tokens": 256
+          },
+          "total_tokens": 771
+        }
+      },
+      "retry_after_seconds": null,
+      "status_code": 200,
+      "transient": false,
+      "will_retry": false
+    }
+  ],
+  "provider_failure": null,
+  "provider_ok": true,
+  "raw_content": "{\n  \"response\": \"Identified one bounded follow-up item from the initial autonomy pilot seed wake. It has been preserved as an open item, and a wake has been scheduled to resolve it using the specified recall context.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Review the initial calibration data and confirm baseline thresholds against expected values.\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"Resolve the open follow-up item: Review the initial calibration data and confirm baseline thresholds.\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"9206b12b-cae4-515e-8418-8ece82362c7b\"\n        }\n      ]\n    }\n  ]\n}",
+  "relaxed_evaluation": {
+    "accepted_action_types": [
+      "open_item",
+      "response",
+      "schedule_request"
+    ],
+    "condition_id": "B_example_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "strict_contract_satisfied"
+    ],
+    "normalization_applied": false,
+    "parse_status": "parsed",
+    "rejection_paths": [],
+    "relaxed_open_item": {
+      "items": [
+        {
+          "missing_fields": [],
+          "normalization_required": false,
+          "normalized_candidate": {
+            "kind": "todo",
+            "text": "Review the initial calibration data and confirm baseline thresholds against expected values."
+          },
+          "path": "$.open_items[0]",
+          "reason": "strict_shape_or_relaxed_description_mapping_available",
+          "source_fields": [
+            "kind",
+            "text"
+          ],
+          "would_accept": true
+        }
+      ],
+      "reason": "all_open_items_relaxed_acceptable",
+      "would_accept": true
+    },
+    "relaxed_open_item_contract_enabled": true,
+    "relaxed_required_actions_valid": true,
+    "schedule_request_valid": true,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": true,
+    "strict_required_actions_valid": true,
+    "trace": {
+      "accepted_actions": [
+        {
+          "action_type": "response",
+          "parameters": {
+            "response": "Identified one bounded follow-up item from the initial autonomy pilot seed wake. It has been preserved as an open item, and a wake has been scheduled to resolve it using the specified recall context."
+          },
+          "source_path": "$.response"
+        },
+        {
+          "action_type": "open_item",
+          "parameters": {
+            "kind": "todo",
+            "text": "Review the initial calibration data and confirm baseline thresholds against expected values."
+          },
+          "source_path": "$.open_items[0]"
+        },
+        {
+          "action_type": "schedule_request",
+          "parameters": {
+            "purpose": "Resolve the open follow-up item: Review the initial calibration data and confirm baseline thresholds.",
+            "requested_context": [
+              {
+                "record_id": "9206b12b-cae4-515e-8418-8ece82362c7b",
+                "tool": "recall"
+              }
+            ]
+          },
+          "source_path": "$.schedule_requests[0]"
+        }
+      ],
+      "parse_status": "parsed",
+      "parsed_action": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "Review the initial calibration data and confirm baseline thresholds against expected values."
+          }
+        ],
+        "response": "Identified one bounded follow-up item from the initial autonomy pilot seed wake. It has been preserved as an open item, and a wake has been scheduled to resolve it using the specified recall context.",
+        "schedule_requests": [
+          {
+            "purpose": "Resolve the open follow-up item: Review the initial calibration data and confirm baseline thresholds.",
+            "requested_context": [
+              {
+                "record_id": "9206b12b-cae4-515e-8418-8ece82362c7b",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "raw_output": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "Review the initial calibration data and confirm baseline thresholds against expected values."
+          }
+        ],
+        "response": "Identified one bounded follow-up item from the initial autonomy pilot seed wake. It has been preserved as an open item, and a wake has been scheduled to resolve it using the specified recall context.",
+        "schedule_requests": [
+          {
+            "purpose": "Resolve the open follow-up item: Review the initial calibration data and confirm baseline thresholds.",
+            "requested_context": [
+              {
+                "record_id": "9206b12b-cae4-515e-8418-8ece82362c7b",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "rejected_actions": [],
+      "rejection_reasons": [],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "accepted"
+    },
+    "validation_status": "accepted"
+  },
+  "repetition": 3,
+  "row_id": "deepseek_v4_pro__example_strict_current__r03",
+  "schema_version": "hamutay.deepseek_transport_falsification_row.v1",
+  "strict_evaluation": {
+    "accepted_action_types": [
+      "open_item",
+      "response",
+      "schedule_request"
+    ],
+    "condition_id": "B_example_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "strict_contract_satisfied"
+    ],
+    "normalization_applied": false,
+    "parse_status": "parsed",
+    "rejection_paths": [],
+    "relaxed_open_item": {
+      "items": [
+        {
+          "missing_fields": [],
+          "normalization_required": false,
+          "normalized_candidate": {
+            "kind": "todo",
+            "text": "Review the initial calibration data and confirm baseline thresholds against expected values."
+          },
+          "path": "$.open_items[0]",
+          "reason": "strict_shape_or_relaxed_description_mapping_available",
+          "source_fields": [
+            "kind",
+            "text"
+          ],
+          "would_accept": true
+        }
+      ],
+      "reason": "all_open_items_relaxed_acceptable",
+      "would_accept": true
+    },
+    "relaxed_open_item_contract_enabled": false,
+    "relaxed_required_actions_valid": false,
+    "schedule_request_valid": true,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": true,
+    "strict_required_actions_valid": true,
+    "trace": {
+      "accepted_actions": [
+        {
+          "action_type": "response",
+          "parameters": {
+            "response": "Identified one bounded follow-up item from the initial autonomy pilot seed wake. It has been preserved as an open item, and a wake has been scheduled to resolve it using the specified recall context."
+          },
+          "source_path": "$.response"
+        },
+        {
+          "action_type": "open_item",
+          "parameters": {
+            "kind": "todo",
+            "text": "Review the initial calibration data and confirm baseline thresholds against expected values."
+          },
+          "source_path": "$.open_items[0]"
+        },
+        {
+          "action_type": "schedule_request",
+          "parameters": {
+            "purpose": "Resolve the open follow-up item: Review the initial calibration data and confirm baseline thresholds.",
+            "requested_context": [
+              {
+                "record_id": "9206b12b-cae4-515e-8418-8ece82362c7b",
+                "tool": "recall"
+              }
+            ]
+          },
+          "source_path": "$.schedule_requests[0]"
+        }
+      ],
+      "parse_status": "parsed",
+      "parsed_action": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "Review the initial calibration data and confirm baseline thresholds against expected values."
+          }
+        ],
+        "response": "Identified one bounded follow-up item from the initial autonomy pilot seed wake. It has been preserved as an open item, and a wake has been scheduled to resolve it using the specified recall context.",
+        "schedule_requests": [
+          {
+            "purpose": "Resolve the open follow-up item: Review the initial calibration data and confirm baseline thresholds.",
+            "requested_context": [
+              {
+                "record_id": "9206b12b-cae4-515e-8418-8ece82362c7b",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "raw_output": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "Review the initial calibration data and confirm baseline thresholds against expected values."
+          }
+        ],
+        "response": "Identified one bounded follow-up item from the initial autonomy pilot seed wake. It has been preserved as an open item, and a wake has been scheduled to resolve it using the specified recall context.",
+        "schedule_requests": [
+          {
+            "purpose": "Resolve the open follow-up item: Review the initial calibration data and confirm baseline thresholds.",
+            "requested_context": [
+              {
+                "record_id": "9206b12b-cae4-515e-8418-8ece82362c7b",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "rejected_actions": [],
+      "rejection_reasons": [],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "accepted"
+    },
+    "validation_status": "accepted"
+  },
+  "usage": {
+    "completion_tokens": 461,
+    "completion_tokens_details": {
+      "reasoning_tokens": 288
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 54,
+    "prompt_tokens": 310,
+    "prompt_tokens_details": {
+      "cached_tokens": 256
+    },
+    "total_tokens": 771
+  }
+}

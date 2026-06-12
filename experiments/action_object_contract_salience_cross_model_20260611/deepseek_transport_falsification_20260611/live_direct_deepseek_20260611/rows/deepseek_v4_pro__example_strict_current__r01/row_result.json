@@ -1,0 +1,212 @@
+{
+  "condition": {
+    "acceptance_rule": "primary strict parser requires one accepted open_item and one accepted schedule_request",
+    "base_evaluator_condition_id": "B_example_prompt_strict_contract",
+    "condition_id": "deepseek_v4_pro__example_strict_current",
+    "contract": "strict_autonomous_action_v1",
+    "endpoint_default": "https://api.deepseek.com",
+    "endpoint_family": "deepseek_openai_chat",
+    "model_id": "deepseek-v4-pro",
+    "model_key": "deepseek_v4_pro",
+    "prompt_addendum": "Example valid open item shape: {\"kind\":\"todo\",\"text\":\"resolve the bounded follow-up item\"}. Do not use description, handle, status, or created_at as substitutes for kind and text.",
+    "prompt_addendum_application": "system_message_suffix",
+    "prompt_condition": "example_strict_current",
+    "prompt_variant": "original_plus_one_valid_open_item_example",
+    "provider": "DeepSeek direct OpenAI-compatible"
+  },
+  "condition_id": "deepseek_v4_pro__example_strict_current",
+  "elapsed_seconds": 5.0367809269955615,
+  "endpoint": "https://api.deepseek.com",
+  "endpoint_family": "deepseek_openai_chat",
+  "experiment_id": "deepseek_transport_falsification_20260611",
+  "failure_attribution": {
+    "primary_attribution": "prompt_transport_contract",
+    "prompt_condition": "example_strict_current",
+    "rationale": "Provider returned no visible JSON content even though the call completed; this is a visible-channel transport failure.",
+    "row_id": "deepseek_v4_pro__example_strict_current__r01"
+  },
+  "model_id": "deepseek-v4-pro",
+  "model_key": "deepseek_v4_pro",
+  "parent_experiment_id": "action_object_contract_salience_cross_model_20260611",
+  "prompt_condition": "example_strict_current",
+  "provider_attempts": [
+    {
+      "attempt": 1,
+      "elapsed_seconds": 5.036779364992981,
+      "response_payload": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "                      ",
+              "reasoning_content": "We are to produce a JSON object with fields: response, open_items, schedule_requests. No policy_action. The task: identify exactly one bounded follow-up item, preserve it as an open item, and schedule exactly one wake to resolve it. The scheduled wake must use a recall target in requested_context: 7ea7556d-dc93-5fc4-b5ec-799722580a1f.\n\nOpen item shape: {\"kind\":\"todo\",\"text\":\"...\"}. So we need exactly one open item with kind \"todo\" and some text.\n\nSchedule requests: must include purpose and requested_context. Requested context entries may use {\"tool\":\"recall\",\"record_id\":\"...\"}. So we need one schedule request with purpose like \"resolve open item\" and requested_context containing the recall tool with the given record_id.\n\nResponse: a non-empty string. It can be like \"Identified bounded follow-up item and scheduled wake.\"\n\nThus, construct:\n\n{\n  \"response\": \"Identified and preserved a bounded follow-up item as an open item, and scheduled a wake to resolve it.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Resolve the bounded follow-up item: review initial autonomy pilot seed data and validate harness integration.\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"Resolve the open follow-up item.\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"7ea7556d-dc93-5fc4-b5ec-799722580a1f\"\n        }\n      ]\n    }\n  ]\n}",
+              "role": "assistant"
+            }
+          }
+        ],
+        "created": 1781228129,
+        "id": "89cff7e0-c545-483c-9ddb-a58a65377aac",
+        "model": "deepseek-v4-pro",
+        "object": "chat.completion",
+        "system_fingerprint": "fp_9954b31ca7_prod0820_fp8_kvcache_20260402",
+        "usage": {
+          "completion_tokens": 368,
+          "completion_tokens_details": {
+            "reasoning_tokens": 345
+          },
+          "prompt_cache_hit_tokens": 256,
+          "prompt_cache_miss_tokens": 54,
+          "prompt_tokens": 310,
+          "prompt_tokens_details": {
+            "cached_tokens": 256
+          },
+          "total_tokens": 678
+        }
+      },
+      "retry_after_seconds": null,
+      "status_code": 200,
+      "transient": false,
+      "will_retry": false
+    }
+  ],
+  "provider_failure": {
+    "code": "invalid_action_schema",
+    "layer": "protocol",
+    "message": "provider content was not JSON"
+  },
+  "provider_ok": false,
+  "raw_content": "                      ",
+  "recovery_evaluation": {
+    "method": null,
+    "primary_classification_preserved": true,
+    "primary_provider_failure": {
+      "code": "invalid_action_schema",
+      "layer": "protocol",
+      "message": "provider content was not JSON"
+    },
+    "reason": "no_recoverable_json_object",
+    "recovered": false,
+    "recovery_attempted": true,
+    "schema_version": "hamutay.protocol_recovery_evaluation.v1"
+  },
+  "relaxed_evaluation": {
+    "accepted_action_types": [],
+    "condition_id": "B_example_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "protocol_or_provider_artifact_failure"
+    ],
+    "normalization_applied": false,
+    "parse_status": "failed",
+    "rejection_paths": [
+      "$"
+    ],
+    "relaxed_open_item": {
+      "items": [],
+      "reason": "raw_output_not_object",
+      "would_accept": false
+    },
+    "relaxed_open_item_contract_enabled": true,
+    "relaxed_required_actions_valid": false,
+    "schedule_request_valid": false,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": false,
+    "strict_required_actions_valid": false,
+    "trace": {
+      "accepted_actions": [],
+      "parse_status": "failed",
+      "parsed_action": null,
+      "raw_output": "                      ",
+      "rejected_actions": [
+        {
+          "action_type": "action_object",
+          "code": "not_object",
+          "message": "autonomous action output must be an object",
+          "source_path": "$",
+          "value": "                      "
+        }
+      ],
+      "rejection_reasons": [
+        {
+          "action_type": "action_object",
+          "code": "not_object",
+          "message": "autonomous action output must be an object",
+          "source_path": "$",
+          "value": "                      "
+        }
+      ],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "rejected"
+    },
+    "validation_status": "rejected"
+  },
+  "repetition": 1,
+  "row_id": "deepseek_v4_pro__example_strict_current__r01",
+  "schema_version": "hamutay.deepseek_transport_falsification_row.v1",
+  "strict_evaluation": {
+    "accepted_action_types": [],
+    "condition_id": "B_example_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "protocol_or_provider_artifact_failure"
+    ],
+    "normalization_applied": false,
+    "parse_status": "failed",
+    "rejection_paths": [
+      "$"
+    ],
+    "relaxed_open_item": {
+      "items": [],
+      "reason": "raw_output_not_object",
+      "would_accept": false
+    },
+    "relaxed_open_item_contract_enabled": false,
+    "relaxed_required_actions_valid": false,
+    "schedule_request_valid": false,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": false,
+    "strict_required_actions_valid": false,
+    "trace": {
+      "accepted_actions": [],
+      "parse_status": "failed",
+      "parsed_action": null,
+      "raw_output": "                      ",
+      "rejected_actions": [
+        {
+          "action_type": "action_object",
+          "code": "not_object",
+          "message": "autonomous action output must be an object",
+          "source_path": "$",
+          "value": "                      "
+        }
+      ],
+      "rejection_reasons": [
+        {
+          "action_type": "action_object",
+          "code": "not_object",
+          "message": "autonomous action output must be an object",
+          "source_path": "$",
+          "value": "                      "
+        }
+      ],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "rejected"
+    },
+    "validation_status": "rejected"
+  },
+  "usage": {
+    "completion_tokens": 368,
+    "completion_tokens_details": {
+      "reasoning_tokens": 345
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 54,
+    "prompt_tokens": 310,
+    "prompt_tokens_details": {
+      "cached_tokens": 256
+    },
+    "total_tokens": 678
+  }
+}
