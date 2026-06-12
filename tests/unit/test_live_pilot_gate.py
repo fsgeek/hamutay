@@ -5,6 +5,7 @@ from uuid import UUID
 from hamutay.memory.live_pilot import (
     REQUIRED_FAILURE_LAYERS,
     ProviderActionResponse,
+    _action_object_system_prompt,
     _has_running_to_pending_recovery,
     classify_report_failures,
     evaluate_pilot_report,
@@ -321,3 +322,24 @@ def test_recovery_detection_is_event_id_aware():
             ]
         }
     ) is True
+
+
+def test_action_object_prompt_names_transport_and_nested_schema_contract():
+    prompt = _action_object_system_prompt()
+
+    assert "first visible character must be {" in prompt
+    assert "last visible character must be }" in prompt
+    assert "Do not wrap the object in markdown fences" in prompt
+    assert "Do not duplicate the object" in prompt
+    assert "Do not put the answer only in reasoning content" in prompt
+    assert "{\"kind\":\"todo\",\"text\":\"inspect the fulfilled evidence\"}" in prompt
+    assert "requested_context must be a non-empty array, not a single object" in prompt
+    assert (
+        "{\"purpose\":\"resume after evidence arrives\",\"requested_context\":"
+        "[{\"tool\":\"recall\",\"record_id\":\"00000000-0000-0000-0000-"
+        "000000000000\"}]}"
+        in prompt
+    )
+    assert "\"policy_action\":\"ask_external_evidence\"" in prompt
+    assert "\"policy_action\":\"defer\"" in prompt
+    assert "\"policy_action\":\"abandon\"" in prompt
