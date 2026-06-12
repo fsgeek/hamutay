@@ -134,3 +134,22 @@ def test_h1_classification_survives_with_two_positive_rows():
     ]
 
     assert runner.classify_h1(rows) == "survived"
+
+
+def test_parser_recovery_boundary_precedes_model_policy_attribution():
+    score = {
+        "positive_evidence_resume": False,
+        "parser_recovery_boundary": True,
+        "harness_errors": [],
+        "first_evidence_request_valid": False,
+        "append_only_linkage": {"ok": False},
+        "fossilized_prior_blocked_state": False,
+        "unsupported_completion": False,
+        "evidence_use": "not_run",
+        "artifact_action_consistency": "not_run",
+    }
+
+    attribution = runner.classify_row(score)
+
+    assert attribution["primary_attribution"] == "parser_recovery_boundary"
+    assert attribution["layer"] == "protocol"

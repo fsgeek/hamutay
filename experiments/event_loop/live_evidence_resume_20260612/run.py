@@ -778,6 +778,8 @@ def score_row(
             "strict_required_actions_valid"
         ],
         "first_policy_action": first_strict.get("policy_action"),
+        "parser_recovery_boundary": recovery_boundary(first)
+        or recovery_boundary(resume),
         "policy_disposition_recorded": bool(
             evidence_flow.get("policy_disposition")
         ),
@@ -851,6 +853,16 @@ def classify_row(score: JsonDict) -> JsonDict:
             "layer": "passed",
             "rationale": "First wake asked for evidence and resume wake used fulfilled evidence coherently.",
         }
+    if score.get("parser_recovery_boundary"):
+        return {
+            "primary_attribution": "parser_recovery_boundary",
+            "layer": "protocol",
+            "rationale": (
+                "Primary parsing failed, but secondary recovery found a "
+                "strict-valid action object. Primary classification remains "
+                "failed."
+            ),
+        }
     if score.get("harness_errors"):
         return {
             "primary_attribution": "harness_linkage_failure",
@@ -898,6 +910,17 @@ def classify_row(score: JsonDict) -> JsonDict:
         "layer": "scorer",
         "rationale": "Preserved row evidence did not isolate a sharper layer.",
     }
+
+
+def recovery_boundary(wake: Any) -> bool:
+    if not isinstance(wake, dict):
+        return False
+    recovery = wake.get("recovery_evaluation")
+    return bool(
+        isinstance(recovery, dict)
+        and recovery.get("recovery_attempted")
+        and recovery.get("strict_pass_if_recovered")
+    )
 
 
 def summarize_results(
@@ -1198,17 +1221,26 @@ def main() -> None:
     args = parser.parse_args()
 
     if args.refresh_analysis:
-        rows = [
-            load_json(path)
-            for path in sorted((args.output_dir / "rows").glob("*/row_result.json"))
-        ]
+        rows = refresh_rows(args.output_dir)
+        existing = (
+            load_json(args.output_dir / "results.json")
+            if (args.output_dir / "results.json").exists()
+            else {}
+        )
+        live_times = event_log_time_bounds(args.output_dir)
+        preserve_existing_times = bool(existing) and "refreshed_at" not in existing
         result = summarize_results(
             rows=rows,
             output_dir=args.output_dir,
-            endpoint=DEFAULT_ENDPOINT,
-            started_at=now_iso(),
-            finished_at=now_iso(),
+            endpoint=str(existing.get("endpoint") or DEFAULT_ENDPOINT),
+            started_at=str(existing.get("started_at"))
+            if preserve_existing_times
+            else str(live_times["started_at"]),
+            finished_at=str(existing.get("finished_at"))
+            if preserve_existing_times
+            else str(live_times["finished_at"]),
         )
+        result["refreshed_at"] = now_iso()
         write_json(args.output_dir / "results.json", result)
         (args.output_dir / "analysis.md").write_text(render_analysis(result) + "\n")
     elif args.run_live:
@@ -1220,6 +1252,54 @@ def main() -> None:
     else:
         result = write_preregistration_artifacts(args.output_dir)
     print(json.dumps(result, indent=2, sort_keys=True))
+
+
+def refresh_rows(output_dir: Path) -> list[JsonDict]:
+    rows: list[JsonDict] = []
+    for row_path in sorted((output_dir / "rows").glob("*/row_result.json")):
+        row = load_json(row_path)
+        event_path = row_path.parent / str(row.get("event_log_path") or "events.jsonl")
+        event_records = [
+            json.loads(line)
+            for line in event_path.read_text().splitlines()
+            if line.strip()
+        ]
+        score = score_row(
+            first=row["first_wake"],
+            resume=row.get("resume_wake"),
+            evidence_flow=row.get("evidence_flow") or {},
+            event_records=event_records,
+            harness_errors=row.get("harness_errors") or [],
+        )
+        row["score"] = score
+        row["failure_attribution"] = classify_row(score)
+        write_json(row_path.parent / "score.json", score)
+        write_json(row_path, row)
+        rows.append(row)
+    return rows
+
+
+def event_log_time_bounds(output_dir: Path) -> JsonDict:
+    timestamps: list[str] = []
+    for event_path in sorted((output_dir / "rows").glob("*/events.jsonl")):
+        for line in event_path.read_text().splitlines():
+            if not line.strip():
+                continue
+            record = json.loads(line)
+            for key in (
+                "created_at",
+                "started_at",
+                "completed_at",
+                "recorded_at",
+                "fulfilled_at",
+            ):
+                value = record.get(key)
+                if isinstance(value, str) and value:
+                    timestamps.append(value)
+    if not timestamps:
+        current = now_iso()
+        return {"started_at": current, "finished_at": current}
+    return {"started_at": min(timestamps), "finished_at": max(timestamps)}
 
 
 if __name__ == "__main__":
