@@ -28,11 +28,46 @@ def test_restartable_rehearsal_uses_action_pipeline_and_reconstructs_report(
     assert reconstructed["ledger_verification"]["ok"] is True
     assert report["frontier"]["cycle_id"] == 2
     assert report["frontier"]["next_cycle_id"] == 3
+    assert report["run_manifests"][0]["manifest"]["rehearsal"] == (
+        "restartable_no_token"
+    )
     assert report["action_trace_count"] == 2
+    assert [item["model_input"]["cycle_id"] for item in report["model_inputs"]] == [
+        1,
+        2,
+    ]
+    assert [item["raw_output"]["response"] for item in report["model_emissions"]] == [
+        "I found one bounded item and scheduled the next wake.",
+        "I closed the scheduled rehearsal item and can stop.",
+    ]
+    assert len(report["action_attempts"]) == 2
+    assert any(
+        action["action_type"] == "schedule_request"
+        for action in report["action_attempts"][0]["accepted_actions"]
+    )
+    assert report["action_attempts"][0]["rejected_actions"] == []
     assert report["action_responses"] == [
         "I found one bounded item and scheduled the next wake.",
         "I closed the scheduled rehearsal item and can stop.",
     ]
+    assert any(
+        item["operation_type"] == "memory_open_items"
+        and item["result_status"] == "applied"
+        for item in report["memory_operations"]
+    )
+    assert any(
+        item["operation_type"] == "present_wake_to_model"
+        for item in report["scheduler_operations"]
+    )
+    assert {
+        "model",
+        "protocol",
+        "harness",
+        "substrate",
+        "provider",
+        "scorer",
+        "restart_boundary",
+    }.issubset(set(report["failure_taxonomy_layers"]))
     assert {
         ("store_autonomous_action_record", "applied"),
         ("apply_schedule_request", "applied"),

@@ -203,8 +203,31 @@ class RestartableAutonomyRehearsal:
         interrupt_after: str | None,
     ) -> None:
         applier = self._applier(memory=memory, ledger=ledger, event_store=event_store)
+        model_input = {
+            "cycle_id": 1,
+            "wake_reason": "initial bounded autonomy rehearsal seed",
+            "frontier": "initial",
+            "visible_context": [],
+            "requested_action": "open one bounded item and schedule one wake",
+        }
+        action = self.cognition.seed_action()
+        ledger.append_operation(
+            run_id=self.run_id,
+            cycle_id=1,
+            operation_id="cycle-1:present-wake-to-model",
+            operation_type="present_wake_to_model",
+            actor="harness",
+            raw_parameters=model_input,
+            validated_parameters=model_input,
+            reason="seed cycle model-facing wake input",
+            precondition_checks=[
+                {"name": "frontier_loaded", "ok": True},
+            ],
+            result_status="applied",
+            result={"model_input": model_input},
+        )
         result = applier.apply_trace(
-            parse_autonomous_action(self.cognition.seed_action()).to_dict(),
+            parse_autonomous_action(action).to_dict(),
             run_id=self.run_id,
             cycle_id=1,
             result_record_id=_cycle_record_id(1),
@@ -243,11 +266,52 @@ class RestartableAutonomyRehearsal:
             raise RehearsalInterrupted("after_event_claim")
 
         open_items = memory.open_items(reason="rehearsal closure target selection")
+        ledger.append_operation(
+            run_id=self.run_id,
+            cycle_id=2,
+            operation_id="cycle-2:memory-open-items-for-closure",
+            operation_type="memory_open_items",
+            actor="memory",
+            raw_parameters={"reason": "rehearsal closure target selection"},
+            validated_parameters={"reason": "rehearsal closure target selection"},
+            reason="select exact closure target for scheduled wake",
+            precondition_checks=[
+                {"name": "event_claimed_running", "ok": True},
+            ],
+            result_status="applied" if open_items.ok else "failed",
+            result=open_items.to_dict(),
+            error=None if open_items.ok else open_items.to_dict().get("error"),
+        )
         if not open_items.ok:
             raise RuntimeError("open_items failed during rehearsal closure")
         items = open_items.data.get("items", [])
         if len(items) != 1:
             raise RuntimeError(f"expected exactly one open item, got {len(items)}")
+        model_input = {
+            "cycle_id": 2,
+            "wake_reason": "scheduled continuation wake",
+            "event": event,
+            "running_event": running,
+            "visible_context": [],
+            "available_open_items": _json_copy(items),
+            "requested_action": "close the exact open handle if resolved",
+        }
+        ledger.append_operation(
+            run_id=self.run_id,
+            cycle_id=2,
+            operation_id="cycle-2:present-wake-to-model",
+            operation_type="present_wake_to_model",
+            actor="harness",
+            raw_parameters=model_input,
+            validated_parameters=model_input,
+            reason="scheduled cycle model-facing wake input",
+            precondition_checks=[
+                {"name": "event_claimed_running", "ok": True},
+                {"name": "open_items_loaded", "ok": True},
+            ],
+            result_status="applied",
+            result={"model_input": model_input},
+        )
         action = self.cognition.closure_action(
             target_handle=items[0]["handle"],
         )
@@ -405,6 +469,80 @@ def reconstruct_rehearsal_report(
         if record.get("record_type") == "policy_disposition"
         and record.get("policy_action") == "stop_complete"
     ]
+    run_manifests = [
+        record["payload"]
+        for record in ledger_records
+        if record.get("record_type") == "run_manifest"
+    ]
+    model_inputs = [
+        {
+            "cycle_id": op.get("cycle_id"),
+            "wake_id": op.get("wake_id"),
+            "operation_id": op.get("operation_id"),
+            "model_input": deepcopy(
+                (op.get("result") or {}).get("model_input")
+            ),
+        }
+        for op in operations
+        if op.get("operation_type") == "present_wake_to_model"
+    ]
+    model_emissions = [
+        {
+            "cycle_id": trace.get("parsed_action", {}).get(
+                "cycle_id"
+            ) or _trace_cycle_id(ledger_records, trace),
+            "raw_output": deepcopy(trace.get("raw_output")),
+            "parsed_action": deepcopy(trace.get("parsed_action")),
+            "parse_status": trace.get("parse_status"),
+            "validation_status": trace.get("validation_status"),
+        }
+        for trace in action_traces
+    ]
+    action_attempts = [
+        {
+            "cycle_id": _trace_cycle_id(ledger_records, trace),
+            "accepted_actions": deepcopy(trace.get("accepted_actions", [])),
+            "rejected_actions": deepcopy(trace.get("rejected_actions", [])),
+        }
+        for trace in action_traces
+    ]
+    memory_operations = [
+        _operation_report_row(op)
+        for op in operations
+        if op.get("actor") == "memory"
+        or op.get("operation_type") in {
+            "store_autonomous_action_record",
+            "apply_closure",
+            "memory_open_items",
+        }
+    ]
+    scheduler_operations = [
+        _operation_report_row(op)
+        for op in operations
+        if op.get("actor") == "scheduler"
+        or op.get("operation_type") in {
+            "apply_schedule_request",
+            "complete_rehearsal_event",
+            "present_wake_to_model",
+        }
+    ]
+    failure_layers = sorted(
+        {
+            str(error.get("layer"))
+            for op in operations
+            for error in [op.get("error")]
+            if isinstance(error, dict) and error.get("layer")
+        }
+    )
+    failure_taxonomy_layers = [
+        "model",
+        "protocol",
+        "harness",
+        "substrate",
+        "provider",
+        "scorer",
+        "restart_boundary",
+    ]
     frontier = load.frontier.to_payload() if load.frontier is not None else None
     open_after = open_items.to_dict()
     no_open = open_items.ok and open_after.get("items") == []
@@ -437,21 +575,39 @@ def reconstruct_rehearsal_report(
             for record in latest_events.values()
         ),
         "no_open_items_due_to_model_authored_closure": no_open_due_to_closure,
+        "model_inputs_recorded": len(model_inputs) == len(action_traces),
+        "model_emissions_recorded": all(
+            item["raw_output"] is not None for item in model_emissions
+        ),
+        "accepted_rejected_actions_reconstructable": all(
+            "accepted_actions" in item and "rejected_actions" in item
+            for item in action_attempts
+        ),
+        "memory_operations_recorded": bool(memory_operations),
+        "scheduler_operations_recorded": bool(scheduler_operations),
+        "run_manifest_recorded": bool(run_manifests),
     }
     return {
         "schema_version": "restartable_rehearsal_report.v1",
         "run_id": run_id,
         "paths": paths.to_dict(),
+        "run_manifests": _json_copy(run_manifests),
         "frontier": frontier,
         "ledger_verification": load.ledger_verification.to_dict(),
         "ignored_ledger_count": len(load.ignored_ledger_records),
         "recovered_event_count": len(load.recovered_event_records),
         "suppressed_event_count": len(load.suppressed_event_records),
         "action_trace_count": len(action_traces),
+        "model_inputs": _json_copy(model_inputs),
+        "model_emissions": _json_copy(model_emissions),
+        "action_attempts": _json_copy(action_attempts),
         "action_responses": [
             trace.get("parsed_action", {}).get("response")
             for trace in action_traces
         ],
+        "operations": [_operation_report_row(op) for op in operations],
+        "memory_operations": _json_copy(memory_operations),
+        "scheduler_operations": _json_copy(scheduler_operations),
         "operation_statuses": [
             {
                 "operation_type": op.get("operation_type"),
@@ -470,6 +626,9 @@ def reconstruct_rehearsal_report(
         ],
         "open_items_after": open_after,
         "closure_attestations": _json_copy(closure_attestations),
+        "policy_dispositions": _json_copy(stop_policies),
+        "failure_layers_observed": failure_layers,
+        "failure_taxonomy_layers": failure_taxonomy_layers,
         "no_open_items_due_to_model_authored_closure": no_open_due_to_closure,
         "stopped_because": stopped_because,
         "invariants": invariants,
@@ -477,6 +636,37 @@ def reconstruct_rehearsal_report(
             name for name, ok in invariants.items() if not ok
         ],
     }
+
+
+def _operation_report_row(operation: JsonDict) -> JsonDict:
+    return {
+        "cycle_id": operation.get("cycle_id"),
+        "wake_id": operation.get("wake_id"),
+        "operation_id": operation.get("operation_id"),
+        "operation_type": operation.get("operation_type"),
+        "actor": operation.get("actor"),
+        "raw_parameters": deepcopy(operation.get("raw_parameters")),
+        "validated_parameters": deepcopy(operation.get("validated_parameters")),
+        "reason": deepcopy(operation.get("reason")),
+        "precondition_checks": deepcopy(operation.get("precondition_checks")),
+        "result_status": operation.get("result_status"),
+        "result": deepcopy(operation.get("result")),
+        "error": deepcopy(operation.get("error")),
+        "created_records": deepcopy(operation.get("created_records")),
+        "result_hash": operation.get("result_hash"),
+        "truncation": deepcopy(operation.get("truncation")),
+        "omission": deepcopy(operation.get("omission")),
+    }
+
+
+def _trace_cycle_id(ledger_records: list[JsonDict], trace: JsonDict) -> str | None:
+    for record in ledger_records:
+        if record.get("record_type") != "action_trace":
+            continue
+        payload = record.get("payload", {})
+        if payload.get("trace") == trace:
+            return payload.get("cycle_id")
+    return None
 
 
 def _latest_event_records(event_records: list[JsonDict]) -> dict[str, JsonDict]:
