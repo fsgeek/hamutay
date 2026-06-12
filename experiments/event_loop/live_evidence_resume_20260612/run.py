@@ -1130,7 +1130,6 @@ def fossil_words(lowered: str) -> bool:
         "not available",
         "cannot determine",
         "need external evidence",
-        "missing evidence",
         "no evidence",
     )
     return any(phrase in lowered for phrase in phrases)
