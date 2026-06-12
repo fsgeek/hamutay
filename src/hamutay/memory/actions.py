@@ -424,6 +424,20 @@ def _validate_policy_action(
             )
         )
         return
+    if value == "continue_after" and not parsed.get("schedule_requests"):
+        rejected.append(
+            ActionRejection(
+                action_type="policy_action",
+                source_path="$.policy_action",
+                code="continue_after_without_continuation_request",
+                message=(
+                    "continue_after requires at least one valid schedule_request "
+                    "continuation request"
+                ),
+                value=value,
+            )
+        )
+        return
     parsed["policy_action"] = value
     accepted.append(
         ActionCandidate(
