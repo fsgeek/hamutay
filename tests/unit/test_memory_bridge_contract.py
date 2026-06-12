@@ -1,6 +1,8 @@
 from uuid import UUID
 
-from hamutay.memory.bridge import LocalMemorySubstrate
+import pytest
+
+from hamutay.memory.bridge import LocalMemorySubstrate, MemoryResponse
 
 
 RID_1 = UUID("00000000-0000-0000-0000-000000000101")
@@ -504,4 +506,63 @@ def test_non_closure_citation_does_not_silently_close_open_item():
     assert len(after.data["items"]) == 1, (
         "a kind='evidence' citation with status='supported' silently closed an open "
         f"item: open_items went {len(before.data['items'])} -> {len(after.data['items'])}"
+    )
+
+
+@pytest.mark.xfail(
+    reason=(
+        "Found-by: Claude (bridge collision experiment, 2026-06-10). The Yanantin "
+        "ApachetaInterface guards access per-operation via check_access(caller, "
+        "operation, target). But Hamut'ay's MemoryPort has TWO overlapping read paths: "
+        "recall(record_id, field) AND open_items(), which returns the FULL item text, "
+        "not a handle. So a wall placed on recall is defeated by open_items: the agent "
+        "never needs to call the guarded method — open_items already hands it the "
+        "content, and the autonomous driver pipes that text straight into the model's "
+        "wake stimulus (verified live: the forbidden label reached the prompt verbatim). "
+        "A YanantinMemorySubstrate adapter that wires check_access onto recall but leaves "
+        "open_items ungated makes the wall theater. Same lesson as yanantin#10 "
+        "(test_llika_wall): the wall must rest on a capability the agent lacks, reachable "
+        "by NO path — not on the shape of one named method. INTENT IS A DESIGN CALL for "
+        "the bridge: open_items must either return handles-only (text fetched via a "
+        "gated recall) or apply the same check_access the adapter applies to recall. "
+        "Flip this xfail once the bridge's wall model is decided."
+    ),
+    strict=True,
+)
+def test_open_items_does_not_leak_text_that_recall_would_gate():
+    """If a substrate can gate recall on a record, open_items must not hand the
+    agent that record's content for free. Models a Yanantin-walled adapter:
+    recall is denied, but open_items currently returns the full item text."""
+    class _Walled(LocalMemorySubstrate):
+        def check_access(self, caller, operation, target=None):
+            return "dead" not in str(target)
+
+        def recall(self, *, record_id, field=None, detail_level="full",
+                   max_chars=None, reason=None):
+            if not self.check_access(caller="agent", operation="recall", target=record_id):
+                return MemoryResponse.failure(
+                    "access_denied", f"walled: {record_id}", record_id=str(record_id)
+                )
+            return super().recall(
+                record_id=record_id, field=field, detail_level=detail_level,
+                max_chars=max_chars, reason=reason,
+            )
+
+    sub = _Walled()
+    rid = UUID("00000000-0000-0000-0000-00000000dead")
+    sub.store_episode(
+        record_id=rid, record_type="secret",
+        content={"open_items": [{"text": "the thing behind the wall", "status": "open"}]},
+        production={"who": {"instance": "x"}, "what": {"artifact": "x"},
+                    "when": {"cycle": 1}, "where": {"project": "hamutay"}},
+        execution_trace={"tool_path": "t"},
+    )
+    # recall is walled...
+    assert not sub.recall(record_id=rid).ok
+    # ...so open_items must not leak the same record's content as free text.
+    items = sub.open_items().data["items"]
+    leaked = [it for it in items if "the thing behind the wall" in str(it.get("item", ""))]
+    assert not leaked, (
+        "open_items handed the agent the full text of a record recall would gate: "
+        f"{leaked}"
     )
