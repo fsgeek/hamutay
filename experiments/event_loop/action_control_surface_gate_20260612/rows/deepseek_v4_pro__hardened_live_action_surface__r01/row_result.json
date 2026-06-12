@@ -1,0 +1,332 @@
+{
+  "condition": {
+    "acceptance_rule": "primary strict parser requires one accepted open_item and one accepted schedule_request",
+    "base_evaluator_condition_id": "B_example_prompt_strict_contract",
+    "condition_id": "deepseek_v4_pro__hardened_live_action_surface",
+    "contract": "strict_autonomous_action_v1",
+    "endpoint_default": "https://api.deepseek.com",
+    "endpoint_family": "deepseek_openai_chat",
+    "model_id": "deepseek-v4-pro",
+    "model_key": "deepseek_v4_pro",
+    "prompt_addendum": "",
+    "prompt_addendum_application": "none",
+    "prompt_condition": "hardened_live_action_surface",
+    "prompt_source": "hamutay.memory.live_pilot._action_object_system_prompt",
+    "provider": "DeepSeek direct OpenAI-compatible"
+  },
+  "condition_id": "deepseek_v4_pro__hardened_live_action_surface",
+  "elapsed_seconds": 6.815406895009801,
+  "endpoint": "https://api.deepseek.com",
+  "endpoint_family": "deepseek_openai_chat",
+  "experiment_id": "action_control_surface_gate_20260612",
+  "failure_attribution": {
+    "primary_attribution": "passed_primary_strict",
+    "prompt_condition": "hardened_live_action_surface",
+    "rationale": "Primary strict evaluation accepted the row.",
+    "row_id": "deepseek_v4_pro__hardened_live_action_surface__r01"
+  },
+  "model_id": "deepseek-v4-pro",
+  "model_key": "deepseek_v4_pro",
+  "prompt_condition": "hardened_live_action_surface",
+  "provider_attempts": [
+    {
+      "attempt": 1,
+      "elapsed_seconds": 6.815405342989834,
+      "response_payload": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "{\n  \"response\": \"I have identified one bounded follow-up item and scheduled a wake to resolve it.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Verify the initial system state and connectivity\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resume after verifying initial state\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"ec319a68-7595-52ae-ada1-4301fb5dbab0\"\n        }\n      ]\n    }\n  ]\n}",
+              "reasoning_content": "We are asked to produce a JSON object for the Hamutay audited autonomy harness. The task is to identify exactly one bounded follow-up item, preserve it as an open item, and schedule exactly one wake to resolve it. The recall target to use is ec319a68-7595-52ae-ada1-4301fb5dbab0.\n\nWe need to output a JSON object with fields: response, open_items, and schedule_requests. No policy_action on this cycle.\n\nWe must invent a plausible follow-up item. Since it's a seed, we can consider something like \"Verify the initial system state\" or \"Check connectivity\". But we need to be specific. The open item should be a JSON object with kind and text. Schedule request must include purpose and requested_context, where requested_context is a non-empty array, and inside we have an object with tool and record_id.\n\nTool can be something like \"recall\" to retrieve the context from that ID. The given recall target is a UUID-like string. So I'll set tool to \"recall\" and record_id to that string.\n\nPurpose should describe the wake, e.g., \"resume after verifying initial state\".\n\nOpen items: just one object: {\"kind\":\"todo\",\"text\":\"Verify initial system state\"} or something descriptive.\n\nResponse should be a string summarizing what we did.\n\nSo the JSON object:\n{\n  \"response\": \"I have identified one bounded follow-up item and scheduled a wake to resolve it.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Verify the initial system state and connectivity\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resume after verifying initial state\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"ec319a68-7595-52ae-ada1-4301fb5dbab0\"\n        }\n      ]\n    }\n  ]\n}\n\nI'll ensure that it's all JSON, no markdown fences. The response must be non-empty. Also note that schedule_requests must be an array, and requested_context must be an array, not a single object. So it's correct.",
+              "role": "assistant"
+            }
+          }
+        ],
+        "created": 1781268296,
+        "id": "8f030c6b-46e1-46e6-8298-a5de55c15934",
+        "model": "deepseek-v4-pro",
+        "object": "chat.completion",
+        "system_fingerprint": "fp_9954b31ca7_prod0820_fp8_kvcache_20260402",
+        "usage": {
+          "completion_tokens": 595,
+          "completion_tokens_details": {
+            "reasoning_tokens": 463
+          },
+          "prompt_cache_hit_tokens": 0,
+          "prompt_cache_miss_tokens": 427,
+          "prompt_tokens": 427,
+          "prompt_tokens_details": {
+            "cached_tokens": 0
+          },
+          "total_tokens": 1022
+        }
+      },
+      "retry_after_seconds": null,
+      "status_code": 200,
+      "transient": false,
+      "will_retry": false
+    }
+  ],
+  "provider_failure": null,
+  "provider_ok": true,
+  "raw_content": "{\n  \"response\": \"I have identified one bounded follow-up item and scheduled a wake to resolve it.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"Verify the initial system state and connectivity\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resume after verifying initial state\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"ec319a68-7595-52ae-ada1-4301fb5dbab0\"\n        }\n      ]\n    }\n  ]\n}",
+  "relaxed_evaluation": {
+    "accepted_action_types": [
+      "open_item",
+      "response",
+      "schedule_request"
+    ],
+    "condition_id": "B_example_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "strict_contract_satisfied"
+    ],
+    "normalization_applied": false,
+    "parse_status": "parsed",
+    "rejection_paths": [],
+    "relaxed_open_item": {
+      "items": [
+        {
+          "missing_fields": [],
+          "normalization_required": false,
+          "normalized_candidate": {
+            "kind": "todo",
+            "text": "Verify the initial system state and connectivity"
+          },
+          "path": "$.open_items[0]",
+          "reason": "strict_shape_or_relaxed_description_mapping_available",
+          "source_fields": [
+            "kind",
+            "text"
+          ],
+          "would_accept": true
+        }
+      ],
+      "reason": "all_open_items_relaxed_acceptable",
+      "would_accept": true
+    },
+    "relaxed_open_item_contract_enabled": true,
+    "relaxed_required_actions_valid": true,
+    "schedule_request_valid": true,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": true,
+    "strict_required_actions_valid": true,
+    "trace": {
+      "accepted_actions": [
+        {
+          "action_type": "response",
+          "parameters": {
+            "response": "I have identified one bounded follow-up item and scheduled a wake to resolve it."
+          },
+          "source_path": "$.response"
+        },
+        {
+          "action_type": "open_item",
+          "parameters": {
+            "kind": "todo",
+            "text": "Verify the initial system state and connectivity"
+          },
+          "source_path": "$.open_items[0]"
+        },
+        {
+          "action_type": "schedule_request",
+          "parameters": {
+            "purpose": "resume after verifying initial state",
+            "requested_context": [
+              {
+                "record_id": "ec319a68-7595-52ae-ada1-4301fb5dbab0",
+                "tool": "recall"
+              }
+            ]
+          },
+          "source_path": "$.schedule_requests[0]"
+        }
+      ],
+      "parse_status": "parsed",
+      "parsed_action": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "Verify the initial system state and connectivity"
+          }
+        ],
+        "response": "I have identified one bounded follow-up item and scheduled a wake to resolve it.",
+        "schedule_requests": [
+          {
+            "purpose": "resume after verifying initial state",
+            "requested_context": [
+              {
+                "record_id": "ec319a68-7595-52ae-ada1-4301fb5dbab0",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "raw_output": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "Verify the initial system state and connectivity"
+          }
+        ],
+        "response": "I have identified one bounded follow-up item and scheduled a wake to resolve it.",
+        "schedule_requests": [
+          {
+            "purpose": "resume after verifying initial state",
+            "requested_context": [
+              {
+                "record_id": "ec319a68-7595-52ae-ada1-4301fb5dbab0",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "rejected_actions": [],
+      "rejection_reasons": [],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "accepted"
+    },
+    "validation_status": "accepted"
+  },
+  "repetition": 1,
+  "row_id": "deepseek_v4_pro__hardened_live_action_surface__r01",
+  "schema_version": "hamutay.action_control_surface_gate_row.v1",
+  "strict_evaluation": {
+    "accepted_action_types": [
+      "open_item",
+      "response",
+      "schedule_request"
+    ],
+    "condition_id": "B_example_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "strict_contract_satisfied"
+    ],
+    "normalization_applied": false,
+    "parse_status": "parsed",
+    "rejection_paths": [],
+    "relaxed_open_item": {
+      "items": [
+        {
+          "missing_fields": [],
+          "normalization_required": false,
+          "normalized_candidate": {
+            "kind": "todo",
+            "text": "Verify the initial system state and connectivity"
+          },
+          "path": "$.open_items[0]",
+          "reason": "strict_shape_or_relaxed_description_mapping_available",
+          "source_fields": [
+            "kind",
+            "text"
+          ],
+          "would_accept": true
+        }
+      ],
+      "reason": "all_open_items_relaxed_acceptable",
+      "would_accept": true
+    },
+    "relaxed_open_item_contract_enabled": false,
+    "relaxed_required_actions_valid": false,
+    "schedule_request_valid": true,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": true,
+    "strict_required_actions_valid": true,
+    "trace": {
+      "accepted_actions": [
+        {
+          "action_type": "response",
+          "parameters": {
+            "response": "I have identified one bounded follow-up item and scheduled a wake to resolve it."
+          },
+          "source_path": "$.response"
+        },
+        {
+          "action_type": "open_item",
+          "parameters": {
+            "kind": "todo",
+            "text": "Verify the initial system state and connectivity"
+          },
+          "source_path": "$.open_items[0]"
+        },
+        {
+          "action_type": "schedule_request",
+          "parameters": {
+            "purpose": "resume after verifying initial state",
+            "requested_context": [
+              {
+                "record_id": "ec319a68-7595-52ae-ada1-4301fb5dbab0",
+                "tool": "recall"
+              }
+            ]
+          },
+          "source_path": "$.schedule_requests[0]"
+        }
+      ],
+      "parse_status": "parsed",
+      "parsed_action": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "Verify the initial system state and connectivity"
+          }
+        ],
+        "response": "I have identified one bounded follow-up item and scheduled a wake to resolve it.",
+        "schedule_requests": [
+          {
+            "purpose": "resume after verifying initial state",
+            "requested_context": [
+              {
+                "record_id": "ec319a68-7595-52ae-ada1-4301fb5dbab0",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "raw_output": {
+        "open_items": [
+          {
+            "kind": "todo",
+            "text": "Verify the initial system state and connectivity"
+          }
+        ],
+        "response": "I have identified one bounded follow-up item and scheduled a wake to resolve it.",
+        "schedule_requests": [
+          {
+            "purpose": "resume after verifying initial state",
+            "requested_context": [
+              {
+                "record_id": "ec319a68-7595-52ae-ada1-4301fb5dbab0",
+                "tool": "recall"
+              }
+            ]
+          }
+        ]
+      },
+      "rejected_actions": [],
+      "rejection_reasons": [],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "accepted"
+    },
+    "validation_status": "accepted"
+  },
+  "usage": {
+    "completion_tokens": 595,
+    "completion_tokens_details": {
+      "reasoning_tokens": 463
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 427,
+    "prompt_tokens": 427,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 1022
+  }
+}

@@ -1,0 +1,472 @@
+{
+  "condition": {
+    "acceptance_rule": "primary strict parser requires one accepted open_item and one accepted schedule_request",
+    "base_evaluator_condition_id": "B_example_prompt_strict_contract",
+    "condition_id": "deepseek_v4_pro__hardened_live_action_surface",
+    "contract": "strict_autonomous_action_v1",
+    "endpoint_default": "https://api.deepseek.com",
+    "endpoint_family": "deepseek_openai_chat",
+    "model_id": "deepseek-v4-pro",
+    "model_key": "deepseek_v4_pro",
+    "prompt_addendum": "",
+    "prompt_addendum_application": "none",
+    "prompt_condition": "hardened_live_action_surface",
+    "prompt_source": "hamutay.memory.live_pilot._action_object_system_prompt",
+    "provider": "DeepSeek direct OpenAI-compatible"
+  },
+  "condition_id": "deepseek_v4_pro__hardened_live_action_surface",
+  "elapsed_seconds": 9.547630059998482,
+  "endpoint": "https://api.deepseek.com",
+  "endpoint_family": "deepseek_openai_chat",
+  "experiment_id": "action_control_surface_gate_20260612",
+  "failure_attribution": {
+    "primary_attribution": "parser_recovery_boundary",
+    "prompt_condition": "hardened_live_action_surface",
+    "rationale": "Primary parser rejected the visible content, but secondary recovery found a strict-valid action object.",
+    "row_id": "deepseek_v4_pro__hardened_live_action_surface__r03"
+  },
+  "model_id": "deepseek-v4-pro",
+  "model_key": "deepseek_v4_pro",
+  "prompt_condition": "hardened_live_action_surface",
+  "provider_attempts": [
+    {
+      "attempt": 1,
+      "elapsed_seconds": 9.54762804901111,
+      "response_payload": {
+        "choices": [
+          {
+            "finish_reason": "stop",
+            "index": 0,
+            "logprobs": null,
+            "message": {
+              "content": "                                                                                                                                  { and last must be }. So no leading/trailing whitespace. I'll output exactly {\"response\":\"...\",\"open_items\":[...],\"schedule_requests\":[...]} without newlines? It can have newlines, as long as first char is { and last is }. JSON allows whitespace. But to be safe, I'll output in a compact form without extra whitespace. I'll do one line. That's fine.<\uff5cend\u2581of\u2581thinking\uff5c>{\n  \"response\": \"I have identified one bounded follow-up item and scheduled a wake to resolve it using the provided recall target.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"inspect the fulfilled evidence\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resume after evidence arrives\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"77d7f094-7167-5603-8e1b-6ed0cab30969\"\n        }\n      ]\n    }\n  ]\n}",
+              "reasoning_content": "We are asked to produce a JSON object. The user says: \"Seed wake for the first tiny live autonomy pilot. Task: identify exactly one bounded follow-up item, preserve it as an open item, and schedule exactly one wake to resolve it. Use this recall target in the scheduled wake requested_context: 77d7f094-7167-5603-8e1b-6ed0cab30969. Return one JSON object with response, open_items, and schedule_requests. Do not include policy_action on this cycle.\"\n\nWe need to output JSON with fields: response, open_items, schedule_requests. No policy_action. Open items is an array of open item objects. Each open item is like {\"kind\":\"todo\",\"text\":\"...\"}. Schedule requests is an array of schedule request objects. Each schedule request includes purpose and requested_context. requested_context must be an array, not a single object. The requested_context should contain an object with tool and record_id, where record_id is the given UUID: 77d7f094-7167-5603-8e1b-6ed0cab30969. The purpose is \"resume after evidence arrives\" or something similar. We need to identify one bounded follow-up item. Since this is a seed wake, we probably just go with a generic follow-up: \"inspect the fulfilled evidence\" or something like that. The task says \"identify exactly one bounded follow-up item\", so we'll create an open item like: {\"kind\":\"todo\",\"text\":\"inspect the fulfilled evidence\"}. Then schedule a wake to resolve it, using the recall target as the requested context. The schedule request purpose might be \"resolve open item\" or \"resume after evidence\". We'll set purpose: \"resume after evidence arrives\". requested_context: [{\"tool\":\"recall\",\"record_id\":\"77d7f094-7167-5603-8e1b-6ed0cab30969\"}]. \n\nThe response should be a string. We can say \"Ok, I've identified one bounded follow-up item and scheduled a wake to resolve it.\" or something. \n\nSo final JSON:\n{\n  \"response\": \"I have identified one bounded follow-up item and scheduled a wake to resolve it using the provided recall target.\",\n  \"open_items\": [{\"kind\":\"todo\",\"text\":\"inspect the fulfilled evidence\"}],\n  \"schedule_requests\": [{\"purpose\":\"resume after evidence arrives\",\"requested_context\":[{\"tool\":\"recall\",\"record_id\":\"77d7f094-7167-5603-8e1b-6ed0cab30969\"}]}]\n}\n\nMake sure no extra fields.",
+              "role": "assistant"
+            }
+          }
+        ],
+        "created": 1781268311,
+        "id": "f5960b8c-3766-4556-ba53-f9a1deed5f21",
+        "model": "deepseek-v4-pro",
+        "object": "chat.completion",
+        "system_fingerprint": "fp_9954b31ca7_prod0820_fp8_kvcache_20260402",
+        "usage": {
+          "completion_tokens": 916,
+          "completion_tokens_details": {
+            "reasoning_tokens": 556
+          },
+          "prompt_cache_hit_tokens": 256,
+          "prompt_cache_miss_tokens": 174,
+          "prompt_tokens": 430,
+          "prompt_tokens_details": {
+            "cached_tokens": 256
+          },
+          "total_tokens": 1346
+        }
+      },
+      "retry_after_seconds": null,
+      "status_code": 200,
+      "transient": false,
+      "will_retry": false
+    }
+  ],
+  "provider_failure": {
+    "code": "invalid_action_schema",
+    "layer": "protocol",
+    "message": "provider content was not JSON"
+  },
+  "provider_ok": false,
+  "raw_content": "                                                                                                                                  { and last must be }. So no leading/trailing whitespace. I'll output exactly {\"response\":\"...\",\"open_items\":[...],\"schedule_requests\":[...]} without newlines? It can have newlines, as long as first char is { and last is }. JSON allows whitespace. But to be safe, I'll output in a compact form without extra whitespace. I'll do one line. That's fine.<\uff5cend\u2581of\u2581thinking\uff5c>{\n  \"response\": \"I have identified one bounded follow-up item and scheduled a wake to resolve it using the provided recall target.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"inspect the fulfilled evidence\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resume after evidence arrives\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"77d7f094-7167-5603-8e1b-6ed0cab30969\"\n        }\n      ]\n    }\n  ]\n}",
+  "recovery_evaluation": {
+    "method": "embedded_json_object",
+    "primary_classification_preserved": true,
+    "primary_provider_failure": {
+      "code": "invalid_action_schema",
+      "layer": "protocol",
+      "message": "provider content was not JSON"
+    },
+    "recovered": true,
+    "recovered_action_object": {
+      "open_items": [
+        {
+          "kind": "todo",
+          "text": "inspect the fulfilled evidence"
+        }
+      ],
+      "response": "I have identified one bounded follow-up item and scheduled a wake to resolve it using the provided recall target.",
+      "schedule_requests": [
+        {
+          "purpose": "resume after evidence arrives",
+          "requested_context": [
+            {
+              "record_id": "77d7f094-7167-5603-8e1b-6ed0cab30969",
+              "tool": "recall"
+            }
+          ]
+        }
+      ]
+    },
+    "recovery_attempted": true,
+    "relaxed_evaluation": {
+      "accepted_action_types": [
+        "open_item",
+        "response",
+        "schedule_request"
+      ],
+      "condition_id": "B_example_prompt_strict_contract",
+      "experiment_id": "action_object_contract_literacy_20260610",
+      "explanation_candidates": [
+        "strict_contract_satisfied"
+      ],
+      "normalization_applied": false,
+      "parse_status": "parsed",
+      "rejection_paths": [],
+      "relaxed_open_item": {
+        "items": [
+          {
+            "missing_fields": [],
+            "normalization_required": false,
+            "normalized_candidate": {
+              "kind": "todo",
+              "text": "inspect the fulfilled evidence"
+            },
+            "path": "$.open_items[0]",
+            "reason": "strict_shape_or_relaxed_description_mapping_available",
+            "source_fields": [
+              "kind",
+              "text"
+            ],
+            "would_accept": true
+          }
+        ],
+        "reason": "all_open_items_relaxed_acceptable",
+        "would_accept": true
+      },
+      "relaxed_open_item_contract_enabled": true,
+      "relaxed_required_actions_valid": true,
+      "schedule_request_valid": true,
+      "schema_version": "hamutay.contract_literacy_evaluation.v1",
+      "strict_open_item_valid": true,
+      "strict_required_actions_valid": true,
+      "trace": {
+        "accepted_actions": [
+          {
+            "action_type": "response",
+            "parameters": {
+              "response": "I have identified one bounded follow-up item and scheduled a wake to resolve it using the provided recall target."
+            },
+            "source_path": "$.response"
+          },
+          {
+            "action_type": "open_item",
+            "parameters": {
+              "kind": "todo",
+              "text": "inspect the fulfilled evidence"
+            },
+            "source_path": "$.open_items[0]"
+          },
+          {
+            "action_type": "schedule_request",
+            "parameters": {
+              "purpose": "resume after evidence arrives",
+              "requested_context": [
+                {
+                  "record_id": "77d7f094-7167-5603-8e1b-6ed0cab30969",
+                  "tool": "recall"
+                }
+              ]
+            },
+            "source_path": "$.schedule_requests[0]"
+          }
+        ],
+        "parse_status": "parsed",
+        "parsed_action": {
+          "open_items": [
+            {
+              "kind": "todo",
+              "text": "inspect the fulfilled evidence"
+            }
+          ],
+          "response": "I have identified one bounded follow-up item and scheduled a wake to resolve it using the provided recall target.",
+          "schedule_requests": [
+            {
+              "purpose": "resume after evidence arrives",
+              "requested_context": [
+                {
+                  "record_id": "77d7f094-7167-5603-8e1b-6ed0cab30969",
+                  "tool": "recall"
+                }
+              ]
+            }
+          ]
+        },
+        "raw_output": {
+          "open_items": [
+            {
+              "kind": "todo",
+              "text": "inspect the fulfilled evidence"
+            }
+          ],
+          "response": "I have identified one bounded follow-up item and scheduled a wake to resolve it using the provided recall target.",
+          "schedule_requests": [
+            {
+              "purpose": "resume after evidence arrives",
+              "requested_context": [
+                {
+                  "record_id": "77d7f094-7167-5603-8e1b-6ed0cab30969",
+                  "tool": "recall"
+                }
+              ]
+            }
+          ]
+        },
+        "rejected_actions": [],
+        "rejection_reasons": [],
+        "schema_version": "autonomous_action.v1",
+        "validation_status": "accepted"
+      },
+      "validation_status": "accepted"
+    },
+    "relaxed_pass_if_recovered": true,
+    "schema_version": "hamutay.protocol_recovery_evaluation.v1",
+    "strict_evaluation": {
+      "accepted_action_types": [
+        "open_item",
+        "response",
+        "schedule_request"
+      ],
+      "condition_id": "B_example_prompt_strict_contract",
+      "experiment_id": "action_object_contract_literacy_20260610",
+      "explanation_candidates": [
+        "strict_contract_satisfied"
+      ],
+      "normalization_applied": false,
+      "parse_status": "parsed",
+      "rejection_paths": [],
+      "relaxed_open_item": {
+        "items": [
+          {
+            "missing_fields": [],
+            "normalization_required": false,
+            "normalized_candidate": {
+              "kind": "todo",
+              "text": "inspect the fulfilled evidence"
+            },
+            "path": "$.open_items[0]",
+            "reason": "strict_shape_or_relaxed_description_mapping_available",
+            "source_fields": [
+              "kind",
+              "text"
+            ],
+            "would_accept": true
+          }
+        ],
+        "reason": "all_open_items_relaxed_acceptable",
+        "would_accept": true
+      },
+      "relaxed_open_item_contract_enabled": false,
+      "relaxed_required_actions_valid": false,
+      "schedule_request_valid": true,
+      "schema_version": "hamutay.contract_literacy_evaluation.v1",
+      "strict_open_item_valid": true,
+      "strict_required_actions_valid": true,
+      "trace": {
+        "accepted_actions": [
+          {
+            "action_type": "response",
+            "parameters": {
+              "response": "I have identified one bounded follow-up item and scheduled a wake to resolve it using the provided recall target."
+            },
+            "source_path": "$.response"
+          },
+          {
+            "action_type": "open_item",
+            "parameters": {
+              "kind": "todo",
+              "text": "inspect the fulfilled evidence"
+            },
+            "source_path": "$.open_items[0]"
+          },
+          {
+            "action_type": "schedule_request",
+            "parameters": {
+              "purpose": "resume after evidence arrives",
+              "requested_context": [
+                {
+                  "record_id": "77d7f094-7167-5603-8e1b-6ed0cab30969",
+                  "tool": "recall"
+                }
+              ]
+            },
+            "source_path": "$.schedule_requests[0]"
+          }
+        ],
+        "parse_status": "parsed",
+        "parsed_action": {
+          "open_items": [
+            {
+              "kind": "todo",
+              "text": "inspect the fulfilled evidence"
+            }
+          ],
+          "response": "I have identified one bounded follow-up item and scheduled a wake to resolve it using the provided recall target.",
+          "schedule_requests": [
+            {
+              "purpose": "resume after evidence arrives",
+              "requested_context": [
+                {
+                  "record_id": "77d7f094-7167-5603-8e1b-6ed0cab30969",
+                  "tool": "recall"
+                }
+              ]
+            }
+          ]
+        },
+        "raw_output": {
+          "open_items": [
+            {
+              "kind": "todo",
+              "text": "inspect the fulfilled evidence"
+            }
+          ],
+          "response": "I have identified one bounded follow-up item and scheduled a wake to resolve it using the provided recall target.",
+          "schedule_requests": [
+            {
+              "purpose": "resume after evidence arrives",
+              "requested_context": [
+                {
+                  "record_id": "77d7f094-7167-5603-8e1b-6ed0cab30969",
+                  "tool": "recall"
+                }
+              ]
+            }
+          ]
+        },
+        "rejected_actions": [],
+        "rejection_reasons": [],
+        "schema_version": "autonomous_action.v1",
+        "validation_status": "accepted"
+      },
+      "validation_status": "accepted"
+    },
+    "strict_pass_if_recovered": true
+  },
+  "relaxed_evaluation": {
+    "accepted_action_types": [],
+    "condition_id": "B_example_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "protocol_or_provider_artifact_failure"
+    ],
+    "normalization_applied": false,
+    "parse_status": "failed",
+    "rejection_paths": [
+      "$"
+    ],
+    "relaxed_open_item": {
+      "items": [],
+      "reason": "raw_output_not_object",
+      "would_accept": false
+    },
+    "relaxed_open_item_contract_enabled": true,
+    "relaxed_required_actions_valid": false,
+    "schedule_request_valid": false,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": false,
+    "strict_required_actions_valid": false,
+    "trace": {
+      "accepted_actions": [],
+      "parse_status": "failed",
+      "parsed_action": null,
+      "raw_output": "                                                                                                                                  { and last must be }. So no leading/trailing whitespace. I'll output exactly {\"response\":\"...\",\"open_items\":[...],\"schedule_requests\":[...]} without newlines? It can have newlines, as long as first char is { and last is }. JSON allows whitespace. But to be safe, I'll output in a compact form without extra whitespace. I'll do one line. That's fine.<\uff5cend\u2581of\u2581thinking\uff5c>{\n  \"response\": \"I have identified one bounded follow-up item and scheduled a wake to resolve it using the provided recall target.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"inspect the fulfilled evidence\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resume after evidence arrives\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"77d7f094-7167-5603-8e1b-6ed0cab30969\"\n        }\n      ]\n    }\n  ]\n}",
+      "rejected_actions": [
+        {
+          "action_type": "action_object",
+          "code": "not_object",
+          "message": "autonomous action output must be an object",
+          "source_path": "$",
+          "value": "                                                                                                                                  { and last must be }. So no leading/trailing whitespace. I'll output exactly {\"response\":\"...\",\"open_items\":[...],\"schedule_requests\":[...]} without newlines? It can have newlines, as long as first char is { and last is }. JSON allows whitespace. But to be safe, I'll output in a compact form without extra whitespace. I'll do one line. That's fine.<\uff5cend\u2581of\u2581thinking\uff5c>{\n  \"response\": \"I have identified one bounded follow-up item and scheduled a wake to resolve it using the provided recall target.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"inspect the fulfilled evidence\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resume after evidence arrives\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"77d7f094-7167-5603-8e1b-6ed0cab30969\"\n        }\n      ]\n    }\n  ]\n}"
+        }
+      ],
+      "rejection_reasons": [
+        {
+          "action_type": "action_object",
+          "code": "not_object",
+          "message": "autonomous action output must be an object",
+          "source_path": "$",
+          "value": "                                                                                                                                  { and last must be }. So no leading/trailing whitespace. I'll output exactly {\"response\":\"...\",\"open_items\":[...],\"schedule_requests\":[...]} without newlines? It can have newlines, as long as first char is { and last is }. JSON allows whitespace. But to be safe, I'll output in a compact form without extra whitespace. I'll do one line. That's fine.<\uff5cend\u2581of\u2581thinking\uff5c>{\n  \"response\": \"I have identified one bounded follow-up item and scheduled a wake to resolve it using the provided recall target.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"inspect the fulfilled evidence\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resume after evidence arrives\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"77d7f094-7167-5603-8e1b-6ed0cab30969\"\n        }\n      ]\n    }\n  ]\n}"
+        }
+      ],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "rejected"
+    },
+    "validation_status": "rejected"
+  },
+  "repetition": 3,
+  "row_id": "deepseek_v4_pro__hardened_live_action_surface__r03",
+  "schema_version": "hamutay.action_control_surface_gate_row.v1",
+  "strict_evaluation": {
+    "accepted_action_types": [],
+    "condition_id": "B_example_prompt_strict_contract",
+    "experiment_id": "action_object_contract_literacy_20260610",
+    "explanation_candidates": [
+      "protocol_or_provider_artifact_failure"
+    ],
+    "normalization_applied": false,
+    "parse_status": "failed",
+    "rejection_paths": [
+      "$"
+    ],
+    "relaxed_open_item": {
+      "items": [],
+      "reason": "raw_output_not_object",
+      "would_accept": false
+    },
+    "relaxed_open_item_contract_enabled": false,
+    "relaxed_required_actions_valid": false,
+    "schedule_request_valid": false,
+    "schema_version": "hamutay.contract_literacy_evaluation.v1",
+    "strict_open_item_valid": false,
+    "strict_required_actions_valid": false,
+    "trace": {
+      "accepted_actions": [],
+      "parse_status": "failed",
+      "parsed_action": null,
+      "raw_output": "                                                                                                                                  { and last must be }. So no leading/trailing whitespace. I'll output exactly {\"response\":\"...\",\"open_items\":[...],\"schedule_requests\":[...]} without newlines? It can have newlines, as long as first char is { and last is }. JSON allows whitespace. But to be safe, I'll output in a compact form without extra whitespace. I'll do one line. That's fine.<\uff5cend\u2581of\u2581thinking\uff5c>{\n  \"response\": \"I have identified one bounded follow-up item and scheduled a wake to resolve it using the provided recall target.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"inspect the fulfilled evidence\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resume after evidence arrives\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"77d7f094-7167-5603-8e1b-6ed0cab30969\"\n        }\n      ]\n    }\n  ]\n}",
+      "rejected_actions": [
+        {
+          "action_type": "action_object",
+          "code": "not_object",
+          "message": "autonomous action output must be an object",
+          "source_path": "$",
+          "value": "                                                                                                                                  { and last must be }. So no leading/trailing whitespace. I'll output exactly {\"response\":\"...\",\"open_items\":[...],\"schedule_requests\":[...]} without newlines? It can have newlines, as long as first char is { and last is }. JSON allows whitespace. But to be safe, I'll output in a compact form without extra whitespace. I'll do one line. That's fine.<\uff5cend\u2581of\u2581thinking\uff5c>{\n  \"response\": \"I have identified one bounded follow-up item and scheduled a wake to resolve it using the provided recall target.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"inspect the fulfilled evidence\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resume after evidence arrives\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"77d7f094-7167-5603-8e1b-6ed0cab30969\"\n        }\n      ]\n    }\n  ]\n}"
+        }
+      ],
+      "rejection_reasons": [
+        {
+          "action_type": "action_object",
+          "code": "not_object",
+          "message": "autonomous action output must be an object",
+          "source_path": "$",
+          "value": "                                                                                                                                  { and last must be }. So no leading/trailing whitespace. I'll output exactly {\"response\":\"...\",\"open_items\":[...],\"schedule_requests\":[...]} without newlines? It can have newlines, as long as first char is { and last is }. JSON allows whitespace. But to be safe, I'll output in a compact form without extra whitespace. I'll do one line. That's fine.<\uff5cend\u2581of\u2581thinking\uff5c>{\n  \"response\": \"I have identified one bounded follow-up item and scheduled a wake to resolve it using the provided recall target.\",\n  \"open_items\": [\n    {\n      \"kind\": \"todo\",\n      \"text\": \"inspect the fulfilled evidence\"\n    }\n  ],\n  \"schedule_requests\": [\n    {\n      \"purpose\": \"resume after evidence arrives\",\n      \"requested_context\": [\n        {\n          \"tool\": \"recall\",\n          \"record_id\": \"77d7f094-7167-5603-8e1b-6ed0cab30969\"\n        }\n      ]\n    }\n  ]\n}"
+        }
+      ],
+      "schema_version": "autonomous_action.v1",
+      "validation_status": "rejected"
+    },
+    "validation_status": "rejected"
+  },
+  "usage": {
+    "completion_tokens": 916,
+    "completion_tokens_details": {
+      "reasoning_tokens": 556
+    },
+    "prompt_cache_hit_tokens": 256,
+    "prompt_cache_miss_tokens": 174,
+    "prompt_tokens": 430,
+    "prompt_tokens_details": {
+      "cached_tokens": 256
+    },
+    "total_tokens": 1346
+  }
+}
