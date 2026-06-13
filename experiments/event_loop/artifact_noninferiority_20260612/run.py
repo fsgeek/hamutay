@@ -1183,7 +1183,7 @@ def run_panel(
     model: str,
 ) -> JsonDict:
     if output_root.exists() and overwrite:
-        shutil.rmtree(output_root)
+        clear_generated_outputs(output_root)
     output_root.mkdir(parents=True, exist_ok=True)
     rows: list[JsonDict] = []
     failures: list[JsonDict] = []
@@ -1227,6 +1227,17 @@ def run_panel(
     }
     _write_json(output_root / "results.json", result)
     return result
+
+
+def clear_generated_outputs(output_root: Path) -> None:
+    """Remove generated panel artifacts while preserving load-bearing files."""
+
+    for relative in ("results.json", "rows", "review_packet", "analysis.md"):
+        path = output_root / relative
+        if path.is_dir():
+            shutil.rmtree(path)
+        elif path.exists():
+            path.unlink()
 
 
 def main(argv: list[str] | None = None) -> int:

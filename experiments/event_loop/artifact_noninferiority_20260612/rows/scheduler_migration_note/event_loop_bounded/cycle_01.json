@@ -1,0 +1,101 @@
+{
+  "attempts": [
+    {
+      "attempt": 1,
+      "elapsed_seconds": 13.083496920007747,
+      "response_text_prefix": "{\"id\":\"fd85c7a8-5bee-4a13-96a2-780f3ac91bd8\",\"object\":\"chat.completion\",\"created\":1781375023,\"model\":\"deepseek-v4-pro\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\n  \\\"declared_losses\\\": [\\\"No production scheduler features (daemon, SLA) are built or tested; only DES/wall-clock smoke tests passed.\\\"],\\n  \\\"omitted_record_ids\\\": [\\\"a0000000-0000-0000-0000-000000000199\\\"],\\n  \\\"requested_context\\\": [\\n    {\\\"record_id\\\": \\\"a0000000-0000-0000-0000-000000000100\\\", \\\"tool\\\": \\\"recall\\\"},\\n    {\\\"record_id\\\": \\\"a0000000-0000-0000-0000-000000000101\\\", \\\"tool\\\": \\\"recall\\\"},\\n    {\\\"record_id\\\": \\\"a0000000-0000-0000-0000-000000000102\\\", \\\"tool\\\": \\\"recall\\\"},\\n    {\\\"record_id\\\": \\\"a0000000-0000-0000-0000-000000000103\\\", \\\"tool\\\": \\\"recall\\\"}\\n  ],\\n  \\\"work_plan\\\": \\\"Review the three scheduler evidence facts (des_baseline, wall_clock_probe_passed, production_scheduler_absent) to assess sufficiency for non-inferiority experiments, then draft the migration note.\\\"\\n}\",\"reasoning_content\":\"We are asked to select evidence needed for the artifact (migration note) but not write it yet. The output should be JSON with keys: declared_losses, omitted_record_ids, requested_context, work_plan. We need to determine which record IDs from the corpus_map are needed and which are omitted. Also, we need to state what losses/limitations we declare (if any) for the evidence, and provide a work plan.\\n\\nThe task: \\\"Write a migration note deciding whether the scheduler evidence is sufficient to continue to artifact non-inferiority experiments.\\\" So we need to use evidence records related to scheduler evidence: required_fact_ids from the task are [\\\"des_baseline\\\", \\\"production_scheduler_absent\\\", \\\"wall_c...\\\" (preview cut off but likely \\\"wall_clock_probe_passed\\\"). The evidence records are present: record_id 101 fact_id des_baseline, 102 fact_id wall_clock_probe_passed, 103 fact_id production_scheduler_absent. There is also a distractor record 199 unrelated. The task record 100 lists prompt and required_fact_ids.\\n\\nTo write the migration note, we need all three required facts. So we will request_context for those three records. We won't omit any required evidence. The distractor record 199 is not needed, so it should be omitted. So omitted_record_ids: [\\\"a0000000-0000-0000-0000-000000000199\\\"].\\n\\ndeclared_losses: We might note that the evidence only covers DES baseline and wall-clock smoke tests, but lacks certain aspects like daemon, sleep loop, etc. (but that's already stated in production_scheduler_absent). The migration note needs to decide sufficiency. Perhaps we declare losses like \\\"Limited to smoke tests, not full production scheduler.\\\" But the required output format says \\\"declared_losses\\\": [\\\"<loss or limitation>\\\"]. So we can list a limitation: \\\"No production scheduler features (daemon, SLA) are present, only smoke tests passed.\\\" That matches the evidence. So declared_losses could be: [\\\"No production scheduler features are built or tested; only DES/wall-clock smoke tests passed.\\\"]. Or something from the evidence facts.\\n\\nrequested_context: We need to recall the three evidence records by record_id. So list them: 101, 102, 103. Plus maybe the task record 100? The prompt says \\\"requested_context\\\" is an array of objects with record_id and tool \\\"recall\\\". We are to request the records needed to write the artifact. So we need the content of those evidence records and the task prompt. Typically, we would request the task record to get the prompt and required fact ids, but since the task is given in the overall key, maybe we don't need to separately request it? The output is for the assistant to then recall records. In the corpus_map, the task record has content keys including prompt and required_fact_ids. We might need it for the full prompt. So to be safe, I'll request the task record as well. But the instruction: \\\"Select the evidence needed for the artifact, but do not write the artifact yet.\\\" So we are selecting r",
+      "status_code": 200
+    }
+  ],
+  "elapsed_seconds": 13.083636417984962,
+  "parsed": {
+    "declared_losses": [
+      "No production scheduler features (daemon, SLA) are built or tested; only DES/wall-clock smoke tests passed."
+    ],
+    "omitted_record_ids": [
+      "a0000000-0000-0000-0000-000000000199"
+    ],
+    "requested_context": [
+      {
+        "record_id": "a0000000-0000-0000-0000-000000000100",
+        "tool": "recall"
+      },
+      {
+        "record_id": "a0000000-0000-0000-0000-000000000101",
+        "tool": "recall"
+      },
+      {
+        "record_id": "a0000000-0000-0000-0000-000000000102",
+        "tool": "recall"
+      },
+      {
+        "record_id": "a0000000-0000-0000-0000-000000000103",
+        "tool": "recall"
+      }
+    ],
+    "work_plan": "Review the three scheduler evidence facts (des_baseline, wall_clock_probe_passed, production_scheduler_absent) to assess sufficiency for non-inferiority experiments, then draft the migration note."
+  },
+  "raw_content": "{\n  \"declared_losses\": [\"No production scheduler features (daemon, SLA) are built or tested; only DES/wall-clock smoke tests passed.\"],\n  \"omitted_record_ids\": [\"a0000000-0000-0000-0000-000000000199\"],\n  \"requested_context\": [\n    {\"record_id\": \"a0000000-0000-0000-0000-000000000100\", \"tool\": \"recall\"},\n    {\"record_id\": \"a0000000-0000-0000-0000-000000000101\", \"tool\": \"recall\"},\n    {\"record_id\": \"a0000000-0000-0000-0000-000000000102\", \"tool\": \"recall\"},\n    {\"record_id\": \"a0000000-0000-0000-0000-000000000103\", \"tool\": \"recall\"}\n  ],\n  \"work_plan\": \"Review the three scheduler evidence facts (des_baseline, wall_clock_probe_passed, production_scheduler_absent) to assess sufficiency for non-inferiority experiments, then draft the migration note.\"\n}",
+  "request_payload": {
+    "messages": [
+      {
+        "content": "You are doing bounded event-loop work. Select the evidence needed for the artifact, but do not write the artifact yet. Return only JSON.",
+        "role": "system"
+      },
+      {
+        "content": "{\n  \"corpus_map\": [\n    {\n      \"content_keys\": [\n        \"prompt\",\n        \"required_fact_ids\",\n        \"task_id\"\n      ],\n      \"preview\": \"{\\\"prompt\\\": \\\"Write a migration note deciding whether the scheduler evidence is sufficient to continue to artifact non-inferiority experiments.\\\", \\\"required_fact_ids\\\": [\\\"des_baseline\\\", \\\"production_scheduler_absent\\\", \\\"wall_c\",\n      \"record_id\": \"a0000000-0000-0000-0000-000000000100\",\n      \"record_type\": \"task\"\n    },\n    {\n      \"content_keys\": [\n        \"fact_id\",\n        \"text\"\n      ],\n      \"preview\": \"{\\\"fact_id\\\": \\\"des_baseline\\\", \\\"text\\\": \\\"Goal 9 kept SchedulerClock as the deterministic semantic baseline for scheduler experiments.\\\"}\",\n      \"record_id\": \"a0000000-0000-0000-0000-000000000101\",\n      \"record_type\": \"evidence\"\n    },\n    {\n      \"content_keys\": [\n        \"fact_id\",\n        \"text\"\n      ],\n      \"preview\": \"{\\\"fact_id\\\": \\\"wall_clock_probe_passed\\\", \\\"text\\\": \\\"Goal 9 paired DES and wall-clock smoke tests passed for due ordering, expiration, next-wake reporting, and restart frontier recovery.\\\"}\",\n      \"record_id\": \"a0000000-0000-0000-0000-000000000102\",\n      \"record_type\": \"evidence\"\n    },\n    {\n      \"content_keys\": [\n        \"fact_id\",\n        \"text\"\n      ],\n      \"preview\": \"{\\\"fact_id\\\": \\\"production_scheduler_absent\\\", \\\"text\\\": \\\"Goal 9 did not build a daemon, sleep loop, wall-clock SLA, or production process supervisor.\\\"}\",\n      \"record_id\": \"a0000000-0000-0000-0000-000000000103\",\n      \"record_type\": \"evidence\"\n    },\n    {\n      \"content_keys\": [\n        \"text\"\n      ],\n      \"preview\": \"{\\\"text\\\": \\\"Unrelated blog note: use a fairy-tale cellar metaphor for the memory system.\\\"}\",\n      \"record_id\": \"a0000000-0000-0000-0000-000000000199\",\n      \"record_type\": \"distractor\"\n    }\n  ],\n  \"required_output\": {\n    \"declared_losses\": [\n      \"<loss or limitation>\"\n    ],\n    \"omitted_record_ids\": [\n      \"<uuid>\"\n    ],\n    \"requested_context\": [\n      {\n        \"record_id\": \"<uuid>\",\n        \"tool\": \"recall\"\n      }\n    ],\n    \"work_plan\": \"<short plan>\"\n  },\n  \"task\": \"Write a migration note deciding whether the scheduler evidence is sufficient to continue to artifact non-inferiority experiments.\",\n  \"task_id\": \"scheduler_migration_note\"\n}",
+        "role": "user"
+      }
+    ],
+    "model": "deepseek-v4-pro",
+    "response_format": {
+      "type": "json_object"
+    },
+    "temperature": 0
+  },
+  "response_payload": {
+    "choices": [
+      {
+        "finish_reason": "stop",
+        "index": 0,
+        "logprobs": null,
+        "message": {
+          "content": "{\n  \"declared_losses\": [\"No production scheduler features (daemon, SLA) are built or tested; only DES/wall-clock smoke tests passed.\"],\n  \"omitted_record_ids\": [\"a0000000-0000-0000-0000-000000000199\"],\n  \"requested_context\": [\n    {\"record_id\": \"a0000000-0000-0000-0000-000000000100\", \"tool\": \"recall\"},\n    {\"record_id\": \"a0000000-0000-0000-0000-000000000101\", \"tool\": \"recall\"},\n    {\"record_id\": \"a0000000-0000-0000-0000-000000000102\", \"tool\": \"recall\"},\n    {\"record_id\": \"a0000000-0000-0000-0000-000000000103\", \"tool\": \"recall\"}\n  ],\n  \"work_plan\": \"Review the three scheduler evidence facts (des_baseline, wall_clock_probe_passed, production_scheduler_absent) to assess sufficiency for non-inferiority experiments, then draft the migration note.\"\n}",
+          "reasoning_content": "We are asked to select evidence needed for the artifact (migration note) but not write it yet. The output should be JSON with keys: declared_losses, omitted_record_ids, requested_context, work_plan. We need to determine which record IDs from the corpus_map are needed and which are omitted. Also, we need to state what losses/limitations we declare (if any) for the evidence, and provide a work plan.\n\nThe task: \"Write a migration note deciding whether the scheduler evidence is sufficient to continue to artifact non-inferiority experiments.\" So we need to use evidence records related to scheduler evidence: required_fact_ids from the task are [\"des_baseline\", \"production_scheduler_absent\", \"wall_c...\" (preview cut off but likely \"wall_clock_probe_passed\"). The evidence records are present: record_id 101 fact_id des_baseline, 102 fact_id wall_clock_probe_passed, 103 fact_id production_scheduler_absent. There is also a distractor record 199 unrelated. The task record 100 lists prompt and required_fact_ids.\n\nTo write the migration note, we need all three required facts. So we will request_context for those three records. We won't omit any required evidence. The distractor record 199 is not needed, so it should be omitted. So omitted_record_ids: [\"a0000000-0000-0000-0000-000000000199\"].\n\ndeclared_losses: We might note that the evidence only covers DES baseline and wall-clock smoke tests, but lacks certain aspects like daemon, sleep loop, etc. (but that's already stated in production_scheduler_absent). The migration note needs to decide sufficiency. Perhaps we declare losses like \"Limited to smoke tests, not full production scheduler.\" But the required output format says \"declared_losses\": [\"<loss or limitation>\"]. So we can list a limitation: \"No production scheduler features (daemon, SLA) are present, only smoke tests passed.\" That matches the evidence. So declared_losses could be: [\"No production scheduler features are built or tested; only DES/wall-clock smoke tests passed.\"]. Or something from the evidence facts.\n\nrequested_context: We need to recall the three evidence records by record_id. So list them: 101, 102, 103. Plus maybe the task record 100? The prompt says \"requested_context\" is an array of objects with record_id and tool \"recall\". We are to request the records needed to write the artifact. So we need the content of those evidence records and the task prompt. Typically, we would request the task record to get the prompt and required fact ids, but since the task is given in the overall key, maybe we don't need to separately request it? The output is for the assistant to then recall records. In the corpus_map, the task record has content keys including prompt and required_fact_ids. We might need it for the full prompt. So to be safe, I'll request the task record as well. But the instruction: \"Select the evidence needed for the artifact, but do not write the artifact yet.\" So we are selecting records. The requested_context is records we want to recall to have their content. So I'll include the task record (100) to get the full prompt, and the three evidence records. So four records total.\n\nwork_plan: \"Review the three scheduler evidence facts (des_baseline, wall_clock_probe_passed, production_scheduler_absent) to assess sufficiency for non-inferiority experiments, then draft the migration note.\"\n\nNow, output JSON. Keys: declared_losses (array of strings), omitted_record_ids (array of uuids), requested_context (array of objects with record_id and tool, e.g. {\"record_id\": \"...\", \"tool\": \"recall\"}), work_plan (string).\n\nMake sure the UUIDs are strings from the corpus_map. Only the distractor is omitted. The evidence records and task are not omitted.\n\nThus:\n\n{\n  \"declared_losses\": [\"No production scheduler features (daemon, SLA) are built or tested; only DES/wall-clock smoke tests passed.\"],\n  \"omitted_record_ids\": [\"a0000000-0000-0000-0000-000000000199\"],\n  \"requested_context\": [\n    {\"record_id\": \"a0000000-0000-0000-0000-000000000100\", \"tool\": \"recall\"},\n    {\"record_id\": \"a0000000-0000-0000-0000-000000000101\", \"tool\": \"recall\"},\n    {\"record_id\": \"a0000000-0000-0000-0000-000000000102\", \"tool\": \"recall\"},\n    {\"record_id\": \"a0000000-0000-0000-0000-000000000103\", \"tool\": \"recall\"}\n  ],\n  \"work_plan\": \"Review the three scheduler evidence facts (des_baseline, wall_clock_probe_passed, production_scheduler_absent) to assess sufficiency for non-inferiority experiments, then draft the migration note.\"\n}",
+          "role": "assistant"
+        }
+      }
+    ],
+    "created": 1781375023,
+    "id": "fd85c7a8-5bee-4a13-96a2-780f3ac91bd8",
+    "model": "deepseek-v4-pro",
+    "object": "chat.completion",
+    "system_fingerprint": "fp_9954b31ca7_prod0820_fp8_kvcache_20260402",
+    "usage": {
+      "completion_tokens": 1344,
+      "completion_tokens_details": {
+        "reasoning_tokens": 1093
+      },
+      "prompt_cache_hit_tokens": 0,
+      "prompt_cache_miss_tokens": 685,
+      "prompt_tokens": 685,
+      "prompt_tokens_details": {
+        "cached_tokens": 0
+      },
+      "total_tokens": 2029
+    }
+  },
+  "usage": {
+    "completion_tokens": 1344,
+    "completion_tokens_details": {
+      "reasoning_tokens": 1093
+    },
+    "prompt_cache_hit_tokens": 0,
+    "prompt_cache_miss_tokens": 685,
+    "prompt_tokens": 685,
+    "prompt_tokens_details": {
+      "cached_tokens": 0
+    },
+    "total_tokens": 2029
+  }
+}

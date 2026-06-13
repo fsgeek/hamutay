@@ -86,3 +86,26 @@ def test_dry_run_preserves_traces_scores_and_review_packet(tmp_path):
         assert (
             tmp_path / "rows" / task_id / "event_loop_bounded" / "cycle_02.json"
         ).exists()
+
+
+def test_overwrite_preserves_load_bearing_methodology_files(tmp_path):
+    module = _load_module()
+    (tmp_path / "PRE_REGISTRATION.md").write_text("locked method\n")
+    (tmp_path / "run.py").write_text("runner\n")
+    (tmp_path / "results.json").write_text("{}\n")
+    (tmp_path / "rows").mkdir()
+    (tmp_path / "rows" / "stale.json").write_text("{}\n")
+
+    module.run_panel(
+        output_root=tmp_path,
+        dry_run=True,
+        overwrite=True,
+        api_key=None,
+        endpoint=module.DEFAULT_ENDPOINT,
+        model=module.DEFAULT_MODEL,
+    )
+
+    assert (tmp_path / "PRE_REGISTRATION.md").read_text() == "locked method\n"
+    assert (tmp_path / "run.py").read_text() == "runner\n"
+    assert (tmp_path / "results.json").exists()
+    assert not (tmp_path / "rows" / "stale.json").exists()

@@ -692,27 +692,45 @@ Recommended goal-tool prompt:
 Preregister and run an artifact non-inferiority panel comparing event-loop bounded work against direct one-shot work. Define matched tasks, a non-inferiority margin, artifact-quality judging, and deterministic observability scoring; preserve all traces and judge/scorer disagreements; write and commit an analysis stating whether artifact quality is non-inferior and whether observability is stronger.
 ```
 
+Completed result:
+
+- Result artifact:
+  `experiments/event_loop/artifact_noninferiority_20260612/analysis.md`
+- Classification: survived.
+- Event-loop bounded work was artifact-quality non-inferior to direct one-shot
+  work on three small matched evidence-bound tasks.
+- Mean artifact quality tied direct one-shot: `0.9000` versus `0.9000`.
+- Mean observability was stronger for event-loop bounded work: `1.0000`
+  versus `0.5500`.
+- No catastrophic artifact failures occurred in either condition.
+- Judge/scorer disagreement was concentrated in direct one-shot rows: useful
+  artifacts with weaker trace observability.
+- The result does not show token efficiency; event-loop rows used more tokens
+  because they used two cycles.
+
+Sharpening from Goal 10:
+
+The event-loop form can preserve artifact quality while improving
+reconstructability on small bounded tasks. The next question is when that
+observability gain is worth its token cost, and whether non-inferiority survives
+larger, noisier, or more failure-prone tasks.
+
 ## Current Recommended Next Goal
 
-Use Goal 10 next.
+No automatic next goal is defined in this roadmap. Do a short stocktake before
+adding a Goal 11.
 
 Rationale:
 
-- Goals 7 and 8 have now exercised the working-set accounting path.
-- Goal 8 did not show a working-set advantage for the model-managed event-loop
-  condition; it showed recoverable evidence access paired with contamination
-  and weak declared-loss discipline.
-- That result does not require wall-clock scheduling to interpret. The failure
-  occurred inside evidence handling, carried-state discipline, and artifact
-  construction, not in simulated-time ordering.
-- The next useful question is therefore not "does a real clock work?" but
-  whether the event-loop form can be non-inferior on artifact quality while
-  offering stronger observability and reconstruction than direct controls.
-- Goal 9 has now supplied the wall-clock boundary probe and did not identify a
-  reason to move semantic scheduler experiments off DES.
+- Goal 10 was the last concrete goal in this roadmap.
+- The event-loop form now has evidence for artifact non-inferiority with
+  stronger observability on small bounded tasks, but not for token efficiency,
+  broad task scaling, or production autonomy.
+- A new goal should therefore be selected from a stocktake of remaining
+  research questions rather than appended by inertia.
 
-Copy-ready prompt:
+Candidate copy-ready stocktake prompt:
 
 ```text
-Preregister and run an artifact non-inferiority panel comparing event-loop bounded work against direct one-shot work. Define matched tasks, a non-inferiority margin, artifact-quality judging, and deterministic observability scoring; preserve all traces and judge/scorer disagreements; write and commit an analysis stating whether artifact quality is non-inferior and whether observability is stronger. Treat Goal 8's corrected falsification as prior evidence: memory access alone is not sufficient, and scoring must separately classify evidence recovery, contamination, declared-loss discipline, artifact quality, and audit/reconstruction value.
+Write a post-Goal-10 stocktake for the Hamut'ay event-loop research program: summarize which hypotheses survived, which were falsified or narrowed, what the strongest current systems claim is, what remains untested, and propose candidate Goal 11 directions with cost/benefit and falsification value.
 ```
