@@ -542,6 +542,36 @@ Recommended goal-tool prompt:
 Preregister and run a matched working-set management panel comparing event-loop model-controlled working set, harness-selected summary, and direct one-shot controls on tasks that exceed trivial carry-forward. Preserve context accounting, recall provenance, declared losses, recovery/contamination scores, artifact usefulness, and token use; write and commit an analysis classifying working-set benefit separately from artifact quality.
 ```
 
+Completed result:
+
+- Result artifact:
+  `experiments/event_loop/working_set_matched_panel_20260612/analysis.md`
+- Corrected live-panel classification: falsified.
+- The event-loop condition recovered all required facts, but had worse
+  working-set score and worse artifact-quality score than the best control.
+- The primary failure was not evidence absence: the model-controlled working
+  set recalled the needed records, then failed to preserve declared-loss
+  discipline and carried contaminating material into the artifact.
+- The initial live run was archived as an aborted run because it exposed two
+  harness/scorer defects. Those defects were fixed before the corrected run,
+  and the aborted run is not treated as the panel result.
+
+Sharpening from Goal 8:
+
+Goal 8 falsifies the simple hypothesis that model-managed event-loop working
+sets already outperform or match harness-selected summary/direct one-shot
+controls on this task shape. It does not falsify the broader systems thesis
+that a bounded-context transformer can participate in working-set management.
+Instead, it sharpens the next confound: once recall is available, the model
+must still distinguish relevant evidence, declared losses, and contaminating
+material while producing a useful artifact.
+
+This result argues against treating memory access alone as the next milestone.
+The next substantive research question should separate artifact quality from
+observability: even if event-loop work is not yet superior as a working-set
+compression strategy, it may still produce enough auditability, reconstruction,
+and failure attribution to justify the control-loop form.
+
 ## Goal 9. Add Wall-Clock Adapter Only If Needed
 
 Framework links:
@@ -643,22 +673,27 @@ Preregister and run an artifact non-inferiority panel comparing event-loop bound
 
 ## Current Recommended Next Goal
 
-Use Goal 7 next.
+Use Goal 10 next, unless the immediate research question explicitly requires
+real elapsed time. Goal 9 remains conditional.
 
 Rationale:
 
-- Goals 4 and 5 hardened strict continuation validation and audit/restart
-  reconstruction.
-- Goal 6 survived with three scoreable, positive less-scaffolded rows under the
-  preregistered scorer.
-- Goal 6 also exposed the next confound: model-authored bounded investigations
-  can become evidence-blocked when the substrate cannot make available evidence,
-  omissions, recallability, and declared losses visible enough.
-- Goal 7 directly attacks that confound before matched working-set or artifact
-  non-inferiority claims.
+- Goals 7 and 8 have now exercised the working-set accounting path.
+- Goal 8 did not show a working-set advantage for the model-managed event-loop
+  condition; it showed recoverable evidence access paired with contamination
+  and weak declared-loss discipline.
+- That result does not require wall-clock scheduling to interpret. The failure
+  occurred inside evidence handling, carried-state discipline, and artifact
+  construction, not in simulated-time ordering.
+- The next useful question is therefore not "does a real clock work?" but
+  whether the event-loop form can be non-inferior on artifact quality while
+  offering stronger observability and reconstruction than direct controls.
+- Goal 9 should move forward only if the next experiment depends on real
+  elapsed time, external deadlines, sleeping/waking across real process time,
+  or wall-clock failure modes.
 
 Copy-ready prompt:
 
 ```text
-Build the working-set accounting gate for Hamut'ay event-loop experiments: record live context, carried state, recalled/evidence context, omitted context, declared losses, token counts, recall provenance, and truncation metadata; choose Yanantin memory or a bounded local substitute; provide a bounded inspectable corpus; classify model-authored evidence requests as answerable, unavailable, structurally impossible, or malformed; add recovery/contamination metrics; and write a readiness analysis for the matched working-set panel that separates model behavior from substrate, recall-protocol, prompt/schema, scorer, and inconclusive failures.
+Preregister and run an artifact non-inferiority panel comparing event-loop bounded work against direct one-shot work. Define matched tasks, a non-inferiority margin, artifact-quality judging, and deterministic observability scoring; preserve all traces and judge/scorer disagreements; write and commit an analysis stating whether artifact quality is non-inferior and whether observability is stronger. Treat Goal 8's corrected falsification as prior evidence: memory access alone is not sufficient, and scoring must separately classify evidence recovery, contamination, declared-loss discipline, artifact quality, and audit/reconstruction value.
 ```
