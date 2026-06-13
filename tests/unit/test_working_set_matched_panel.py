@@ -25,6 +25,7 @@ def _load_module():
 def test_score_artifact_separates_recovery_from_contamination():
     module = _load_module()
     output = module.dry_provider_response("direct_one_shot", 1)
+    output["claims"][0]["status"] = "verified"
     clean = module.score_artifact(output)
 
     contaminated = dict(output)
@@ -39,6 +40,23 @@ def test_score_artifact_separates_recovery_from_contamination():
     assert dirty["recovery_rate"] == 1.0
     assert dirty["contamination_rate"] == 1.0
     assert dirty["artifact_quality_score"] < clean["artifact_quality_score"]
+
+
+def test_selection_payload_accepts_model_output_wrapped_by_prompt_shape():
+    module = _load_module()
+    wrapped = {
+        "required_output": {
+            "requested_context": [
+                {"tool": "recall", "record_id": module.RECORD_IDS["ledger"]}
+            ],
+            "omitted_record_ids": [module.DISTRACTOR_ID],
+        }
+    }
+
+    selected = module.selection_payload(wrapped)
+
+    assert selected["requested_context"][0]["record_id"] == module.RECORD_IDS["ledger"]
+    assert selected["omitted_record_ids"] == [module.DISTRACTOR_ID]
 
 
 def test_working_set_score_uses_provenance_without_overwriting_artifact_quality():

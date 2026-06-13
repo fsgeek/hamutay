@@ -507,6 +507,15 @@ def dry_provider_response(condition: str, cycle: int) -> JsonDict:
     }
 
 
+def selection_payload(selection: JsonDict) -> JsonDict:
+    """Return the model-authored selection payload, nested or top-level."""
+
+    nested = selection.get("required_output")
+    if isinstance(nested, dict):
+        return nested
+    return selection
+
+
 def provider_call(
     *,
     condition: str,
@@ -642,9 +651,18 @@ def score_artifact(output: JsonDict) -> JsonDict:
         evidence = {
             str(item) for item in claim.get("evidence_record_ids", [])
         }
+        status = str(claim.get("status", "")).lower()
+        unsupported = {
+            "unsupported",
+            "open",
+            "unknown",
+            "missing",
+            "uncertain",
+            "not_supported",
+        }
         if (
             fact_id in EXPECTED_FACTS
-            and claim.get("status") == "supported"
+            and status not in unsupported
             and EXPECTED_FACTS[fact_id]["evidence"] in evidence
         ):
             recovered.add(fact_id)
@@ -753,14 +771,15 @@ def run_event_loop_condition(
         model=model,
     )
     write_cycle(row_root, 1, selection)
-    requested_context = selection.parsed.get("requested_context", [])
+    selected = selection_payload(selection.parsed)
+    requested_context = selected.get("requested_context", [])
     recalled_context, request_classifications = resolve_context(
         substrate=substrate,
         requested_context=requested_context if isinstance(requested_context, list) else [],
     )
     messages2 = final_messages_for_event_loop(
         recalled_context=recalled_context,
-        selection=selection.parsed,
+        selection=selected,
     )
     final = provider_call(
         condition=condition,
@@ -782,7 +801,7 @@ def run_event_loop_condition(
         },
         "carried_state": selection.parsed,
         "recalled_context": recalled_context,
-        "omitted_context": selection.parsed.get("omitted_record_ids", []),
+        "omitted_context": selected.get("omitted_record_ids", []),
         "declared_losses": final.parsed.get("declared_losses", []),
         "token_use": {
             "prompt_tokens": usage1["prompt_tokens"] + usage2["prompt_tokens"],
