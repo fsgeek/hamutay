@@ -1085,7 +1085,7 @@ def run_panel(
                 "budget.json",
                 "failure_taxonomy.json",
                 "run.py",
-            }:
+            } or child.name.startswith("aborted_"):
                 continue
             if child.is_dir():
                 shutil.rmtree(child)
