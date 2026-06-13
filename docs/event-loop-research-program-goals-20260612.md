@@ -418,6 +418,16 @@ Intent:
 Prepare to test Hamut'ay's larger systems thesis: whether a transformer can
 participate in its own working-set management.
 
+Sharpening from Goal 6:
+
+The less-scaffolded bounded-investigation panel survived, but two of three
+positive rows naturally turned into evidence-blocked investigations. That is
+not a reason to reorder the plan. It identifies the next confound: the model
+can choose and control bounded work, but the substrate must make evidence
+availability, recallability, omission, and working-set membership visible
+enough that the next panel can distinguish "the model ignored evidence" from
+"the needed evidence was not available to it."
+
 Work items:
 
 - Record per cycle:
@@ -430,15 +440,34 @@ Work items:
 - Decide whether to use Yanantin memory if ready or a bounded local substitute
   if not.
 - Preserve recall provenance and truncation/omission metadata.
+- Provide a bounded, inspectable corpus that the model can actually request
+  from during event-loop work.
+- Classify each model evidence request as:
+  - answerable by the substrate;
+  - unavailable but well-formed;
+  - structurally impossible under the current substrate;
+  - malformed or underspecified by the model.
+- Distinguish at scoring time:
+  - live prompt context;
+  - recalled context;
+  - carried state;
+  - omitted context;
+  - declared losses;
+  - unavailable evidence.
 - Add deterministic recovery/contamination metrics.
 
 Success criteria:
 
 - A dry-run can report what was in context, what was recalled, what was lost,
   and what was omitted.
+- A dry-run can report whether model-authored evidence requests were
+  answerable by the configured memory substrate.
 - The system can compare event-loop working-set behavior against direct
   one-shot and harness-summary controls.
 - Memory substrate limitations are explicit.
+- The readiness analysis states whether remaining failures would be charged to
+  model behavior, prompt/schema, memory substrate coverage, recall protocol,
+  scorer, or inconclusive layer.
 
 Recommended output paths:
 
@@ -450,12 +479,13 @@ Recommended validation:
 
 - context accounting tests;
 - recall provenance tests;
+- evidence-request answerability tests;
 - contamination/recovery scorer tests.
 
 Recommended goal-tool prompt:
 
 ```text
-Build the working-set accounting gate for Hamut'ay event-loop experiments: record live context, carried state, recalled/evidence context, omitted context, declared losses, token counts, recall provenance, and truncation metadata; choose Yanantin memory or a bounded local substitute; add recovery/contamination metrics; and write a readiness analysis for the matched working-set panel.
+Build the working-set accounting gate for Hamut'ay event-loop experiments: record live context, carried state, recalled/evidence context, omitted context, declared losses, token counts, recall provenance, and truncation metadata; choose Yanantin memory or a bounded local substitute; provide a bounded inspectable corpus; classify model-authored evidence requests as answerable, unavailable, structurally impossible, or malformed; add recovery/contamination metrics; and write a readiness analysis for the matched working-set panel that separates model behavior from substrate, recall-protocol, prompt/schema, scorer, and inconclusive failures.
 ```
 
 ## Goal 8. Run Working-Set Management Matched Panel
@@ -613,19 +643,22 @@ Preregister and run an artifact non-inferiority panel comparing event-loop bound
 
 ## Current Recommended Next Goal
 
-Use Goal 1 next.
+Use Goal 7 next.
 
 Rationale:
 
-- The latest DeepSeek direct-endpoint test showed the current action surface is
-  still prompt/transport/schema sensitive.
-- Live evidence-resume needs interpretable model-authored control rows.
-- Goal 1 is low cost and removes a known confound before the higher-value
-  evidence-resume panel.
+- Goals 4 and 5 hardened strict continuation validation and audit/restart
+  reconstruction.
+- Goal 6 survived with three scoreable, positive less-scaffolded rows under the
+  preregistered scorer.
+- Goal 6 also exposed the next confound: model-authored bounded investigations
+  can become evidence-blocked when the substrate cannot make available evidence,
+  omissions, recallability, and declared losses visible enough.
+- Goal 7 directly attacks that confound before matched working-set or artifact
+  non-inferiority claims.
 
 Copy-ready prompt:
 
 ```text
-Harden the live model-authored action/control surface for upcoming evidence-resume experiments: add transport-explicit and schema-explicit action-object guidance, especially for nested requested_context lists and policy fields; generalize row-level failure attribution; preregister and run a three-row positive-anchor gate preserving primary strict scoring plus secondary recovery audit; write and commit the analysis stating whether the control surface is adequate for live evidence-resume.
+Build the working-set accounting gate for Hamut'ay event-loop experiments: record live context, carried state, recalled/evidence context, omitted context, declared losses, token counts, recall provenance, and truncation metadata; choose Yanantin memory or a bounded local substitute; provide a bounded inspectable corpus; classify model-authored evidence requests as answerable, unavailable, structurally impossible, or malformed; add recovery/contamination metrics; and write a readiness analysis for the matched working-set panel that separates model behavior from substrate, recall-protocol, prompt/schema, scorer, and inconclusive failures.
 ```
-
