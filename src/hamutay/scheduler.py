@@ -13,7 +13,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Protocol
 from uuid import UUID
 
 from hamutay.events import (
@@ -26,6 +26,22 @@ from hamutay.memory.bridge import JsonDict, MemoryPort, MemoryResponse
 
 
 WakeHandler = Callable[["WakeEnvelope"], str | JsonDict]
+
+
+class ClockPort(Protocol):
+    """Clock boundary used by scheduler dispatch.
+
+    Deterministic tests and replay use ``SchedulerClock``. Runtime probes can
+    use ``WallClock`` without changing queue ordering or lifecycle semantics.
+    """
+
+    def now(self) -> datetime:
+        """Return the current scheduler time."""
+        ...
+
+    def now_iso(self) -> str:
+        """Return the current scheduler time as an ISO-8601 string."""
+        ...
 
 
 def _parse_time(value: datetime | str) -> datetime:
@@ -68,6 +84,23 @@ class SchedulerClock:
         if delta.total_seconds() < 0:
             raise ValueError("SchedulerClock cannot move backward")
         self.current = self.current + delta
+
+
+@dataclass(frozen=True)
+class WallClock:
+    """UTC wall-clock adapter for runtime boundary probes.
+
+    The adapter intentionally has no ``advance_*`` API. Code that needs
+    deterministic replay should depend on ``SchedulerClock`` directly.
+    """
+
+    tz: timezone = timezone.utc
+
+    def now(self) -> datetime:
+        return datetime.now(self.tz)
+
+    def now_iso(self) -> str:
+        return self.now().isoformat()
 
 
 @dataclass
@@ -118,6 +151,16 @@ class EventQueue:
             if is_expired(event, now=now) or is_due(event, now=now):
                 return deepcopy(event)
         return None
+
+    def next_wake_at(self, *, now: datetime) -> str | None:
+        waiting_times: list[tuple[datetime, str]] = []
+        for event in self.pending_events():
+            if is_expired(event, now=now) or is_due(event, now=now):
+                continue
+            not_before = event.get("not_before")
+            if not_before:
+                waiting_times.append((_parse_time(str(not_before)), str(not_before)))
+        return min(waiting_times)[1] if waiting_times else None
 
     def claim_next_due(
         self,
@@ -263,7 +306,7 @@ class SchedulerDispatcher:
         self,
         *,
         queue: EventQueue,
-        clock: SchedulerClock,
+        clock: ClockPort,
         memory: MemoryPort,
         handler: WakeHandler,
         context_char_budget: int | None = None,

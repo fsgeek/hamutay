@@ -625,6 +625,27 @@ Recommended goal-tool prompt:
 Add a wall-clock scheduler adapter only as a DES boundary probe: define the clock abstraction, preserve deterministic SchedulerClock semantics, implement a wall-clock adapter, run paired DES and wall-clock smoke tests for due ordering, expiration, next-wake reporting, and restart frontier behavior, then write an analysis separating semantic scheduler failures from runtime availability failures.
 ```
 
+Completed result:
+
+- Result artifact:
+  `experiments/event_loop/des_wall_clock_boundary_20260612/analysis.md`
+- Classification: passed.
+- `SchedulerClock` remains the deterministic semantic baseline.
+- `ClockPort` and `WallClock` now provide a narrow runtime clock boundary for
+  scheduler probes.
+- Paired DES and wall-clock smoke tests passed for due ordering, expiration,
+  next-wake reporting, and restart frontier recovery.
+- No semantic scheduler failures or runtime availability failures were
+  observed.
+
+Sharpening from Goal 9:
+
+Wall-clock access is now available as a bounded adapter, but no current
+research claim requires wall-clock execution. The DES scheduler remains the
+right substrate for semantic scheduler experiments unless a future task depends
+on real elapsed time, external deadlines, sleeping/waking across process time,
+or wall-clock availability failures.
+
 ## Goal 10. Run Artifact Non-Inferiority Panel
 
 Framework links:
@@ -673,8 +694,7 @@ Preregister and run an artifact non-inferiority panel comparing event-loop bound
 
 ## Current Recommended Next Goal
 
-Use Goal 10 next, unless the immediate research question explicitly requires
-real elapsed time. Goal 9 remains conditional.
+Use Goal 10 next.
 
 Rationale:
 
@@ -688,9 +708,8 @@ Rationale:
 - The next useful question is therefore not "does a real clock work?" but
   whether the event-loop form can be non-inferior on artifact quality while
   offering stronger observability and reconstruction than direct controls.
-- Goal 9 should move forward only if the next experiment depends on real
-  elapsed time, external deadlines, sleeping/waking across real process time,
-  or wall-clock failure modes.
+- Goal 9 has now supplied the wall-clock boundary probe and did not identify a
+  reason to move semantic scheduler experiments off DES.
 
 Copy-ready prompt:
 
