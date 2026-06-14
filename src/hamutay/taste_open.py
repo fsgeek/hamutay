@@ -176,9 +176,6 @@ see an error.
 is the project root. Unscoped — it can reach anywhere the running \
 process can, including outside the project.
 
-The framework does not gate which commands you run. The discipline \
-lives in your voice, not in the tool.
-
 Bash subsumes much of what the perception tools do — you can cat and \
 grep yourself. They remain because they are often more ergonomic and \
 record cleaner activity entries.
