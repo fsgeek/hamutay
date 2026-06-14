@@ -10,12 +10,53 @@ absent, the activity log records no reason — and that absence is itself
 information.
 """
 
-READ_SCHEMA = {
-    "name": "read",
+EDIT_SCHEMA = {
+    "name": "edit",
     "description": (
-        "Read a file from the project. Scoped to the project directory. "
-        "Returns file content and a SHA-256 hash of the file's raw bytes. "
-        "Use this to see the codebase you live in."
+        "Edit a file by replacing old_string with new_string. "
+        "Fails if old_string is not found or is not unique (unless replace_all=true). "
+        "Same path semantics as read and write."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": "Path to edit. Relative to project root, or absolute.",
+            },
+            "old_string": {
+                "type": "string",
+                "description": (
+                    "The exact string to replace. Must appear exactly once "
+                    "unless replace_all is true."
+                ),
+            },
+            "new_string": {
+                "type": "string",
+                "description": "The string to substitute in place of old_string.",
+            },
+            "replace_all": {
+                "type": "boolean",
+                "description": (
+                    "If true, replace every occurrence of old_string. "
+                    "Default false — fails if old_string appears more than once."
+                ),
+            },
+            "reason": {
+                "type": "string",
+                "description": "Optional: why you are making this edit. Recorded in the activity log when provided.",
+            },
+        },
+        "required": ["path", "old_string", "new_string"],
+    },
+}
+
+WRITE_SCHEMA = {
+    "name": "write",
+    "description": (
+        "Write a file. Relative paths resolve against the project root; "
+        "absolute paths are used as-is. Creates parent directories as needed. "
+        "Overwrites any existing content."
     ),
     "input_schema": {
         "type": "object",
@@ -23,9 +64,39 @@ READ_SCHEMA = {
             "path": {
                 "type": "string",
                 "description": (
-                    "Path relative to project root. "
-                    "e.g. 'src/hamutay/taste_open.py' or "
-                    "'experiments/taste_open/some_file.jsonl'."
+                    "Path to write. Relative to project root, or absolute."
+                ),
+            },
+            "content": {
+                "type": "string",
+                "description": "The content to write.",
+            },
+            "reason": {
+                "type": "string",
+                "description": (
+                    "Optional: why you are writing this file. Recorded in "
+                    "the activity log when provided."
+                ),
+            },
+        },
+        "required": ["path", "content"],
+    },
+}
+
+READ_SCHEMA = {
+    "name": "read",
+    "description": (
+        "Read a file. Relative paths resolve against the project root; "
+        "absolute paths are used as-is. "
+        "Returns file content and a SHA-256 hash of the file's raw bytes."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "path": {
+                "type": "string",
+                "description": (
+                    "Path to read. Relative to project root, or absolute."
                 ),
             },
             "offset": {
@@ -569,13 +640,11 @@ BASH_SCHEMA = {
     "name": "bash",
     "description": (
         "Execute a bash command. Returns stdout, stderr, and exit_code. "
-        "Working directory is the project root. Bash is unscoped — it "
-        "can reach anywhere the running process can, including outside "
-        "the project. The framework does not gate which commands you "
-        "run; the discipline lives in your voice. The soft norm is to "
-        "flag irreversible-or-shared-state actions in conversation "
-        "before executing them. Output past a per-stream cap is "
-        "truncated in-band; timeout defaults to 60s, max 600s."
+        "Working directory is the project root. Unscoped — it can reach "
+        "anywhere the running process can, including outside the project. "
+        "The framework does not gate which commands you run; the discipline "
+        "lives in your voice. Output past a per-stream cap is truncated "
+        "in-band; timeout defaults to 60s, max 600s."
     ),
     "input_schema": {
         "type": "object",
@@ -600,6 +669,8 @@ BASH_SCHEMA = {
 
 
 TOOL_SCHEMAS: dict[str, dict] = {
+    "edit": EDIT_SCHEMA,
+    "write": WRITE_SCHEMA,
     "read": READ_SCHEMA,
     "search_project": SEARCH_PROJECT_SCHEMA,
     "clock": CLOCK_SCHEMA,

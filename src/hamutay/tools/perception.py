@@ -6,16 +6,16 @@ Each tool is a pure function:
 Context kwargs provide runtime state (project_root, cycle, session_start).
 Result dicts always include either content or error, never both.
 
-Security note: read and search are scoped to project_root via
-Path.is_relative_to rather than a string-prefix check. A prefix check
-lets a path like ../project-evil/file escape a project whose name happens
-to share a prefix with a sibling directory. is_relative_to compares path
-components and does the right thing.
+Content hash in tool_read is computed over raw bytes, not decoded text.
+read() applies errors='replace' to survive invalid UTF-8; hashing the
+replaced text would produce a value not reproducible from the file itself,
+breaking 'is this the same file I read before?'
 
-Content hash is computed over raw bytes, not decoded text. This matters
-because read() applies errors='replace' to survive invalid UTF-8; hashing
-the replaced text would produce a value that cannot be reproduced from
-the file itself, which breaks 'is this the same bytes I read last time?'
+_within_project is used by tool_search_project to bound the search root
+to the project directory (path narrowing, not a trust boundary). It uses
+Path.is_relative_to rather than a string-prefix check: a prefix check lets
+a path like ../project-evil/file escape a project whose name shares a prefix
+with a sibling directory.
 """
 
 from __future__ import annotations
@@ -27,22 +27,81 @@ from pathlib import Path
 
 
 def _within_project(candidate: Path, project_root: Path) -> bool:
-    """True iff candidate (resolved) is inside project_root (resolved)."""
     try:
         return candidate.is_relative_to(project_root.resolve())
     except ValueError:
         return False
 
 
+def tool_edit(params: dict, *, project_root: Path) -> dict:
+    """Edit a file by replacing old_string with new_string. Fails if old_string
+    is not found or (unless replace_all) is not unique."""
+    path_str = params.get("path", "")
+    old_string = params.get("old_string", "")
+    new_string = params.get("new_string", "")
+    replace_all = bool(params.get("replace_all", False))
+
+    p = Path(path_str)
+    target = p.resolve() if p.is_absolute() else (project_root / path_str).resolve()
+
+    if not target.is_file():
+        return {"error": f"File not found: {path_str}", "path": path_str}
+
+    try:
+        content = target.read_text(encoding="utf-8", errors="replace")
+    except OSError as e:
+        return {"error": str(e), "path": path_str}
+
+    count = content.count(old_string)
+    if count == 0:
+        return {"error": "old_string not found in file", "path": path_str}
+    if not replace_all and count > 1:
+        return {
+            "error": f"old_string found {count} times; use replace_all=true to replace all occurrences",
+            "path": path_str,
+            "occurrence_count": count,
+        }
+
+    new_content = content.replace(old_string, new_string)
+    try:
+        target.write_text(new_content, encoding="utf-8")
+    except OSError as e:
+        return {"error": str(e), "path": path_str}
+
+    return {
+        "path": path_str,
+        "replacements": count if replace_all else 1,
+    }
+
+
+def tool_write(params: dict, *, project_root: Path) -> dict:
+    """Write a file. Relative paths are resolved against project_root; absolute paths are used as-is."""
+    path_str = params.get("path", "")
+    content = params.get("content", "")
+
+    p = Path(path_str)
+    target = p.resolve() if p.is_absolute() else (project_root / path_str).resolve()
+
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content, encoding="utf-8")
+    except OSError as e:
+        return {"error": str(e), "path": path_str}
+
+    return {
+        "path": path_str,
+        "bytes_written": len(content.encode("utf-8")),
+    }
+
+
 def tool_read(params: dict, *, project_root: Path) -> dict:
-    """Read a file from the project. Scoped to project_root."""
+    """Read a file. Relative paths are resolved against project_root; absolute paths are used as-is."""
     path_str = params.get("path", "")
     offset = params.get("offset")
     limit = params.get("limit", 500)
 
-    target = (project_root / path_str).resolve()
-    if not _within_project(target, project_root):
-        return {"error": f"Path outside project: {path_str}", "path": path_str}
+    p = Path(path_str)
+    target = p.resolve() if p.is_absolute() else (project_root / path_str).resolve()
 
     if not target.is_file():
         return {"error": f"File not found: {path_str}", "path": path_str}

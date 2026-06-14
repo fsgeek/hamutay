@@ -35,13 +35,15 @@ from hamutay.tools.memory import (
     tool_search_memory,
     tool_walk,
 )
-from hamutay.tools.perception import tool_clock, tool_read, tool_search_project
+from hamutay.tools.perception import tool_clock, tool_edit, tool_read, tool_search_project, tool_write
 
 
 # Capability of each tool. Descriptive metadata for analysis and for a future
 # knowing compression — not a gate on what gets captured. Everything is logged
 # regardless of capability; this just tags how far a call could reach.
 _CAPABILITY: dict[str, str] = {
+    "edit": "unbounded",
+    "write": "unbounded",
     "read": "read_only",
     "search_project": "read_only",
     "clock": "read_only",
@@ -105,7 +107,11 @@ class ToolExecutor:
         start = time.monotonic()
         reason = tool_input.get("reason")
 
-        if tool_name == "read":
+        if tool_name == "edit":
+            result = tool_edit(tool_input, project_root=self._project_root)
+        elif tool_name == "write":
+            result = tool_write(tool_input, project_root=self._project_root)
+        elif tool_name == "read":
             result = tool_read(tool_input, project_root=self._project_root)
         elif tool_name == "search_project":
             result = tool_search_project(
@@ -232,6 +238,10 @@ def _summarize(tool_name: str, result: dict) -> str:
     """Short human-readable summary of a tool result for the activity log."""
     if "error" in result:
         return f"error: {str(result['error'])[:100]}"
+    if tool_name == "edit":
+        return f"edit {result.get('path', '?')} ({result.get('replacements', '?')} replacement(s))"
+    if tool_name == "write":
+        return f"write {result.get('path', '?')} ({result.get('bytes_written', '?')} bytes)"
     if tool_name == "read":
         return f"read {result.get('path', '?')} ({result.get('line_count', '?')} lines)"
     if tool_name == "search_project":
