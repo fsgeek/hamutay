@@ -12,6 +12,55 @@ def test_executor_resolves_read(tmp_path):
     assert "print" in result["content"]
 
 
+def test_executor_resolves_write(tmp_path):
+    executor = ToolExecutor(project_root=tmp_path, cycle=1)
+    result = executor.execute(
+        "write",
+        {
+            "path": "created.txt",
+            "content": "created\n",
+            "reason": "create fixture",
+        },
+    )
+    assert result["bytes_written"] == len("created\n")
+    assert (tmp_path / "created.txt").read_text() == "created\n"
+    log = executor.activity_log
+    assert log[-1]["tool"] == "write"
+    assert log[-1]["capability"] == "unbounded"
+    assert log[-1]["parameters"] == {
+        "path": "created.txt",
+        "content": "created\n",
+    }
+    assert log[-1]["reason"] == "create fixture"
+    assert log[-1]["result_summary"].startswith("write created.txt")
+
+
+def test_executor_resolves_edit(tmp_path):
+    (tmp_path / "hello.py").write_text("print('hello')\n")
+    executor = ToolExecutor(project_root=tmp_path, cycle=1)
+    result = executor.execute(
+        "edit",
+        {
+            "path": "hello.py",
+            "old_string": "hello",
+            "new_string": "hi",
+            "reason": "shorten greeting",
+        },
+    )
+    assert result["replacements"] == 1
+    assert (tmp_path / "hello.py").read_text() == "print('hi')\n"
+    log = executor.activity_log
+    assert log[-1]["tool"] == "edit"
+    assert log[-1]["capability"] == "unbounded"
+    assert log[-1]["parameters"] == {
+        "path": "hello.py",
+        "old_string": "hello",
+        "new_string": "hi",
+    }
+    assert log[-1]["reason"] == "shorten greeting"
+    assert log[-1]["result_summary"].startswith("edit hello.py")
+
+
 def test_executor_resolves_clock(tmp_path):
     executor = ToolExecutor(project_root=tmp_path, cycle=5)
     result = executor.execute("clock", {})

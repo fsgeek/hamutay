@@ -3,11 +3,14 @@
 import hashlib
 from datetime import datetime, timedelta, timezone
 
+from hamutay.tools.perception import tool_clock, tool_read, tool_search_project
 from hamutay.tools.schemas import TOOL_SCHEMAS
 
 
 def test_tool_schemas_exist():
-    """All three perception tools have schemas."""
+    """All perception tools have schemas."""
+    assert "edit" in TOOL_SCHEMAS
+    assert "write" in TOOL_SCHEMAS
     assert "read" in TOOL_SCHEMAS
     assert "search_project" in TOOL_SCHEMAS
     assert "clock" in TOOL_SCHEMAS
@@ -70,9 +73,6 @@ def test_clock_has_no_required_fields():
 # tool_read
 # ---------------------------------------------------------------------------
 
-from hamutay.tools.perception import tool_clock, tool_read, tool_search_project
-
-
 def test_read_returns_file_content(tmp_path):
     f = tmp_path / "test.py"
     f.write_text("line1\nline2\nline3\n")
@@ -94,21 +94,20 @@ def test_read_with_offset_and_limit(tmp_path):
     assert result["line_count"] == 2
 
 
-def test_read_rejects_parent_traversal(tmp_path):
+def test_read_allows_parent_traversal(tmp_path):
+    """read is intentionally unscoped; search_project remains scoped below."""
     project = tmp_path / "proj"
     project.mkdir()
     (tmp_path / "secret.txt").write_text("not for you\n")
     result = tool_read(
         params={"path": "../secret.txt"}, project_root=project
     )
-    assert result.get("error") is not None
-    assert "outside project" in result["error"].lower()
+    assert "error" not in result
+    assert result["content"] == "not for you\n"
 
 
-def test_read_rejects_sibling_prefix_escape(tmp_path):
-    """Catches the classic prefix-match bug: project and project-evil share
-    a string prefix, so str.startswith passes even though the target is
-    outside the project. is_relative_to catches this."""
+def test_read_allows_sibling_prefix_path(tmp_path):
+    """read follows filesystem paths; it is not the scoped project search."""
     project = tmp_path / "proj"
     project.mkdir()
     sibling = tmp_path / "proj-evil"
@@ -117,7 +116,8 @@ def test_read_rejects_sibling_prefix_escape(tmp_path):
     result = tool_read(
         params={"path": "../proj-evil/leak.txt"}, project_root=project
     )
-    assert result.get("error") is not None
+    assert "error" not in result
+    assert result["content"] == "secret\n"
 
 
 def test_read_nonexistent_file(tmp_path):

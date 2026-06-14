@@ -189,7 +189,7 @@ def test_session_passes_tools_to_backend_when_enabled(tmp_path):
     tool_names = {t["name"] for t in backend.last_extra_tools}
     # Perception tools always present; memory tools join when available.
     # Count is not pinned — new tools shouldn't break this test.
-    assert {"read", "search_project", "clock"} <= tool_names
+    assert {"read", "write", "edit", "search_project", "clock"} <= tool_names
     assert backend.last_tool_executor is not None
 
 
@@ -286,6 +286,8 @@ def test_build_messages_includes_tool_guidance_when_enabled():
         tools_enabled=True,
     )
     assert "read" in system.lower()
+    assert "write" in system.lower()
+    assert "edit" in system.lower()
     assert "clock" in system.lower()
     assert "search_project" in system.lower()
 
@@ -388,9 +390,11 @@ def test_tool_guidance_mentions_memory_tools():
 
 
 def test_tool_guidance_memory_voice_is_permissive():
-    """Memory section inherits the 'not required' frame from the guidance."""
+    """Memory/tool guidance keeps reason optional rather than mandatory."""
     from hamutay.taste_open import _TOOL_GUIDANCE
-    assert "not required" in _TOOL_GUIDANCE
+    guidance = _TOOL_GUIDANCE.lower()
+    assert "optional `reason` field" in guidance
+    assert "mandatory" not in guidance
 
 
 def test_pick_memory_still_returns_two_tuple(tmp_path):
