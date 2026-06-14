@@ -41,6 +41,9 @@ def tool_edit(params: dict, *, project_root: Path) -> dict:
     new_string = params.get("new_string", "")
     replace_all = bool(params.get("replace_all", False))
 
+    if old_string == "":
+        return {"error": "old_string must not be empty", "path": path_str}
+
     p = Path(path_str)
     target = p.resolve() if p.is_absolute() else (project_root / path_str).resolve()
 
@@ -98,7 +101,12 @@ def tool_read(params: dict, *, project_root: Path) -> dict:
     """Read a file. Relative paths are resolved against project_root; absolute paths are used as-is."""
     path_str = params.get("path", "")
     offset = params.get("offset")
-    limit = params.get("limit", 500)
+    try:
+        limit = int(params.get("limit", 500))
+    except (TypeError, ValueError):
+        return {"error": "limit must be an integer", "path": path_str}
+    if limit < 0:
+        return {"error": "limit must be non-negative", "path": path_str}
 
     p = Path(path_str)
     target = p.resolve() if p.is_absolute() else (project_root / path_str).resolve()
@@ -118,7 +126,7 @@ def tool_read(params: dict, *, project_root: Path) -> dict:
     if offset is not None:
         start = max(0, offset - 1)
         lines = lines[start : start + limit]
-    elif limit and len(lines) > limit:
+    elif len(lines) > limit:
         lines = lines[:limit]
 
     return {
