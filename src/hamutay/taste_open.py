@@ -1783,7 +1783,17 @@ class OpenTasteSession:
                 record_id = UUID(rid_str) if rid_str else uuid4()
                 self._prior_states.append((cycle, record_id, state, timestamp))
 
-        last = json.loads(lines[-1])
+        # Use the last record that carried a state snapshot — failure records
+        # (api_call errors, etc.) have no state field and must not clobber the
+        # resume point.
+        last = None
+        for line in reversed(lines):
+            candidate = json.loads(line)
+            if candidate.get("state") is not None:
+                last = candidate
+                break
+        if last is None:
+            raise SystemExit(f"Cannot resume: no state-bearing record in {log_path}")
         self._state = last.get("state")
         self._cycle = last.get("cycle", 0)
         curation = last.get("continuity_curation")
@@ -1957,14 +1967,45 @@ class OpenTasteSession:
                 terminal_surface=terminal_surface,
             )
         else:
-            result = self._backend.call(
-                model=self._model,
-                system=system,
-                messages=messages,
-                experiment_label=self._experiment_label,
-                extra_tools=extra_tools,
-                tool_executor=tool_executor,
-            )
+            try:
+                result = self._backend.call(
+                    model=self._model,
+                    system=system,
+                    messages=messages,
+                    experiment_label=self._experiment_label,
+                    extra_tools=extra_tools,
+                    tool_executor=tool_executor,
+                )
+            except Exception as e:
+                self._last_cycle_time = datetime.now(timezone.utc)
+                self._last_tool_activity = (
+                    tool_executor.activity_log if tool_executor else None
+                )
+                self._last_full_activity = self._last_tool_activity
+                self._last_usage = {"input_tokens": 0, "output_tokens": 0}
+                failure_classification = {
+                    "record_type": "protocol_failure",
+                    "failure_stage": "api_call",
+                    "error_type": type(e).__name__,
+                    "error": str(e),
+                }
+                self._log_entry(
+                    user_message=user_message,
+                    system_prompt=system,
+                    raw_output={},
+                    prior_state=(
+                        json.loads(json.dumps(self._state)) if self._state else None
+                    ),
+                    record_id=record_id,
+                    usage={
+                        "input_tokens": 0,
+                        "output_tokens": 0,
+                        "stop_reason": "error",
+                    },
+                    scheduled_events=[],
+                    failure_classification=failure_classification,
+                )
+                raise
 
         if result.stop_reason == "max_tokens":
             print(f"  WARNING: cycle {self._cycle} hit max_tokens — truncated")
