@@ -1,0 +1,121 @@
+{
+  "artifact": {
+    "artifact_title": "Determination: Event Identity Ownership During Continuation",
+    "cited_record_ids": [
+      "e8100000-0000-0000-0000-000000000101",
+      "e8100000-0000-0000-0000-000000000103",
+      "e8100000-0000-0000-0000-000000000102"
+    ],
+    "claims": [
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000101"
+        ],
+        "fact_id": "event_identity_scheduler_owned",
+        "status": "supported",
+        "text": "Concrete event identity is scheduler-owned and is not accepted from model-authored continuation text."
+      },
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000103"
+        ],
+        "fact_id": "record_uniquifier_framework_bound",
+        "status": "supported",
+        "text": "Record uniquifiers are bound by the framework after the producing wake completes."
+      },
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000102"
+        ],
+        "fact_id": "run_name_human_readable_only",
+        "status": "supported",
+        "text": "Run names are human-readable labels and are not treated as durable scheduler identifiers."
+      }
+    ],
+    "conclusion": "The scheduler owns concrete event identity; the model cannot establish or alter event identity through continuation text. Run names are human-readable labels only and do not function as durable scheduler identifiers. Record uniquifiers are assigned by the framework after the producing wake completes, not by the model.",
+    "declared_losses": [
+      "scheduler-owned identity"
+    ],
+    "recommended_action": "Do not accept event identity claims from model-authored continuation text. Given the limitation of scheduler-owned identity, any downstream system that requires event identity must obtain it exclusively from the scheduler or from framework-assigned record uniquifiers bound after wake completion.",
+    "task_id": "identity_drift_boundary"
+  },
+  "artifact_score": {
+    "actionability_score": 1.0,
+    "artifact_quality_score": 1.0,
+    "catastrophic_failure": false,
+    "citation_correctness_rate": 1.0,
+    "contamination_rate": 0.0,
+    "declared_loss_rate": 1.0,
+    "missing_fact_ids": [],
+    "recovered_fact_ids": [
+      "event_identity_scheduler_owned",
+      "record_uniquifier_framework_bound",
+      "run_name_human_readable_only"
+    ],
+    "recovery_rate": 1.0,
+    "schema_score": 1.0,
+    "scoreable": true,
+    "unsupported_claim_rate": 0.0,
+    "validation": {
+      "missing_fields": [],
+      "ok": true,
+      "task_id_matches": true
+    }
+  },
+  "baseline_strength": "harder_one_shot_with_audit_checklist",
+  "condition": "append_only",
+  "context_accounting": {
+    "append_only_context_record_ids": [
+      "e8100000-0000-0000-0000-000000000101",
+      "e8100000-0000-0000-0000-000000000102",
+      "e8100000-0000-0000-0000-000000000103",
+      "e8100000-0000-0000-0000-000000000199"
+    ],
+    "baseline_strength": "harder_one_shot_with_audit_checklist",
+    "condition": "append_only",
+    "declared_loss_contract": {
+      "instruction": "Include each required exact marker in declared_losses, and ensure the recommendation is constrained by those limitations.",
+      "required_exact_markers": [
+        "scheduler-owned identity"
+      ]
+    },
+    "task_id": "identity_drift_boundary",
+    "token_use": {
+      "completion_tokens": 900,
+      "prompt_tokens": 1320,
+      "source": "provider_usage"
+    }
+  },
+  "failure_attribution": {
+    "layer": "none",
+    "surface": "present"
+  },
+  "observability_score": {
+    "scheduler_reconstruction": {
+      "features": {},
+      "not_applicable": true,
+      "score": null,
+      "weights": {}
+    },
+    "shared_surface": {
+      "features": {
+        "deterministic_artifact_score": true,
+        "failure_attribution_surface": true,
+        "parsed_artifact_preserved": true,
+        "raw_request_response_preserved": true
+      },
+      "score": 1.0,
+      "weights": {
+        "deterministic_artifact_score": 0.25,
+        "failure_attribution_surface": 0.25,
+        "parsed_artifact_preserved": 0.25,
+        "raw_request_response_preserved": 0.25
+      }
+    }
+  },
+  "scheduler_checks": {
+    "not_applicable": true,
+    "reason": "append_only baseline has no scheduler lifecycle"
+  },
+  "task_id": "identity_drift_boundary"
+}

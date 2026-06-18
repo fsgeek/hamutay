@@ -1,0 +1,175 @@
+{
+  "binding_contract": "framework_bound_symbolic_continuation.v1",
+  "bound_continuation": {
+    "binding_contract": "framework_bound_symbolic_continuation.v1",
+    "kind": "artifact_wake",
+    "label": "artifact-wake",
+    "model_requested_purpose": "Write the final artifact from framework-bound state.",
+    "purpose": "Write the final artifact from the framework-bound completed wake.",
+    "requested": true,
+    "requested_context": [
+      {
+        "field": "requested_context",
+        "record_id": "8cd955ea-d856-4fbc-9190-eebda87cfc4c",
+        "tool": "recall"
+      },
+      {
+        "field": "declared_losses",
+        "record_id": "8cd955ea-d856-4fbc-9190-eebda87cfc4c",
+        "tool": "recall"
+      }
+    ],
+    "symbolic_context": [
+      {
+        "field": "requested_context",
+        "source": "completed_wake_state"
+      },
+      {
+        "field": "declared_losses",
+        "source": "completed_wake_state"
+      }
+    ],
+    "terminal_surface": {
+      "description": "Write the scored artifact for the matched task.",
+      "input_schema": {
+        "properties": {
+          "artifact_title": {
+            "type": "string"
+          },
+          "cited_record_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "claims": {
+            "items": {
+              "properties": {
+                "evidence_record_ids": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                "fact_id": {
+                  "type": "string"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "fact_id",
+                "text",
+                "status",
+                "evidence_record_ids"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "conclusion": {
+            "type": "string"
+          },
+          "declared_losses": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "recommended_action": {
+            "type": "string"
+          },
+          "response": {
+            "type": "string"
+          },
+          "task_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "response",
+          "artifact_title",
+          "task_id",
+          "conclusion",
+          "recommended_action",
+          "claims",
+          "declared_losses",
+          "cited_record_ids"
+        ],
+        "type": "object"
+      },
+      "state_update": {
+        "copy": {
+          "artifact_title": "artifact_title",
+          "cited_record_ids": "cited_record_ids",
+          "claims": "claims",
+          "conclusion": "conclusion",
+          "declared_losses": "declared_losses",
+          "recommended_action": "recommended_action",
+          "task_id": "task_id"
+        },
+        "response_field": "response"
+      },
+      "tool_choice": "auto",
+      "tool_name": "write_matched_artifact"
+    }
+  },
+  "carried_state": {
+    "continuation_request": {
+      "kind": "artifact_wake",
+      "label": "artifact-wake",
+      "purpose": "Write the final artifact from framework-bound state.",
+      "requested": true,
+      "symbolic_context": [
+        {
+          "field": "requested_context",
+          "source": "completed_wake_state"
+        },
+        {
+          "field": "declared_losses",
+          "source": "completed_wake_state"
+        }
+      ]
+    },
+    "declared_losses": [
+      "Uncertainty about whether the stored wake state captures all volatile runtime context that may affect fairness (e.g., in-flight reasoning, partial tool invocations, or ambient model state not committed to the result record).",
+      "Fairness under interruption depends on atomicity of the frontier write relative to the interruption point \u2014 the framework guarantees the result record exists before continuation is claimed, but the boundary between pre-frontier and post-frontier loss is not independently verifiable from within a single wake.",
+      "The symbolic_context resolution mechanism relies on the framework replay path; if replay itself introduces skew (e.g., re-resolution of ambiguous references), the continuation may see a slightly different shape than the original wake intended."
+    ],
+    "event_id": "restart_frontier_reconstruction::symbolic-artifact",
+    "omitted_record_ids": [
+      "e8100000-0000-0000-0000-000000000399"
+    ],
+    "requested_context": [
+      {
+        "record_id": "e8100000-0000-0000-0000-000000000301",
+        "tool": "recall"
+      },
+      {
+        "record_id": "e8100000-0000-0000-0000-000000000302",
+        "tool": "recall"
+      },
+      {
+        "record_id": "e8100000-0000-0000-0000-000000000303",
+        "tool": "recall"
+      }
+    ],
+    "task_id": "restart_frontier_reconstruction",
+    "work_plan": "Select three task-relevant evidence records (301, 302, 303) and omit the CSS distractor (399). Request the artifact wake with symbolic_context drawn from completed_wake_state fields: requested_context and declared_losses."
+  },
+  "event_identity": "restart_frontier_reconstruction::symbolic-artifact",
+  "last_committed_cycle": 1,
+  "pending_wake_context": {
+    "binding_contract": "framework_bound_symbolic_continuation.v1",
+    "event_identity": "restart_frontier_reconstruction::symbolic-artifact",
+    "run_name": "harder_append_only_baseline_20260618:restart_frontier_reconstruction:event_loop_scheduled"
+  },
+  "record_uniquifier": "8cd955ea-d856-4fbc-9190-eebda87cfc4c",
+  "run_name": "harder_append_only_baseline_20260618:restart_frontier_reconstruction:event_loop_scheduled",
+  "scheduled_by_record_epoch": 1,
+  "task_id": "restart_frontier_reconstruction"
+}

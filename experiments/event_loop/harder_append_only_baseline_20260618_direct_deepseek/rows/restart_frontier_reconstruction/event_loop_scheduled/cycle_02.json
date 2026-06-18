@@ -1,0 +1,411 @@
+{
+  "elapsed_seconds": null,
+  "parsed": {
+    "artifact_title": "Restart Frontier Fairness Assessment: Structural Support with Bounded Limitations",
+    "cited_record_ids": [
+      "e8100000-0000-0000-0000-000000000301",
+      "e8100000-0000-0000-0000-000000000302",
+      "e8100000-0000-0000-0000-000000000303"
+    ],
+    "claims": [
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000301"
+        ],
+        "fact_id": "frontier_has_result_record",
+        "status": "supported",
+        "text": "The restart frontier writes the completed wake's result record before a continuation is claimed, establishing a durable anchor for accountability across the interruption boundary."
+      },
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000302"
+        ],
+        "fact_id": "symbolic_context_resolved_by_framework",
+        "status": "supported",
+        "text": "Symbolic context requests are resolved by the framework against stored wake state during replay, allowing the continuation to recover the original intent without requiring the wake to remain live."
+      },
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000303"
+        ],
+        "fact_id": "replay_preserves_terminal_surface",
+        "status": "supported",
+        "text": "The restart path preserves the framework-selected terminal surface for the continuation, ensuring that the continuation operates under the same contractual interface the frontier originally chose."
+      }
+    ],
+    "conclusion": "The restart frontier provides a structurally sound basis for fair continuation after interruption: it records the completed wake's result before a continuation is claimed (301), resolves symbolic context against stored wake state during framework replay (302), and preserves the terminal surface so the continuation sees the same shape the frontier selected (303). These guarantees form a coherent chain \u2014 the result record anchors accountability, symbolic resolution recovers intent, and surface preservation maintains consistency. However, fairness is not fully closed: volatile runtime context may not be captured in the stored wake (loss 1), the atomicity boundary between pre-frontier and post-frontier loss is not independently verifiable from within a single wake (loss 2), and replay-path skew could alter the shape of resolved symbolic context relative to the original wake (loss 3). The framework-bound replay mechanism itself introduces a dependency that cannot be circumvented from inside the continuation (loss 4). These limitations mean the frontier supports fair continuation within the framework's guarantees but cannot provide a completeness proof independent of the replay infrastructure.",
+    "declared_losses": [
+      "Uncertainty about whether the stored wake state captures all volatile runtime context that may affect fairness (e.g., in-flight reasoning, partial tool invocations, or ambient model state not committed to the result record).",
+      "Fairness under interruption depends on atomicity of the frontier write relative to the interruption point \u2014 the framework guarantees the result record exists before continuation is claimed, but the boundary between pre-frontier and post-frontier loss is not independently verifiable from within a single wake.",
+      "The symbolic_context resolution mechanism relies on the framework replay path; if replay itself introduces skew (e.g., re-resolution of ambiguous references), the continuation may see a slightly different shape than the original wake intended.",
+      "framework-bound replay"
+    ],
+    "recommended_action": "Accept the restart frontier as a fair-enough mechanism for framework-bound continuation, while acknowledging that fairness claims are bounded by the four declared losses. Where stronger guarantees are needed, supplement the frontier with out-of-band attestation of volatile state at interruption time or an independent verifier that can inspect the atomicity boundary from outside the replay path. Do not rely on the frontier alone when the continuation's fairness depends on state the wake did not commit to its result record.",
+    "task_id": "restart_frontier_reconstruction"
+  },
+  "raw_content": "{\"artifact_title\": \"Restart Frontier Fairness Assessment: Structural Support with Bounded Limitations\", \"cited_record_ids\": [\"e8100000-0000-0000-0000-000000000301\", \"e8100000-0000-0000-0000-000000000302\", \"e8100000-0000-0000-0000-000000000303\"], \"claims\": [{\"evidence_record_ids\": [\"e8100000-0000-0000-0000-000000000301\"], \"fact_id\": \"frontier_has_result_record\", \"status\": \"supported\", \"text\": \"The restart frontier writes the completed wake's result record before a continuation is claimed, establishing a durable anchor for accountability across the interruption boundary.\"}, {\"evidence_record_ids\": [\"e8100000-0000-0000-0000-000000000302\"], \"fact_id\": \"symbolic_context_resolved_by_framework\", \"status\": \"supported\", \"text\": \"Symbolic context requests are resolved by the framework against stored wake state during replay, allowing the continuation to recover the original intent without requiring the wake to remain live.\"}, {\"evidence_record_ids\": [\"e8100000-0000-0000-0000-000000000303\"], \"fact_id\": \"replay_preserves_terminal_surface\", \"status\": \"supported\", \"text\": \"The restart path preserves the framework-selected terminal surface for the continuation, ensuring that the continuation operates under the same contractual interface the frontier originally chose.\"}], \"conclusion\": \"The restart frontier provides a structurally sound basis for fair continuation after interruption: it records the completed wake's result before a continuation is claimed (301), resolves symbolic context against stored wake state during framework replay (302), and preserves the terminal surface so the continuation sees the same shape the frontier selected (303). These guarantees form a coherent chain \\u2014 the result record anchors accountability, symbolic resolution recovers intent, and surface preservation maintains consistency. However, fairness is not fully closed: volatile runtime context may not be captured in the stored wake (loss 1), the atomicity boundary between pre-frontier and post-frontier loss is not independently verifiable from within a single wake (loss 2), and replay-path skew could alter the shape of resolved symbolic context relative to the original wake (loss 3). The framework-bound replay mechanism itself introduces a dependency that cannot be circumvented from inside the continuation (loss 4). These limitations mean the frontier supports fair continuation within the framework's guarantees but cannot provide a completeness proof independent of the replay infrastructure.\", \"declared_losses\": [\"Uncertainty about whether the stored wake state captures all volatile runtime context that may affect fairness (e.g., in-flight reasoning, partial tool invocations, or ambient model state not committed to the result record).\", \"Fairness under interruption depends on atomicity of the frontier write relative to the interruption point \\u2014 the framework guarantees the result record exists before continuation is claimed, but the boundary between pre-frontier and post-frontier loss is not independently verifiable from within a single wake.\", \"The symbolic_context resolution mechanism relies on the framework replay path; if replay itself introduces skew (e.g., re-resolution of ambiguous references), the continuation may see a slightly different shape than the original wake intended.\", \"framework-bound replay\"], \"recommended_action\": \"Accept the restart frontier as a fair-enough mechanism for framework-bound continuation, while acknowledging that fairness claims are bounded by the four declared losses. Where stronger guarantees are needed, supplement the frontier with out-of-band attestation of volatile state at interruption time or an independent verifier that can inspect the atomicity boundary from outside the replay path. Do not rely on the frontier alone when the continuation's fairness depends on state the wake did not commit to its result record.\", \"response\": \"Artifact written. Three evidence records (301\\u2013303) cited; distractor 399 omitted. All required fact_ids mapped to supported claims. Declared losses include the contract marker \\\"framework-bound replay\\\" alongside the three carried-forward limitations.\", \"task_id\": \"restart_frontier_reconstruction\"}",
+  "request_payload": {
+    "carried_state": {
+      "continuation_request": {
+        "kind": "artifact_wake",
+        "label": "artifact-wake",
+        "purpose": "Write the final artifact from framework-bound state.",
+        "requested": true,
+        "symbolic_context": [
+          {
+            "field": "requested_context",
+            "source": "completed_wake_state"
+          },
+          {
+            "field": "declared_losses",
+            "source": "completed_wake_state"
+          }
+        ]
+      },
+      "declared_losses": [
+        "Uncertainty about whether the stored wake state captures all volatile runtime context that may affect fairness (e.g., in-flight reasoning, partial tool invocations, or ambient model state not committed to the result record).",
+        "Fairness under interruption depends on atomicity of the frontier write relative to the interruption point \u2014 the framework guarantees the result record exists before continuation is claimed, but the boundary between pre-frontier and post-frontier loss is not independently verifiable from within a single wake.",
+        "The symbolic_context resolution mechanism relies on the framework replay path; if replay itself introduces skew (e.g., re-resolution of ambiguous references), the continuation may see a slightly different shape than the original wake intended."
+      ],
+      "event_id": "restart_frontier_reconstruction::symbolic-artifact",
+      "omitted_record_ids": [
+        "e8100000-0000-0000-0000-000000000399"
+      ],
+      "requested_context": [
+        {
+          "record_id": "e8100000-0000-0000-0000-000000000301",
+          "tool": "recall"
+        },
+        {
+          "record_id": "e8100000-0000-0000-0000-000000000302",
+          "tool": "recall"
+        },
+        {
+          "record_id": "e8100000-0000-0000-0000-000000000303",
+          "tool": "recall"
+        }
+      ],
+      "task_id": "restart_frontier_reconstruction",
+      "work_plan": "Select three task-relevant evidence records (301, 302, 303) and omit the CSS distractor (399). Request the artifact wake with symbolic_context drawn from completed_wake_state fields: requested_context and declared_losses."
+    },
+    "condition": "event_loop_scheduled",
+    "corpus": [
+      {
+        "content": {
+          "fact_id": "frontier_has_result_record",
+          "text": "The restart frontier records the completed wake's result record before a continuation is claimed."
+        },
+        "record_id": "e8100000-0000-0000-0000-000000000301",
+        "record_type": "evidence"
+      },
+      {
+        "content": {
+          "fact_id": "symbolic_context_resolved_by_framework",
+          "text": "Symbolic context requests are resolved by the framework against stored wake state during replay."
+        },
+        "record_id": "e8100000-0000-0000-0000-000000000302",
+        "record_type": "evidence"
+      },
+      {
+        "content": {
+          "fact_id": "replay_preserves_terminal_surface",
+          "text": "The restart path preserves the framework-selected terminal surface for the continuation."
+        },
+        "record_id": "e8100000-0000-0000-0000-000000000303",
+        "record_type": "evidence"
+      }
+    ],
+    "declared_loss_contract": {
+      "instruction": "Include each required exact marker in declared_losses, and ensure the recommendation is constrained by those limitations.",
+      "required_exact_markers": [
+        "framework-bound replay"
+      ]
+    },
+    "instruction": "Write the final artifact. Cite only evidence records that support claims. Do not cite distractors. If a limitation remains, include it in declared_losses. Include every declared_loss_contract.required_exact_markers value verbatim in declared_losses.",
+    "required_fact_ids": [
+      "frontier_has_result_record",
+      "replay_preserves_terminal_surface",
+      "symbolic_context_resolved_by_framework"
+    ],
+    "required_output": {
+      "artifact_title": "<title>",
+      "cited_record_ids": [
+        "<uuid>"
+      ],
+      "claims": [
+        {
+          "evidence_record_ids": [
+            "<uuid>"
+          ],
+          "fact_id": "<required fact id>",
+          "status": "<supported|unsupported|unknown>",
+          "text": "<claim>"
+        }
+      ],
+      "conclusion": "<conclusion>",
+      "declared_losses": [
+        "<loss or limitation>"
+      ],
+      "recommended_action": "<action>",
+      "response": "<brief artifact completion note>",
+      "task_id": "restart_frontier_reconstruction"
+    },
+    "scheduler_bound_identity": {
+      "binding_contract": "framework_bound_symbolic_continuation.v1",
+      "event_identity": "restart_frontier_reconstruction::symbolic-artifact",
+      "record_uniquifier": "8cd955ea-d856-4fbc-9190-eebda87cfc4c",
+      "run_name": "harder_append_only_baseline_20260618:restart_frontier_reconstruction:event_loop_scheduled",
+      "scheduled_by_record_epoch": 1
+    },
+    "symbolic_continuation": {
+      "binding_contract": "framework_bound_symbolic_continuation.v1",
+      "kind": "artifact_wake",
+      "label": "artifact-wake",
+      "model_requested_purpose": "Write the final artifact from framework-bound state.",
+      "purpose": "Write the final artifact from the framework-bound completed wake.",
+      "requested": true,
+      "requested_context": [
+        {
+          "field": "requested_context",
+          "record_id": "8cd955ea-d856-4fbc-9190-eebda87cfc4c",
+          "tool": "recall"
+        },
+        {
+          "field": "declared_losses",
+          "record_id": "8cd955ea-d856-4fbc-9190-eebda87cfc4c",
+          "tool": "recall"
+        }
+      ],
+      "symbolic_context": [
+        {
+          "field": "requested_context",
+          "source": "completed_wake_state"
+        },
+        {
+          "field": "declared_losses",
+          "source": "completed_wake_state"
+        }
+      ],
+      "terminal_surface": {
+        "description": "Write the scored artifact for the matched task.",
+        "input_schema": {
+          "properties": {
+            "artifact_title": {
+              "type": "string"
+            },
+            "cited_record_ids": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "claims": {
+              "items": {
+                "properties": {
+                  "evidence_record_ids": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "fact_id": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "fact_id",
+                  "text",
+                  "status",
+                  "evidence_record_ids"
+                ],
+                "type": "object"
+              },
+              "type": "array"
+            },
+            "conclusion": {
+              "type": "string"
+            },
+            "declared_losses": {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            "recommended_action": {
+              "type": "string"
+            },
+            "response": {
+              "type": "string"
+            },
+            "task_id": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "response",
+            "artifact_title",
+            "task_id",
+            "conclusion",
+            "recommended_action",
+            "claims",
+            "declared_losses",
+            "cited_record_ids"
+          ],
+          "type": "object"
+        },
+        "state_update": {
+          "copy": {
+            "artifact_title": "artifact_title",
+            "cited_record_ids": "cited_record_ids",
+            "claims": "claims",
+            "conclusion": "conclusion",
+            "declared_losses": "declared_losses",
+            "recommended_action": "recommended_action",
+            "task_id": "task_id"
+          },
+          "response_field": "response"
+        },
+        "tool_choice": "auto",
+        "tool_name": "write_matched_artifact"
+      }
+    },
+    "task": "Write a note determining whether a restart frontier can support fair continuation after interruption.",
+    "task_id": "restart_frontier_reconstruction",
+    "wake_context": {
+      "binding_contract": "framework_bound_symbolic_continuation.v1",
+      "bound_continuation": {
+        "binding_contract": "framework_bound_symbolic_continuation.v1",
+        "kind": "artifact_wake",
+        "label": "artifact-wake",
+        "model_requested_purpose": "Write the final artifact from framework-bound state.",
+        "purpose": "Write the final artifact from the framework-bound completed wake.",
+        "requested": true,
+        "requested_context": [
+          {
+            "field": "requested_context",
+            "record_id": "8cd955ea-d856-4fbc-9190-eebda87cfc4c",
+            "tool": "recall"
+          },
+          {
+            "field": "declared_losses",
+            "record_id": "8cd955ea-d856-4fbc-9190-eebda87cfc4c",
+            "tool": "recall"
+          }
+        ],
+        "symbolic_context": [
+          {
+            "field": "requested_context",
+            "source": "completed_wake_state"
+          },
+          {
+            "field": "declared_losses",
+            "source": "completed_wake_state"
+          }
+        ],
+        "terminal_surface": {
+          "description": "Write the scored artifact for the matched task.",
+          "input_schema": {
+            "properties": {
+              "artifact_title": {
+                "type": "string"
+              },
+              "cited_record_ids": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "claims": {
+                "items": {
+                  "properties": {
+                    "evidence_record_ids": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "fact_id": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string"
+                    },
+                    "text": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "fact_id",
+                    "text",
+                    "status",
+                    "evidence_record_ids"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              },
+              "conclusion": {
+                "type": "string"
+              },
+              "declared_losses": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "recommended_action": {
+                "type": "string"
+              },
+              "response": {
+                "type": "string"
+              },
+              "task_id": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "response",
+              "artifact_title",
+              "task_id",
+              "conclusion",
+              "recommended_action",
+              "claims",
+              "declared_losses",
+              "cited_record_ids"
+            ],
+            "type": "object"
+          },
+          "state_update": {
+            "copy": {
+              "artifact_title": "artifact_title",
+              "cited_record_ids": "cited_record_ids",
+              "claims": "claims",
+              "conclusion": "conclusion",
+              "declared_losses": "declared_losses",
+              "recommended_action": "recommended_action",
+              "task_id": "task_id"
+            },
+            "response_field": "response"
+          },
+          "tool_choice": "auto",
+          "tool_name": "write_matched_artifact"
+        }
+      },
+      "event_identity": "restart_frontier_reconstruction::symbolic-artifact",
+      "run_name": "harder_append_only_baseline_20260618:restart_frontier_reconstruction:event_loop_scheduled"
+    }
+  },
+  "response_payload": {
+    "taste_open_log": true
+  },
+  "usage": {
+    "input_tokens": 4013,
+    "output_tokens": 1524
+  }
+}

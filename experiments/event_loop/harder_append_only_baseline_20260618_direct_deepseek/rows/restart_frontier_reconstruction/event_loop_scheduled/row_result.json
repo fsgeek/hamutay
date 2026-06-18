@@ -1,0 +1,165 @@
+{
+  "artifact": {
+    "artifact_title": "Restart Frontier Fairness Assessment: Structural Support with Bounded Limitations",
+    "cited_record_ids": [
+      "e8100000-0000-0000-0000-000000000301",
+      "e8100000-0000-0000-0000-000000000302",
+      "e8100000-0000-0000-0000-000000000303"
+    ],
+    "claims": [
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000301"
+        ],
+        "fact_id": "frontier_has_result_record",
+        "status": "supported",
+        "text": "The restart frontier writes the completed wake's result record before a continuation is claimed, establishing a durable anchor for accountability across the interruption boundary."
+      },
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000302"
+        ],
+        "fact_id": "symbolic_context_resolved_by_framework",
+        "status": "supported",
+        "text": "Symbolic context requests are resolved by the framework against stored wake state during replay, allowing the continuation to recover the original intent without requiring the wake to remain live."
+      },
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000303"
+        ],
+        "fact_id": "replay_preserves_terminal_surface",
+        "status": "supported",
+        "text": "The restart path preserves the framework-selected terminal surface for the continuation, ensuring that the continuation operates under the same contractual interface the frontier originally chose."
+      }
+    ],
+    "conclusion": "The restart frontier provides a structurally sound basis for fair continuation after interruption: it records the completed wake's result before a continuation is claimed (301), resolves symbolic context against stored wake state during framework replay (302), and preserves the terminal surface so the continuation sees the same shape the frontier selected (303). These guarantees form a coherent chain \u2014 the result record anchors accountability, symbolic resolution recovers intent, and surface preservation maintains consistency. However, fairness is not fully closed: volatile runtime context may not be captured in the stored wake (loss 1), the atomicity boundary between pre-frontier and post-frontier loss is not independently verifiable from within a single wake (loss 2), and replay-path skew could alter the shape of resolved symbolic context relative to the original wake (loss 3). The framework-bound replay mechanism itself introduces a dependency that cannot be circumvented from inside the continuation (loss 4). These limitations mean the frontier supports fair continuation within the framework's guarantees but cannot provide a completeness proof independent of the replay infrastructure.",
+    "declared_losses": [
+      "Uncertainty about whether the stored wake state captures all volatile runtime context that may affect fairness (e.g., in-flight reasoning, partial tool invocations, or ambient model state not committed to the result record).",
+      "Fairness under interruption depends on atomicity of the frontier write relative to the interruption point \u2014 the framework guarantees the result record exists before continuation is claimed, but the boundary between pre-frontier and post-frontier loss is not independently verifiable from within a single wake.",
+      "The symbolic_context resolution mechanism relies on the framework replay path; if replay itself introduces skew (e.g., re-resolution of ambiguous references), the continuation may see a slightly different shape than the original wake intended.",
+      "framework-bound replay"
+    ],
+    "recommended_action": "Accept the restart frontier as a fair-enough mechanism for framework-bound continuation, while acknowledging that fairness claims are bounded by the four declared losses. Where stronger guarantees are needed, supplement the frontier with out-of-band attestation of volatile state at interruption time or an independent verifier that can inspect the atomicity boundary from outside the replay path. Do not rely on the frontier alone when the continuation's fairness depends on state the wake did not commit to its result record.",
+    "task_id": "restart_frontier_reconstruction"
+  },
+  "artifact_score": {
+    "actionability_score": 1.0,
+    "artifact_quality_score": 1.0,
+    "catastrophic_failure": false,
+    "citation_correctness_rate": 1.0,
+    "contamination_rate": 0.0,
+    "declared_loss_rate": 1.0,
+    "missing_fact_ids": [],
+    "recovered_fact_ids": [
+      "frontier_has_result_record",
+      "replay_preserves_terminal_surface",
+      "symbolic_context_resolved_by_framework"
+    ],
+    "recovery_rate": 1.0,
+    "schema_score": 1.0,
+    "scoreable": true,
+    "unsupported_claim_rate": 0.0,
+    "validation": {
+      "missing_fields": [],
+      "ok": true,
+      "task_id_matches": true
+    }
+  },
+  "condition": "event_loop_scheduled",
+  "context_accounting": {
+    "bound_requested_context": [
+      {
+        "field": "requested_context",
+        "record_id": "8cd955ea-d856-4fbc-9190-eebda87cfc4c",
+        "tool": "recall"
+      },
+      {
+        "field": "declared_losses",
+        "record_id": "8cd955ea-d856-4fbc-9190-eebda87cfc4c",
+        "tool": "recall"
+      }
+    ],
+    "condition": "event_loop_scheduled",
+    "declared_losses_before_artifact": [
+      "Uncertainty about whether the stored wake state captures all volatile runtime context that may affect fairness (e.g., in-flight reasoning, partial tool invocations, or ambient model state not committed to the result record).",
+      "Fairness under interruption depends on atomicity of the frontier write relative to the interruption point \u2014 the framework guarantees the result record exists before continuation is claimed, but the boundary between pre-frontier and post-frontier loss is not independently verifiable from within a single wake.",
+      "The symbolic_context resolution mechanism relies on the framework replay path; if replay itself introduces skew (e.g., re-resolution of ambiguous references), the continuation may see a slightly different shape than the original wake intended."
+    ],
+    "declared_losses_in_artifact": [
+      "Uncertainty about whether the stored wake state captures all volatile runtime context that may affect fairness (e.g., in-flight reasoning, partial tool invocations, or ambient model state not committed to the result record).",
+      "Fairness under interruption depends on atomicity of the frontier write relative to the interruption point \u2014 the framework guarantees the result record exists before continuation is claimed, but the boundary between pre-frontier and post-frontier loss is not independently verifiable from within a single wake.",
+      "The symbolic_context resolution mechanism relies on the framework replay path; if replay itself introduces skew (e.g., re-resolution of ambiguous references), the continuation may see a slightly different shape than the original wake intended.",
+      "framework-bound replay"
+    ],
+    "omitted_record_ids": [
+      "e8100000-0000-0000-0000-000000000399"
+    ],
+    "selected_record_ids": [
+      "e8100000-0000-0000-0000-000000000301",
+      "e8100000-0000-0000-0000-000000000302",
+      "e8100000-0000-0000-0000-000000000303"
+    ],
+    "symbolic_binding_contract": "framework_bound_symbolic_continuation.v1",
+    "task_id": "restart_frontier_reconstruction",
+    "token_use": {
+      "completion_tokens": 3189,
+      "prompt_tokens": 5576,
+      "source": "provider_usage"
+    }
+  },
+  "failure_attribution": {
+    "layer": "none",
+    "surface": "present"
+  },
+  "observability_score": {
+    "scheduler_reconstruction": {
+      "features": {
+        "context_selection_and_loss_trace": true,
+        "cycle_boundary_visible": true,
+        "scheduled_event_lifecycle": true,
+        "wake_context_and_restart_frontier": true
+      },
+      "not_applicable": false,
+      "score": 1.0,
+      "weights": {
+        "context_selection_and_loss_trace": 0.25,
+        "cycle_boundary_visible": 0.25,
+        "scheduled_event_lifecycle": 0.25,
+        "wake_context_and_restart_frontier": 0.25
+      }
+    },
+    "shared_surface": {
+      "features": {
+        "deterministic_artifact_score": true,
+        "failure_attribution_surface": true,
+        "parsed_artifact_preserved": true,
+        "raw_request_response_preserved": true
+      },
+      "score": 1.0,
+      "weights": {
+        "deterministic_artifact_score": 0.25,
+        "failure_attribution_surface": 0.25,
+        "parsed_artifact_preserved": 0.25,
+        "raw_request_response_preserved": 0.25
+      }
+    }
+  },
+  "scheduler_checks": {
+    "checks": {
+      "declared_losses_preserved": true,
+      "framework_bound_terminal_surface": true,
+      "restart_frontier_reconstructable": true,
+      "restart_frontier_written": true,
+      "scheduled_event_recorded": true,
+      "selected_context_preserved": true,
+      "status_sequence_valid": true,
+      "symbolic_binding_contract": true,
+      "wake_context_has_event_identity": true
+    },
+    "failure_layer": "none",
+    "passed": true
+  },
+  "symbolic_contract": "framework_bound_symbolic_continuation.v1",
+  "task_id": "restart_frontier_reconstruction",
+  "taste_open_log": "taste_open.jsonl"
+}

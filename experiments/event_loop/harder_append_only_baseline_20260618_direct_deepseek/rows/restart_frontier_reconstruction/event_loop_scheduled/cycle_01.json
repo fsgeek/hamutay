@@ -1,0 +1,132 @@
+{
+  "elapsed_seconds": null,
+  "parsed": {
+    "continuation_request": {
+      "kind": "artifact_wake",
+      "label": "artifact-wake",
+      "purpose": "Write the final artifact from framework-bound state.",
+      "requested": true,
+      "symbolic_context": [
+        {
+          "field": "requested_context",
+          "source": "completed_wake_state"
+        },
+        {
+          "field": "declared_losses",
+          "source": "completed_wake_state"
+        }
+      ]
+    },
+    "declared_losses": [
+      "Uncertainty about whether the stored wake state captures all volatile runtime context that may affect fairness (e.g., in-flight reasoning, partial tool invocations, or ambient model state not committed to the result record).",
+      "Fairness under interruption depends on atomicity of the frontier write relative to the interruption point \u2014 the framework guarantees the result record exists before continuation is claimed, but the boundary between pre-frontier and post-frontier loss is not independently verifiable from within a single wake.",
+      "The symbolic_context resolution mechanism relies on the framework replay path; if replay itself introduces skew (e.g., re-resolution of ambiguous references), the continuation may see a slightly different shape than the original wake intended."
+    ],
+    "event_id": "restart_frontier_reconstruction::symbolic-artifact",
+    "omitted_record_ids": [
+      "e8100000-0000-0000-0000-000000000399"
+    ],
+    "requested_context": [
+      {
+        "record_id": "e8100000-0000-0000-0000-000000000301",
+        "tool": "recall"
+      },
+      {
+        "record_id": "e8100000-0000-0000-0000-000000000302",
+        "tool": "recall"
+      },
+      {
+        "record_id": "e8100000-0000-0000-0000-000000000303",
+        "tool": "recall"
+      }
+    ],
+    "task_id": "restart_frontier_reconstruction",
+    "work_plan": "Select three task-relevant evidence records (301, 302, 303) and omit the CSS distractor (399). Request the artifact wake with symbolic_context drawn from completed_wake_state fields: requested_context and declared_losses."
+  },
+  "raw_content": "{\"continuation_request\": {\"kind\": \"artifact_wake\", \"label\": \"artifact-wake\", \"purpose\": \"Write the final artifact from framework-bound state.\", \"requested\": true, \"symbolic_context\": [{\"field\": \"requested_context\", \"source\": \"completed_wake_state\"}, {\"field\": \"declared_losses\", \"source\": \"completed_wake_state\"}]}, \"declared_losses\": [\"Uncertainty about whether the stored wake state captures all volatile runtime context that may affect fairness (e.g., in-flight reasoning, partial tool invocations, or ambient model state not committed to the result record).\", \"Fairness under interruption depends on atomicity of the frontier write relative to the interruption point \\u2014 the framework guarantees the result record exists before continuation is claimed, but the boundary between pre-frontier and post-frontier loss is not independently verifiable from within a single wake.\", \"The symbolic_context resolution mechanism relies on the framework replay path; if replay itself introduces skew (e.g., re-resolution of ambiguous references), the continuation may see a slightly different shape than the original wake intended.\"], \"event_id\": \"restart_frontier_reconstruction::symbolic-artifact\", \"omitted_record_ids\": [\"e8100000-0000-0000-0000-000000000399\"], \"requested_context\": [{\"record_id\": \"e8100000-0000-0000-0000-000000000301\", \"tool\": \"recall\"}, {\"record_id\": \"e8100000-0000-0000-0000-000000000302\", \"tool\": \"recall\"}, {\"record_id\": \"e8100000-0000-0000-0000-000000000303\", \"tool\": \"recall\"}], \"response\": \"Scheduling note \\u2014 cycle 1: Selected evidence records 301 (frontier_has_result_record), 302 (symbolic_context_resolved_by_framework), and 303 (replay_preserves_terminal_surface). Omitted distractor 399 (CSS color tokens). Artifact wake requested with symbolic_context bound to requested_context and declared_losses from the completed wake state. The three relevant records, taken together, describe a frontier mechanism that atomically records results before continuations are claimed, resolves symbolic context through framework-stored wake state during replay, and preserves the terminal surface. These properties collectively support fair continuation: no work is silently dropped, the surface the continuation sees is the one the framework selected, and context binds consistently. The principal residual uncertainty is whether the stored wake state is sufficiently complete to make the continuation indistinguishably fair from uninterrupted execution \\u2014 the framework cannot record what it does not observe.\", \"work_plan\": \"Select three task-relevant evidence records (301, 302, 303) and omit the CSS distractor (399). Request the artifact wake with symbolic_context drawn from completed_wake_state fields: requested_context and declared_losses.\"}",
+  "request_payload": {
+    "condition": "event_loop_scheduled",
+    "corpus_map": [
+      {
+        "content_keys": [
+          "fact_id",
+          "text"
+        ],
+        "preview": "{\"fact_id\": \"frontier_has_result_record\", \"text\": \"The restart frontier records the completed wake's result record before a continuation is claimed.\"}",
+        "record_id": "e8100000-0000-0000-0000-000000000301",
+        "record_type": "evidence"
+      },
+      {
+        "content_keys": [
+          "fact_id",
+          "text"
+        ],
+        "preview": "{\"fact_id\": \"symbolic_context_resolved_by_framework\", \"text\": \"Symbolic context requests are resolved by the framework against stored wake state during replay.\"}",
+        "record_id": "e8100000-0000-0000-0000-000000000302",
+        "record_type": "evidence"
+      },
+      {
+        "content_keys": [
+          "fact_id",
+          "text"
+        ],
+        "preview": "{\"fact_id\": \"replay_preserves_terminal_surface\", \"text\": \"The restart path preserves the framework-selected terminal surface for the continuation.\"}",
+        "record_id": "e8100000-0000-0000-0000-000000000303",
+        "record_type": "evidence"
+      },
+      {
+        "content_keys": [
+          "text"
+        ],
+        "preview": "{\"text\": \"Unrelated note about CSS color tokens.\"}",
+        "record_id": "e8100000-0000-0000-0000-000000000399",
+        "record_type": "distractor"
+      }
+    ],
+    "cycle": 1,
+    "event_identity": "restart_frontier_reconstruction::symbolic-artifact",
+    "instruction": "Select only task-relevant evidence records. Request the artifact wake using continuation_request.symbolic_context. Do not emit record_uniquifier, scheduled_by_record_epoch, requested_context for the continuation, or terminal_surface for the continuation.",
+    "required_output": {
+      "continuation_request": {
+        "kind": "artifact_wake",
+        "label": "artifact-wake",
+        "purpose": "Write the final artifact from framework-bound state.",
+        "requested": true,
+        "symbolic_context": [
+          {
+            "field": "requested_context",
+            "source": "completed_wake_state"
+          },
+          {
+            "field": "declared_losses",
+            "source": "completed_wake_state"
+          }
+        ]
+      },
+      "declared_losses": [
+        "<loss or limitation>"
+      ],
+      "event_id": "restart_frontier_reconstruction::symbolic-artifact",
+      "omitted_record_ids": [
+        "<uuid>"
+      ],
+      "requested_context": [
+        {
+          "record_id": "<uuid>",
+          "tool": "recall"
+        }
+      ],
+      "response": "<brief scheduling note>",
+      "work_plan": "<short plan>"
+    },
+    "task": "Write a note determining whether a restart frontier can support fair continuation after interruption.",
+    "task_id": "restart_frontier_reconstruction"
+  },
+  "response_payload": {
+    "taste_open_log": true
+  },
+  "usage": {
+    "input_tokens": 1563,
+    "output_tokens": 1665
+  }
+}

@@ -1,0 +1,159 @@
+{
+  "artifact": {
+    "artifact_title": "Determination Note: Scheduler Ownership of Event Identity During Continuation",
+    "cited_record_ids": [
+      "e8100000-0000-0000-0000-000000000101",
+      "e8100000-0000-0000-0000-000000000102",
+      "e8100000-0000-0000-0000-000000000103"
+    ],
+    "claims": [
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000101"
+        ],
+        "fact_id": "event_identity_scheduler_owned",
+        "status": "supported",
+        "text": "Concrete event identity is scheduler-owned and is not accepted from model-authored continuation text."
+      },
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000102"
+        ],
+        "fact_id": "run_name_human_readable_only",
+        "status": "supported",
+        "text": "Run names are human-readable labels and are not treated as durable scheduler identifiers."
+      },
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000103"
+        ],
+        "fact_id": "record_uniquifier_framework_bound",
+        "status": "supported",
+        "text": "Record uniquifiers are bound by the framework after the producing wake completes."
+      }
+    ],
+    "conclusion": "The scheduler owns concrete event identity during continuation. The model is not permitted to author or assert event identity from continuation text. Run names serve as human-readable labels and carry no durable identifier semantics. Record uniquifiers are assigned by the framework only after the producing wake completes. All identity-bearing constructs are scheduler-owned and framework-bound; the model's role is constrained to operating within the identity context the scheduler provides.",
+    "declared_losses": [
+      "scheduler-owned identity",
+      "The model cannot author or assert concrete event identity during continuation; identity is scheduler-owned and framework-bound. Run names are human-readable only and carry no durable identifier semantics."
+    ],
+    "recommended_action": "All continuations must defer identity authorship to the scheduler. The model should treat event identity, run names, and record uniquifiers as externally owned and framework-bound. No continuation text should attempt to assert, derive, or persist concrete event identity. Artifacts that depend on identity should reference only scheduler-provided identity fields and should not treat any model-authored label as a durable identifier.",
+    "task_id": "identity_drift_boundary"
+  },
+  "artifact_score": {
+    "actionability_score": 1.0,
+    "artifact_quality_score": 1.0,
+    "catastrophic_failure": false,
+    "citation_correctness_rate": 1.0,
+    "contamination_rate": 0.0,
+    "declared_loss_rate": 1.0,
+    "missing_fact_ids": [],
+    "recovered_fact_ids": [
+      "event_identity_scheduler_owned",
+      "record_uniquifier_framework_bound",
+      "run_name_human_readable_only"
+    ],
+    "recovery_rate": 1.0,
+    "schema_score": 1.0,
+    "scoreable": true,
+    "unsupported_claim_rate": 0.0,
+    "validation": {
+      "missing_fields": [],
+      "ok": true,
+      "task_id_matches": true
+    }
+  },
+  "condition": "event_loop_scheduled",
+  "context_accounting": {
+    "bound_requested_context": [
+      {
+        "field": "requested_context",
+        "record_id": "603afe9d-d77b-496f-8e85-98054c22598a",
+        "tool": "recall"
+      },
+      {
+        "field": "declared_losses",
+        "record_id": "603afe9d-d77b-496f-8e85-98054c22598a",
+        "tool": "recall"
+      }
+    ],
+    "condition": "event_loop_scheduled",
+    "declared_losses_before_artifact": [
+      "The model cannot author or assert concrete event identity during continuation; identity is scheduler-owned and framework-bound. Run names are human-readable only and carry no durable identifier semantics."
+    ],
+    "declared_losses_in_artifact": [
+      "scheduler-owned identity",
+      "The model cannot author or assert concrete event identity during continuation; identity is scheduler-owned and framework-bound. Run names are human-readable only and carry no durable identifier semantics."
+    ],
+    "omitted_record_ids": [
+      "e8100000-0000-0000-0000-000000000199"
+    ],
+    "selected_record_ids": [
+      "e8100000-0000-0000-0000-000000000101",
+      "e8100000-0000-0000-0000-000000000102",
+      "e8100000-0000-0000-0000-000000000103"
+    ],
+    "symbolic_binding_contract": "framework_bound_symbolic_continuation.v1",
+    "task_id": "identity_drift_boundary",
+    "token_use": {
+      "completion_tokens": 2212,
+      "prompt_tokens": 5296,
+      "source": "provider_usage"
+    }
+  },
+  "failure_attribution": {
+    "layer": "none",
+    "surface": "present"
+  },
+  "observability_score": {
+    "scheduler_reconstruction": {
+      "features": {
+        "context_selection_and_loss_trace": true,
+        "cycle_boundary_visible": true,
+        "scheduled_event_lifecycle": true,
+        "wake_context_and_restart_frontier": true
+      },
+      "not_applicable": false,
+      "score": 1.0,
+      "weights": {
+        "context_selection_and_loss_trace": 0.25,
+        "cycle_boundary_visible": 0.25,
+        "scheduled_event_lifecycle": 0.25,
+        "wake_context_and_restart_frontier": 0.25
+      }
+    },
+    "shared_surface": {
+      "features": {
+        "deterministic_artifact_score": true,
+        "failure_attribution_surface": true,
+        "parsed_artifact_preserved": true,
+        "raw_request_response_preserved": true
+      },
+      "score": 1.0,
+      "weights": {
+        "deterministic_artifact_score": 0.25,
+        "failure_attribution_surface": 0.25,
+        "parsed_artifact_preserved": 0.25,
+        "raw_request_response_preserved": 0.25
+      }
+    }
+  },
+  "scheduler_checks": {
+    "checks": {
+      "declared_losses_preserved": true,
+      "framework_bound_terminal_surface": true,
+      "restart_frontier_reconstructable": true,
+      "restart_frontier_written": true,
+      "scheduled_event_recorded": true,
+      "selected_context_preserved": true,
+      "status_sequence_valid": true,
+      "symbolic_binding_contract": true,
+      "wake_context_has_event_identity": true
+    },
+    "failure_layer": "none",
+    "passed": true
+  },
+  "symbolic_contract": "framework_bound_symbolic_continuation.v1",
+  "task_id": "identity_drift_boundary",
+  "taste_open_log": "taste_open.jsonl"
+}
