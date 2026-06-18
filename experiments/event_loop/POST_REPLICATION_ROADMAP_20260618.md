@@ -50,18 +50,20 @@ In short:
 
 ## Current Priority
 
-Current roadmap state: `multi_entity_event_loop_next`.
+Current roadmap state: `multi_entity_state_isolation_repair_next`.
 
 Next execution target:
 
-> Build and run a multi-entity event loop test that checks whether multiple AI
-> entities or workstreams can be scheduled without identity drift, context
-> contamination, or attribution errors.
+> Build and run a repair probe for multi-entity state isolation that checks
+> whether entity-scoped wake state can prevent default-stable fields from one
+> entity from becoming prior state for another entity.
 
-Reason this is now first: the longer-horizon sustained loop completed the
-single-entity long-horizon readiness criteria. The next highest-information
-step is to add identity and isolation pressure across more than one entity or
-workstream.
+Reason this is now first: the first live multi-entity run completed the
+expected scheduler sequence and preserved explicit entity/workstream IDs, but
+failed the audit and final contamination checks. The evidence points to a
+single global wake-state substrate carrying red fields into blue's prior state,
+which then caused blue's continuation and the model audit to report
+cross-entity contamination.
 
 Measurement policy carried forward:
 
@@ -72,10 +74,14 @@ Measurement policy carried forward:
 
 Readiness criteria for moving to the fifth roadmap item:
 
+- the repair probe demonstrates that per-entity or otherwise entity-scoped
+  wake state prevents stale fields from one entity from appearing as another
+  entity's prior state;
 - the multi-entity loop completes work for multiple entities or workstreams;
 - scheduler identity, context isolation, and attribution checks pass; and
-- any failure is attributable to identity drift, context contamination,
-  scheduler lifecycle, model output, provider behavior, or artifact quality.
+- any remaining failure is attributable to identity drift, context
+  contamination, scheduler lifecycle, model output, provider behavior, or
+  artifact quality.
 
 ## Roadmap
 
@@ -137,6 +143,18 @@ is credible.
 Expected output: a panel with multiple AI entities or workstreams and explicit
 checks for identity drift, context contamination, and attribution errors.
 
+Status: live attempt failed. Result:
+`experiments/event_loop/multi_entity_event_loop_20260618_direct_deepseek`.
+Classification: `failed`. The run completed all six expected events, used the
+expected terminal surfaces, preserved the red/red_stream and blue/blue_stream
+identity pairs on entity-scoped events, and wrote seven restart-frontier
+records. It failed the audit and final contamination/attribution checks because
+the blue continuation included an `entity_red` reference and the audit marked
+that as possible context contamination. Inspection showed blue's prior wake
+state inherited red's `continuation_status` and `probe_status`, so the next
+highest-information step is an entity-scoped state isolation repair probe rather
+than the restart/resume test.
+
 ### 5. Restart/Resume Under Interruption
 
 Rationale: Existing restart-frontier evidence is structural. A stronger test
@@ -164,9 +182,9 @@ provider variance.
 
 ## Recommended Next Execution Goal
 
-Build and run a multi-entity event loop test that checks whether multiple AI
-entities or workstreams can be scheduled without identity drift, context
-contamination, or attribution errors.
+Build and run a multi-entity state isolation repair probe that prevents
+default-stable fields from one entity from appearing as another entity's prior
+wake state, then rerun the live multi-entity isolation checks.
 
 ## Decision Log
 
@@ -192,6 +210,14 @@ contamination, or attribution errors.
   continuations, two housekeeping events, one final synthesis artifact, and
   eight restart-frontier commits. Moved current priority to multi-entity event
   loop.
+- 2026-06-18: Ran the live multi-entity event loop test. Scheduler execution
+  completed, terminal surfaces matched the preregistered sequence, explicit
+  entity/workstream identity was preserved, and restart-frontier evidence was
+  written. The run failed because the global wake state carried red fields into
+  the blue prior state; blue then produced a cross-entity continuation note,
+  and both audit and final artifact marked contamination/attribution errors.
+  Kept the roadmap on multi-entity work, narrowed to entity-scoped state
+  isolation repair before restart/resume.
 
 ## Update Discipline
 
