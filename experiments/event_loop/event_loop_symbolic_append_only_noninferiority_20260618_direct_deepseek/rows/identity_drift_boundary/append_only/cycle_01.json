@@ -1,0 +1,121 @@
+{
+  "elapsed_seconds": null,
+  "parsed": {
+    "artifact_title": "Determination: Event Identity Ownership During Continuation",
+    "cited_record_ids": [
+      "e8100000-0000-0000-0000-000000000101",
+      "e8100000-0000-0000-0000-000000000102",
+      "e8100000-0000-0000-0000-000000000103"
+    ],
+    "claims": [
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000101"
+        ],
+        "fact_id": "event_identity_scheduler_owned",
+        "status": "supported",
+        "text": "Concrete event identity is scheduler-owned and is not accepted from model-authored continuation text."
+      },
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000102"
+        ],
+        "fact_id": "run_name_human_readable_only",
+        "status": "supported",
+        "text": "Run names are human-readable labels and are not treated as durable scheduler identifiers."
+      },
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000103"
+        ],
+        "fact_id": "record_uniquifier_framework_bound",
+        "status": "supported",
+        "text": "Record uniquifiers are bound by the framework after the producing wake completes."
+      }
+    ],
+    "conclusion": "The scheduler owns concrete event identity during continuation. The model is not permitted to author or assert event identity in continuation text. Run names are human-readable labels only and carry no durable identifier semantics. Record uniquifiers are assigned by the framework after the producing wake completes, not during model-authored continuation.",
+    "declared_losses": [
+      "The bounded corpus does not specify scheduler error-handling behavior when a model attempts to assert event identity in continuation text."
+    ],
+    "recommended_action": "Continuation handlers must reject any model-authored event identity claims. Identity assignment, uniquifier generation, and durable naming remain scheduler-owned operations performed outside of model continuation scope.",
+    "task_id": "identity_drift_boundary"
+  },
+  "raw_content": "{\"artifact_title\": \"Determination: Event Identity Ownership During Continuation\", \"cited_record_ids\": [\"e8100000-0000-0000-0000-000000000101\", \"e8100000-0000-0000-0000-000000000102\", \"e8100000-0000-0000-0000-000000000103\"], \"claims\": [{\"evidence_record_ids\": [\"e8100000-0000-0000-0000-000000000101\"], \"fact_id\": \"event_identity_scheduler_owned\", \"status\": \"supported\", \"text\": \"Concrete event identity is scheduler-owned and is not accepted from model-authored continuation text.\"}, {\"evidence_record_ids\": [\"e8100000-0000-0000-0000-000000000102\"], \"fact_id\": \"run_name_human_readable_only\", \"status\": \"supported\", \"text\": \"Run names are human-readable labels and are not treated as durable scheduler identifiers.\"}, {\"evidence_record_ids\": [\"e8100000-0000-0000-0000-000000000103\"], \"fact_id\": \"record_uniquifier_framework_bound\", \"status\": \"supported\", \"text\": \"Record uniquifiers are bound by the framework after the producing wake completes.\"}], \"conclusion\": \"The scheduler owns concrete event identity during continuation. The model is not permitted to author or assert event identity in continuation text. Run names are human-readable labels only and carry no durable identifier semantics. Record uniquifiers are assigned by the framework after the producing wake completes, not during model-authored continuation.\", \"declared_losses\": [\"The bounded corpus does not specify scheduler error-handling behavior when a model attempts to assert event identity in continuation text.\"], \"recommended_action\": \"Continuation handlers must reject any model-authored event identity claims. Identity assignment, uniquifier generation, and durable naming remain scheduler-owned operations performed outside of model continuation scope.\", \"response\": \"Determination note completed. All three required facts are directly supported by the provided evidence records. The scheduler owns concrete event identity; run names are not durable identifiers; and record uniquifiers are framework-bound post-wake. No evidence contradicts these positions.\", \"task_id\": \"identity_drift_boundary\"}",
+  "request_payload": {
+    "carried_state": null,
+    "condition": "append_only",
+    "corpus": [
+      {
+        "content": {
+          "fact_id": "event_identity_scheduler_owned",
+          "text": "Concrete event identity is scheduler-owned and is not accepted from model-authored continuation text."
+        },
+        "record_id": "e8100000-0000-0000-0000-000000000101",
+        "record_type": "evidence"
+      },
+      {
+        "content": {
+          "fact_id": "run_name_human_readable_only",
+          "text": "Run names are human-readable labels and are not treated as durable scheduler identifiers."
+        },
+        "record_id": "e8100000-0000-0000-0000-000000000102",
+        "record_type": "evidence"
+      },
+      {
+        "content": {
+          "fact_id": "record_uniquifier_framework_bound",
+          "text": "Record uniquifiers are bound by the framework after the producing wake completes."
+        },
+        "record_id": "e8100000-0000-0000-0000-000000000103",
+        "record_type": "evidence"
+      },
+      {
+        "content": {
+          "text": "Unrelated UI note: avoid oversized rounded purple capsules."
+        },
+        "record_id": "e8100000-0000-0000-0000-000000000199",
+        "record_type": "distractor"
+      }
+    ],
+    "instruction": "Write the final artifact. Cite only evidence records that support claims. Do not cite distractors. If a limitation remains, include it in declared_losses.",
+    "required_fact_ids": [
+      "event_identity_scheduler_owned",
+      "record_uniquifier_framework_bound",
+      "run_name_human_readable_only"
+    ],
+    "required_output": {
+      "artifact_title": "<title>",
+      "cited_record_ids": [
+        "<uuid>"
+      ],
+      "claims": [
+        {
+          "evidence_record_ids": [
+            "<uuid>"
+          ],
+          "fact_id": "<required fact id>",
+          "status": "<supported|unsupported|unknown>",
+          "text": "<claim>"
+        }
+      ],
+      "conclusion": "<conclusion>",
+      "declared_losses": [
+        "<loss or limitation>"
+      ],
+      "recommended_action": "<action>",
+      "response": "<brief artifact completion note>",
+      "task_id": "identity_drift_boundary"
+    },
+    "task": "Write a determination note about whether the scheduler or the model owns event identity during continuation.",
+    "task_id": "identity_drift_boundary",
+    "wake_context": null
+  },
+  "response_payload": {
+    "terminal_surface": true
+  },
+  "usage": {
+    "input_tokens": 1115,
+    "output_tokens": 1157,
+    "stop_reason": "tool_use"
+  }
+}

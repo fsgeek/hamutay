@@ -1,0 +1,113 @@
+{
+  "artifact": {
+    "artifact_title": "Determination: Event Identity Ownership During Continuation",
+    "cited_record_ids": [
+      "e8100000-0000-0000-0000-000000000101",
+      "e8100000-0000-0000-0000-000000000102",
+      "e8100000-0000-0000-0000-000000000103"
+    ],
+    "claims": [
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000101"
+        ],
+        "fact_id": "event_identity_scheduler_owned",
+        "status": "supported",
+        "text": "Concrete event identity is scheduler-owned and is not accepted from model-authored continuation text."
+      },
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000102"
+        ],
+        "fact_id": "run_name_human_readable_only",
+        "status": "supported",
+        "text": "Run names are human-readable labels and are not treated as durable scheduler identifiers."
+      },
+      {
+        "evidence_record_ids": [
+          "e8100000-0000-0000-0000-000000000103"
+        ],
+        "fact_id": "record_uniquifier_framework_bound",
+        "status": "supported",
+        "text": "Record uniquifiers are bound by the framework after the producing wake completes."
+      }
+    ],
+    "conclusion": "The scheduler owns concrete event identity during continuation. The model is not permitted to author or assert event identity in continuation text. Run names are human-readable labels only and carry no durable identifier semantics. Record uniquifiers are assigned by the framework after the producing wake completes, not during model-authored continuation.",
+    "declared_losses": [
+      "The bounded corpus does not specify scheduler error-handling behavior when a model attempts to assert event identity in continuation text."
+    ],
+    "recommended_action": "Continuation handlers must reject any model-authored event identity claims. Identity assignment, uniquifier generation, and durable naming remain scheduler-owned operations performed outside of model continuation scope.",
+    "task_id": "identity_drift_boundary"
+  },
+  "artifact_score": {
+    "actionability_score": 1.0,
+    "artifact_quality_score": 0.85,
+    "catastrophic_failure": false,
+    "citation_correctness_rate": 1.0,
+    "contamination_rate": 0.0,
+    "declared_loss_rate": 0.0,
+    "missing_fact_ids": [],
+    "recovered_fact_ids": [
+      "event_identity_scheduler_owned",
+      "record_uniquifier_framework_bound",
+      "run_name_human_readable_only"
+    ],
+    "recovery_rate": 1.0,
+    "schema_score": 1.0,
+    "scoreable": true,
+    "unsupported_claim_rate": 0.0,
+    "validation": {
+      "missing_fields": [],
+      "ok": true,
+      "task_id_matches": true
+    }
+  },
+  "condition": "append_only",
+  "context_accounting": {
+    "append_only_context_record_ids": [
+      "e8100000-0000-0000-0000-000000000101",
+      "e8100000-0000-0000-0000-000000000102",
+      "e8100000-0000-0000-0000-000000000103",
+      "e8100000-0000-0000-0000-000000000199"
+    ],
+    "condition": "append_only",
+    "task_id": "identity_drift_boundary",
+    "token_use": {
+      "completion_tokens": 1157,
+      "prompt_tokens": 1115,
+      "source": "provider_usage"
+    }
+  },
+  "failure_attribution": {
+    "layer": "none",
+    "surface": "present"
+  },
+  "observability_score": {
+    "scheduler_reconstruction": {
+      "features": {},
+      "not_applicable": true,
+      "score": null,
+      "weights": {}
+    },
+    "shared_surface": {
+      "features": {
+        "deterministic_artifact_score": true,
+        "failure_attribution_surface": true,
+        "parsed_artifact_preserved": true,
+        "raw_request_response_preserved": true
+      },
+      "score": 1.0,
+      "weights": {
+        "deterministic_artifact_score": 0.25,
+        "failure_attribution_surface": 0.25,
+        "parsed_artifact_preserved": 0.25,
+        "raw_request_response_preserved": 0.25
+      }
+    }
+  },
+  "scheduler_checks": {
+    "not_applicable": true,
+    "reason": "append_only baseline has no scheduler lifecycle"
+  },
+  "task_id": "identity_drift_boundary"
+}
