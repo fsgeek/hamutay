@@ -50,20 +50,20 @@ In short:
 
 ## Current Priority
 
-Current roadmap state: `multi_entity_state_isolation_repair_next`.
+Current roadmap state: `restart_resume_under_interruption_next`.
 
 Next execution target:
 
-> Build and run a repair probe for multi-entity state isolation that checks
-> whether entity-scoped wake state can prevent default-stable fields from one
-> entity from becoming prior state for another entity.
+> Build and run a restart/resume interruption test that deliberately stops a
+> nontrivial event loop mid-execution and resumes from committed artifacts
+> without losing scheduler identity, carried state, or failure attribution.
 
-Reason this is now first: the first live multi-entity run completed the
-expected scheduler sequence and preserved explicit entity/workstream IDs, but
-failed the audit and final contamination checks. The evidence points to a
-single global wake-state substrate carrying red fields into blue's prior state,
-which then caused blue's continuation and the model audit to report
-cross-entity contamination.
+Reason this is now first: the multi-entity repair probe passed after adding
+experiment-layer entity-scoped wake state. The live result showed no prior-state
+leaks, no identity drift, no audit/final contamination, and no failure
+attribution records. The next highest-information operational risk is whether a
+nontrivial loop can survive an intentional interruption and resume from
+committed restart-frontier artifacts.
 
 Measurement policy carried forward:
 
@@ -72,16 +72,14 @@ Measurement policy carried forward:
 - a future experiment must preregister a semantic declared-loss scorer before
   using semantic loss declarations as scored evidence.
 
-Readiness criteria for moving to the fifth roadmap item:
+Readiness criteria for moving to provider variance:
 
-- the repair probe demonstrates that per-entity or otherwise entity-scoped
-  wake state prevents stale fields from one entity from appearing as another
-  entity's prior state;
-- the multi-entity loop completes work for multiple entities or workstreams;
-- scheduler identity, context isolation, and attribution checks pass; and
-- any remaining failure is attributable to identity drift, context
-  contamination, scheduler lifecycle, model output, provider behavior, or
-  artifact quality.
+- a restart/resume test deliberately interrupts a nontrivial loop after at
+  least one pending or completed event boundary;
+- the resumed run reconstructs the runnable frontier from committed artifacts;
+- scheduler identity, carried state, and failure attribution remain intact; and
+- any remaining failure is attributable to restart frontier, event lifecycle,
+  context reconstruction, model output, provider behavior, or artifact quality.
 
 ## Roadmap
 
@@ -155,6 +153,14 @@ state inherited red's `continuation_status` and `probe_status`, so the next
 highest-information step is an entity-scoped state isolation repair probe rather
 than the restart/resume test.
 
+Repair status: complete. Result:
+`experiments/event_loop/multi_entity_state_isolation_repair_20260618_direct_deepseek`.
+Classification: `passed`. The repair restored entity-scoped wake state before
+each entity event. The live run completed all six events, preserved explicit
+entity/workstream identity, showed no foreign-entity mentions in entity-event
+prior states, passed audit/final contamination and attribution checks, and
+wrote restart-frontier evidence with no failure attribution records.
+
 ### 5. Restart/Resume Under Interruption
 
 Rationale: Existing restart-frontier evidence is structural. A stronger test
@@ -182,9 +188,9 @@ provider variance.
 
 ## Recommended Next Execution Goal
 
-Build and run a multi-entity state isolation repair probe that prevents
-default-stable fields from one entity from appearing as another entity's prior
-wake state, then rerun the live multi-entity isolation checks.
+Build and run a restart/resume interruption test that stops a nontrivial event
+loop mid-execution and resumes from committed artifacts while preserving
+scheduler identity, carried state, and failure attribution.
 
 ## Decision Log
 
@@ -218,6 +224,12 @@ wake state, then rerun the live multi-entity isolation checks.
   and both audit and final artifact marked contamination/attribution errors.
   Kept the roadmap on multi-entity work, narrowed to entity-scoped state
   isolation repair before restart/resume.
+- 2026-06-18: Completed the multi-entity state isolation repair probe. The live
+  direct DeepSeek run passed after the experiment layer restored per-entity wake
+  state before each entity event. Entity-event prior states contained no
+  foreign-entity mentions, the audit and final artifact reported no
+  contamination or attribution errors, and the run had no failure attribution
+  records. Moved current priority to restart/resume under interruption.
 
 ## Update Discipline
 
