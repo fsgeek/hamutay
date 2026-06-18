@@ -65,19 +65,19 @@ In short:
 
 ## Current Priority
 
-Current roadmap state: `phase_2a_larger_multi_entity_loop_next`.
+Current roadmap state: `phase_2a_interleaving_restart_resume_next`.
 
 Next execution target:
 
-> Build and run a larger multi-entity sustained loop without Yanantin: 3-5
-> entities or workstreams, interleaved scheduling, multiple inbound messages per
-> entity, self-scheduled continuations, housekeeping, and final synthesis.
+> Build and run a combined interleaving and restart/resume stress test over the
+> larger multi-entity loop, deliberately interrupting one or more boundaries
+> while preserving entity-scoped state and scheduler identity.
 
-Reason this is now first: the Phase 2A substrate contract probe passed under
-live direct DeepSeek. The experiment-layer contract now explicitly defines and
-checks entity-scoped wake state, shared-context authorization, and
-scheduler-owned field discipline. The next scale step is to increase entity
-count and scheduling interleaving without adding Yanantin.
+Reason this is now first: the larger multi-entity sustained loop passed under
+live direct DeepSeek with three entities, two rounds, interleaved scheduling,
+two housekeeping audits, final synthesis, local artifacts only, and no
+entity-state leaks. The next highest-information Phase 2A risk is whether this
+larger interleaved loop remains recoverable under interruption.
 
 ## Phase 2A Readiness Criteria
 
@@ -176,6 +176,17 @@ Readiness to advance:
 - interleaving does not cause identity drift or state bleed;
 - housekeeping does not collapse entity-specific and shared state;
 - final synthesis distinguishes each entity's contributions and open items.
+
+Status: complete. Result:
+`experiments/event_loop/phase_2a_larger_multi_entity_loop_20260618_direct_deepseek`.
+Classification: `passed`. The live direct DeepSeek run completed three
+entities across two interleaved rounds using local artifacts only. It completed
+15 events, including 12 entity events, two housekeeping audits, and one final
+synthesis artifact. Entity/workstream/round identity followed the
+preregistered interleaved sequence, private entity prior states had no
+foreign-entity mentions, housekeeping and final contamination checks were
+clean, model raw outputs did not author scheduler-owned fields, and 16
+restart-frontier records were written.
 
 ### 3. Combined Interleaving And Restart/Resume Stress
 
@@ -297,9 +308,9 @@ only when the roadmap's explicit readiness gate is met.
 
 ## Recommended Next Execution Goal
 
-Build and run the Phase 2A larger multi-entity sustained loop without
-Yanantin, using the committed substrate contract as the state-isolation
-measurement surface.
+Build and run the Phase 2A combined interleaving and restart/resume stress test
+over the larger multi-entity loop, using the committed substrate contract and
+larger-loop result as anchors.
 
 ## Decision Log
 
@@ -315,6 +326,12 @@ measurement surface.
   clean audit/final contamination checks, scheduler-owned field discipline, and
   failure-attribution surface presence. Advanced current priority to the larger
   multi-entity sustained loop without Yanantin.
+- 2026-06-18: Completed the Phase 2A larger multi-entity sustained loop. The
+  live direct DeepSeek run passed with three entities, two interleaved rounds,
+  12 entity events, two housekeeping audits, one final synthesis artifact,
+  local artifacts only, no entity-state leaks, clean housekeeping/final
+  contamination checks, and 16 restart-frontier records. Advanced current
+  priority to combined interleaving and restart/resume stress.
 
 ## Update Discipline
 
