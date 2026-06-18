@@ -50,19 +50,18 @@ In short:
 
 ## Current Priority
 
-Current roadmap state: `harder_append_only_baseline_next`.
+Current roadmap state: `longer_horizon_sustained_loop_next`.
 
 Next execution target:
 
-> Build and run a harder append-only baseline test that determines whether
-> symbolic event-loop non-inferiority survives against a stronger one-shot
-> condition, while preserving the declared-loss measurement policy below.
+> Build and run a longer-horizon sustained loop test with inbound work,
+> self-scheduled continuation, housekeeping, restart frontier updates, and
+> final artifact synthesis across more than one task.
 
-Reason this is now first: the declared-loss discipline stress test satisfied
-the readiness criterion for moving on. It showed that exact-marker scoring is
-lexical, that the model can comply when the exact loss contract is explicit,
-and that the prior `declared_loss_rate = 0.0` is best attributed to
-prompt/rubric design under the current scorer, with a scorer caveat.
+Reason this is now first: the harder append-only baseline test survived with
+equal perfect artifact and declared-loss scores in both conditions. Further
+single-artifact baseline hardening is likely lower information gain than moving
+to the long-horizon behavior the event-loop thesis is actually about.
 
 Measurement policy carried forward:
 
@@ -71,13 +70,13 @@ Measurement policy carried forward:
 - a future experiment must preregister a semantic declared-loss scorer before
   using semantic loss declarations as scored evidence.
 
-Readiness criteria for moving to the third roadmap item:
+Readiness criteria for moving to the fourth roadmap item:
 
-- the harder append-only baseline test establishes whether event-loop
-  non-inferiority survives, narrows, or fails against the stronger baseline; and
-- any failure is attributable to artifact quality, declared-loss discipline,
-  prompt/rubric design, provider behavior, or scheduler behavior without using
-  scheduler observability to rescue the shared-surface comparison.
+- the longer-horizon loop completes inbound work, self-scheduled continuation,
+  housekeeping, restart frontier updates, and final artifact synthesis across
+  more than one task; and
+- any failure is attributable to scheduler lifecycle, model output, context
+  recovery, provider behavior, artifact quality, or declared-loss discipline.
 
 ## Roadmap
 
@@ -108,6 +107,12 @@ second.
 Expected output: a stricter append-only baseline prompt, rubric, or task set
 that tests whether event-loop non-inferiority survives against a stronger
 one-shot condition.
+
+Status: complete. Result:
+`experiments/event_loop/harder_append_only_baseline_20260618_direct_deepseek`.
+Classification: `survived`. Event-loop mean artifact quality was `1.0`; harder
+append-only mean artifact quality was `1.0`; both conditions had declared-loss
+rate `1.0` across all rows under the exact-marker contract.
 
 ### 3. Longer-Horizon Sustained Loop
 
@@ -154,10 +159,9 @@ provider variance.
 
 ## Recommended Next Execution Goal
 
-Build and run a harder append-only baseline test that determines whether
-symbolic event-loop non-inferiority survives against a stronger one-shot
-condition, while preserving the declared-loss measurement policy from this
-roadmap.
+Build and run a longer-horizon sustained loop test with inbound work,
+self-scheduled continuation, housekeeping, restart frontier updates, and final
+artifact synthesis across more than one task.
 
 ## Decision Log
 
@@ -173,6 +177,11 @@ roadmap.
   without a constrained recommendation was not materially disciplined. Live
   direct-DeepSeek rows showed the model can comply when the exact marker is
   explicit. Moved current priority to harder append-only baseline.
+- 2026-06-18: Completed harder append-only baseline test. The symbolic
+  event-loop condition survived against the stronger one-shot append-only
+  baseline with equal perfect artifact quality and declared-loss scores. Moved
+  current priority to longer-horizon sustained loop because it should provide
+  more information than another single-artifact comparison.
 
 ## Update Discipline
 
