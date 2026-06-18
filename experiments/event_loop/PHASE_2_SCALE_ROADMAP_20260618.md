@@ -65,20 +65,21 @@ In short:
 
 ## Current Priority
 
-Current roadmap state: `phase_2a_local_memory_pressure_next`.
+Current roadmap state: `phase_2b_yanantin_memory_contract_next`.
 
 Next execution target:
 
-> Build and run a local memory pressure probe that requires recall, comparison,
-> and selective retrieval from prior events using only current local mechanisms.
+> Design the Yanantin memory contract for event-loop integration, defining
+> which records are written, which remain local-only, how entity-scoped and
+> shared memory are separated, how retrievals appear in event envelopes, and how
+> provenance is scored.
 
-Reason this is now first: the combined interleaving and restart/resume stress
-test passed under live direct DeepSeek. The larger interleaved loop recovered
-an interrupted round-2 entity continuation from `running` back to `pending`,
-reconstructed entity-scoped state from local artifacts, and completed the loop
-without identity drift or state leaks. The next Phase 2A question is whether
-local mechanisms remain sufficient when tasks require recall and provenance-like
-support across prior events.
+Reason this is now first: the local memory pressure probe passed after
+clarifying the provenance scorer from exact equality to source-record
+inclusion. Local requested-context recall recovered commitments that were absent
+from current wake state, and final synthesis cited all source commitment
+records. Phase 2A therefore has enough positive substrate-scale evidence to
+open the planned Phase 2B Yanantin contract-design gate.
 
 ## Phase 2A Readiness Criteria
 
@@ -243,6 +244,26 @@ Readiness to advance:
 - if local mechanisms fail specifically on recall, provenance, or cross-session
   reconstruction, the Phase 2B gate opens.
 
+Status: complete. Initial strict-scorer result:
+`experiments/event_loop/phase_2a_local_memory_pressure_20260618_direct_deepseek`.
+Classification: `failed`. The live direct DeepSeek run passed local recall:
+each entity recovered the correct commitment from explicit local requested
+context, each recalled commitment was absent from the current wake prior state,
+housekeeping was clean, and there were no failure-attribution records. The
+failed check was exact equality on final `provenance_record_ids`: the final
+artifact included all source commitment records plus additional supporting
+local records. This was stricter than the preregistered prose criterion that
+final synthesis include the source record IDs.
+
+Corrected-scorer status: complete. Result:
+`experiments/event_loop/phase_2a_local_memory_pressure_20260618_direct_deepseek_provenance_superset`.
+Classification: `passed`. The scorer was clarified to require that final
+provenance include every source commitment record ID while allowing additional
+supporting local records. Under that criterion, the live run passed. Yanantin
+remains unneeded for this bounded local recall surface, but the planned Phase
+2B contract-design gate opens because Phase 2A substrate-scale tests have
+passed rather than because local memory failed.
+
 ### 5. Yanantin Memory Contract Design
 
 Rationale: Yanantin should enter as a substrate with a clear contract, not as an
@@ -319,9 +340,10 @@ only when the roadmap's explicit readiness gate is met.
 
 ## Recommended Next Execution Goal
 
-Build and run the Phase 2A local memory pressure probe. Keep Yanantin disabled
-unless the probe fails specifically on recall, provenance, or cross-session
-reconstruction.
+Design the Phase 2B Yanantin event-loop memory contract. Do not yet implement
+or commit `src/hamutay` integration; first specify record-write boundaries,
+entity-scoped versus shared memory, retrieval envelope shape, and provenance
+scoring.
 
 ## Decision Log
 
@@ -351,6 +373,16 @@ reconstruction.
   `running`, `pending`, `running`, `completed`; no events were suppressed and
   no failure attribution records were produced. Kept the Yanantin gate closed
   and advanced current priority to local memory pressure.
+- 2026-06-18: Completed the Phase 2A local memory pressure probe. The initial
+  strict-provenance scorer failed because the final artifact included source
+  commitment records plus additional supporting local records, while the prose
+  criterion required inclusion of source records rather than exact equality.
+  After clarifying the scorer, the live direct DeepSeek run passed: commitments
+  absent from current wake state were recovered through explicit local
+  requested context, recall source record IDs were cited, housekeeping was
+  clean, and final provenance included every source commitment record. Opened
+  the Phase 2B Yanantin contract-design gate because Phase 2A passed, not
+  because local memory failed.
 
 ## Update Discipline
 
