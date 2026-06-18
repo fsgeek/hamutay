@@ -326,6 +326,13 @@ class ExchangeResult:
     cache_read_tokens: int = 0
     cache_creation_tokens: int = 0
     tool_activity: list[dict] | None = None
+    # Premature think_and_respond drafts held when the model bundled the
+    # terminal tool with peripheral tool calls (case A in the exchange loop).
+    # The harness discards the bundled draft (it was composed before the
+    # peripheral results came back); recording it here makes that loss
+    # *declared* rather than silent. Single-cycle, like tool_activity: a
+    # list because the model may bundle on more than one turn per cycle.
+    unprocessed_request: list[dict] | None = None
 
 
 @dataclass
@@ -780,6 +787,11 @@ class AnthropicTasteBackend:
         total_output = 0
         cache_read = 0
         cache_create = 0
+        # Premature think_and_respond drafts the model bundled with peripheral
+        # tool calls. Discarded from the conversation (composed before the
+        # peripheral results were seen) but recorded here so the loss is
+        # declared rather than silent. May fire on more than one turn.
+        held_drafts: list[dict] = []
         max_turns = 20
         # Estimated input tokens for the *next* turn. Initialized to 0;
         # after each turn we set it to the API's reported input_tokens
@@ -877,6 +889,15 @@ class AnthropicTasteBackend:
                             "Model called perception tools but no tool_executor "
                             "was provided to resolve them"
                         )
+                    # The bundled terminal draft is about to be dropped from
+                    # the conversation. Record it before it goes out of scope.
+                    held_drafts.append(
+                        {
+                            "turn_index": turn_index,
+                            "n_peripheral_tools": len(split.other_tool_uses),
+                            "held_draft": split.think_and_respond_input,
+                        }
+                    )
                     assistant_content = []
                     for block in response.content:
                         if (
@@ -926,6 +947,7 @@ class AnthropicTasteBackend:
                     tool_activity=(
                         tool_executor.activity_log if tool_executor else None
                     ),
+                    unprocessed_request=held_drafts or None,
                 )
 
             if not split.other_tool_uses:
@@ -2095,6 +2117,21 @@ class OpenTasteSession:
             ]
         self._last_tool_activity = full_activity
         self._last_full_activity = full_activity
+
+        # Declare any premature think_and_respond drafts the exchange loop
+        # held (bundled with peripheral tools, then discarded from the
+        # conversation). Present only in the cycle where the bundling
+        # happened, durable via the JSONL record, never carried forward as
+        # standing context — so we must CLEAR it on cycles that held nothing.
+        # _apply_updates carries unlisted keys forward by design (so the model
+        # must actively forget); a harness-injected single-cycle annotation
+        # would otherwise become exactly the append-only log this project
+        # rejects. Set-when-present / remove-when-absent makes "single-cycle"
+        # explicit instead of relying on the field happening to be re-stamped.
+        if result.unprocessed_request:
+            self._state["_unprocessed_request"] = result.unprocessed_request
+        else:
+            self._state.pop("_unprocessed_request", None)
 
         self._last_cycle_time = datetime.now(timezone.utc)
 
