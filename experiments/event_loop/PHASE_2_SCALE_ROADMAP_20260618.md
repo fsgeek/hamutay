@@ -65,21 +65,20 @@ In short:
 
 ## Current Priority
 
-Current roadmap state: `phase_2b_yanantin_memory_contract_next`.
+Current roadmap state: `phase_2b_yanantin_backed_multi_entity_memory_probe_next`.
 
 Next execution target:
 
-> Design the Yanantin memory contract for event-loop integration, defining
-> which records are written, which remain local-only, how entity-scoped and
-> shared memory are separated, how retrievals appear in event envelopes, and how
-> provenance is scored.
+> Preregister and run a Yanantin-backed multi-entity memory probe that tests
+> entity-scoped writes, authorized shared-memory access, retrieval envelopes,
+> housekeeping over historical commitments, and final provenance citation.
 
-Reason this is now first: the local memory pressure probe passed after
-clarifying the provenance scorer from exact equality to source-record
-inclusion. Local requested-context recall recovered commitments that were absent
-from current wake state, and final synthesis cited all source commitment
-records. Phase 2A therefore has enough positive substrate-scale evidence to
-open the planned Phase 2B Yanantin contract-design gate.
+Reason this is now first: the Phase 2B Yanantin memory contract dry validator
+passed. The contract now defines Yanantin write boundaries, local-only records,
+entity-scoped versus shared versus housekeeping memory scopes, retrieval
+envelope fields, required provenance fields, and failure-attribution layers.
+The validator also confirmed that the existing Hamut'ay memory port and
+Apacheta bridge expose the minimum methods needed for the next probe.
 
 ## Phase 2A Readiness Criteria
 
@@ -287,6 +286,15 @@ Readiness to advance:
   which event;
 - shared memory access is authorized rather than accidental.
 
+Status: complete. Result:
+`experiments/event_loop/phase_2b_yanantin_memory_contract_20260618_dry_validation`.
+Classification: `passed`. The dry validator confirmed that the contract names
+the required sections, provenance fields, memory scopes, record-write
+boundaries, retrieval envelope fields, and failure-attribution layers. It also
+confirmed that the existing Hamut'ay `MemoryPort` and `ApachetaBridge` surfaces
+contain the required methods for the planned probe. This opens the Phase 2B
+Yanantin-backed multi-entity memory probe as the next execution target.
+
 ### 6. Yanantin-Backed Multi-Entity Memory Probe
 
 Rationale: Once the contract is explicit, test whether provenance-bearing memory
@@ -340,10 +348,9 @@ only when the roadmap's explicit readiness gate is met.
 
 ## Recommended Next Execution Goal
 
-Design the Phase 2B Yanantin event-loop memory contract. Do not yet implement
-or commit `src/hamutay` integration; first specify record-write boundaries,
-entity-scoped versus shared memory, retrieval envelope shape, and provenance
-scoring.
+Preregister and run the Phase 2B Yanantin-backed multi-entity memory probe.
+Keep the next change isolated to experiment artifacts unless the probe exposes
+a narrowly scoped integration gap that must be reviewed before source changes.
 
 ## Decision Log
 
@@ -383,6 +390,12 @@ scoring.
   clean, and final provenance included every source commitment record. Opened
   the Phase 2B Yanantin contract-design gate because Phase 2A passed, not
   because local memory failed.
+- 2026-06-18: Completed the Phase 2B Yanantin memory contract design gate. The
+  dry validator passed with no failure attribution records: required contract
+  sections, provenance fields, memory scopes, write/local-only boundaries,
+  retrieval envelope fields, failure-attribution layers, recall-substrate
+  distinctions, and existing bridge methods were all present. Advanced current
+  priority to a Yanantin-backed multi-entity memory probe.
 
 ## Update Discipline
 
