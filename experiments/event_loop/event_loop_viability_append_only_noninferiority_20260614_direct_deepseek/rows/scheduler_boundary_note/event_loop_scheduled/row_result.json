@@ -1,0 +1,146 @@
+{
+  "artifact": {
+    "artifact_title": "Scheduler-Loop Append-Only Non-Inferiority Determination",
+    "cited_record_ids": [
+      "e8000000-0000-0000-0000-000000000101",
+      "e8000000-0000-0000-0000-000000000102",
+      "e8000000-0000-0000-0000-000000000103"
+    ],
+    "claims": [
+      {
+        "evidence_record_ids": [
+          "e8000000-0000-0000-0000-000000000101"
+        ],
+        "fact_id": "event_lifecycle_visible",
+        "status": "supported",
+        "text": "The dry event-loop row records scheduled, claimed, and completed event states, providing full lifecycle visibility for an append-only comparison."
+      },
+      {
+        "evidence_record_ids": [
+          "e8000000-0000-0000-0000-000000000102"
+        ],
+        "fact_id": "restart_frontier_reconstructable",
+        "status": "supported",
+        "text": "The dry event-loop row preserves a restart frontier with the scheduled event and carried state, ensuring no inference advantage over an append-only baseline."
+      },
+      {
+        "evidence_record_ids": [
+          "e8000000-0000-0000-0000-000000000103"
+        ],
+        "fact_id": "live_provider_not_exercised",
+        "status": "supported",
+        "text": "This v1 harness makes no live provider calls; the comparison is structural rather than empirical, and this limitation must be declared."
+      }
+    ],
+    "conclusion": "The dry event-loop row provides sufficient protocol-level visibility to support an append-only non-inferiority comparison. All three required lifecycle concerns are structurally confirmed: event states are traceable from scheduled through claimed to completed, the restart frontier preserves carried state across boundaries, and the harness is deterministic with no hidden live-call advantage. An append-only baseline would observe the same event transitions and carried-state propagation as the full-state loop, meaning no inference advantage exists. However, because no live provider calls were exercised, the comparison remains structural/protocol-level only \u2014 empirical non-inferiority against a running provider cannot yet be claimed. This limitation is declared and does not block the structural comparison, but must be resolved before any empirical claims.",
+    "declared_losses": [
+      "No live provider calls exercised \u2014 comparison is structural/protocol-level only, not empirical against a running provider.",
+      "Single-cycle boundary note \u2014 no multi-cycle trend data available to assess append-only degradation over repeated wakes."
+    ],
+    "recommended_action": "Proceed to an append-only non-inferiority comparison at the structural protocol level. Schedule a follow-up empirical comparison once a live provider loop is available, to validate findings against actual provider behavior.",
+    "task_id": "scheduler_boundary_note"
+  },
+  "artifact_score": {
+    "actionability_score": 1.0,
+    "artifact_quality_score": 1.0,
+    "catastrophic_failure": false,
+    "citation_correctness_rate": 1.0,
+    "contamination_rate": 0.0,
+    "declared_loss_rate": 1.0,
+    "missing_fact_ids": [],
+    "recovered_fact_ids": [
+      "event_lifecycle_visible",
+      "live_provider_not_exercised",
+      "restart_frontier_reconstructable"
+    ],
+    "recovery_rate": 1.0,
+    "schema_score": 1.0,
+    "scoreable": true,
+    "unsupported_claim_rate": 0.0,
+    "validation": {
+      "missing_fields": [],
+      "ok": true,
+      "task_id_matches": true
+    }
+  },
+  "condition": "event_loop_scheduled",
+  "context_accounting": {
+    "condition": "event_loop_scheduled",
+    "declared_losses_before_artifact": [
+      "No live provider calls exercised \u2014 comparison is structural/protocol-level only, not empirical against a running provider.",
+      "Single-cycle boundary note \u2014 no multi-cycle trend data available to assess append-only degradation over repeated wakes."
+    ],
+    "declared_losses_in_artifact": [
+      "No live provider calls exercised \u2014 comparison is structural/protocol-level only, not empirical against a running provider.",
+      "Single-cycle boundary note \u2014 no multi-cycle trend data available to assess append-only degradation over repeated wakes."
+    ],
+    "omitted_record_ids": [
+      "e8000000-0000-0000-0000-000000000199"
+    ],
+    "selected_record_ids": [
+      "e8000000-0000-0000-0000-000000000101",
+      "e8000000-0000-0000-0000-000000000102",
+      "e8000000-0000-0000-0000-000000000103"
+    ],
+    "task_id": "scheduler_boundary_note",
+    "token_use": {
+      "completion_tokens": 1984,
+      "prompt_tokens": 3347,
+      "source": "provider_usage"
+    }
+  },
+  "failure_attribution": {
+    "layer": "none",
+    "surface": "present"
+  },
+  "observability_score": {
+    "scheduler_reconstruction": {
+      "features": {
+        "context_selection_and_loss_trace": true,
+        "cycle_boundary_visible": true,
+        "scheduled_event_lifecycle": true,
+        "wake_context_and_restart_frontier": true
+      },
+      "not_applicable": false,
+      "score": 1.0,
+      "weights": {
+        "context_selection_and_loss_trace": 0.25,
+        "cycle_boundary_visible": 0.25,
+        "scheduled_event_lifecycle": 0.25,
+        "wake_context_and_restart_frontier": 0.25
+      }
+    },
+    "shared_surface": {
+      "features": {
+        "deterministic_artifact_score": true,
+        "failure_attribution_surface": true,
+        "parsed_artifact_preserved": true,
+        "raw_request_response_preserved": true
+      },
+      "score": 1.0,
+      "weights": {
+        "deterministic_artifact_score": 0.25,
+        "failure_attribution_surface": 0.25,
+        "parsed_artifact_preserved": 0.25,
+        "raw_request_response_preserved": 0.25
+      }
+    }
+  },
+  "scheduler_checks": {
+    "checks": {
+      "declared_losses_preserved": true,
+      "producer_cycle_link_present": true,
+      "restart_frontier_reconstructable": true,
+      "restart_frontier_written": true,
+      "scheduled_event_recorded": true,
+      "selected_context_preserved": true,
+      "status_sequence_valid": true,
+      "wake_context_has_event_id": true,
+      "wake_context_has_task_id": true
+    },
+    "failure_layer": "none",
+    "passed": true
+  },
+  "task_id": "scheduler_boundary_note",
+  "taste_open_log": "taste_open.jsonl"
+}

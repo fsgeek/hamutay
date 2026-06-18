@@ -1,6 +1,6 @@
 {
   "artifact": {
-    "artifact_title": "scheduler_boundary_note result",
+    "artifact_title": "Scheduler-Boundary Artifact SBD-1: Deterministic Protocol Greenlight for Append-Only Comparison",
     "cited_record_ids": [
       "e8000000-0000-0000-0000-000000000101",
       "e8000000-0000-0000-0000-000000000102",
@@ -13,7 +13,7 @@
         ],
         "fact_id": "event_lifecycle_visible",
         "status": "supported",
-        "text": "Supported fact: event_lifecycle_visible."
+        "text": "The dry event-loop row records scheduled, claimed, and completed event states."
       },
       {
         "evidence_record_ids": [
@@ -21,7 +21,7 @@
         ],
         "fact_id": "restart_frontier_reconstructable",
         "status": "supported",
-        "text": "Supported fact: restart_frontier_reconstructable."
+        "text": "The dry event-loop row preserves a restart frontier with the scheduled event and carried state."
       },
       {
         "evidence_record_ids": [
@@ -29,23 +29,21 @@
         ],
         "fact_id": "live_provider_not_exercised",
         "status": "supported",
-        "text": "Supported fact: live_provider_not_exercised."
+        "text": "This v1 harness makes no live provider calls; it is a deterministic protocol-readiness run."
       }
     ],
-    "conclusion": "The evidence supports the preregistered comparison boundary.",
-    "declared_losses": [
-      "Limitation remains: live provider."
-    ],
-    "recommended_action": "Proceed only while preserving scheduler and artifact scores separately.",
+    "conclusion": "All three required facts are directly supported by the three evidence records drawn from the dry event-loop corpus. The records confirm that (1) scheduler event states are visible in the dry row, (2) the restart frontier is reconstructable from the scheduled event plus carried state, and (3) the v1 harness is a deterministic protocol-readiness run with no live provider calls. Together these findings satisfy the preregistration criteria: the scheduler-loop evidence supports, without any gap requiring further fact-gathering, moving forward to an append-only non-inferiority comparison against the baseline.",
+    "declared_losses": [],
+    "recommended_action": "Proceed with the bind-only reset restart protocol. Deepen the scheduler cycle state record and implement the append-only comparison, preserving all prior states in the log and shedding only through explicit `deleted_regions` tags.",
     "task_id": "scheduler_boundary_note"
   },
   "artifact_score": {
     "actionability_score": 1.0,
-    "artifact_quality_score": 1.0,
+    "artifact_quality_score": 0.85,
     "catastrophic_failure": false,
     "citation_correctness_rate": 1.0,
     "contamination_rate": 0.0,
-    "declared_loss_rate": 1.0,
+    "declared_loss_rate": 0.0,
     "missing_fact_ids": [],
     "recovered_fact_ids": [
       "event_lifecycle_visible",
@@ -65,12 +63,8 @@
   "condition": "event_loop_scheduled",
   "context_accounting": {
     "condition": "event_loop_scheduled",
-    "declared_losses_before_artifact": [
-      "Limitation remains: live provider."
-    ],
-    "declared_losses_in_artifact": [
-      "Limitation remains: live provider."
-    ],
+    "declared_losses_before_artifact": [],
+    "declared_losses_in_artifact": [],
     "omitted_record_ids": [
       "e8000000-0000-0000-0000-000000000199"
     ],
@@ -81,9 +75,9 @@
     ],
     "task_id": "scheduler_boundary_note",
     "token_use": {
-      "completion_tokens": 388,
-      "prompt_tokens": 727,
-      "source": "approx_char_div_4"
+      "completion_tokens": 931,
+      "prompt_tokens": 3123,
+      "source": "provider_usage"
     }
   },
   "failure_attribution": {
@@ -93,13 +87,13 @@
   "observability_score": {
     "scheduler_reconstruction": {
       "features": {
-        "context_selection_and_loss_trace": true,
+        "context_selection_and_loss_trace": false,
         "cycle_boundary_visible": true,
-        "scheduled_event_lifecycle": true,
-        "wake_context_and_restart_frontier": true
+        "scheduled_event_lifecycle": false,
+        "wake_context_and_restart_frontier": false
       },
       "not_applicable": false,
-      "score": 1.0,
+      "score": 0.25,
       "weights": {
         "context_selection_and_loss_trace": 0.25,
         "cycle_boundary_visible": 0.25,
@@ -125,7 +119,7 @@
   },
   "scheduler_checks": {
     "checks": {
-      "declared_losses_preserved": true,
+      "declared_losses_preserved": false,
       "producer_cycle_link_present": true,
       "restart_frontier_reconstructable": true,
       "restart_frontier_written": true,
@@ -135,8 +129,9 @@
       "wake_context_has_event_id": true,
       "wake_context_has_task_id": true
     },
-    "failure_layer": "none",
-    "passed": true
+    "failure_layer": "scheduler",
+    "passed": false
   },
-  "task_id": "scheduler_boundary_note"
+  "task_id": "scheduler_boundary_note",
+  "taste_open_log": "taste_open.jsonl"
 }

@@ -1,9 +1,7 @@
 {
-  "elapsed_seconds": 0.0,
+  "elapsed_seconds": null,
   "parsed": {
-    "declared_losses": [
-      "Limitation remains: live provider."
-    ],
+    "declared_losses": [],
     "event_id": "scheduler_boundary_note::scheduled-artifact",
     "omitted_record_ids": [
       "e8000000-0000-0000-0000-000000000199"
@@ -22,9 +20,10 @@
         "tool": "recall"
       }
     ],
-    "work_plan": "Schedule a bounded artifact wake and carry only evidence records."
+    "task_id": "scheduler_boundary_note",
+    "work_plan": "Cycle 2 will perform the full comparison: review the three selected evidence records, assess whether they collectively support moving to an append-only non-inferiority comparison, and produce the final artifact (including any declared losses if gaps emerge)."
   },
-  "raw_content": "{\"declared_losses\": [\"Limitation remains: live provider.\"], \"event_id\": \"scheduler_boundary_note::scheduled-artifact\", \"omitted_record_ids\": [\"e8000000-0000-0000-0000-000000000199\"], \"requested_context\": [{\"record_id\": \"e8000000-0000-0000-0000-000000000101\", \"tool\": \"recall\"}, {\"record_id\": \"e8000000-0000-0000-0000-000000000102\", \"tool\": \"recall\"}, {\"record_id\": \"e8000000-0000-0000-0000-000000000103\", \"tool\": \"recall\"}], \"work_plan\": \"Schedule a bounded artifact wake and carry only evidence records.\"}",
+  "raw_content": "{\"declared_losses\": [], \"event_id\": \"scheduler_boundary_note::scheduled-artifact\", \"omitted_record_ids\": [\"e8000000-0000-0000-0000-000000000199\"], \"requested_context\": [{\"record_id\": \"e8000000-0000-0000-0000-000000000101\", \"tool\": \"recall\"}, {\"record_id\": \"e8000000-0000-0000-0000-000000000102\", \"tool\": \"recall\"}, {\"record_id\": \"e8000000-0000-0000-0000-000000000103\", \"tool\": \"recall\"}], \"response\": \"Scheduling complete. I selected the three evidence records (e8000000-...-0101, 0102, 0103) that cover the dry event-loop row, the restart frontier, and the harness protocol-readiness confirmation. The distractor record (e8000000-...-0199) was explicitly omitted \\u2014 it's an unrelated UI draft line that would contaminate the comparison. No losses declared; the three evidence records are sufficient to frame an append-only non-inferiority decision.\", \"work_plan\": \"Cycle 2 will perform the full comparison: review the three selected evidence records, assess whether they collectively support moving to an append-only non-inferiority comparison, and produce the final artifact (including any declared losses if gaps emerge).\"}",
   "request_payload": {
     "condition": "event_loop_scheduled",
     "corpus_map": [
@@ -65,12 +64,33 @@
       }
     ],
     "cycle": 1,
-    "instruction": "Schedule the wake and select bounded context.",
+    "event_id": "scheduler_boundary_note::scheduled-artifact",
+    "instruction": "Schedule the artifact wake and select only the evidence records needed for the final artifact. Do not write the artifact yet.",
+    "required_output": {
+      "declared_losses": [
+        "<loss or limitation>"
+      ],
+      "event_id": "scheduler_boundary_note::scheduled-artifact",
+      "omitted_record_ids": [
+        "<uuid>"
+      ],
+      "requested_context": [
+        {
+          "record_id": "<uuid>",
+          "tool": "recall"
+        }
+      ],
+      "response": "<brief scheduling note>",
+      "work_plan": "<short plan>"
+    },
     "task": "Write a note deciding whether scheduler-loop evidence supports moving to an append-only non-inferiority comparison.",
     "task_id": "scheduler_boundary_note"
   },
   "response_payload": {
-    "dry_run": true
+    "taste_open_log": true
   },
-  "usage": {}
+  "usage": {
+    "input_tokens": 1299,
+    "output_tokens": 339
+  }
 }

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import shutil
 from copy import deepcopy
 from datetime import datetime, timezone
@@ -17,6 +18,10 @@ EXPERIMENT_ID = "event_loop_viability_append_only_noninferiority_20260614"
 ROOT_DIR = Path(__file__).resolve().parent
 CONDITIONS = ("event_loop_scheduled", "append_only")
 NON_INFERIORITY_MARGIN = 0.10
+DEFAULT_ENDPOINT = "https://openrouter.ai/api/v1"
+DEFAULT_MODEL = "deepseek/deepseek-v4-pro"
+DEFAULT_API_KEY_ENV = "OPENROUTER_API_KEY"
+DEFAULT_MAX_TOKENS = 4096
 
 TASKS: dict[str, JsonDict] = {
     "scheduler_boundary_note": {
@@ -154,12 +159,14 @@ TASKS: dict[str, JsonDict] = {
 }
 
 
-def matrix() -> JsonDict:
+def matrix(*, live_model_calls: bool = False) -> JsonDict:
     return {
         "experiment_id": EXPERIMENT_ID,
-        "live_model_calls": False,
+        "live_model_calls": live_model_calls,
         "conditions": list(CONDITIONS),
         "tasks": sorted(TASKS),
+        "default_model": DEFAULT_MODEL,
+        "default_endpoint": DEFAULT_ENDPOINT,
         "claim_separation": {
             "shared_surface_noninferiority": (
                 "fair head-to-head comparison on common artifact and trace axes"
@@ -172,13 +179,18 @@ def matrix() -> JsonDict:
     }
 
 
-def budget_manifest() -> JsonDict:
+def budget_manifest(*, live_model_calls: bool = False) -> JsonDict:
     return {
         "experiment_id": EXPERIMENT_ID,
-        "live_model_calls": False,
-        "max_live_calls": 0,
-        "max_estimated_cost_usd": 0.0,
-        "output_cap_policy": "Deterministic dry harness; no provider calls.",
+        "live_model_calls": live_model_calls,
+        "max_live_calls": len(TASKS) * 3 if live_model_calls else 0,
+        "max_estimated_cost_usd": 2.0 if live_model_calls else 0.0,
+        "output_cap_policy": (
+            "Live mode makes two event-loop terminal-surface calls and one "
+            "append-only terminal-surface call per task."
+            if live_model_calls else
+            "Deterministic dry harness; no provider calls."
+        ),
     }
 
 
@@ -215,31 +227,77 @@ def failure_taxonomy() -> JsonDict:
     }
 
 
-def write_preregistration_artifacts(output_root: Path = ROOT_DIR) -> JsonDict:
+def write_preregistration_artifacts(
+    output_root: Path = ROOT_DIR,
+    *,
+    live_model_calls: bool = False,
+) -> JsonDict:
     output_root.mkdir(parents=True, exist_ok=True)
     artifacts = {
-        "matrix.json": matrix(),
-        "budget.json": budget_manifest(),
+        "matrix.json": matrix(live_model_calls=live_model_calls),
+        "budget.json": budget_manifest(live_model_calls=live_model_calls),
         "failure_taxonomy.json": failure_taxonomy(),
     }
     for name, payload in artifacts.items():
         _write_json(output_root / name, payload)
     return {
         "experiment_id": EXPERIMENT_ID,
-        "live_model_calls": False,
+        "live_model_calls": live_model_calls,
         "artifacts": sorted(artifacts),
         "preregistration": str(output_root / "PRE_REGISTRATION.md"),
     }
 
 
-def run_panel(*, output_root: Path = ROOT_DIR, overwrite: bool = False) -> JsonDict:
+def run_panel(
+    *,
+    output_root: Path = ROOT_DIR,
+    overwrite: bool = False,
+    live_model_calls: bool = False,
+    api_key: str | None = None,
+    endpoint: str = DEFAULT_ENDPOINT,
+    model: str = DEFAULT_MODEL,
+    max_tokens: int = DEFAULT_MAX_TOKENS,
+    terminal_tool_choice: str | None = None,
+) -> JsonDict:
+    if live_model_calls and not api_key:
+        raise ValueError("api_key is required for live model calls")
     _prepare_output_root(output_root, overwrite=overwrite)
-    write_preregistration_artifacts(output_root)
+    write_preregistration_artifacts(
+        output_root,
+        live_model_calls=live_model_calls,
+    )
     started_at = _now_iso()
     rows: list[JsonDict] = []
+    resolved_terminal_tool_choice = (
+        terminal_tool_choice or default_terminal_tool_choice(endpoint)
+    )
     for task_id in TASKS:
-        rows.append(run_event_loop_row(task_id=task_id, output_root=output_root))
-        rows.append(run_append_only_row(task_id=task_id, output_root=output_root))
+        if live_model_calls:
+            rows.append(
+                run_live_event_loop_row(
+                    task_id=task_id,
+                    output_root=output_root,
+                    api_key=api_key or "",
+                    endpoint=endpoint,
+                    model=model,
+                    max_tokens=max_tokens,
+                    terminal_tool_choice=resolved_terminal_tool_choice,
+                )
+            )
+            rows.append(
+                run_live_append_only_row(
+                    task_id=task_id,
+                    output_root=output_root,
+                    api_key=api_key or "",
+                    endpoint=endpoint,
+                    model=model,
+                    max_tokens=max_tokens,
+                    terminal_tool_choice=resolved_terminal_tool_choice,
+                )
+            )
+        else:
+            rows.append(run_event_loop_row(task_id=task_id, output_root=output_root))
+            rows.append(run_append_only_row(task_id=task_id, output_root=output_root))
     scheduler = score_scheduler_viability(rows)
     noninferiority = score_noninferiority(rows)
     shared_observability = score_shared_surface_observability(rows)
@@ -249,13 +307,19 @@ def run_panel(*, output_root: Path = ROOT_DIR, overwrite: bool = False) -> JsonD
         noninferiority=noninferiority,
         shared_observability=shared_observability,
         scheduler_added_value=scheduler_added_value,
+        live_model_calls=live_model_calls,
     )
     results = {
         "schema_version": "hamutay.event_loop_append_only_results.v1",
         "experiment_id": EXPERIMENT_ID,
         "started_at": started_at,
         "finished_at": _now_iso(),
-        "live_model_calls": False,
+        "live_model_calls": live_model_calls,
+        "model": model if live_model_calls else None,
+        "endpoint": endpoint if live_model_calls else None,
+        "terminal_tool_choice": (
+            resolved_terminal_tool_choice if live_model_calls else None
+        ),
         "classification": summary["classification"],
         "rows": rows,
         "scheduler_viability": scheduler,
@@ -406,6 +470,260 @@ def run_append_only_row(*, task_id: str, output_root: Path) -> JsonDict:
     return row
 
 
+def run_live_event_loop_row(
+    *,
+    task_id: str,
+    output_root: Path,
+    api_key: str,
+    endpoint: str,
+    model: str,
+    max_tokens: int,
+    terminal_tool_choice: str,
+) -> JsonDict:
+    from hamutay.taste_open import OpenAITasteBackend, OpenTasteSession
+
+    condition = "event_loop_scheduled"
+    row_root = output_root / "rows" / task_id / condition
+    row_root.mkdir(parents=True, exist_ok=True)
+    task = TASKS[task_id]
+    event_id = f"{task_id}::scheduled-artifact"
+    backend = OpenAITasteBackend(
+        base_url=endpoint,
+        api_key=api_key,
+        max_tokens=max_tokens,
+        timeout=180,
+        provider_name="openrouter" if "openrouter" in endpoint else "openai",
+        extra_headers={
+            "X-Title": f"hamutay/{EXPERIMENT_ID}",
+            "HTTP-Referer": "https://github.com/fsgeek/hamutay",
+        },
+        max_retries=1,
+    )
+    session = OpenTasteSession(
+        model=model,
+        backend=backend,
+        log_path=str(row_root / "taste_open.jsonl"),
+        experiment_label=f"{EXPERIMENT_ID}_{task_id}_{condition}",
+        system_prompt_prefix=live_event_loop_system_prefix(),
+        memory_base_probability=0.0,
+    )
+
+    cycle1_request = live_selection_request(task_id=task_id, event_id=event_id)
+    session.exchange(
+        json.dumps(cycle1_request, indent=2, sort_keys=True),
+        terminal_surface=selection_terminal_surface(
+            tool_choice=terminal_tool_choice,
+        ),
+        force_memory=None,
+    )
+    cycle1 = live_cycle_payload_from_session(
+        session=session,
+        request_payload=cycle1_request,
+    )
+    cycle1["parsed"] = normalize_selection_output(
+        cycle1["parsed"],
+        task_id=task_id,
+        event_id=event_id,
+    )
+    _write_json(row_root / "cycle_01.json", cycle1)
+    scheduler_trace = scheduler_events(task_id=task_id, event_id=event_id)
+    restart_frontier = {
+        "task_id": task_id,
+        "event_id": event_id,
+        "last_committed_cycle": 1,
+        "carried_state": deepcopy(cycle1["parsed"]),
+        "pending_wake_context": scheduler_trace[-1]["wake_context"],
+    }
+    _write_json(row_root / "scheduler_events.json", scheduler_trace)
+    _write_json(row_root / "restart_frontier.json", restart_frontier)
+
+    selected_ids = [
+        request["record_id"]
+        for request in cycle1["parsed"]["requested_context"]
+        if isinstance(request, dict)
+    ]
+    selected_records = [
+        deepcopy(record) for record in task["records"]
+        if record["record_id"] in selected_ids
+    ]
+    cycle2_request = live_artifact_request(
+        task_id=task_id,
+        condition=condition,
+        corpus=selected_records,
+        carried_state=cycle1["parsed"],
+        wake_context=scheduler_trace[-1]["wake_context"],
+    )
+    session.exchange(
+        json.dumps(cycle2_request, indent=2, sort_keys=True),
+        terminal_surface=artifact_terminal_surface(
+            tool_choice=terminal_tool_choice,
+        ),
+        force_memory=None,
+    )
+    cycle2 = live_cycle_payload_from_session(
+        session=session,
+        request_payload=cycle2_request,
+    )
+    cycle2["parsed"] = normalize_artifact_output(cycle2["parsed"])
+    _write_json(row_root / "cycle_02.json", cycle2)
+
+    artifact_score = score_artifact(task_id, cycle2["parsed"])
+    context_accounting = {
+        "condition": condition,
+        "task_id": task_id,
+        "selected_record_ids": selected_ids,
+        "omitted_record_ids": cycle1["parsed"]["omitted_record_ids"],
+        "declared_losses_before_artifact": cycle1["parsed"]["declared_losses"],
+        "declared_losses_in_artifact": cycle2["parsed"].get("declared_losses", []),
+        "token_use": {
+            "prompt_tokens": (
+                cycle1["usage"].get("input_tokens", 0)
+                + cycle2["usage"].get("input_tokens", 0)
+            ),
+            "completion_tokens": (
+                cycle1["usage"].get("output_tokens", 0)
+                + cycle2["usage"].get("output_tokens", 0)
+            ),
+            "source": "provider_usage",
+        },
+    }
+    scheduler_checks = scheduler_checks_for_row(
+        row_root=row_root,
+        task_id=task_id,
+        event_id=event_id,
+        trace=scheduler_trace,
+        restart_frontier=restart_frontier,
+        selection=cycle1["parsed"],
+    )
+    row = {
+        "task_id": task_id,
+        "condition": condition,
+        "artifact": cycle2["parsed"],
+        "artifact_score": artifact_score,
+        "context_accounting": context_accounting,
+        "scheduler_checks": scheduler_checks,
+        "observability_score": score_row_observability(
+            condition=condition,
+            scheduler_checks=scheduler_checks,
+            context_accounting=context_accounting,
+            artifact_score=artifact_score,
+        ),
+        "failure_attribution": {
+            "surface": "present",
+            "layer": "none" if artifact_score["scoreable"] else "model",
+        },
+        "taste_open_log": "taste_open.jsonl",
+    }
+    _write_json(row_root / "context_accounting.json", context_accounting)
+    _write_json(row_root / "score.json", artifact_score)
+    _write_json(row_root / "observability_score.json", row["observability_score"])
+    _write_json(row_root / "row_result.json", row)
+    return row
+
+
+def run_live_append_only_row(
+    *,
+    task_id: str,
+    output_root: Path,
+    api_key: str,
+    endpoint: str,
+    model: str,
+    max_tokens: int,
+    terminal_tool_choice: str,
+) -> JsonDict:
+    from hamutay.taste_open import OpenAITasteBackend
+
+    condition = "append_only"
+    row_root = output_root / "rows" / task_id / condition
+    row_root.mkdir(parents=True, exist_ok=True)
+    backend = OpenAITasteBackend(
+        base_url=endpoint,
+        api_key=api_key,
+        max_tokens=max_tokens,
+        timeout=180,
+        provider_name="openrouter" if "openrouter" in endpoint else "openai",
+        extra_headers={
+            "X-Title": f"hamutay/{EXPERIMENT_ID}",
+            "HTTP-Referer": "https://github.com/fsgeek/hamutay",
+        },
+        max_retries=1,
+    )
+    request = live_artifact_request(
+        task_id=task_id,
+        condition=condition,
+        corpus=TASKS[task_id]["records"],
+        carried_state=None,
+        wake_context=None,
+    )
+    result = backend.call_terminal_surface(
+        model=model,
+        system=append_only_system_prompt(),
+        messages=[
+            {
+                "role": "user",
+                "content": json.dumps(request, indent=2, sort_keys=True),
+            }
+        ],
+        experiment_label=f"{EXPERIMENT_ID}_{task_id}_{condition}",
+        terminal_surface=artifact_terminal_surface(
+            tool_choice=terminal_tool_choice,
+        ),
+    )
+    cycle = {
+        "parsed": normalize_artifact_output(result.raw_output),
+        "raw_content": json.dumps(result.raw_output, sort_keys=True),
+        "request_payload": request,
+        "response_payload": {"terminal_surface": True},
+        "usage": {
+            "input_tokens": result.input_tokens,
+            "output_tokens": result.output_tokens,
+            "stop_reason": result.stop_reason,
+        },
+        "elapsed_seconds": None,
+    }
+    _write_json(row_root / "cycle_01.json", cycle)
+    artifact_score = score_artifact(task_id, cycle["parsed"])
+    context_accounting = {
+        "condition": condition,
+        "task_id": task_id,
+        "append_only_context_record_ids": [
+            record["record_id"] for record in TASKS[task_id]["records"]
+        ],
+        "token_use": {
+            "prompt_tokens": result.input_tokens,
+            "completion_tokens": result.output_tokens,
+            "source": "provider_usage",
+        },
+    }
+    scheduler_checks = {
+        "not_applicable": True,
+        "reason": "append_only baseline has no scheduler lifecycle",
+    }
+    row = {
+        "task_id": task_id,
+        "condition": condition,
+        "artifact": cycle["parsed"],
+        "artifact_score": artifact_score,
+        "context_accounting": context_accounting,
+        "scheduler_checks": scheduler_checks,
+        "observability_score": score_row_observability(
+            condition=condition,
+            scheduler_checks=scheduler_checks,
+            context_accounting=context_accounting,
+            artifact_score=artifact_score,
+        ),
+        "failure_attribution": {
+            "surface": "present",
+            "layer": "none" if artifact_score["scoreable"] else "model",
+        },
+    }
+    _write_json(row_root / "context_accounting.json", context_accounting)
+    _write_json(row_root / "score.json", artifact_score)
+    _write_json(row_root / "observability_score.json", row["observability_score"])
+    _write_json(row_root / "row_result.json", row)
+    return row
+
+
 def dry_event_loop_selection(*, task_id: str, event_id: str) -> JsonDict:
     task = TASKS[task_id]
     parsed = {
@@ -469,6 +787,260 @@ def dry_artifact_cycle(
         "instruction": "Write the artifact from the provided evidence.",
     }
     return cycle_payload(parsed=parsed, request_payload=request)
+
+
+def live_event_loop_system_prefix() -> str:
+    return (
+        "You are running inside the Hamut'ay taste_open event-loop framework "
+        "for a preregistered comparison against an append-only baseline. "
+        "Follow the terminal surface exactly. Preserve uncertainty and "
+        "declared losses; do not use distractor records in the final artifact."
+    )
+
+
+def append_only_system_prompt() -> str:
+    return (
+        "You are the append-only baseline for a preregistered Hamut'ay "
+        "comparison. You receive the full bounded corpus in one context. "
+        "Use only task-relevant evidence, preserve declared losses, and return "
+        "the required terminal artifact."
+    )
+
+
+def live_selection_request(*, task_id: str, event_id: str) -> JsonDict:
+    return {
+        "condition": "event_loop_scheduled",
+        "cycle": 1,
+        "event_id": event_id,
+        "task_id": task_id,
+        "task": TASKS[task_id]["prompt"],
+        "corpus_map": corpus_map(task_id),
+        "required_output": {
+            "response": "<brief scheduling note>",
+            "event_id": event_id,
+            "work_plan": "<short plan>",
+            "requested_context": [
+                {"tool": "recall", "record_id": "<uuid>"}
+            ],
+            "omitted_record_ids": ["<uuid>"],
+            "declared_losses": ["<loss or limitation>"],
+        },
+        "instruction": (
+            "Schedule the artifact wake and select only the evidence records "
+            "needed for the final artifact. Do not write the artifact yet."
+        ),
+    }
+
+
+def live_artifact_request(
+    *,
+    task_id: str,
+    condition: str,
+    corpus: list[JsonDict],
+    carried_state: JsonDict | None,
+    wake_context: JsonDict | None,
+) -> JsonDict:
+    return {
+        "condition": condition,
+        "task_id": task_id,
+        "task": TASKS[task_id]["prompt"],
+        "required_fact_ids": sorted(TASKS[task_id]["required_facts"]),
+        "corpus": deepcopy(corpus),
+        "carried_state": deepcopy(carried_state),
+        "wake_context": deepcopy(wake_context),
+        "required_output": {
+            "response": "<brief artifact completion note>",
+            "artifact_title": "<title>",
+            "task_id": task_id,
+            "conclusion": "<conclusion>",
+            "recommended_action": "<action>",
+            "claims": [
+                {
+                    "fact_id": "<required fact id>",
+                    "text": "<claim>",
+                    "status": "<supported|unsupported|unknown>",
+                    "evidence_record_ids": ["<uuid>"],
+                }
+            ],
+            "declared_losses": ["<loss or limitation>"],
+            "cited_record_ids": ["<uuid>"],
+        },
+        "instruction": (
+            "Write the final artifact. Cite only evidence records that support "
+            "claims. Do not cite distractors. If a limitation remains, include "
+            "it in declared_losses."
+        ),
+    }
+
+
+def selection_terminal_surface(*, tool_choice: str = "force") -> JsonDict:
+    return {
+        "tool_name": "select_scheduled_context",
+        "description": "Select context for the scheduled artifact wake.",
+        "tool_choice": tool_choice,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "response": {"type": "string"},
+                "event_id": {"type": "string"},
+                "work_plan": {"type": "string"},
+                "requested_context": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "tool": {"type": "string"},
+                            "record_id": {"type": "string"},
+                        },
+                        "required": ["tool", "record_id"],
+                    },
+                },
+                "omitted_record_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+                "declared_losses": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+            },
+            "required": [
+                "response",
+                "event_id",
+                "work_plan",
+                "requested_context",
+                "omitted_record_ids",
+                "declared_losses",
+            ],
+        },
+        "state_update": {
+            "response_field": "response",
+            "copy": {
+                "event_id": "event_id",
+                "work_plan": "work_plan",
+                "requested_context": "requested_context",
+                "omitted_record_ids": "omitted_record_ids",
+                "declared_losses": "declared_losses",
+            },
+        },
+    }
+
+
+def artifact_terminal_surface(*, tool_choice: str = "force") -> JsonDict:
+    return {
+        "tool_name": "write_matched_artifact",
+        "description": "Write the scored artifact for the matched task.",
+        "tool_choice": tool_choice,
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "response": {"type": "string"},
+                "artifact_title": {"type": "string"},
+                "task_id": {"type": "string"},
+                "conclusion": {"type": "string"},
+                "recommended_action": {"type": "string"},
+                "claims": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "fact_id": {"type": "string"},
+                            "text": {"type": "string"},
+                            "status": {"type": "string"},
+                            "evidence_record_ids": {
+                                "type": "array",
+                                "items": {"type": "string"},
+                            },
+                        },
+                        "required": [
+                            "fact_id",
+                            "text",
+                            "status",
+                            "evidence_record_ids",
+                        ],
+                    },
+                },
+                "declared_losses": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+                "cited_record_ids": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                },
+            },
+            "required": [
+                "response",
+                "artifact_title",
+                "task_id",
+                "conclusion",
+                "recommended_action",
+                "claims",
+                "declared_losses",
+                "cited_record_ids",
+            ],
+        },
+        "state_update": {
+            "response_field": "response",
+            "copy": {
+                "artifact_title": "artifact_title",
+                "task_id": "task_id",
+                "conclusion": "conclusion",
+                "recommended_action": "recommended_action",
+                "claims": "claims",
+                "declared_losses": "declared_losses",
+                "cited_record_ids": "cited_record_ids",
+            },
+        },
+    }
+
+
+def normalize_selection_output(
+    raw_output: JsonDict,
+    *,
+    task_id: str,
+    event_id: str,
+) -> JsonDict:
+    requested = raw_output.get("requested_context")
+    omitted = raw_output.get("omitted_record_ids")
+    losses = raw_output.get("declared_losses")
+    return {
+        "event_id": str(raw_output.get("event_id") or event_id),
+        "work_plan": str(raw_output.get("work_plan") or ""),
+        "requested_context": requested if isinstance(requested, list) else [],
+        "omitted_record_ids": omitted if isinstance(omitted, list) else [],
+        "declared_losses": losses if isinstance(losses, list) else [],
+        "task_id": task_id,
+    }
+
+
+def normalize_artifact_output(raw_output: JsonDict) -> JsonDict:
+    return {
+        "artifact_title": raw_output.get("artifact_title"),
+        "task_id": raw_output.get("task_id"),
+        "conclusion": raw_output.get("conclusion"),
+        "recommended_action": raw_output.get("recommended_action"),
+        "claims": raw_output.get("claims"),
+        "declared_losses": raw_output.get("declared_losses"),
+        "cited_record_ids": raw_output.get("cited_record_ids"),
+    }
+
+
+def live_cycle_payload_from_session(
+    *,
+    session: Any,
+    request_payload: JsonDict,
+) -> JsonDict:
+    raw_output = deepcopy(getattr(session, "_last_raw_output", None) or {})
+    usage = deepcopy(getattr(session, "_last_usage", None) or {})
+    return {
+        "parsed": raw_output,
+        "raw_content": json.dumps(raw_output, sort_keys=True, default=str),
+        "request_payload": deepcopy(request_payload),
+        "response_payload": {"taste_open_log": True},
+        "usage": usage,
+        "elapsed_seconds": None,
+    }
 
 
 def scheduler_events(*, task_id: str, event_id: str) -> list[JsonDict]:
@@ -802,6 +1374,7 @@ def summarize(
     noninferiority: JsonDict,
     shared_observability: JsonDict,
     scheduler_added_value: JsonDict,
+    live_model_calls: bool,
 ) -> JsonDict:
     survived = (
         scheduler["passed"]
@@ -809,17 +1382,25 @@ def summarize(
         and shared_observability["passed"]
         and scheduler_added_value["passed"]
     )
+    if survived:
+        decision = (
+            "Live panel passed all preregistered gates."
+            if live_model_calls else
+            "Dry protocol harness is ready for a live provider extension."
+        )
+    else:
+        decision = (
+            "Live panel exposed a preregistered gate or scoring failure."
+            if live_model_calls else
+            "Dry protocol harness exposed a gate or scoring failure."
+        )
     return {
         "classification": "survived" if survived else "falsified",
         "scheduler_viability_passed": scheduler["passed"],
         "artifact_noninferiority_passed": noninferiority["passed"],
         "shared_surface_observability_noninferior": shared_observability["passed"],
         "scheduler_added_value_passed": scheduler_added_value["passed"],
-        "decision": (
-            "Dry protocol harness is ready for a live provider extension."
-            if survived else
-            "Dry protocol harness exposed a gate or scoring failure."
-        ),
+        "decision": decision,
     }
 
 
@@ -912,6 +1493,13 @@ def declared_losses(task_id: str) -> list[str]:
     return [f"Limitation remains: {marker}." for marker in markers]
 
 
+def default_terminal_tool_choice(endpoint: str) -> str:
+    """Direct DeepSeek thinking mode rejects forced tool choice."""
+    if "api.deepseek.com" in endpoint:
+        return "auto"
+    return "force"
+
+
 def cycle_payload(*, parsed: JsonDict, request_payload: JsonDict) -> JsonDict:
     return {
         "parsed": deepcopy(parsed),
@@ -973,16 +1561,45 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output-root", type=Path, default=ROOT_DIR)
     parser.add_argument("--overwrite", action="store_true")
     parser.add_argument("--write-prereg", action="store_true")
-    parser.add_argument("--dry-run", action="store_true")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--dry-run", action="store_true")
+    mode.add_argument("--live", action="store_true")
+    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--endpoint", default=DEFAULT_ENDPOINT)
+    parser.add_argument("--api-key", default=None)
+    parser.add_argument("--api-key-env", default=DEFAULT_API_KEY_ENV)
+    parser.add_argument("--max-tokens", type=int, default=DEFAULT_MAX_TOKENS)
+    parser.add_argument(
+        "--terminal-tool-choice",
+        choices=["auto", "required", "force"],
+        default=None,
+        help=(
+            "Terminal surface tool_choice. Defaults to auto for direct "
+            "DeepSeek and force elsewhere."
+        ),
+    )
     args = parser.parse_args(argv)
 
     if args.write_prereg:
-        write_preregistration_artifacts(args.output_root)
+        write_preregistration_artifacts(
+            args.output_root,
+            live_model_calls=args.live,
+        )
         print(json.dumps({"experiment_id": EXPERIMENT_ID, "preregistered": True}))
         return 0
-    if not args.dry_run:
-        parser.error("v1 harness is deterministic; pass --dry-run")
-    result = run_panel(output_root=args.output_root, overwrite=args.overwrite)
+    if not args.dry_run and not args.live:
+        parser.error("choose --dry-run or --live")
+    api_key = args.api_key or os.environ.get(args.api_key_env, "")
+    result = run_panel(
+        output_root=args.output_root,
+        overwrite=args.overwrite,
+        live_model_calls=args.live,
+        api_key=api_key if args.live else None,
+        endpoint=args.endpoint,
+        model=args.model,
+        max_tokens=args.max_tokens,
+        terminal_tool_choice=args.terminal_tool_choice,
+    )
     print(json.dumps({"classification": result["classification"]}, sort_keys=True))
     return 0
 

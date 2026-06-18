@@ -33,9 +33,13 @@ Each matched task is run in two conditions:
   task and the full bounded corpus in a single context and writes the final
   artifact.
 
-Version 1 of the harness is deterministic and dry-run only. It establishes the
-row shape, scoring rules, and artifact trail before any live provider calls are
-introduced.
+The harness has two modes:
+
+- `--dry-run`: deterministic protocol-readiness mode. It establishes the row
+  shape, scoring rules, and artifact trail without provider uncertainty.
+- `--live`: provider-backed mode. It runs the `event_loop_scheduled` condition
+  through live `taste_open` terminal-surface cycles and runs `append_only` as a
+  one-shot terminal-surface baseline against the same model and endpoint.
 
 ## Matched Tasks
 
@@ -146,8 +150,8 @@ added value fails under the deterministic harness.
 
 The run is `inconclusive` only when a fair comparison cannot be made because of
 provider, transport, harness, substrate, scorer, or protocol failure. The dry
-v1 harness should not normally produce `inconclusive`; that classification is
-reserved for future live-provider extensions.
+mode should not normally produce `inconclusive`; live mode may, because
+provider/protocol failures are not model non-inferiority failures.
 
 ## Expected Result
 
@@ -157,8 +161,8 @@ This is not a substantive live-model result. It is a readiness artifact proving
 that the protocol can run matched append-only and event-loop rows while keeping
 scheduler viability separate from model artifact quality.
 
-Expected live-model result: likely falsified or narrowed on at least one
-shared-surface axis. The `taste` / `taste_open` instances inside the event loop
-have not yet been tuned for this comparison, and non-inferiority should
-reasonably be expected to require tuning. A live failure on one shared axis
-would therefore be informative rather than surprising.
+Expected live-model result: likely falsified, inconclusive, or narrowed on at
+least one shared-surface axis. The `taste` / `taste_open` instances inside the
+event loop have not yet been tuned for this comparison, and non-inferiority
+should reasonably be expected to require tuning. A live failure on one shared
+axis would therefore be informative rather than surprising.
