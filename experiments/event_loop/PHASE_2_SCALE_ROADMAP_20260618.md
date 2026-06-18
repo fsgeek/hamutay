@@ -65,20 +65,21 @@ In short:
 
 ## Current Priority
 
-Current roadmap state: `phase_2b_yanantin_backed_multi_entity_memory_probe_next`.
+Current roadmap state: `phase_2c_long_horizon_autonomous_loop_pilot_next`.
 
 Next execution target:
 
-> Preregister and run a Yanantin-backed multi-entity memory probe that tests
-> entity-scoped writes, authorized shared-memory access, retrieval envelopes,
-> housekeeping over historical commitments, and final provenance citation.
+> Preregister a long-horizon autonomous loop pilot that combines IPC-style
+> inbound messages, self-scheduled continuations, housekeeping, restart/resume,
+> multiple workstreams, and bounded periodic reports.
 
-Reason this is now first: the Phase 2B Yanantin memory contract dry validator
-passed. The contract now defines Yanantin write boundaries, local-only records,
-entity-scoped versus shared versus housekeeping memory scopes, retrieval
-envelope fields, required provenance fields, and failure-attribution layers.
-The validator also confirmed that the existing Hamut'ay memory port and
-Apacheta bridge expose the minimum methods needed for the next probe.
+Reason this is now first: the Phase 2B Yanantin-backed multi-entity memory
+probe passed using the experiment-local `ApachetaBridge.from_memory` substrate.
+The run showed that entity commitments can be written through the bridge,
+retrieved later through bridge fallback rather than current wake state, carried
+through explicit event envelopes with provenance, audited by housekeeping, and
+cited in final synthesis. The next risk is sustained autonomous operation
+rather than bounded memory recall.
 
 ## Phase 2A Readiness Criteria
 
@@ -317,6 +318,20 @@ Readiness to advance:
 - failures distinguish Yanantin retrieval, event-loop integration, model output,
   and provider behavior.
 
+Status: complete. Result:
+`experiments/event_loop/phase_2b_yanantin_backed_multi_entity_memory_20260618_direct_deepseek`.
+Classification: `passed`. The live direct DeepSeek run completed three
+Yanantin-backed entity commitment events, three Yanantin-backed recall events,
+one housekeeping event, and one final synthesis event. The harness wrote nine
+open records through `ApachetaBridge.from_memory`, forced recall events through
+bridge fallback rather than in-session prior-state resolution, and observed
+Yanantin-style provenance on all three recall context results. Final synthesis
+cited all three source commitment record IDs, housekeeping reported no
+unsupported claims or attribution errors, and the failure-attribution surface
+was empty. This result validates the event-loop/Yanantin contract at the
+experiment-local in-memory bridge layer; it does not yet prove external
+persistent Yanantin backend behavior.
+
 ### 7. Long-Horizon Autonomous Loop Pilot
 
 Rationale: The strategic goal is an autonomous loop for interaction, work, and
@@ -348,9 +363,10 @@ only when the roadmap's explicit readiness gate is met.
 
 ## Recommended Next Execution Goal
 
-Preregister and run the Phase 2B Yanantin-backed multi-entity memory probe.
-Keep the next change isolated to experiment artifacts unless the probe exposes
-a narrowly scoped integration gap that must be reviewed before source changes.
+Preregister the long-horizon autonomous loop pilot. Keep the pilot bounded
+enough to score, but long enough to test IPC-style messages, self-scheduled
+continuations, housekeeping, restart/resume, multiple workstreams, and periodic
+reports in one sustained run.
 
 ## Decision Log
 
@@ -396,6 +412,15 @@ a narrowly scoped integration gap that must be reviewed before source changes.
   retrieval envelope fields, failure-attribution layers, recall-substrate
   distinctions, and existing bridge methods were all present. Advanced current
   priority to a Yanantin-backed multi-entity memory probe.
+- 2026-06-18: Completed the Phase 2B Yanantin-backed multi-entity memory probe.
+  The live direct DeepSeek run passed with three entity commitments, three
+  bridge-backed recall events, one housekeeping event, and one final synthesis.
+  All recall context results carried Yanantin-style provenance, final synthesis
+  cited all source commitment records, housekeeping was clean, and no failure
+  attribution records were produced. Advanced current priority to the
+  long-horizon autonomous loop pilot while preserving the caveat that the
+  passed memory substrate was experiment-local `ApachetaBridge.from_memory`,
+  not an external persistent Yanantin deployment.
 
 ## Update Discipline
 
