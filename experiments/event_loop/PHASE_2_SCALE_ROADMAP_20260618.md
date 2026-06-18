@@ -65,21 +65,20 @@ In short:
 
 ## Current Priority
 
-Current roadmap state: `phase_2c_long_horizon_autonomous_loop_pilot_next`.
+Current roadmap state: `phase_2_scale_roadmap_complete`.
 
 Next execution target:
 
-> Preregister a long-horizon autonomous loop pilot that combines IPC-style
-> inbound messages, self-scheduled continuations, housekeeping, restart/resume,
-> multiple workstreams, and bounded periodic reports.
+> No further Phase 2 execution target is currently listed. The next research
+> step should be planned as a new roadmap rather than appended silently to this
+> one.
 
-Reason this is now first: the Phase 2B Yanantin-backed multi-entity memory
-probe passed using the experiment-local `ApachetaBridge.from_memory` substrate.
-The run showed that entity commitments can be written through the bridge,
-retrieved later through bridge fallback rather than current wake state, carried
-through explicit event envelopes with provenance, audited by housekeeping, and
-cited in final synthesis. The next risk is sustained autonomous operation
-rather than bounded memory recall.
+Reason this state is complete: the Phase 2C long-horizon autonomous loop pilot
+passed. The run combined IPC-style inbound messages, scheduler-bound
+self-scheduled continuations, housekeeping, bounded periodic reports,
+restart/resume recovery of an already-claimed event, two workstreams, final
+synthesis, and restart-frontier observability in one sustained direct-DeepSeek
+run.
 
 ## Phase 2A Readiness Criteria
 
@@ -355,6 +354,18 @@ Readiness to advance:
 - the loop can explain what it is doing, what it remembers, what it has
   forgotten, and what needs human review.
 
+Status: complete. Result:
+`experiments/event_loop/phase_2c_long_horizon_autonomous_loop_20260618_direct_deepseek`.
+Classification: `passed`. The live direct DeepSeek run completed nine events
+in the expected order: two inbound IPC events, two scheduler-bound
+continuations, two housekeeping audits, two bounded periodic reports, and one
+final synthesis artifact. The beta continuation was interrupted after claim as
+`running`, recovered through the restart frontier, and completed with lifecycle
+history `pending`, `running`, `pending`, `running`, `completed`. The run
+covered two workstreams, wrote 11 restart-frontier records, ended with no
+pending runnable events, and produced no context errors, lifecycle anomalies,
+material outcome warnings, or failure-attribution records.
+
 ## Recommended Roadmap Goal
 
 Build and execute the Phase 2 event-loop scale roadmap, starting with Phase 2A
@@ -363,10 +374,10 @@ only when the roadmap's explicit readiness gate is met.
 
 ## Recommended Next Execution Goal
 
-Preregister the long-horizon autonomous loop pilot. Keep the pilot bounded
-enough to score, but long enough to test IPC-style messages, self-scheduled
-continuations, housekeeping, restart/resume, multiple workstreams, and periodic
-reports in one sustained run.
+The Phase 2 roadmap has no remaining listed execution item. Recommended next
+step: create a Phase 3 roadmap that decides whether to stress external
+persistent Yanantin backends, longer wall-clock operation, richer IPC, or memory
+maintenance policies first.
 
 ## Decision Log
 
@@ -421,6 +432,16 @@ reports in one sustained run.
   long-horizon autonomous loop pilot while preserving the caveat that the
   passed memory substrate was experiment-local `ApachetaBridge.from_memory`,
   not an external persistent Yanantin deployment.
+- 2026-06-18: Completed the Phase 2C long-horizon autonomous loop pilot. The
+  live direct DeepSeek run passed with two workstreams, two inbound IPC events,
+  two scheduler-bound continuations, two housekeeping audits, two bounded
+  periodic reports, one final synthesis, and an intentional restart/resume
+  recovery of the beta continuation after claim as `running`. The interrupted
+  lifecycle was `pending`, `running`, `pending`, `running`, `completed`;
+  restart frontier contained 11 records; the run ended cleanly with no pending
+  runnable events, no context errors, no lifecycle anomalies, no material
+  outcome warnings, and no failure-attribution records. Marked the Phase 2
+  scale roadmap complete.
 
 ## Update Discipline
 
