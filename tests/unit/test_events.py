@@ -2254,6 +2254,48 @@ def test_detect_lifecycle_anomalies_flags_invalid_history():
     assert "completed_missing_fields" in kinds
 
 
+def test_detect_lifecycle_anomalies_allows_restart_recovered_pending():
+    event_id = "event-1"
+    anomalies = detect_lifecycle_anomalies(
+        event_id,
+        [
+            {
+                "record_type": "event_status",
+                "event_id": event_id,
+                "status": "pending",
+            },
+            {
+                "record_type": "event_status",
+                "event_id": event_id,
+                "status": "running",
+                "run_id": "run-before-crash",
+            },
+            {
+                "record_type": "event_status",
+                "event_id": event_id,
+                "status": "pending",
+                "recovered_by": "restart_frontier",
+                "recovered_from_run_id": "run-before-crash",
+            },
+            {
+                "record_type": "event_status",
+                "event_id": event_id,
+                "status": "running",
+                "run_id": "run-after-restart",
+            },
+            {
+                "record_type": "event_status",
+                "event_id": event_id,
+                "status": "completed",
+                "wake_cycle": 3,
+                "result_record_id": "00000000-0000-0000-0000-000000000003",
+            },
+        ],
+    )
+
+    assert anomalies == []
+
+
 def test_summarize_event_log_reports_lifecycle_anomalies():
     pending = _event_record()
     running = {

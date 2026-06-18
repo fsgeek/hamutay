@@ -116,6 +116,60 @@ def test_append_only_is_not_penalized_on_scheduler_specific_observability(tmp_pa
         assert scheduler_obs["not_applicable"] is True
 
 
+def test_live_mode_requires_api_key_before_writing_outputs(tmp_path):
+    module = _load_module()
+
+    try:
+        module.run_panel(
+            output_root=tmp_path,
+            overwrite=True,
+            live_model_calls=True,
+            api_key=None,
+        )
+    except ValueError as exc:
+        assert "api_key" in str(exc)
+    else:
+        raise AssertionError("live mode accepted a missing api_key")
+
+    assert not (tmp_path / "results.json").exists()
+    assert not (tmp_path / "rows").exists()
+
+
+def test_terminal_surfaces_preserve_required_scored_fields():
+    module = _load_module()
+
+    selection = module.selection_terminal_surface()
+    artifact = module.artifact_terminal_surface()
+
+    assert selection["tool_choice"] == "force"
+    assert "requested_context" in selection["input_schema"]["required"]
+    assert selection["state_update"]["copy"]["declared_losses"] == "declared_losses"
+    assert artifact["tool_choice"] == "force"
+    for field in (
+        "artifact_title",
+        "task_id",
+        "conclusion",
+        "recommended_action",
+        "claims",
+        "declared_losses",
+        "cited_record_ids",
+    ):
+        assert field in artifact["input_schema"]["required"]
+        assert artifact["state_update"]["copy"][field] == field
+
+
+def test_direct_deepseek_defaults_terminal_tool_choice_to_auto():
+    module = _load_module()
+
+    assert module.default_terminal_tool_choice("https://api.deepseek.com") == "auto"
+    assert (
+        module.default_terminal_tool_choice("https://openrouter.ai/api/v1")
+        == "force"
+    )
+    assert module.selection_terminal_surface(tool_choice="auto")["tool_choice"] == "auto"
+    assert module.artifact_terminal_surface(tool_choice="auto")["tool_choice"] == "auto"
+
+
 def test_dry_harness_writes_matched_rows_and_separate_summaries(tmp_path):
     module = _load_module()
 

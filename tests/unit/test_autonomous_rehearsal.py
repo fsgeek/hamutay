@@ -5,7 +5,9 @@ from hamutay.memory.rehearsal import (
     RehearsalInterrupted,
     RehearsalPaths,
     RestartableAutonomyRehearsal,
+    SustainedEventLoopReadinessRehearsal,
     reconstruct_rehearsal_report,
+    reconstruct_sustained_event_loop_report,
     run_fake_autonomy_rehearsal,
 )
 
@@ -159,3 +161,56 @@ def test_restartable_rehearsal_resume_after_event_claim_recovers_pending_wake(
     assert report["invariants"]["event_reached_completed"] is True
     assert report["stopped_because"] == "idle: no open work remained"
     assert statuses == ["pending", "running", "pending", "running", "completed"]
+
+
+def test_sustained_event_loop_rehearsal_runs_mixed_stream_to_idle(tmp_path):
+    paths = RehearsalPaths.from_root(tmp_path)
+
+    result = SustainedEventLoopReadinessRehearsal(paths=paths).run()
+    report = result.to_dict()
+    reconstructed = reconstruct_sustained_event_loop_report(paths)
+
+    assert report == reconstructed
+    assert report["frontier"]["cycle_id"] == 10
+    assert report["target_cycle"] == 10
+    assert report["stopped_because"] == "idle: no open work remained"
+    assert report["invariant_failures"] == []
+    assert all(report["invariants"].values())
+    assert report["completed_event_types"][:3] == [
+        "inbound_message",
+        "self_scheduled_reflection",
+        "housekeeping",
+    ]
+    assert report["completed_event_count"] == 10
+    assert report["completed_event_types"].count("housekeeping") == 8
+    assert report["housekeeping_audit_count"] == 8
+    assert report["housekeeping_audit"] == {
+        "cycle_id": 10,
+        "event_count": 10,
+        "open_item_count": 0,
+        "pending_or_running_other_event_ids": [],
+    }
+
+
+def test_sustained_event_loop_rehearsal_recovers_claimed_housekeeping_event(
+    tmp_path,
+):
+    paths = RehearsalPaths.from_root(tmp_path)
+    runner = SustainedEventLoopReadinessRehearsal(paths=paths)
+
+    with pytest.raises(RehearsalInterrupted, match="after_housekeeping_claim"):
+        runner.run(interrupt_after="after_housekeeping_claim")
+
+    report = SustainedEventLoopReadinessRehearsal(paths=paths).run().to_dict()
+
+    assert report["frontier"]["cycle_id"] == 10
+    assert report["recovered_event_count"] == 1
+    assert report["invariants"]["restart_recovered_running_housekeeping"] is True
+    assert report["invariant_failures"] == []
+    assert report["stopped_because"] == "idle: no open work remained"
+    assert report["completed_event_count"] == 10
+    assert report["completed_event_types"].count("housekeeping") == 8
+    assert any(
+        statuses == ["pending", "running", "pending", "running", "completed"]
+        for statuses in report["event_lifecycle_by_event"].values()
+    )
