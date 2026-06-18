@@ -65,19 +65,20 @@ In short:
 
 ## Current Priority
 
-Current roadmap state: `phase_2a_interleaving_restart_resume_next`.
+Current roadmap state: `phase_2a_local_memory_pressure_next`.
 
 Next execution target:
 
-> Build and run a combined interleaving and restart/resume stress test over the
-> larger multi-entity loop, deliberately interrupting one or more boundaries
-> while preserving entity-scoped state and scheduler identity.
+> Build and run a local memory pressure probe that requires recall, comparison,
+> and selective retrieval from prior events using only current local mechanisms.
 
-Reason this is now first: the larger multi-entity sustained loop passed under
-live direct DeepSeek with three entities, two rounds, interleaved scheduling,
-two housekeeping audits, final synthesis, local artifacts only, and no
-entity-state leaks. The next highest-information Phase 2A risk is whether this
-larger interleaved loop remains recoverable under interruption.
+Reason this is now first: the combined interleaving and restart/resume stress
+test passed under live direct DeepSeek. The larger interleaved loop recovered
+an interrupted round-2 entity continuation from `running` back to `pending`,
+reconstructed entity-scoped state from local artifacts, and completed the loop
+without identity drift or state leaks. The next Phase 2A question is whether
+local mechanisms remain sufficient when tasks require recall and provenance-like
+support across prior events.
 
 ## Phase 2A Readiness Criteria
 
@@ -209,6 +210,16 @@ Readiness to advance:
 - resumed sessions preserve scheduler identity and entity-scoped state;
 - failure attribution remains readable after recovery.
 
+Status: complete. Result:
+`experiments/event_loop/phase_2a_interleaving_restart_resume_20260618_direct_deepseek`.
+Classification: `passed`. The live direct DeepSeek run interrupted
+`entity_green`'s round-2 continuation after claim as `running`, loaded the
+latest restart frontier, recovered the event to `pending`, reconstructed
+entity-scoped state for resume from local session artifacts, and completed the
+larger loop. The interrupted event lifecycle was `pending`, `running`,
+`pending`, `running`, `completed`; no events were suppressed; all larger-loop
+checks still passed; and no failure attribution records were produced.
+
 ### 4. Local Memory Pressure Probe
 
 Rationale: Before integrating Yanantin, we should force the local framework to
@@ -308,9 +319,9 @@ only when the roadmap's explicit readiness gate is met.
 
 ## Recommended Next Execution Goal
 
-Build and run the Phase 2A combined interleaving and restart/resume stress test
-over the larger multi-entity loop, using the committed substrate contract and
-larger-loop result as anchors.
+Build and run the Phase 2A local memory pressure probe. Keep Yanantin disabled
+unless the probe fails specifically on recall, provenance, or cross-session
+reconstruction.
 
 ## Decision Log
 
@@ -332,6 +343,14 @@ larger-loop result as anchors.
   local artifacts only, no entity-state leaks, clean housekeeping/final
   contamination checks, and 16 restart-frontier records. Advanced current
   priority to combined interleaving and restart/resume stress.
+- 2026-06-18: Completed the Phase 2A combined interleaving and restart/resume
+  stress test. The live direct DeepSeek run interrupted `entity_green`'s
+  round-2 continuation after claim, recovered it from `running` back to
+  `pending`, reconstructed entity-scoped state from local artifacts, and
+  completed the larger loop. The interrupted lifecycle was `pending`,
+  `running`, `pending`, `running`, `completed`; no events were suppressed and
+  no failure attribution records were produced. Kept the Yanantin gate closed
+  and advanced current priority to local memory pressure.
 
 ## Update Discipline
 
