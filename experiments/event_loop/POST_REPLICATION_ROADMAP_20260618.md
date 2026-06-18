@@ -50,18 +50,18 @@ In short:
 
 ## Current Priority
 
-Current roadmap state: `longer_horizon_sustained_loop_next`.
+Current roadmap state: `multi_entity_event_loop_next`.
 
 Next execution target:
 
-> Build and run a longer-horizon sustained loop test with inbound work,
-> self-scheduled continuation, housekeeping, restart frontier updates, and
-> final artifact synthesis across more than one task.
+> Build and run a multi-entity event loop test that checks whether multiple AI
+> entities or workstreams can be scheduled without identity drift, context
+> contamination, or attribution errors.
 
-Reason this is now first: the harder append-only baseline test survived with
-equal perfect artifact and declared-loss scores in both conditions. Further
-single-artifact baseline hardening is likely lower information gain than moving
-to the long-horizon behavior the event-loop thesis is actually about.
+Reason this is now first: the longer-horizon sustained loop completed the
+single-entity long-horizon readiness criteria. The next highest-information
+step is to add identity and isolation pressure across more than one entity or
+workstream.
 
 Measurement policy carried forward:
 
@@ -70,13 +70,12 @@ Measurement policy carried forward:
 - a future experiment must preregister a semantic declared-loss scorer before
   using semantic loss declarations as scored evidence.
 
-Readiness criteria for moving to the fourth roadmap item:
+Readiness criteria for moving to the fifth roadmap item:
 
-- the longer-horizon loop completes inbound work, self-scheduled continuation,
-  housekeeping, restart frontier updates, and final artifact synthesis across
-  more than one task; and
-- any failure is attributable to scheduler lifecycle, model output, context
-  recovery, provider behavior, artifact quality, or declared-loss discipline.
+- the multi-entity loop completes work for multiple entities or workstreams;
+- scheduler identity, context isolation, and attribution checks pass; and
+- any failure is attributable to identity drift, context contamination,
+  scheduler lifecycle, model output, provider behavior, or artifact quality.
 
 ## Roadmap
 
@@ -123,6 +122,12 @@ Expected output: a sustained single-entity loop with inbound work,
 self-scheduled continuation, housekeeping, restart frontier updates, and final
 artifact synthesis across more than one task.
 
+Status: complete. Result:
+`experiments/event_loop/longer_horizon_sustained_loop_20260618_direct_deepseek`.
+Classification: `passed`. The run completed two inbound tasks, two
+framework-bound continuations, two housekeeping events, one final artifact
+synthesis, and eight restart-frontier commits with no failure attribution.
+
 ### 4. Multi-Entity Event Loop
 
 Rationale: Multi-entity scheduling adds identity, isolation, attribution, and
@@ -159,9 +164,9 @@ provider variance.
 
 ## Recommended Next Execution Goal
 
-Build and run a longer-horizon sustained loop test with inbound work,
-self-scheduled continuation, housekeeping, restart frontier updates, and final
-artifact synthesis across more than one task.
+Build and run a multi-entity event loop test that checks whether multiple AI
+entities or workstreams can be scheduled without identity drift, context
+contamination, or attribution errors.
 
 ## Decision Log
 
@@ -182,6 +187,11 @@ artifact synthesis across more than one task.
   baseline with equal perfect artifact quality and declared-loss scores. Moved
   current priority to longer-horizon sustained loop because it should provide
   more information than another single-artifact comparison.
+- 2026-06-18: Completed longer-horizon sustained loop test. The live direct
+  DeepSeek run passed with seven completed events, two inbound tasks, two
+  continuations, two housekeeping events, one final synthesis artifact, and
+  eight restart-frontier commits. Moved current priority to multi-entity event
+  loop.
 
 ## Update Discipline
 
