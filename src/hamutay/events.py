@@ -914,7 +914,12 @@ def detect_lifecycle_anomalies(event_id: str, history: list[dict]) -> list[dict]
             "missing_initial_pending",
             "event history does not start with a pending record",
         )
-    if statuses.count("pending") > 1:
+    repeated_pending_is_recovery = all(
+        record.get("recovered_by") == "restart_frontier"
+        for index, record in enumerate(history)
+        if index > 0 and record.get("status") == "pending"
+    )
+    if statuses.count("pending") > 1 and not repeated_pending_is_recovery:
         add("duplicate_pending", "event history has multiple pending records")
 
     terminal_indexes = [
