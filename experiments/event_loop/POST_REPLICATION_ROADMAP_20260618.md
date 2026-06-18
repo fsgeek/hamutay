@@ -50,20 +50,18 @@ In short:
 
 ## Current Priority
 
-Current roadmap state: `restart_resume_under_interruption_next`.
+Current roadmap state: `provider_variance_panel_next`.
 
 Next execution target:
 
-> Build and run a restart/resume interruption test that deliberately stops a
-> nontrivial event loop mid-execution and resumes from committed artifacts
-> without losing scheduler identity, carried state, or failure attribution.
+> Build and run a small provider variance panel that distinguishes event-loop
+> framework robustness from provider-specific terminal-surface behavior.
 
-Reason this is now first: the multi-entity repair probe passed after adding
-experiment-layer entity-scoped wake state. The live result showed no prior-state
-leaks, no identity drift, no audit/final contamination, and no failure
-attribution records. The next highest-information operational risk is whether a
-nontrivial loop can survive an intentional interruption and resume from
-committed restart-frontier artifacts.
+Reason this is now first: the restart/resume interruption probe passed. The
+loop recovered an intentionally interrupted `running` housekeeping event back
+to `pending`, resumed from committed artifacts, completed the event, and
+preserved scheduler identity and failure-attribution surfaces. Provider
+variance is now the remaining roadmap item.
 
 Measurement policy carried forward:
 
@@ -72,14 +70,16 @@ Measurement policy carried forward:
 - a future experiment must preregister a semantic declared-loss scorer before
   using semantic loss declarations as scored evidence.
 
-Readiness criteria for moving to provider variance:
+Readiness criteria for closing this roadmap:
 
-- a restart/resume test deliberately interrupts a nontrivial loop after at
-  least one pending or completed event boundary;
-- the resumed run reconstructs the runnable frontier from committed artifacts;
-- scheduler identity, carried state, and failure attribution remain intact; and
-- any remaining failure is attributable to restart frontier, event lifecycle,
-  context reconstruction, model output, provider behavior, or artifact quality.
+- the provider panel runs the same small protocol across at least two provider
+  configurations when credentials are available;
+- provider-specific terminal-surface failures are separated from framework
+  failures;
+- at least one direct DeepSeek row is retained as the current known-good anchor;
+  and
+- any remaining failure is attributable to provider behavior, model output,
+  framework lifecycle, context reconstruction, or artifact quality.
 
 ## Roadmap
 
@@ -170,6 +170,15 @@ Expected output: a run that interrupts mid-execution and resumes from committed
 artifacts without losing scheduler identity, carried state, or failure
 attribution.
 
+Status: complete. Result:
+`experiments/event_loop/restart_resume_interruption_20260618_direct_deepseek`.
+Classification: `passed`. The run completed inbound, self-scheduled
+continuation, and housekeeping events. The housekeeping event history was
+`pending`, `running`, `pending`, `running`, `completed`, demonstrating recovery
+from an interrupted claimed event. No events were suppressed, completed result
+records were present in the resumed session log, five restart-frontier records
+were written, and no failure attribution records were produced.
+
 ### 6. Provider Variance Panel
 
 Rationale: Provider differences are real, but broad provider comparison is less
@@ -188,9 +197,9 @@ provider variance.
 
 ## Recommended Next Execution Goal
 
-Build and run a restart/resume interruption test that stops a nontrivial event
-loop mid-execution and resumes from committed artifacts while preserving
-scheduler identity, carried state, and failure attribution.
+Build and run a small provider variance panel that keeps direct DeepSeek as the
+known-good anchor and adds any available alternate provider configuration to
+separate provider terminal-surface behavior from framework robustness.
 
 ## Decision Log
 
@@ -230,6 +239,12 @@ scheduler identity, carried state, and failure attribution.
   foreign-entity mentions, the audit and final artifact reported no
   contamination or attribution errors, and the run had no failure attribution
   records. Moved current priority to restart/resume under interruption.
+- 2026-06-18: Completed the restart/resume interruption probe. The live direct
+  DeepSeek run passed with an intentionally interrupted claimed housekeeping
+  event recovered from `running` back to `pending`, then completed by a resumed
+  session. The interrupted event lifecycle was `pending`, `running`, `pending`,
+  `running`, `completed`; no events were suppressed and no failure attribution
+  records were produced. Moved current priority to provider variance.
 
 ## Update Discipline
 
