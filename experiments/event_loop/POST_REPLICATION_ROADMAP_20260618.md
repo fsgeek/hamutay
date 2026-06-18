@@ -48,6 +48,28 @@ In short:
 4. Then add concurrency and operational recovery.
 5. Then generalize across providers.
 
+## Current Priority
+
+Current roadmap state: `declared_loss_discipline_first`.
+
+Next execution target:
+
+> Run a declared-loss discipline stress test that determines whether the
+> observed `declared_loss_rate = 0.0` is caused by prompt/rubric design, model
+> behavior, or harness/scoring behavior.
+
+Reason this remains first: the prospective replication survived on the
+non-inferiority gates, but both conditions failed declared-loss discipline. A
+broader or longer-horizon experiment before isolating this weakness would make
+failure attribution less clear.
+
+Readiness criteria for moving to the second roadmap item:
+
+- the stress test distinguishes prompt/rubric failure from model behavior and
+  harness/scoring behavior; or
+- the test shows the distinction cannot be made with the current scoring
+  surface and records the needed scorer change.
+
 ## Roadmap
 
 ### 1. Declared-Loss Discipline Stress Test
@@ -119,6 +141,15 @@ provider variance.
 Run a declared-loss discipline stress test that determines whether the observed
 `declared_loss_rate = 0.0` is caused by prompt/rubric design, model behavior, or
 harness/scoring behavior.
+
+## Decision Log
+
+- 2026-06-18: Created roadmap after prospective symbolic append-only
+  replication survived. Ranked declared-loss discipline first because it is the
+  clearest observed weakness and can be isolated without adding sustained-loop,
+  multi-entity, restart, or provider-panel degrees of freedom.
+- 2026-06-18: Refined roadmap with explicit current priority and readiness
+  criteria so future goals can target this artifact directly.
 
 ## Update Discipline
 
