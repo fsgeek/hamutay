@@ -50,18 +50,16 @@ In short:
 
 ## Current Priority
 
-Current roadmap state: `provider_variance_panel_next`.
+Current roadmap state: `complete`.
 
 Next execution target:
 
-> Build and run a small provider variance panel that distinguishes event-loop
-> framework robustness from provider-specific terminal-surface behavior.
+> No remaining item on this roadmap. Future work should open a new roadmap or
+> extend this one with a new decision log entry.
 
-Reason this is now first: the restart/resume interruption probe passed. The
-loop recovered an intentionally interrupted `running` housekeeping event back
-to `pending`, resumed from committed artifacts, completed the event, and
-preserved scheduler identity and failure-attribution surfaces. Provider
-variance is now the remaining roadmap item.
+Reason this is complete: all six roadmap items have committed protocol and
+result evidence. The final provider panel passed with direct DeepSeek as the
+known-good anchor and OpenRouter DeepSeek as the alternate provider row.
 
 Measurement policy carried forward:
 
@@ -70,16 +68,14 @@ Measurement policy carried forward:
 - a future experiment must preregister a semantic declared-loss scorer before
   using semantic loss declarations as scored evidence.
 
-Readiness criteria for closing this roadmap:
+Closure criteria:
 
-- the provider panel runs the same small protocol across at least two provider
-  configurations when credentials are available;
-- provider-specific terminal-surface failures are separated from framework
-  failures;
-- at least one direct DeepSeek row is retained as the current known-good anchor;
-  and
-- any remaining failure is attributable to provider behavior, model output,
-  framework lifecycle, context reconstruction, or artifact quality.
+- all six roadmap items have committed result evidence;
+- the provider panel ran the same small protocol across direct DeepSeek and
+  OpenRouter DeepSeek;
+- provider-specific terminal-surface failures were separated from framework
+  failures; and
+- no framework failure remained on the final panel.
 
 ## Roadmap
 
@@ -187,6 +183,14 @@ useful before the task and scoring surfaces are sharper.
 Expected output: a small provider panel that distinguishes framework robustness
 from provider-specific terminal-surface behavior.
 
+Status: complete. Result:
+`experiments/event_loop/provider_variance_panel_20260618`.
+Classification: `passed`. The panel reused the committed direct DeepSeek
+restart/resume result as the known-good anchor and added an OpenRouter DeepSeek
+row using the same restart/resume protocol with terminal tool choice `auto`.
+Both rows passed; the panel conclusion was
+`no_provider_variance_detected_on_panel`.
+
 ## Recommended Roadmap Goal
 
 Maintain and refine the post-replication roadmap for event-loop viability:
@@ -197,9 +201,10 @@ provider variance.
 
 ## Recommended Next Execution Goal
 
-Build and run a small provider variance panel that keeps direct DeepSeek as the
-known-good anchor and adds any available alternate provider configuration to
-separate provider terminal-surface behavior from framework robustness.
+Open a new roadmap if the next research question is broader than this
+post-replication sequence. Candidate next directions are larger provider
+panels, longer-horizon multi-entity operation, or moving the experiment-layer
+state isolation repair into reviewed substrate code.
 
 ## Decision Log
 
@@ -245,6 +250,11 @@ separate provider terminal-surface behavior from framework robustness.
   session. The interrupted event lifecycle was `pending`, `running`, `pending`,
   `running`, `completed`; no events were suppressed and no failure attribution
   records were produced. Moved current priority to provider variance.
+- 2026-06-18: Completed the provider variance panel. The committed direct
+  DeepSeek restart/resume result and the new OpenRouter DeepSeek row both
+  passed the same restart/resume protocol with terminal tool choice `auto`.
+  Panel conclusion: `no_provider_variance_detected_on_panel`. Marked this
+  roadmap complete.
 
 ## Update Discipline
 
