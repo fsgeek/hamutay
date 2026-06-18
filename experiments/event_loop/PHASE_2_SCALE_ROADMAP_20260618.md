@@ -65,19 +65,19 @@ In short:
 
 ## Current Priority
 
-Current roadmap state: `phase_2a_substrate_contract_next`.
+Current roadmap state: `phase_2a_larger_multi_entity_loop_next`.
 
 Next execution target:
 
-> Specify and test the substrate contract for entity-scoped wake state,
-> workstream identity, and scheduler-owned versus model-owned fields, without
-> committing source changes under `src/hamutay` unless reviewed separately.
+> Build and run a larger multi-entity sustained loop without Yanantin: 3-5
+> entities or workstreams, interleaved scheduling, multiple inbound messages per
+> entity, self-scheduled continuations, housekeeping, and final synthesis.
 
-Reason this is first: the strongest Phase 1 failure was not lack of model
-capacity. It was a substrate-boundary problem: red entity state became blue
-entity prior state. Before scaling entity count or memory complexity, Phase 2
-needs a crisp contract for how entity-scoped state is selected, restored,
-merged, and audited.
+Reason this is now first: the Phase 2A substrate contract probe passed under
+live direct DeepSeek. The experiment-layer contract now explicitly defines and
+checks entity-scoped wake state, shared-context authorization, and
+scheduler-owned field discipline. The next scale step is to increase entity
+count and scheduling interleaving without adding Yanantin.
 
 ## Phase 2A Readiness Criteria
 
@@ -142,6 +142,17 @@ Readiness to advance:
 - state merge behavior is deterministic enough to test;
 - failure attribution distinguishes state isolation, model output, scheduler,
   and provider layers.
+
+Status: complete. Result:
+`experiments/event_loop/phase_2a_substrate_contract_20260618_direct_deepseek`.
+Classification: `passed`. The live direct DeepSeek run reused the
+multi-entity state-isolation repair behavior and scored it against the explicit
+contract in
+`experiments/event_loop/phase_2a_substrate_contract_20260618/CONTRACT.md`.
+Private entity prior states had no foreign-entity mentions, entity/workstream
+identity was preserved, audit and final synthesis used explicit shared
+requested context, audit/final contamination checks were clean, and model raw
+outputs did not author scheduler-owned fields.
 
 ### 2. Larger Multi-Entity Sustained Loop Without Yanantin
 
@@ -286,10 +297,9 @@ only when the roadmap's explicit readiness gate is met.
 
 ## Recommended Next Execution Goal
 
-Specify and test the Phase 2A entity-scoped wake-state substrate contract using
-experiment-layer artifacts first. Do not modify or commit `src/hamutay` source
-for the contract until the developer has reviewed the proposed substrate
-semantics.
+Build and run the Phase 2A larger multi-entity sustained loop without
+Yanantin, using the committed substrate contract as the state-isolation
+measurement surface.
 
 ## Decision Log
 
@@ -299,6 +309,12 @@ semantics.
   Recorded qualitative evidence from long-running Hamut'ay taste instances as
   a reason to expect memory pressure, while keeping scheduler and
   entity-isolation scale tests first.
+- 2026-06-18: Completed the Phase 2A substrate contract probe. The live direct
+  DeepSeek run passed all contract checks: private entity prior-state
+  isolation, entity/workstream preservation, explicit shared requested context,
+  clean audit/final contamination checks, scheduler-owned field discipline, and
+  failure-attribution surface presence. Advanced current priority to the larger
+  multi-entity sustained loop without Yanantin.
 
 ## Update Discipline
 
