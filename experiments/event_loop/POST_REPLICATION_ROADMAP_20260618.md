@@ -50,25 +50,34 @@ In short:
 
 ## Current Priority
 
-Current roadmap state: `declared_loss_discipline_first`.
+Current roadmap state: `harder_append_only_baseline_next`.
 
 Next execution target:
 
-> Run a declared-loss discipline stress test that determines whether the
-> observed `declared_loss_rate = 0.0` is caused by prompt/rubric design, model
-> behavior, or harness/scoring behavior.
+> Build and run a harder append-only baseline test that determines whether
+> symbolic event-loop non-inferiority survives against a stronger one-shot
+> condition, while preserving the declared-loss measurement policy below.
 
-Reason this remains first: the prospective replication survived on the
-non-inferiority gates, but both conditions failed declared-loss discipline. A
-broader or longer-horizon experiment before isolating this weakness would make
-failure attribution less clear.
+Reason this is now first: the declared-loss discipline stress test satisfied
+the readiness criterion for moving on. It showed that exact-marker scoring is
+lexical, that the model can comply when the exact loss contract is explicit,
+and that the prior `declared_loss_rate = 0.0` is best attributed to
+prompt/rubric design under the current scorer, with a scorer caveat.
 
-Readiness criteria for moving to the second roadmap item:
+Measurement policy carried forward:
 
-- the stress test distinguishes prompt/rubric failure from model behavior and
-  harness/scoring behavior; or
-- the test shows the distinction cannot be made with the current scoring
-  surface and records the needed scorer change.
+- future exact declared-loss scores require an explicit exact-marker contract in
+  the prompt/rubric; or
+- a future experiment must preregister a semantic declared-loss scorer before
+  using semantic loss declarations as scored evidence.
+
+Readiness criteria for moving to the third roadmap item:
+
+- the harder append-only baseline test establishes whether event-loop
+  non-inferiority survives, narrows, or fails against the stronger baseline; and
+- any failure is attributable to artifact quality, declared-loss discipline,
+  prompt/rubric design, provider behavior, or scheduler behavior without using
+  scheduler observability to rescue the shared-surface comparison.
 
 ## Roadmap
 
@@ -82,6 +91,13 @@ behavior.
 
 Expected output: an experiment that makes loss declaration unavoidable and
 checks whether the loss materially changes the recommendation.
+
+Status: complete. Result:
+`experiments/event_loop/declared_loss_discipline_stress_20260618_direct_deepseek`.
+Classification: `prompt_rubric_primary_with_lexical_scorer_caveat`. The model
+declared the limitation semantically in the unanchored live row but did not
+receive exact-marker credit; it passed exact-marker scoring when the prompt
+included the exact declared-loss contract.
 
 ### 2. Harder Append-Only Baseline
 
@@ -138,9 +154,10 @@ provider variance.
 
 ## Recommended Next Execution Goal
 
-Run a declared-loss discipline stress test that determines whether the observed
-`declared_loss_rate = 0.0` is caused by prompt/rubric design, model behavior, or
-harness/scoring behavior.
+Build and run a harder append-only baseline test that determines whether
+symbolic event-loop non-inferiority survives against a stronger one-shot
+condition, while preserving the declared-loss measurement policy from this
+roadmap.
 
 ## Decision Log
 
@@ -150,6 +167,12 @@ harness/scoring behavior.
   multi-entity, restart, or provider-panel degrees of freedom.
 - 2026-06-18: Refined roadmap with explicit current priority and readiness
   criteria so future goals can target this artifact directly.
+- 2026-06-18: Completed declared-loss discipline stress test. Deterministic
+  controls showed exact-marker scoring is lexical: exact marker passed,
+  semantic-equivalent loss declaration failed exact scoring, and an exact marker
+  without a constrained recommendation was not materially disciplined. Live
+  direct-DeepSeek rows showed the model can comply when the exact marker is
+  explicit. Moved current priority to harder append-only baseline.
 
 ## Update Discipline
 
