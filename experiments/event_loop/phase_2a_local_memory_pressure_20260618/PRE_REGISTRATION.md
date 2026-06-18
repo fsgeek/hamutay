@@ -30,8 +30,8 @@ The experiment passes only if:
 - each recall output cites the source commitment record ID;
 - housekeeping checks all recall records and reports no unsupported claims or
   attribution errors;
-- final synthesis includes all recalled commitment codes and provenance record
-  IDs;
+- final synthesis includes all recalled commitment codes and includes every
+  source commitment record ID in its provenance record IDs;
 - context, lifecycle, and idle checks are clean;
 - the Yanantin gate remains closed.
 

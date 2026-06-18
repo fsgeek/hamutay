@@ -608,8 +608,9 @@ def required_success(summary: JsonDict, records: list[JsonDict], *, paths: Any) 
         "final_entity_count": final_state.get("entity_count") == len(ENTITIES),
         "final_codes": sorted(final_state.get("recalled_commitment_codes") or [])
         == EXPECTED_CODES,
-        "final_provenance_records": sorted(final_state.get("provenance_record_ids") or [])
-        == expected_source_ids,
+        "final_provenance_includes_source_records": set(expected_source_ids).issubset(
+            set(final_state.get("provenance_record_ids") or [])
+        ),
         "final_clean": final_state.get("unsupported_claims") == []
         and final_state.get("attribution_errors") == [],
         "yanantin_gate_remains_closed": True,

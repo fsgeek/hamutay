@@ -42,7 +42,7 @@ def test_dry_local_memory_pressure_passes(tmp_path):
     assert checks["housekeeping_checked_recall_records"] is True
     assert checks["housekeeping_clean"] is True
     assert checks["final_codes"] is True
-    assert checks["final_provenance_records"] is True
+    assert checks["final_provenance_includes_source_records"] is True
     assert checks["yanantin_gate_remains_closed"] is True
     assert len(result["success"]["recall_states"]) == 3
     assert result["success"]["recall_prior_leaks"] == []
