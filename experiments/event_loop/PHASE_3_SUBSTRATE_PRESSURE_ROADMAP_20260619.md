@@ -65,37 +65,33 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state: `phase_3c_preserved_state_scorer_clarification_next`.
+Current roadmap state: `phase_3d_richer_ipc_ingress_next`.
 
 Next execution target:
 
-> Clarify the Phase 3C preserved-state scorer so concrete preserved state
-> fields are accepted rather than only the scorer's canned labels, then rerun
-> the live direct-DeepSeek wall-clock condition.
+> Preregister and run the Phase 3D richer IPC ingress probe.
 
-Reason this is now first: the clarified Phase 3C rerun passed elapsed-delay
-window naming, current-pending state, event order, restart/resume recovery,
-periodic report consistency, clean idle state, and failure-attribution surface.
-It still failed `final_distinguishes_operation_state` because the scorer
-expected exact canned preserved-state labels, while the model listed concrete
-preserved state fields such as `open_items`, `continuation_request`,
-`report_status`, and `unsupported_claims`.
+Reason this is now first: Phase 3C now passes after preserving the two
+strict/clarified failures as contract-scorer evidence. The next untested
+substrate caveat is whether the loop can accept richer IPC message types
+without confusing event identity, workstream scope, cancellation/correction
+semantics, or continuation binding.
 
 Prediction:
 
-> A scorer that treats preserved-state labels semantically, rather than as an
-> exact canned label set, should classify the observed behavior as successful
-> if completed work, no current pending work, historical elapsed-delay windows,
-> and preserved state fields are all present.
+> Basic task/status IPC should pass. Corrections and cancellations are higher
+> risk because they can mutate workstream state and continuation expectations.
+> The likely failure modes are route bleed across workstreams, stale
+> continuation execution after cancellation, or final synthesis flattening
+> accepted, corrected, canceled, rejected, and completed messages.
 
 Falsification target:
 
-> The loop is not yet sustained-operation-ready if, after scorer
-> clarification, elapsed-time scheduling becomes unobservable, restart/resume
-> loses pending work, periodic reports diverge from event history, housekeeping
-> corrupts or silently drops open state, or final synthesis still lacks
-> completed, currently pending, historically delayed, or preserved-state
-> evidence.
+> The loop is not yet richer-IPC-ready if messages route to the wrong
+> workstream, cancellations or corrections corrupt unrelated state, scheduler
+> identity becomes model-authored, continuations bind to stale or canceled
+> records, or final synthesis cannot explain accepted, corrected, canceled,
+> rejected, and completed messages.
 
 ## Ordered Hypotheses
 
@@ -242,6 +238,19 @@ preserved state fields. This suggests a preserved-state scorer overconstraint,
 not elapsed-time scheduler, restart-frontier, housekeeping, or reporting
 failure.
 
+Preserved-state scorer result:
+`experiments/event_loop/phase_3c_longer_wall_clock_sustained_operation_20260619_direct_deepseek_wall_clock_preserved_state`.
+Classification: `passed`. The live direct DeepSeek rerun completed all nine
+events in order, observed both elapsed-delay windows, recovered the interrupted
+beta continuation with lifecycle history `pending`, `running`, `pending`,
+`running`, `completed`, produced clean periodic reports, left no runnable
+pending events, and reported no context errors, lifecycle anomalies, material
+outcome warnings, or failure-attribution records. The final artifact listed the
+historical elapsed-delay windows, no currently pending events, completed
+alpha/beta workstreams, empty unsupported claims/open items, and concrete
+preserved state fields including open-item, continuation, housekeeping, and
+report state. This advances the roadmap to richer IPC ingress.
+
 ### 4. Richer IPC Ingress
 
 Hypothesis: The loop can accept multiple asynchronous message types without
@@ -346,10 +355,12 @@ each result, and continuing while readiness criteria are met.
 
 ## Recommended Next Execution Goal
 
-Clarify the Phase 3C preserved-state scorer so concrete preserved state fields
-are accepted when the final artifact already distinguishes completed work,
-current pending events, and historical elapsed-delay windows. Preserve both
-failed results, then rerun the live direct-DeepSeek wall-clock condition.
+Preregister and run the Phase 3D richer IPC ingress probe with task,
+correction, cancellation, status-query, and external-evidence messages
+interleaved across workstreams. Score routing, workstream isolation,
+continuation binding, cancellation/correction effects, scheduler-owned
+identity, and final explanation of accepted, corrected, canceled, rejected, and
+completed messages.
 
 ## Decision Log
 
@@ -398,6 +409,11 @@ failed results, then rerun the live direct-DeepSeek wall-clock condition.
   because the scorer required exact canned preserved-state labels. The final
   artifact instead listed concrete preserved state fields. Advanced current
   priority to preserved-state scorer clarification.
+- 2026-06-19: Clarified the Phase 3C preserved-state scorer and reran the live
+  wall-clock condition. The run passed all checks: elapsed-delay observation,
+  event order, restart/resume recovery, periodic report consistency, clean idle
+  state, final completed/pending/delay/preserved-state distinction, and empty
+  failure-attribution surface. Advanced current priority to richer IPC ingress.
 
 ## Update Discipline
 
