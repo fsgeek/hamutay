@@ -65,18 +65,20 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state: `phase_3e_duplicate_link_surface_clarification_next`.
+Current roadmap state: `phase_3e_obsolete_report_surface_clarification_next`.
 
 Next execution target:
 
-> Clarify the Phase 3E duplicate-link and contested-reason surfaces, then rerun
-> the live memory-maintenance pressure condition.
+> Clarify the Phase 3E obsolete-report surface and maintenance-action coverage
+> scorer, then rerun the live memory-maintenance pressure condition.
 
-Reason this is now first: the initial Phase 3E run did the substantive
-maintenance work, but the protocol collapsed duplicate linking into retirement
-and scored a free-text contested-memory reason exactly. Those are
-surface/scorer ambiguities that should be clarified before treating the result
-as either a pass or a memory-maintenance failure.
+Reason this is now first: the duplicate-link clarification resolved the
+duplicate and contested-reason ambiguity, but the rerun showed a second
+surface ambiguity: obsolete reports were represented through
+`obsolete_report_record_labels` and `retire_obsolete_report`, not through the
+aggregate stale-retirement field. The action scorer also required one combined
+`mark_contested` action rather than accepting equivalent per-record contested
+actions.
 
 Initial durable-ledger result:
 
@@ -138,16 +140,16 @@ Interpretation:
 
 Next prediction:
 
-> A clarified duplicate-link field and contested-reason scorer should preserve
-> the initial substantive maintenance success if the weakness is protocol
-> ambiguity rather than memory-maintenance failure.
+> A clarified obsolete-report field in final synthesis and action-set coverage
+> scoring should preserve the substantive maintenance success if the weakness
+> is protocol ambiguity rather than memory-maintenance failure.
 
 Falsification target:
 
-> If housekeeping still fails to preserve active, retired, linked-duplicate,
-> contested, unresolved, provenance, deletion, and disorder-reduction fields
-> after those surfaces are explicit, the weak layer is memory-maintenance
-> discipline.
+> If housekeeping still fails to preserve active, stale-retired,
+> linked-duplicate, obsolete-report, contested, unresolved, provenance,
+> deletion, and disorder-reduction fields after those surfaces are explicit,
+> the weak layer is memory-maintenance discipline.
 
 ## Ordered Hypotheses
 
@@ -437,6 +439,20 @@ than retired, represented `ops-report-obsolete` through
 the contested gamma labels with a semantically correct but non-identical
 reason. Advance to a narrow duplicate-link/fuzzy-contested-reason surface
 clarification before rerunning.
+
+Duplicate-link clarification result:
+`experiments/event_loop/phase_3e_memory_maintenance_pressure_20260619_direct_deepseek_duplicate_surface`.
+Classification: `failed`. The rerun preserved the substantive maintenance
+pattern and correctly populated `linked_duplicate_record_labels` with
+`beta-duplicate-b`. It passed duplicate-link, contested-memory, deletion,
+authorship, provenance, and disorder-reduction checks. Remaining failures were
+`maintenance_retired_records`, `final_retired_records`, and
+`maintenance_actions_complete`: the model represented `ops-report-obsolete`
+through `obsolete_report_record_labels` and `retire_obsolete_report` rather
+than aggregate retired labels, and emitted two per-record `mark_contested`
+actions instead of one combined action. Advance to an obsolete-report final
+surface and action-set coverage clarification before treating this as a
+memory-maintenance failure.
 
 ### 6. Reduced Scaffolding
 
