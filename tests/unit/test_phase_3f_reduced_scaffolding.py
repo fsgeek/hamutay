@@ -54,6 +54,7 @@ def test_preregistration_artifacts_capture_reduced_scaffolding_contract(tmp_path
     profile = matrix["reduced_scaffolding_profile"]
     assert profile["exact_value_enums_removed"] is True
     assert profile["terminal_field_names_required"] is True
+    assert profile["harness_copied_fields_required"] is True
     assert profile["scoring_contract_unchanged_from_phase_3e"] is True
     assert budget["max_live_calls"] == 11
     assert "reduced_scaffolding" in taxonomy["layers"]

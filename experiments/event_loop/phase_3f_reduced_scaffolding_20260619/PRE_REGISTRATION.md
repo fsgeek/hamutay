@@ -26,6 +26,11 @@ Run the Phase 3E memory-maintenance matrix with loosened terminal schemas:
 seed eight memory records, run housekeeping maintenance, and write a final
 maintenance artifact. Score with the same clarified Phase 3E postconditions.
 
+Clarification after the initial live run: fields copied into durable state by
+the harness remain required even when their values are unconstrained. Absent
+`superseded_by`, `duplicate_of`, and `conflict_group` values are represented
+as empty strings.
+
 ## Pass Criteria
 
 Pass if all contract checks in `CONTRACT.md` are true.

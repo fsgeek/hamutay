@@ -17,6 +17,8 @@ but removes most exact-value enum rails from terminal schemas:
 - record-label, status, action, list-item, boolean, and integer value enums
   removed;
 - required field names remain;
+- every field copied by the harness state-update map is required, with absent
+  optional semantic values represented as an empty string;
 - scheduler-owned event identity remains harness-authored;
 - the scoring contract remains the Phase 3E clarified contract.
 

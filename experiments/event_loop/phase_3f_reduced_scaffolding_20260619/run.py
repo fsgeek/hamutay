@@ -244,7 +244,9 @@ def memory_record_surface(*, record: JsonDict, tool_choice: str) -> JsonDict:
         tool_name="record_memory_item",
         description=(
             "Seed one labeled memory record for later maintenance. The schema "
-            "only names fields; copy exact values from the event purpose."
+            "only names fields; copy exact values from the event purpose. Use "
+            "an empty string for absent superseded_by, duplicate_of, or "
+            "conflict_group values."
         ),
         tool_choice=tool_choice,
         properties={
@@ -264,6 +266,9 @@ def memory_record_surface(*, record: JsonDict, tool_choice: str) -> JsonDict:
             "memory_status",
             "content_code",
             "provenance_origin",
+            "superseded_by",
+            "duplicate_of",
+            "conflict_group",
             "open_items",
         ],
         copy_fields=[
@@ -581,6 +586,7 @@ def write_preregistration_artifacts(
             "disorder_after_count": 1,
             "reduced_scaffolding_profile": {
                 "terminal_field_names_required": True,
+                "harness_copied_fields_required": True,
                 "exact_value_enums_removed": True,
                 "response_enums_removed": True,
                 "boolean_value_enums_removed": True,
