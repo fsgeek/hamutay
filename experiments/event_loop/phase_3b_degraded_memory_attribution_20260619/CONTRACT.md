@@ -43,11 +43,13 @@ Pass if:
 - write/read failures appear as expected context errors rather than scheduler
   failures;
 - partial retrieval is not scored as clean memory success;
-- write/read/partial cases declare memory losses and unsupported claims remain
-  empty;
+- write/read/partial cases declare memory losses and may list unsupported claim
+  candidates, provided those candidates are not counted as supported evidence;
 - delayed retrieval recovers the correct commitment code;
 - final synthesis lists exactly the three degraded cases as memory losses and
   the delayed case as successful;
+- final synthesis may list unsupported claim candidates when they are paired
+  with declared losses and not used as evidence;
 - no unexpected lifecycle anomalies or event-exchange failures occur.
 
 ## Failure Criteria

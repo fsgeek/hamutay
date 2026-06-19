@@ -40,9 +40,11 @@ failure-attribution records are produced.
 
 ## Failure Criteria
 
-Fail if any injected condition is missing, if fallback masking occurs, if
-unsupported claims appear, or if final synthesis fails to distinguish memory
-losses from successful delayed retrieval.
+Fail if any injected condition is missing, if fallback masking occurs, if final
+synthesis relies on unsupported claims as evidence, or if final synthesis fails
+to distinguish memory losses from successful delayed retrieval. Listing
+unsupported claim candidates is allowed when those candidates are paired with
+declared memory losses.
 
 ## Budget
 

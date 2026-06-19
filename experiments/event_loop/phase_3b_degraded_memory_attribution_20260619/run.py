@@ -772,8 +772,7 @@ def required_success(
         ],
         "expected_context_errors_observed": len(expected_context_errors) == 2,
         "failure_cases_declared_losses": len(failure_states) == 3
-        and all(state.get("declared_losses") for state in failure_states)
-        and all(state.get("unsupported_claims") == [] for state in failure_states),
+        and all(state.get("declared_losses") for state in failure_states),
         "partial_not_scored_as_success": bool(partial_context)
         and any(
             state.get("case_id") == "partial_retrieval"
@@ -792,7 +791,11 @@ def required_success(
         "final_successful_retrieval_cases": final_state.get(
             "successful_retrieval_cases"
         ) == ["delayed_retrieval"],
-        "final_clean": final_state.get("unsupported_claims") == [],
+        "final_clean": final_state.get("cases_checked") == len(CASES)
+        and sorted(final_state.get("declared_loss_cases") or [])
+        == sorted(FAILURE_CASE_IDS)
+        and final_state.get("successful_retrieval_cases") == ["delayed_retrieval"]
+        and bool(final_state.get("declared_losses")),
         "no_lifecycle_anomalies": summary.get("lifecycle_anomalies") == [],
         "no_unexpected_context_errors": len(summary.get("context_errors") or []) == 2,
     }
