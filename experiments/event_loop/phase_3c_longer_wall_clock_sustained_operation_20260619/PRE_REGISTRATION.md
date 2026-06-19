@@ -20,8 +20,8 @@ workstreams while:
 - recovering one already-claimed continuation after elapsed time and
   restart/resume;
 - running housekeeping and periodic reports after delayed execution;
-- producing a final synthesis that distinguishes completed, pending, delayed,
-  and preserved state;
+- producing a final synthesis that distinguishes completed work, currently
+  pending events, historical elapsed-delay windows, and preserved state;
 - preserving restart-frontier observability and failure attribution.
 
 ## Prediction
@@ -61,8 +61,9 @@ Pass if all of these are true:
 - restart/resume recovers exactly one interrupted event;
 - both periodic reports remain consistent with the completed workstream
   history and report zero open items;
-- final synthesis names both workstreams, lists the two delayed windows, lists
-  no pending events, and lists the preserved restart/report/open-item state;
+- final synthesis names both workstreams, lists the two historical
+  elapsed-delay windows, lists no currently pending events, and lists the
+  preserved restart/report/open-item state;
 - no pending runnable events remain;
 - there are no context errors, lifecycle anomalies, material outcome warnings,
   or failure-attribution records.

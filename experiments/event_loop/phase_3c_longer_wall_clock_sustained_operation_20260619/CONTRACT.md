@@ -18,8 +18,8 @@ periodic-report consistency, housekeeping state, and final failure attribution.
 - One recovered already-claimed continuation with lifecycle history `pending`,
   `running`, `pending`, `running`, `completed`.
 - Periodic reports after housekeeping.
-- Final synthesis that distinguishes completed, pending, delayed, and
-  preserved state.
+- Final synthesis that distinguishes completed work, currently pending events,
+  historical elapsed-delay windows, and preserved state.
 
 ## Pass Criteria
 
@@ -31,8 +31,9 @@ Pass if:
 - restart/resume recovers exactly one interrupted event;
 - periodic reports remain consistent with workstream history and zero open
   items;
-- final synthesis reports both workstreams complete, no pending event labels,
-  both delayed window labels, and preserved restart/report/open-item state;
+- final synthesis reports both workstreams complete, no current pending event
+  labels, both historical elapsed-delay window labels, and preserved
+  restart/report/open-item state;
 - no context errors, lifecycle anomalies, material outcome warnings, or
   failure-attribution records appear.
 

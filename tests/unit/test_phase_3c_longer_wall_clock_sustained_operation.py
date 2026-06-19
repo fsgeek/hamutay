@@ -47,6 +47,12 @@ def test_dry_wall_clock_sustained_operation_probe_passes(tmp_path):
     assert checks["interrupted_event_recovered_and_completed"] is True
     assert checks["recovered_one_interrupted_event"] is True
     assert checks["final_distinguishes_operation_state"] is True
+    final_state = result["success"]["final_after_state"]
+    assert final_state["elapsed_delay_window_labels"] == [
+        "alpha-report-delay",
+        "beta-restart-delay",
+    ]
+    assert final_state["currently_pending_event_labels"] == []
     assert result["success"]["interrupted_event_history"] == [
         "pending",
         "running",

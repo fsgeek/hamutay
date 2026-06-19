@@ -245,8 +245,14 @@ def final_artifact_terminal_surface(*, tool_choice: str) -> JsonDict:
             "completed_task_labels": {"type": "array", "items": {"type": "string"}},
             "completed_workstream_ids": {"type": "array", "items": {"type": "string"}},
             "periodic_report_count": {"type": "integer"},
-            "delayed_event_labels": {"type": "array", "items": {"type": "string"}},
-            "pending_event_labels": {"type": "array", "items": {"type": "string"}},
+            "elapsed_delay_window_labels": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+            "currently_pending_event_labels": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
             "preserved_state_labels": {"type": "array", "items": {"type": "string"}},
             "unsupported_claims": {"type": "array", "items": {"type": "string"}},
             "open_items": PROBE.open_items_schema(),
@@ -260,8 +266,8 @@ def final_artifact_terminal_surface(*, tool_choice: str) -> JsonDict:
             "completed_task_labels",
             "completed_workstream_ids",
             "periodic_report_count",
-            "delayed_event_labels",
-            "pending_event_labels",
+            "elapsed_delay_window_labels",
+            "currently_pending_event_labels",
             "preserved_state_labels",
             "unsupported_claims",
             "open_items",
@@ -274,8 +280,8 @@ def final_artifact_terminal_surface(*, tool_choice: str) -> JsonDict:
             "completed_task_labels",
             "completed_workstream_ids",
             "periodic_report_count",
-            "delayed_event_labels",
-            "pending_event_labels",
+            "elapsed_delay_window_labels",
+            "currently_pending_event_labels",
             "preserved_state_labels",
             "unsupported_claims",
             "open_items",
@@ -346,8 +352,11 @@ def scripted_outputs() -> list[JsonDict]:
             "completed_task_labels": TASK_LABELS,
             "completed_workstream_ids": WORKSTREAM_IDS,
             "periodic_report_count": len(WORKSTREAMS),
-            "delayed_event_labels": ["alpha-report-delay", "beta-restart-delay"],
-            "pending_event_labels": [],
+            "elapsed_delay_window_labels": [
+                "alpha-report-delay",
+                "beta-restart-delay",
+            ],
+            "currently_pending_event_labels": [],
             "preserved_state_labels": [
                 "restart-frontier",
                 "open-item-empty-state",
@@ -508,6 +517,9 @@ def append_final_event(
             "beta. Set workstream_count to 2, periodic_report_count to 2, "
             "completed_task_labels to ['alpha', 'beta'], "
             "completed_workstream_ids to ['research', 'operations'], "
+            "elapsed_delay_window_labels to ['alpha-report-delay', "
+            "'beta-restart-delay'] for the historical delay windows observed "
+            "during this run, currently_pending_event_labels to [], "
             "unsupported_claims to [], open_items to [], and response exactly: "
             "autonomous loop artifact complete."
         ),
@@ -711,10 +723,10 @@ def required_success(
         "final_clean": final_after.get("unsupported_claims") == []
         and final_after.get("open_items") == [],
         "final_distinguishes_operation_state": sorted(
-            final_after.get("delayed_event_labels") or []
+            final_after.get("elapsed_delay_window_labels") or []
         )
         == sorted(["alpha-report-delay", "beta-restart-delay"])
-        and final_after.get("pending_event_labels") == []
+        and final_after.get("currently_pending_event_labels") == []
         and sorted(final_after.get("preserved_state_labels") or [])
         == sorted(
             [
