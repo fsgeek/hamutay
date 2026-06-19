@@ -65,33 +65,38 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state: `phase_3d_richer_ipc_ingress_next`.
+Current roadmap state: `phase_3d_final_category_contract_clarification_next`.
 
 Next execution target:
 
-> Preregister and run the Phase 3D richer IPC ingress probe.
+> Clarify the Phase 3D final-category contract so accepted task messages,
+> accepted non-task IPC messages, unresolved open items, and unsupported claim
+> candidates are not conflated, then rerun the live direct-DeepSeek IPC ingress
+> condition.
 
-Reason this is now first: Phase 3C now passes after preserving the two
-strict/clarified failures as contract-scorer evidence. The next untested
-substrate caveat is whether the loop can accept richer IPC message types
-without confusing event identity, workstream scope, cancellation/correction
-semantics, or continuation binding.
+Reason this is now first: the initial live Phase 3D run passed the substantive
+IPC ingress checks for routing, correction, cancellation, rejection,
+continuation completion, status consistency, evidence routing, event order, and
+failure-attribution surface. It failed only in final synthesis because the
+final surface conflated accepted task messages with accepted non-task IPC
+messages, and because audit notes about cancellation/rejection were emitted as
+`open_items`/`unsupported_claims`.
 
 Prediction:
 
-> Basic task/status IPC should pass. Corrections and cancellations are higher
-> risk because they can mutate workstream state and continuation expectations.
-> The likely failure modes are route bleed across workstreams, stale
-> continuation execution after cancellation, or final synthesis flattening
-> accepted, corrected, canceled, rejected, and completed messages.
+> A clarified final surface should pass if the model can keep accepted task
+> messages separate from accepted non-task IPC messages, report rejected-target
+> notes without treating them as unsupported claims actually made, and keep
+> unresolved open items distinct from audit notes.
 
 Falsification target:
 
-> The loop is not yet richer-IPC-ready if messages route to the wrong
-> workstream, cancellations or corrections corrupt unrelated state, scheduler
-> identity becomes model-authored, continuations bind to stale or canceled
-> records, or final synthesis cannot explain accepted, corrected, canceled,
-> rejected, and completed messages.
+> The loop is not yet richer-IPC-ready if, after final-surface clarification,
+> messages route to the wrong workstream, cancellations or corrections corrupt
+> unrelated state, scheduler identity becomes model-authored, continuations bind
+> to stale or canceled records, or final synthesis still cannot explain
+> accepted task, accepted non-task, corrected, canceled, rejected, and completed
+> messages.
 
 ## Ordered Hypotheses
 
@@ -276,6 +281,21 @@ Readiness to advance:
 - final synthesis can explain accepted, rejected, canceled, and completed
   messages.
 
+Status: initial final-category result complete. Result:
+`experiments/event_loop/phase_3d_richer_ipc_ingress_20260619_direct_deepseek`.
+Classification: `failed`. The run completed all nine expected events in order.
+Task routing, alpha correction, beta cancellation, unknown-target rejection,
+corrected alpha continuation, status-query consistency, external-evidence
+routing, workstream isolation, clean idle state, context-error absence, and
+lifecycle-anomaly absence all passed. The failed checks were `final_categories`
+and `final_clean`: final synthesis listed all accepted IPC messages in
+`accepted_message_labels` rather than only accepted task messages, and it used
+`open_items` plus `unsupported_claims` to preserve audit notes about
+`cancel-beta` and rejected `cancel-ghost`. This suggests a final-artifact
+contract ambiguity around task acceptance, audit notes, unresolved open items,
+and unsupported claim candidates, not a message-routing or continuation-binding
+failure.
+
 ### 5. Memory Maintenance Pressure
 
 Hypothesis: Housekeeping can reduce memory disorder rather than merely observe
@@ -355,12 +375,11 @@ each result, and continuing while readiness criteria are met.
 
 ## Recommended Next Execution Goal
 
-Preregister and run the Phase 3D richer IPC ingress probe with task,
-correction, cancellation, status-query, and external-evidence messages
-interleaved across workstreams. Score routing, workstream isolation,
-continuation binding, cancellation/correction effects, scheduler-owned
-identity, and final explanation of accepted, corrected, canceled, rejected, and
-completed messages.
+Clarify the Phase 3D final-category contract so accepted task messages are
+separate from accepted non-task IPC messages, audit notes are separate from
+unresolved open items, and unsupported claim candidates are separate from
+unsupported claims made. Preserve the initial failed result, then rerun the
+live direct-DeepSeek IPC ingress condition.
 
 ## Decision Log
 
@@ -414,6 +433,12 @@ completed messages.
   event order, restart/resume recovery, periodic report consistency, clean idle
   state, final completed/pending/delay/preserved-state distinction, and empty
   failure-attribution surface. Advanced current priority to richer IPC ingress.
+- 2026-06-19: Completed the initial Phase 3D richer IPC ingress live run. It
+  passed routing, correction, cancellation, rejection, continuation, status,
+  evidence, event-order, idle-state, and failure-surface checks, but failed
+  final synthesis because accepted task messages were conflated with accepted
+  non-task IPC messages and audit notes were emitted as open items/unsupported
+  claims. Advanced current priority to final-category contract clarification.
 
 ## Update Discipline
 
