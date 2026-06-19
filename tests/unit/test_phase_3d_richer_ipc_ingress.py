@@ -45,16 +45,27 @@ def test_dry_richer_ipc_ingress_probe_passes(tmp_path):
     assert checks["corrected_continuation_completed"] is True
     assert checks["status_query_consistent"] is True
     assert checks["external_evidence_routed"] is True
-    assert checks["final_categories"] is True
+    assert checks["category_summary"] is True
+    assert checks["category_summary_clean"] is True
+    assert checks["claim_audit_clean"] is True
+    assert checks["final_uses_split_summaries"] is True
     assert checks["final_workstream_isolation"] is True
+    category_state = result["success"]["category_state"]
+    claim_audit_state = result["success"]["claim_audit_state"]
     final_state = result["success"]["final_state"]
-    assert final_state["accepted_task_message_labels"] == ["task-alpha", "task-beta"]
-    assert sorted(final_state["accepted_non_task_message_labels"]) == [
+    assert category_state["accepted_task_message_labels"] == [
+        "task-alpha",
+        "task-beta",
+    ]
+    assert sorted(category_state["accepted_non_task_message_labels"]) == [
         "cancel-beta",
         "correction-alpha",
         "evidence-alpha",
         "status-all",
     ]
+    assert claim_audit_state["unsupported_claims"] == []
+    assert claim_audit_state["unresolved_open_items"] == []
+    assert final_state["summary_source_labels"] == ["category-summary", "claim-audit"]
     assert final_state["unresolved_open_items"] == []
     assert final_state["unsupported_claims"] == []
     assert result["failure_attribution"] == []
@@ -72,6 +83,6 @@ def test_preregistration_artifacts_capture_richer_ipc_contract(tmp_path):
     assert matrix["expected_event_type_sequence"] == module.EXPECTED_EVENT_TYPES
     assert matrix["expected_terminal_tools"] == module.EXPECTED_TERMINAL_TOOLS
     assert matrix["expected_categories"]["rejected"] == ["cancel-ghost"]
-    assert budget["max_live_calls"] == 10
+    assert budget["max_live_calls"] == 12
     assert "message_routing" in taxonomy["layers"]
     assert "continuation_binding" in taxonomy["layers"]

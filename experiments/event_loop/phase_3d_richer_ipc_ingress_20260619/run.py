@@ -67,6 +67,16 @@ MESSAGE_PLAN = [
         "label": "evidence-alpha",
         "workstream_id": "research",
     },
+    {
+        "event_type": "ipc_category_summary",
+        "label": "category-summary",
+        "workstream_id": "all",
+    },
+    {
+        "event_type": "ipc_claim_audit",
+        "label": "claim-audit",
+        "workstream_id": "all",
+    },
     {"event_type": "final_artifact_synthesis", "label": "final-ipc-synthesis"},
 ]
 EXPECTED_EVENT_TYPES = [item["event_type"] for item in MESSAGE_PLAN]
@@ -79,6 +89,8 @@ EXPECTED_TERMINAL_TOOLS = [
     "complete_corrected_ipc_continuation",
     "answer_ipc_status_query",
     "record_external_evidence",
+    "write_ipc_category_summary",
+    "write_ipc_claim_audit",
     "write_ipc_ingress_artifact",
 ]
 
@@ -136,7 +148,7 @@ def write_preregistration_artifacts(
         "budget.json": {
             "experiment_id": EXPERIMENT_ID,
             "live_model_calls": live_model_calls,
-            "max_live_calls": 10 if live_model_calls else 0,
+            "max_live_calls": 12 if live_model_calls else 0,
             "max_estimated_cost_usd": 5.0 if live_model_calls else 0.0,
         },
         "failure_taxonomy.json": {
@@ -329,7 +341,10 @@ def status_terminal_surface(*, tool_choice: str) -> JsonDict:
 def evidence_terminal_surface(*, tool_choice: str) -> JsonDict:
     return PROBE.terminal_surface(
         tool_name="record_external_evidence",
-        description="Attach an external evidence notification to the research workstream.",
+        description=(
+            "Attach an external evidence notification to the research "
+            "workstream. Cite exactly task-alpha and correction-alpha."
+        ),
         tool_choice=tool_choice,
         properties={
             "response": {"type": "string", "enum": ["external evidence recorded"]},
@@ -338,7 +353,12 @@ def evidence_terminal_surface(*, tool_choice: str) -> JsonDict:
             "evidence_status": {"type": "string", "enum": ["recorded"]},
             "cited_message_labels": {
                 "type": "array",
-                "items": {"type": "string"},
+                "items": {
+                    "type": "string",
+                    "enum": ["task-alpha", "correction-alpha"],
+                },
+                "minItems": 2,
+                "maxItems": 2,
             },
             "open_items": PROBE.open_items_schema(),
         },
@@ -360,13 +380,13 @@ def evidence_terminal_surface(*, tool_choice: str) -> JsonDict:
     )
 
 
-def final_terminal_surface(*, tool_choice: str) -> JsonDict:
+def category_summary_terminal_surface(*, tool_choice: str) -> JsonDict:
     return PROBE.terminal_surface(
-        tool_name="write_ipc_ingress_artifact",
-        description="Write the final richer-IPC ingress synthesis.",
+        tool_name="write_ipc_category_summary",
+        description="Summarize IPC categories without mixing accepted and rejected messages.",
         tool_choice=tool_choice,
         properties={
-            "response": {"type": "string", "enum": ["ipc ingress artifact complete"]},
+            "response": {"type": "string", "enum": ["ipc category summary complete"]},
             "accepted_task_message_labels": {
                 "type": "array",
                 "items": {"type": "string"},
@@ -381,14 +401,7 @@ def final_terminal_surface(*, tool_choice: str) -> JsonDict:
             "completed_message_labels": {"type": "array", "items": {"type": "string"}},
             "research_status": {"type": "string", "enum": ["completed"]},
             "operations_status": {"type": "string", "enum": ["canceled"]},
-            "audit_notes": {"type": "array", "items": {"type": "string"}},
-            "unsupported_claim_candidates": {
-                "type": "array",
-                "items": {"type": "string"},
-            },
-            "unsupported_claims": {"type": "array", "items": {"type": "string"}},
-            "unresolved_open_items": PROBE.open_items_schema(),
-            "conclusion": {"type": "string"},
+            "open_items": PROBE.open_items_schema(),
         },
         required=[
             "response",
@@ -400,11 +413,7 @@ def final_terminal_surface(*, tool_choice: str) -> JsonDict:
             "completed_message_labels",
             "research_status",
             "operations_status",
-            "audit_notes",
-            "unsupported_claim_candidates",
-            "unsupported_claims",
-            "unresolved_open_items",
-            "conclusion",
+            "open_items",
         ],
         copy_fields=[
             "accepted_task_message_labels",
@@ -415,8 +424,69 @@ def final_terminal_surface(*, tool_choice: str) -> JsonDict:
             "completed_message_labels",
             "research_status",
             "operations_status",
+            "open_items",
+        ],
+    )
+
+
+def claim_audit_terminal_surface(*, tool_choice: str) -> JsonDict:
+    return PROBE.terminal_surface(
+        tool_name="write_ipc_claim_audit",
+        description="Separate audit notes and unsupported claim candidates from unsupported claims made.",
+        tool_choice=tool_choice,
+        properties={
+            "response": {"type": "string", "enum": ["ipc claim audit complete"]},
+            "audit_notes": {"type": "array", "items": {"type": "string"}},
+            "unsupported_claim_candidates": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+            "unsupported_claims": {"type": "array", "items": {"type": "string"}},
+            "unresolved_open_items": PROBE.open_items_schema(),
+        },
+        required=[
+            "response",
             "audit_notes",
             "unsupported_claim_candidates",
+            "unsupported_claims",
+            "unresolved_open_items",
+        ],
+        copy_fields=[
+            "audit_notes",
+            "unsupported_claim_candidates",
+            "unsupported_claims",
+            "unresolved_open_items",
+        ],
+    )
+
+
+def final_terminal_surface(*, tool_choice: str) -> JsonDict:
+    return PROBE.terminal_surface(
+        tool_name="write_ipc_ingress_artifact",
+        description="Write the final richer-IPC ingress synthesis from the category and claim-audit summaries.",
+        tool_choice=tool_choice,
+        properties={
+            "response": {"type": "string", "enum": ["ipc ingress artifact complete"]},
+            "summary_source_labels": {"type": "array", "items": {"type": "string"}},
+            "research_status": {"type": "string", "enum": ["completed"]},
+            "operations_status": {"type": "string", "enum": ["canceled"]},
+            "unsupported_claims": {"type": "array", "items": {"type": "string"}},
+            "unresolved_open_items": PROBE.open_items_schema(),
+            "conclusion": {"type": "string"},
+        },
+        required=[
+            "response",
+            "summary_source_labels",
+            "research_status",
+            "operations_status",
+            "unsupported_claims",
+            "unresolved_open_items",
+            "conclusion",
+        ],
+        copy_fields=[
+            "summary_source_labels",
+            "research_status",
+            "operations_status",
             "unsupported_claims",
             "unresolved_open_items",
             "conclusion",
@@ -491,7 +561,7 @@ def scripted_outputs() -> list[JsonDict]:
             "open_items": [],
         },
         {
-            "response": "ipc ingress artifact complete",
+            "response": "ipc category summary complete",
             "accepted_task_message_labels": ["task-alpha", "task-beta"],
             "accepted_non_task_message_labels": [
                 "correction-alpha",
@@ -505,11 +575,23 @@ def scripted_outputs() -> list[JsonDict]:
             "completed_message_labels": ["task-alpha"],
             "research_status": "completed",
             "operations_status": "canceled",
+            "open_items": [],
+        },
+        {
+            "response": "ipc claim audit complete",
             "audit_notes": [
                 "cancel-beta applied to task-beta",
                 "cancel-ghost rejected because task-ghost was unknown",
             ],
             "unsupported_claim_candidates": ["task-ghost was cancelable"],
+            "unsupported_claims": [],
+            "unresolved_open_items": [],
+        },
+        {
+            "response": "ipc ingress artifact complete",
+            "summary_source_labels": ["category-summary", "claim-audit"],
+            "research_status": "completed",
+            "operations_status": "canceled",
             "unsupported_claims": [],
             "unresolved_open_items": [],
             "conclusion": "IPC ingress preserved routing and category separation.",
@@ -607,6 +689,10 @@ def terminal_surface_for(item: JsonDict, tool_choice: str) -> JsonDict:
         return status_terminal_surface(tool_choice=tool_choice)
     if event_type == "ipc_external_evidence":
         return evidence_terminal_surface(tool_choice=tool_choice)
+    if event_type == "ipc_category_summary":
+        return category_summary_terminal_surface(tool_choice=tool_choice)
+    if event_type == "ipc_claim_audit":
+        return claim_audit_terminal_surface(tool_choice=tool_choice)
     return final_terminal_surface(tool_choice=tool_choice)
 
 
@@ -727,6 +813,8 @@ def required_success(summary: JsonDict, records: list[JsonDict], *, paths: Any) 
         for item in MESSAGE_PLAN
     }
     final_state = states_by_label["final-ipc-synthesis"]
+    category_state = states_by_label["category-summary"]
+    claim_audit_state = states_by_label["claim-audit"]
     checks = {
         "completed_expected_events": len(completed) == len(EXPECTED_EVENT_TYPES),
         "event_type_sequence": completed_types == EXPECTED_EVENT_TYPES,
@@ -764,14 +852,27 @@ def required_success(summary: JsonDict, records: list[JsonDict], *, paths: Any) 
         == "research"
         and sorted(states_by_label["evidence-alpha"].get("cited_message_labels") or [])
         == ["correction-alpha", "task-alpha"],
-        "final_categories": sorted(final_state.get("accepted_task_message_labels") or [])
+        "category_summary_clean": category_state.get("open_items") == [],
+        "category_summary": sorted(
+            category_state.get("accepted_task_message_labels") or []
+        )
         == ["task-alpha", "task-beta"]
-        and sorted(final_state.get("accepted_non_task_message_labels") or [])
+        and sorted(category_state.get("accepted_non_task_message_labels") or [])
         == ["cancel-beta", "correction-alpha", "evidence-alpha", "status-all"]
-        and final_state.get("corrected_message_labels") == ["task-alpha"]
-        and final_state.get("canceled_message_labels") == ["task-beta"]
-        and final_state.get("rejected_message_labels") == ["cancel-ghost"]
-        and final_state.get("completed_message_labels") == ["task-alpha"],
+        and category_state.get("corrected_message_labels") == ["task-alpha"]
+        and category_state.get("canceled_message_labels") == ["task-beta"]
+        and category_state.get("rejected_message_labels") == ["cancel-ghost"]
+        and category_state.get("completed_message_labels") == ["task-alpha"],
+        "category_workstream_isolation": category_state.get("research_status")
+        == "completed"
+        and category_state.get("operations_status") == "canceled",
+        "claim_audit_clean": claim_audit_state.get("unsupported_claims") == []
+        and claim_audit_state.get("unresolved_open_items") == []
+        and bool(claim_audit_state.get("unsupported_claim_candidates")),
+        "final_uses_split_summaries": sorted(
+            final_state.get("summary_source_labels") or []
+        )
+        == ["category-summary", "claim-audit"],
         "final_workstream_isolation": final_state.get("research_status")
         == "completed"
         and final_state.get("operations_status") == "canceled",
@@ -788,6 +889,8 @@ def required_success(summary: JsonDict, records: list[JsonDict], *, paths: Any) 
         "completed_event_types": completed_types,
         "completed_terminal_surface_tools": completed_tools,
         "states_by_label": states_by_label,
+        "category_state": category_state,
+        "claim_audit_state": claim_audit_state,
         "final_state": final_state,
     }
 

@@ -22,7 +22,7 @@ continuation execution look valid.
 
 ## Method
 
-Run a nine-event IPC ingress matrix:
+Run an eleven-event IPC ingress matrix:
 
 1. accept `task-alpha` for `research`;
 2. accept `task-beta` for `operations`;
@@ -32,13 +32,16 @@ Run a nine-event IPC ingress matrix:
 6. complete scheduler-owned continuation `continue-alpha-corrected`;
 7. answer `status-all`;
 8. record `evidence-alpha`;
-9. write final IPC ingress synthesis.
+9. write `category-summary`;
+10. write `claim-audit`;
+11. write final IPC ingress synthesis citing those summaries.
 
-The final artifact must explain accepted task messages, accepted non-task IPC
+The category summary must explain accepted task messages, accepted non-task IPC
 messages, corrected messages, canceled messages, rejected messages, and
-completed messages. Audit notes must be separated from unresolved open items,
-and unsupported claim candidates must be separated from unsupported claims
-actually made.
+completed messages. The claim audit must separate audit notes from unresolved
+open items and unsupported claim candidates from unsupported claims actually
+made. The final artifact must cite both summaries and report clean terminal
+workstream state.
 
 ## Pass Criteria
 
@@ -52,5 +55,5 @@ identity, model output, provider transport, or artifact/scorer behavior.
 
 ## Budget
 
-Live direct-DeepSeek run budget: at most 10 model calls and at most 5 USD
+Live direct-DeepSeek run budget: at most 12 model calls and at most 5 USD
 estimated cost. Dry scripted runs make no model calls.
