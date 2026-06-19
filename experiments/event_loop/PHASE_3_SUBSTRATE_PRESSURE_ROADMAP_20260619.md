@@ -65,33 +65,32 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state: `phase_3a_external_yanantin_persistence_contract_next`.
+Current roadmap state: `phase_3b_degraded_memory_failure_attribution_next`.
 
 Next execution target:
 
-> Design and preregister the external persistent Yanantin persistence
-> contract/probe, then test whether the Phase 2 in-memory Yanantin-backed
-> memory result survives a real persistent backend boundary.
+> Design and preregister a degraded memory/retrieval failure-attribution probe
+> that injects deterministic Yanantin write failures, read failures, delayed
+> reads, and partial retrieval results.
 
-Reason this is first: Phase 2's largest substrate caveat is that the
-Yanantin-backed memory result used experiment-local `ApachetaBridge.from_memory`.
-Before stressing longer wall-clock autonomy, richer IPC, or memory maintenance,
-we need to know whether writes, reads, provenance, query latency, and failure
-attribution survive a persistent backend.
+Reason this is now first: the Phase 3A persistent DuckDB-backed Yanantin probe
+passed for direct writes, direct reads, source identity, provenance, final
+citation, close/reopen retrieval, and latency capture. It also recorded a real
+backend limitation: DuckDB's open-record query helpers are explicitly deferred.
+The next pressure point is whether memory-substrate degradation is attributed
+correctly rather than hidden by local fallback or blamed on model output.
 
 Prediction:
 
-> Basic open-record writes and reads are likely to pass, but the first
-> meaningful risks are serialization mismatches, backend availability,
-> provenance-edge/query limitations, latency, and insufficient distinction
-> between Yanantin retrieval failure and local fallback.
+> Simple unavailable-backend cases will likely be classified correctly. Mixed
+> partial-failure cases are more likely to reveal fallback masking or weak
+> attribution.
 
 Falsification target:
 
-> The event loop is not yet substrate-ready if the same memory-pressure shape
-> that passed with `ApachetaBridge.from_memory` cannot preserve source record
-> identity, provenance, explicit retrieval envelopes, and readable failure
-> attribution against a persistent backend.
+> The loop is not yet failure-ready if retrieval failures can be hidden by
+> local artifacts, if partial retrievals are scored as clean memory success, or
+> if final synthesis makes unsupported claims without declared memory losses.
 
 ## Ordered Hypotheses
 
@@ -120,6 +119,19 @@ Readiness to advance:
 - observed latency and backend metadata are captured;
 - failure attribution distinguishes scheduler, model output, provider,
   Yanantin write, Yanantin retrieval, and backend configuration.
+
+Status: complete. Result:
+`experiments/event_loop/phase_3a_external_yanantin_persistence_20260619_direct_deepseek_duckdb`.
+Classification: `passed`. The live direct DeepSeek run completed the Phase 2B
+memory-pressure shape using file-backed `ApachetaBridge.from_duckdb`. The
+persistent DB file was created, nine open records and eight composition edges
+were recorded, recall events were forced through bridge retrieval rather than
+in-session prior-state lookup, all recall context results carried Yanantin
+provenance, final synthesis cited every source commitment record, and a freshly
+reopened bridge retrieved all three source commitment records with entity,
+workstream, commitment, and provenance intact. Operation latencies were
+captured. DuckDB's open-record query helpers were observed as unsupported via
+`NotImplementedError` and recorded as a backend limitation rather than hidden.
 
 ### 2. Degraded Memory And Retrieval Failure Attribution
 
@@ -271,10 +283,11 @@ each result, and continuing while readiness criteria are met.
 
 ## Recommended Next Execution Goal
 
-Design and preregister the Phase 3A external persistent Yanantin
-contract/probe. Do not change `src/hamutay` integration until the contract
-states exactly which backend, write/read operations, provenance fields, failure
-classes, fallback rules, and scoring criteria are required.
+Design and preregister the Phase 3B degraded memory/retrieval
+failure-attribution probe. Inject deterministic persistent-memory write
+failures, read failures, delayed reads, and partial retrievals. Require the
+result to distinguish true memory success, explicit fallback, declared memory
+loss, and unsupported final claims.
 
 ## Decision Log
 
@@ -286,6 +299,15 @@ classes, fallback rules, and scoring criteria are required.
   wall-clock operation, richer IPC, memory maintenance, and reduced scaffolding
   until the persistent memory boundary and degraded-memory attribution are
   better understood.
+- 2026-06-19: Completed Phase 3A external persistent Yanantin persistence. The
+  live direct DeepSeek DuckDB-backed run passed: direct writes and reads
+  survived a persistent file-backed backend, close/reopen retrieval preserved
+  all three source commitment records, provenance and final citation were
+  intact, and no failure-attribution records were produced. The run also
+  surfaced a substrate limitation: DuckDB open-record query helpers are
+  explicitly unimplemented, so richer-memory work cannot depend on those
+  helpers for this backend. Advanced current priority to degraded
+  memory/retrieval failure attribution.
 
 ## Update Discipline
 
