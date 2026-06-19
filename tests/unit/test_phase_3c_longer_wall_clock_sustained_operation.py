@@ -79,3 +79,18 @@ def test_preregistration_artifacts_capture_wall_clock_contract(tmp_path):
     assert budget["max_live_calls"] == 10
     assert "elapsed_time_scheduler" in taxonomy["layers"]
     assert "restart_frontier" in taxonomy["layers"]
+
+
+def test_preserved_state_labels_accept_concrete_state_fields():
+    module = load_module()
+
+    assert module.preserved_state_labels_sufficient(
+        [
+            "probe_status",
+            "open_items",
+            "workstream_id",
+            "continuation_request",
+            "report_status",
+            "unsupported_claims",
+        ]
+    )

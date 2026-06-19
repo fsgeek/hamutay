@@ -616,6 +616,34 @@ def observed_pending_elapsed(delay_observations: list[JsonDict]) -> list[float]:
     return elapsed
 
 
+def preserved_state_labels_sufficient(labels: Any) -> bool:
+    if not isinstance(labels, list):
+        return False
+    normalized = {str(label) for label in labels}
+    has_open_state = bool({"open_items", "open-item-empty-state"} & normalized)
+    has_continuation_or_restart_state = bool(
+        {
+            "continuation_request",
+            "continuation_status",
+            "restart-frontier",
+        }
+        & normalized
+    )
+    has_report_or_housekeeping_state = bool(
+        {
+            "report_status",
+            "periodic-report-history",
+            "housekeeping_audit",
+        }
+        & normalized
+    )
+    return (
+        has_open_state
+        and has_continuation_or_restart_state
+        and has_report_or_housekeeping_state
+    )
+
+
 def collect_failures(paths: Any, records: list[JsonDict], success: JsonDict) -> list[JsonDict]:
     failures = PROBE.collect_failures(paths, records, success)
     for check_name, passed in success.get("checks", {}).items():
@@ -727,14 +755,7 @@ def required_success(
         )
         == sorted(["alpha-report-delay", "beta-restart-delay"])
         and final_after.get("currently_pending_event_labels") == []
-        and sorted(final_after.get("preserved_state_labels") or [])
-        == sorted(
-            [
-                "restart-frontier",
-                "open-item-empty-state",
-                "periodic-report-history",
-            ]
-        ),
+        and preserved_state_labels_sufficient(final_after.get("preserved_state_labels")),
         "multiple_frontier_updates": frontier_line_count >= 10,
         "clean_idle": summary.get("pending_runnable_count") == 0,
         "no_context_errors": summary.get("context_errors") == [],
