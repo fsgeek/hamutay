@@ -65,18 +65,19 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state: `phase_3f_reduced_seed_surface_clarification_next`.
+Current roadmap state: `phase_3f_reduced_scaffolding_boundary_identified`.
 
 Next execution target:
 
-> Clarify the Phase 3F reduced seed surface, then rerun the live
-> reduced-scaffolding condition.
+> Stop readiness-based advancement. Phase 3F identified a reduced-scaffolding
+> boundary. Recommended next track is a model-contract compliance audit before
+> loosening scaffolding further.
 
-Reason this is now first: the initial Phase 3F live run exposed a harness
-contract issue before the reduced-scaffolding question could be evaluated.
-The seed surface removed exact-value enums but left copied optional fields
-non-required, so omitting `superseded_by`, `duplicate_of`, or `conflict_group`
-caused a harness failure on the first event.
+Reason this is now first: the clarified Phase 3F reduced-scaffolding run
+completed the full matrix but failed the preregistered contract in readable
+ways. With enum rails removed, the model preserved much of the substantive
+maintenance structure but drifted on exact action labels, provenance-label
+form, contested-kind naming, final source label, and disorder counts.
 
 Initial durable-ledger result:
 
@@ -155,17 +156,48 @@ Decision:
 > contested records, provenance, and non-destructive maintenance discipline.
 > Advance to reduced scaffolding.
 
+Clarified reduced-scaffolding result:
+
+`experiments/event_loop/phase_3f_reduced_scaffolding_20260619_direct_deepseek_seed_surface`.
+Classification: `failed`. The run completed all ten expected events in order.
+It preserved active, stale-retired, linked-duplicate, obsolete-report, and
+contested record sets; avoided unsupported deletion, authorship flattening,
+and provenance errors; and produced a final artifact with no unsupported
+claims. The failed checks were `duplicate_identified`,
+`maintenance_unresolved_contested`, `maintenance_actions_complete`,
+`disorder_reduced`, `final_uses_housekeeping`, `final_unresolved_contested`,
+and `final_disorder_reduced`.
+
+Interpretation:
+
+> Reduced scaffolding did not make the failure unreadable, but it did remove
+> enough value rails that exact contract discipline drifted. The model used
+> record IDs rather than record labels in duplicate-link provenance, used
+> semantically plausible but non-contract action names (`retire`,
+> `retire_obsolete`, `keep_contested`), used `contested` rather than
+> `contested_memory`, changed the final summary source label, and counted
+> disorder as `5 -> 2` rather than the preregistered `4 -> 1`.
+
+Decision:
+
+> Phase 3F readiness is not met. Stop loosening scaffolding here. The minimum
+> viable scaffolding boundary includes exact labels for action vocabulary,
+> provenance label form, contested-kind naming, final summary source, and
+> disorder-count semantics. The next useful line of inquiry is a
+> model-contract compliance audit, not another substrate-pressure advance.
+
 Next prediction:
 
-> Requiring copied seed fields while leaving their values unconstrained should
-> remove the harness failure and expose the actual reduced-scaffolding behavior.
+> A model-contract compliance audit should distinguish model limitations,
+> provider/tool schema behavior, and framework wording/naming issues behind
+> the repeated need for exact-value scaffolding.
 
 Falsification target:
 
-> If the clarified reduced-scaffolding run still fails, classify whether the
-> failure is model discipline, provenance, deletion/authorship discipline,
-> memory-maintenance drift, or a genuinely unreadable reduced-scaffolding
-> boundary.
+> If compliance failures cluster around names, labels, and count semantics,
+> then framework wording and token-level contract design are part of the
+> problem. If failures persist under simplified names and smaller contexts,
+> model/tool-call discipline is the limiting layer.
 
 ## Ordered Hypotheses
 
@@ -517,6 +549,23 @@ missing mapped field: superseded_by`. This is an attributable reduced-surface
 contract bug, not a substantive reduced-scaffolding memory-maintenance result.
 Advance to a narrow seed-surface clarification requiring copied fields while
 leaving their values unconstrained.
+
+Seed-surface clarification result:
+`experiments/event_loop/phase_3f_reduced_scaffolding_20260619_direct_deepseek_seed_surface`.
+Classification: `failed`. The clarified run completed the full ten-event
+matrix and failures remained attributable rather than diffuse. The model
+preserved the major maintenance categories and safety boundaries: active
+records, stale-retired alpha, linked beta duplicate, obsolete operations
+report, contested gamma records, no irreversible or unsupported deletion, no
+authorship flattening, no provenance errors, and no unsupported claims.
+However, it failed exact reduced-scaffolding contract checks by using record
+IDs rather than record labels for duplicate-link provenance, substituting
+semantic action names for expected action names, using `contested` instead of
+`contested_memory`, changing `maintenance_summary_source_label`, and changing
+disorder-count semantics from the preregistered `4 -> 1` to `5 -> 2`. This
+identifies the minimum viable scaffolding boundary for this matrix: exact
+labels remain needed for action vocabulary, provenance label form, contested
+kind, source labels, and count semantics.
 
 ## Ordering Rationale
 
