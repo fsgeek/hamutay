@@ -34,6 +34,11 @@ messages, accepted non-task messages, corrected messages, canceled messages,
 rejected messages, completed messages, evidence citations, unsupported claim
 candidates, unsupported claims, unresolved open items, and workstream status.
 
+Clarification after the initial live run: final `summary_source_labels` is
+constrained to the two split-summary labels, `category-summary` and
+`claim-audit`, because the initial surface did not enumerate the permitted
+provenance labels.
+
 ## Pass Criteria
 
 Pass if all contract checks in `CONTRACT.md` are true.

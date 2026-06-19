@@ -648,7 +648,15 @@ def final_terminal_surface(*, tool_choice: str) -> JsonDict:
                 "type": "string",
                 "enum": ["durable_category_ledger"],
             },
-            "summary_source_labels": {"type": "array", "items": {"type": "string"}},
+            "summary_source_labels": {
+                "type": "array",
+                "items": {
+                    "type": "string",
+                    "enum": ["category-summary", "claim-audit"],
+                },
+                "minItems": 2,
+                "maxItems": 2,
+            },
             "accepted_task_message_labels": {
                 "type": "array",
                 "items": {"type": "string"},
@@ -960,6 +968,8 @@ def append_ipc_event(
             "unsupported-claim, and unresolved-open-item fields from it "
             "exactly where the terminal surface asks for them. "
             "category_ledger_source must be durable_category_ledger. "
+            "For final synthesis, summary_source_labels must be exactly "
+            "[\"category-summary\", \"claim-audit\"]. "
             f"category_ledger_json={json.dumps(normalized_ledger, sort_keys=True)}"
         )
     return PROBE.append_probe_event(

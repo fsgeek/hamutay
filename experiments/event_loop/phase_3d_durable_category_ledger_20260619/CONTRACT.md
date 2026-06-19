@@ -19,6 +19,8 @@ categories.
   substrate-owned state.
 - Final synthesis must copy the ledger categories and cite the split summary
   records.
+- In the clarified provenance rerun, final `summary_source_labels` is
+  constrained to exactly `category-summary` and `claim-audit`.
 
 ## Pass Criteria
 
