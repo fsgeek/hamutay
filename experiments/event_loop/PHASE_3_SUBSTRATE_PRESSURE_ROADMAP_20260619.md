@@ -65,34 +65,37 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state: `phase_3c_final_state_contract_clarification_next`.
+Current roadmap state: `phase_3c_preserved_state_scorer_clarification_next`.
 
 Next execution target:
 
-> Clarify the Phase 3C final-state contract so historical elapsed-delay windows
-> are not confused with currently pending delayed events, then rerun the live
-> direct-DeepSeek wall-clock condition.
+> Clarify the Phase 3C preserved-state scorer so concrete preserved state
+> fields are accepted rather than only the scorer's canned labels, then rerun
+> the live direct-DeepSeek wall-clock condition.
 
-Reason this is now first: the initial live Phase 3C run passed the substrate
-checks for elapsed delay observation, event order, restart/resume recovery,
+Reason this is now first: the clarified Phase 3C rerun passed elapsed-delay
+window naming, current-pending state, event order, restart/resume recovery,
 periodic report consistency, clean idle state, and failure-attribution surface.
-It failed only because the final artifact interpreted `delayed_event_labels` as
-currently delayed/pending events and left it empty, while the scorer intended
-historical elapsed-delay window labels.
+It still failed `final_distinguishes_operation_state` because the scorer
+expected exact canned preserved-state labels, while the model listed concrete
+preserved state fields such as `open_items`, `continuation_request`,
+`report_status`, and `unsupported_claims`.
 
 Prediction:
 
-> A clarified final surface using explicit historical delay-window naming
-> should pass if the model can distinguish completed work, currently pending
-> work, historically delayed windows, and preserved state after restart/resume.
+> A scorer that treats preserved-state labels semantically, rather than as an
+> exact canned label set, should classify the observed behavior as successful
+> if completed work, no current pending work, historical elapsed-delay windows,
+> and preserved state fields are all present.
 
 Falsification target:
 
-> The loop is not yet sustained-operation-ready if, after clarification,
-> elapsed-time scheduling becomes unobservable, restart/resume loses pending
-> work, periodic reports diverge from event history, housekeeping corrupts or
-> silently drops open state, or final synthesis still cannot distinguish
-> completed, currently pending, historically delayed, and preserved state.
+> The loop is not yet sustained-operation-ready if, after scorer
+> clarification, elapsed-time scheduling becomes unobservable, restart/resume
+> loses pending work, periodic reports diverge from event history, housekeeping
+> corrupts or silently drops open state, or final synthesis still lacks
+> completed, currently pending, historically delayed, or preserved-state
+> evidence.
 
 ## Ordered Hypotheses
 
@@ -224,6 +227,21 @@ ambiguity rather than a scheduler, restart-frontier, housekeeping, or reporting
 failure. The next step is final-state contract clarification followed by a
 rerun.
 
+Clarified delay-window result:
+`experiments/event_loop/phase_3c_longer_wall_clock_sustained_operation_20260619_direct_deepseek_wall_clock_elapsed_labels`.
+Classification: `failed`. The rerun completed all nine expected events in
+order, observed both two-second delay windows, recovered the interrupted beta
+continuation, produced clean periodic reports, left no runnable pending events,
+and reported no context errors, lifecycle anomalies, or material outcome
+warnings. The clarified final artifact correctly listed
+`elapsed_delay_window_labels` as `alpha-report-delay` and `beta-restart-delay`
+and listed `currently_pending_event_labels` as empty. The remaining failed
+check was again `final_distinguishes_operation_state`, now because the scorer
+required exact canned `preserved_state_labels` while the model listed concrete
+preserved state fields. This suggests a preserved-state scorer overconstraint,
+not elapsed-time scheduler, restart-frontier, housekeeping, or reporting
+failure.
+
 ### 4. Richer IPC Ingress
 
 Hypothesis: The loop can accept multiple asynchronous message types without
@@ -328,9 +346,10 @@ each result, and continuing while readiness criteria are met.
 
 ## Recommended Next Execution Goal
 
-Clarify the Phase 3C final-state contract so historical delay-window labels are
-reported separately from currently pending delayed events. Preserve the initial
-failed result, then rerun the live direct-DeepSeek wall-clock condition.
+Clarify the Phase 3C preserved-state scorer so concrete preserved state fields
+are accepted when the final artifact already distinguishes completed work,
+current pending events, and historical elapsed-delay windows. Preserve both
+failed results, then rerun the live direct-DeepSeek wall-clock condition.
 
 ## Decision Log
 
@@ -373,6 +392,12 @@ failed result, then rerun the live direct-DeepSeek wall-clock condition.
   restart/resume, report-consistency, idle-state, and failure-attribution
   checks passed. Advanced current priority to final-state contract
   clarification before rerunning Phase 3C.
+- 2026-06-19: Clarified the Phase 3C final-state field names and reran the
+  live wall-clock condition. The model correctly listed historical
+  elapsed-delay windows and no current pending events, but the run still failed
+  because the scorer required exact canned preserved-state labels. The final
+  artifact instead listed concrete preserved state fields. Advanced current
+  priority to preserved-state scorer clarification.
 
 ## Update Discipline
 
