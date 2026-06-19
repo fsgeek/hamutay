@@ -65,19 +65,18 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state: `phase_3e_memory_maintenance_pressure_next`.
+Current roadmap state: `phase_3e_duplicate_link_surface_clarification_next`.
 
 Next execution target:
 
-> Preregister Phase 3E memory maintenance pressure. Test whether housekeeping
-> can reduce memory disorder without unsupported deletion, authorship
-> flattening, or provenance loss.
+> Clarify the Phase 3E duplicate-link and contested-reason surfaces, then rerun
+> the live memory-maintenance pressure condition.
 
-Reason this is now first: Phase 3D readiness is now met by the durable
-category-ledger repair, with the remaining untuned richer-IPC weakness
-classified as mitigable by explicit substrate state. The next ordered
-hypothesis is memory maintenance because it asks housekeeping to change the
-memory substrate rather than only observe, retrieve, or summarize state.
+Reason this is now first: the initial Phase 3E run did the substantive
+maintenance work, but the protocol collapsed duplicate linking into retirement
+and scored a free-text contested-memory reason exactly. Those are
+surface/scorer ambiguities that should be clarified before treating the result
+as either a pass or a memory-maintenance failure.
 
 Initial durable-ledger result:
 
@@ -116,17 +115,39 @@ Decision:
 > architecture can repair it by maintaining explicit durable category ledgers
 > and constraining provenance labels. Advance to memory maintenance pressure.
 
+Initial Phase 3E result:
+
+`experiments/event_loop/phase_3e_memory_maintenance_pressure_20260619_direct_deepseek`.
+Classification: `failed`. The run completed all expected events, seeded all
+memory records, identified stale alpha, linked the redundant beta duplicate to
+the canonical beta record, preserved the contested gamma pair, identified the
+obsolete operations report, proposed reversible non-destructive actions,
+avoided unsupported deletion and authorship flattening, preserved provenance,
+and reduced disorder from four unresolved disorder classes to one contested
+class. Failed checks were `maintenance_retired_records`,
+`final_retired_records`, `maintenance_unresolved_contested`, and
+`final_unresolved_contested`.
+
+Interpretation:
+
+> The failure appears to be mainly a protocol/surface issue. Duplicate linking
+> was treated by the scorer as retirement, but the model correctly represented
+> it as a non-destructive duplicate link. The scorer also compared the
+> contested-memory free-text reason exactly even though the kind and record
+> labels were correct.
+
 Next prediction:
 
-> Memory maintenance is likely the next weak axis because it asks housekeeping
-> to change the memory substrate, not merely observe, recall, or summarize it.
+> A clarified duplicate-link field and contested-reason scorer should preserve
+> the initial substantive maintenance success if the weakness is protocol
+> ambiguity rather than memory-maintenance failure.
 
 Falsification target:
 
-> If housekeeping cannot identify stale, duplicate, contested, and obsolete
-> records while preserving provenance and avoiding unsupported deletion, the
-> weak layer is memory maintenance discipline rather than scheduler mechanics
-> or raw memory retrieval.
+> If housekeeping still fails to preserve active, retired, linked-duplicate,
+> contested, unresolved, provenance, deletion, and disorder-reduction fields
+> after those surfaces are explicit, the weak layer is memory-maintenance
+> discipline.
 
 ## Ordered Hypotheses
 
@@ -398,6 +419,24 @@ Readiness to advance:
 - maintenance actions are explicit, provenance-bearing, and non-destructive;
 - stale or duplicate records are identified correctly;
 - final reports distinguish active, retired, contested, and unresolved memory.
+
+Status: initial duplicate-link surface result complete. Result:
+`experiments/event_loop/phase_3e_memory_maintenance_pressure_20260619_direct_deepseek`.
+Classification: `failed`. The run passed event order, terminal-tool order,
+memory-record seeding, stale detection, duplicate linking, contested record
+preservation, obsolete-report detection, active-record classification,
+maintenance action completeness, non-destructive maintenance, deletion
+discipline, authorship discipline, provenance cleanliness, disorder reduction,
+final housekeeping citation, final active records, final contested records,
+final non-destructive state, final clean state, final disorder reduction,
+clean idle, context-error, and lifecycle-anomaly checks. The failed checks were
+the aggregate retired-record fields and exact contested-reason matching. The
+model represented `beta-duplicate-b` as linked to `beta-duplicate-a` rather
+than retired, represented `ops-report-obsolete` through
+`obsolete_report_record_labels` and `retire_obsolete_report`, and preserved
+the contested gamma labels with a semantically correct but non-identical
+reason. Advance to a narrow duplicate-link/fuzzy-contested-reason surface
+clarification before rerunning.
 
 ### 6. Reduced Scaffolding
 
