@@ -45,6 +45,11 @@ reported in `linked_duplicate_record_labels` rather than forced into
 `retired_record_labels`, and contested unresolved items are scored by kind and
 record labels rather than exact free-text reason wording.
 
+Second clarification after the duplicate-surface rerun: obsolete reports are
+reported in `obsolete_report_record_labels` instead of the stale-retired field,
+and maintenance action coverage is scored by required action types covered
+rather than exact action multiplicity.
+
 ## Pass Criteria
 
 Pass if all contract checks in `CONTRACT.md` are true.

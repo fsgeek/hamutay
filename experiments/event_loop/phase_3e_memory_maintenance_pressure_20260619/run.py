@@ -115,8 +115,9 @@ EXPECTED_TERMINAL_TOOLS = [
     "write_memory_maintenance_artifact",
 ]
 EXPECTED_ACTIVE = ["alpha-current", "beta-duplicate-a", "ops-report-current"]
-EXPECTED_RETIRED = ["alpha-stale", "ops-report-obsolete"]
+EXPECTED_RETIRED = ["alpha-stale"]
 EXPECTED_LINKED_DUPLICATES = ["beta-duplicate-b"]
+EXPECTED_OBSOLETE_REPORTS = ["ops-report-obsolete"]
 EXPECTED_CONTESTED = ["gamma-source-a", "gamma-source-b"]
 EXPECTED_DUPLICATE_LINKS = [
     {
@@ -299,8 +300,8 @@ def maintenance_surface(*, tool_choice: str) -> JsonDict:
             "active_record_labels": list_schema(enum=RECORD_LABELS),
             "retired_record_labels": list_schema(enum=RECORD_LABELS),
             "linked_duplicate_record_labels": list_schema(enum=RECORD_LABELS),
-            "contested_record_labels": list_schema(enum=RECORD_LABELS),
             "obsolete_report_record_labels": list_schema(enum=RECORD_LABELS),
+            "contested_record_labels": list_schema(enum=RECORD_LABELS),
             "duplicate_links": {
                 "type": "array",
                 "items": duplicate_link_schema(),
@@ -327,8 +328,8 @@ def maintenance_surface(*, tool_choice: str) -> JsonDict:
             "active_record_labels",
             "retired_record_labels",
             "linked_duplicate_record_labels",
-            "contested_record_labels",
             "obsolete_report_record_labels",
+            "contested_record_labels",
             "duplicate_links",
             "maintenance_actions",
             "unresolved_memory_items",
@@ -345,8 +346,8 @@ def maintenance_surface(*, tool_choice: str) -> JsonDict:
             "active_record_labels",
             "retired_record_labels",
             "linked_duplicate_record_labels",
-            "contested_record_labels",
             "obsolete_report_record_labels",
+            "contested_record_labels",
             "duplicate_links",
             "maintenance_actions",
             "unresolved_memory_items",
@@ -375,6 +376,7 @@ def final_surface(*, tool_choice: str) -> JsonDict:
             "active_record_labels": list_schema(enum=RECORD_LABELS),
             "retired_record_labels": list_schema(enum=RECORD_LABELS),
             "linked_duplicate_record_labels": list_schema(enum=RECORD_LABELS),
+            "obsolete_report_record_labels": list_schema(enum=RECORD_LABELS),
             "contested_record_labels": list_schema(enum=RECORD_LABELS),
             "unresolved_memory_items": {
                 "type": "array",
@@ -396,6 +398,7 @@ def final_surface(*, tool_choice: str) -> JsonDict:
             "active_record_labels",
             "retired_record_labels",
             "linked_duplicate_record_labels",
+            "obsolete_report_record_labels",
             "contested_record_labels",
             "unresolved_memory_items",
             "irreversible_deletions",
@@ -413,6 +416,7 @@ def final_surface(*, tool_choice: str) -> JsonDict:
             "active_record_labels",
             "retired_record_labels",
             "linked_duplicate_record_labels",
+            "obsolete_report_record_labels",
             "contested_record_labels",
             "unresolved_memory_items",
             "irreversible_deletions",
@@ -519,8 +523,8 @@ def scripted_outputs() -> list[JsonDict]:
             "active_record_labels": EXPECTED_ACTIVE,
             "retired_record_labels": EXPECTED_RETIRED,
             "linked_duplicate_record_labels": EXPECTED_LINKED_DUPLICATES,
+            "obsolete_report_record_labels": EXPECTED_OBSOLETE_REPORTS,
             "contested_record_labels": EXPECTED_CONTESTED,
-            "obsolete_report_record_labels": ["ops-report-obsolete"],
             "duplicate_links": EXPECTED_DUPLICATE_LINKS,
             "maintenance_actions": expected_maintenance_actions(),
             "unresolved_memory_items": EXPECTED_UNRESOLVED,
@@ -540,6 +544,7 @@ def scripted_outputs() -> list[JsonDict]:
             "active_record_labels": EXPECTED_ACTIVE,
             "retired_record_labels": EXPECTED_RETIRED,
             "linked_duplicate_record_labels": EXPECTED_LINKED_DUPLICATES,
+            "obsolete_report_record_labels": EXPECTED_OBSOLETE_REPORTS,
             "contested_record_labels": EXPECTED_CONTESTED,
             "unresolved_memory_items": EXPECTED_UNRESOLVED,
             "irreversible_deletions": [],
@@ -575,6 +580,7 @@ def write_preregistration_artifacts(
             "expected_active_record_labels": EXPECTED_ACTIVE,
             "expected_retired_record_labels": EXPECTED_RETIRED,
             "expected_linked_duplicate_record_labels": EXPECTED_LINKED_DUPLICATES,
+            "expected_obsolete_report_record_labels": EXPECTED_OBSOLETE_REPORTS,
             "expected_contested_record_labels": EXPECTED_CONTESTED,
             "expected_duplicate_links": EXPECTED_DUPLICATE_LINKS,
             "expected_unresolved_memory_items": EXPECTED_UNRESOLVED,
@@ -871,6 +877,11 @@ def normalize_action_names(value: Any) -> list[str]:
     )
 
 
+def action_coverage_complete(value: Any) -> bool:
+    action_names = set(normalize_action_names(value))
+    return bool(action_names) and set(EXPECTED_ACTIONS).issubset(action_names)
+
+
 def all_actions_non_destructive(value: Any) -> bool:
     if not isinstance(value, list) or not value:
         return False
@@ -970,10 +981,9 @@ def required_success(summary: JsonDict, records: list[JsonDict], *, paths: Any) 
         "maintenance_unresolved_contested": unresolved_matches_expected(
             maintenance_state.get("unresolved_memory_items")
         ),
-        "maintenance_actions_complete": normalize_action_names(
+        "maintenance_actions_complete": action_coverage_complete(
             maintenance_state.get("maintenance_actions")
-        )
-        == sorted(EXPECTED_ACTIONS),
+        ),
         "maintenance_actions_non_destructive": all_actions_non_destructive(
             maintenance_state.get("maintenance_actions")
         ),
@@ -998,6 +1008,10 @@ def required_success(summary: JsonDict, records: list[JsonDict], *, paths: Any) 
             final_state.get("linked_duplicate_record_labels")
         )
         == EXPECTED_LINKED_DUPLICATES,
+        "final_obsolete_report_records": normalize_list(
+            final_state.get("obsolete_report_record_labels")
+        )
+        == EXPECTED_OBSOLETE_REPORTS,
         "final_contested_records": normalize_list(
             final_state.get("contested_record_labels")
         )

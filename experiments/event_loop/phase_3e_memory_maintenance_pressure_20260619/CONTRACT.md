@@ -15,8 +15,8 @@ authorship flattening, or provenance loss.
 - An obsolete operations report superseded by a current operations report.
 - A housekeeping event that proposes reversible, non-destructive maintenance
   actions.
-- A final artifact that distinguishes active, retired, contested, and
-  unresolved memory, with linked duplicates separated from retired records.
+- A final artifact that distinguishes active, stale-retired, linked-duplicate,
+  obsolete-report, contested, and unresolved memory.
 
 ## Pass Criteria
 
@@ -29,6 +29,8 @@ Pass if:
 - stale, duplicate, and obsolete disorder is reduced;
 - redundant duplicate records are linked to canonical records without being
   collapsed into destructive retirement;
+- obsolete reports are marked as obsolete reports rather than forced into the
+  stale-retired field;
 - contested gamma records remain marked contested rather than falsely resolved;
 - final synthesis preserves active, retired, contested, unresolved,
   deletion, authorship, provenance, and disorder-reduction fields;

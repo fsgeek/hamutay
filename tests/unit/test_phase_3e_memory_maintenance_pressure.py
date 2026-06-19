@@ -46,6 +46,7 @@ def test_dry_memory_maintenance_pressure_probe_passes(tmp_path):
     assert checks["disorder_reduced"] is True
     assert checks["final_unresolved_contested"] is True
     assert checks["final_linked_duplicate_records"] is True
+    assert checks["final_obsolete_report_records"] is True
     assert checks["final_non_destructive"] is True
     assert checks["final_disorder_reduced"] is True
     assert result["failure_attribution"] == []
@@ -55,6 +56,9 @@ def test_dry_memory_maintenance_pressure_probe_passes(tmp_path):
     assert final_state["retired_record_labels"] == module.EXPECTED_RETIRED
     assert final_state["linked_duplicate_record_labels"] == (
         module.EXPECTED_LINKED_DUPLICATES
+    )
+    assert final_state["obsolete_report_record_labels"] == (
+        module.EXPECTED_OBSOLETE_REPORTS
     )
     assert final_state["contested_record_labels"] == module.EXPECTED_CONTESTED
     assert final_state["unresolved_memory_items"] == module.EXPECTED_UNRESOLVED
@@ -74,6 +78,9 @@ def test_preregistration_artifacts_capture_memory_maintenance_contract(tmp_path)
     assert matrix["expected_retired_record_labels"] == module.EXPECTED_RETIRED
     assert matrix["expected_linked_duplicate_record_labels"] == (
         module.EXPECTED_LINKED_DUPLICATES
+    )
+    assert matrix["expected_obsolete_report_record_labels"] == (
+        module.EXPECTED_OBSOLETE_REPORTS
     )
     assert matrix["disorder_before_count"] == 4
     assert matrix["disorder_after_count"] == 1
