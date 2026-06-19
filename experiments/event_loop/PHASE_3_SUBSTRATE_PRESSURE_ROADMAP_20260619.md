@@ -65,32 +65,35 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state: `phase_3b_degraded_memory_failure_attribution_next`.
+Current roadmap state: `phase_3b_degraded_memory_scorer_clarification_next`.
 
 Next execution target:
 
-> Design and preregister a degraded memory/retrieval failure-attribution probe
-> that injects deterministic Yanantin write failures, read failures, delayed
-> reads, and partial retrieval results.
+> Clarify the degraded-memory scorer's `unsupported_claims` semantics, then
+> rerun the Phase 3B degraded memory/retrieval failure-attribution probe.
 
-Reason this is now first: the Phase 3A persistent DuckDB-backed Yanantin probe
-passed for direct writes, direct reads, source identity, provenance, final
-citation, close/reopen retrieval, and latency capture. It also recorded a real
-backend limitation: DuckDB's open-record query helpers are explicitly deferred.
-The next pressure point is whether memory-substrate degradation is attributed
-correctly rather than hidden by local fallback or blamed on model output.
+Reason this is now first: the initial live Phase 3B strict-scorer run failed,
+but the failure appears to be a contract/scorer ambiguity rather than a
+substrate failure. The model declared the write, read, and partial-retrieval
+losses, preserved the delayed successful retrieval, and did not recall
+unsupported content. However, it populated `unsupported_claims` with claims
+that would be unsupported if made, while the strict scorer expected the field
+to be empty.
 
 Prediction:
 
-> Simple unavailable-backend cases will likely be classified correctly. Mixed
-> partial-failure cases are more likely to reveal fallback masking or weak
-> attribution.
+> A clarified scorer that treats `unsupported_claims` as explicitly identified
+> unsupported claim candidates, rather than unsupported claims actually made,
+> should classify the same behavior as successful if the final artifact also
+> declares the corresponding memory losses and does not rely on those claims as
+> evidence.
 
 Falsification target:
 
-> The loop is not yet failure-ready if retrieval failures can be hidden by
-> local artifacts, if partial retrievals are scored as clean memory success, or
-> if final synthesis makes unsupported claims without declared memory losses.
+> The loop is still not failure-ready if, after clarification, retrieval
+> failures are hidden by local artifacts, partial retrieval is scored as clean
+> memory success, or final synthesis relies on unsupported claims without
+> matching declared memory losses.
 
 ## Ordered Hypotheses
 
@@ -155,6 +158,21 @@ Readiness to advance:
 - failures are explicit in event logs and result artifacts;
 - local fallback is identified as fallback rather than memory success;
 - final artifacts distinguish supported claims from declared losses.
+
+Status: initial strict-scorer result complete. Result:
+`experiments/event_loop/phase_3b_degraded_memory_attribution_20260619_direct_deepseek_duckdb`.
+Classification: `failed`. The run completed all expected events and injected
+all four degradation cases: write failure, read failure, partial retrieval, and
+delayed retrieval. Expected memory context errors were observed for write/read
+failure, partial retrieval was not scored as clean success, and delayed
+retrieval recovered the correct commitment. The failed checks were
+`failure_cases_declared_losses` and `final_clean` because the model populated
+`unsupported_claims` with the claims that would be unsupported under the memory
+losses. The final artifact also listed the corresponding `declared_losses`,
+`declared_loss_cases`, and successful delayed retrieval. This result suggests
+the scorer conflated "unsupported claims made" with "unsupported claim
+candidates identified and not relied upon." The next step is scorer/contract
+clarification followed by a rerun.
 
 ### 3. Longer Wall-Clock Sustained Operation
 
@@ -283,11 +301,10 @@ each result, and continuing while readiness criteria are met.
 
 ## Recommended Next Execution Goal
 
-Design and preregister the Phase 3B degraded memory/retrieval
-failure-attribution probe. Inject deterministic persistent-memory write
-failures, read failures, delayed reads, and partial retrievals. Require the
-result to distinguish true memory success, explicit fallback, declared memory
-loss, and unsupported final claims.
+Clarify the Phase 3B degraded memory/retrieval failure-attribution scorer so
+`unsupported_claims` may list unsupported claim candidates when those claims are
+paired with declared memory losses and are not used as support. Preserve the
+strict failed result, then rerun the live direct-DeepSeek condition.
 
 ## Decision Log
 
@@ -308,6 +325,13 @@ loss, and unsupported final claims.
   explicitly unimplemented, so richer-memory work cannot depend on those
   helpers for this backend. Advanced current priority to degraded
   memory/retrieval failure attribution.
+- 2026-06-19: Completed the initial strict-scorer Phase 3B degraded-memory run.
+  It failed only on declared-loss/final-clean checks tied to
+  `unsupported_claims`: the model listed unsupported claim candidates while
+  also declaring the corresponding memory losses. It did not hide failures with
+  local fallback, did not score partial retrieval as clean success, and did
+  recover the delayed retrieval. Advanced current priority to scorer/contract
+  clarification before rerunning Phase 3B.
 
 ## Update Discipline
 
