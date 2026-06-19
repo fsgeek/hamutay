@@ -65,32 +65,30 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state: `phase_3d_final_synthesis_weak_axis_identified`.
+Current roadmap state: `phase_3d_durable_category_ledger_probe_next`.
 
 Next execution target:
 
-> Do not advance to memory maintenance yet. Treat Phase 3D richer IPC final
-> synthesis as the first demonstrated weak axis unless a tuned Phase 3D repair
-> is explicitly planned.
+> Preregister a tuned Phase 3D durable category-ledger probe. Do not advance to
+> memory maintenance until this repair is tested or explicitly declined.
 
-Reason this is now first: the focused split-final repair still failed. The
-model repaired evidence citation, but the category summary still listed
-rejected `cancel-ghost` as accepted non-task IPC, claim audit promoted
-substantive gaps into `unsupported_claims`, and final synthesis did not cite
-the split summaries as requested.
+Reason this is now first: deterministic replay shows the event substrate
+contains enough information to reconstruct accepted/rejected/canceled/completed
+category truth without model synthesis. The failure is therefore likely
+mitigable by maintaining an explicit durable category ledger instead of asking
+final synthesis to reconstruct category truth from accumulated context.
 
 Prediction:
 
-> Untuned richer IPC final synthesis is inferior on final category discipline.
-> A future tuned variant may repair this, but the current Phase 3D readiness
-> criterion is not met.
+> A durable category ledger should repair accepted/rejected/canceled/completed
+> final category discipline if the failure is caused by final reconstruction
+> load rather than deeper model inability to read explicit state.
 
 Falsification target:
 
-> A tuned Phase 3D repair must show that accepted/rejected,
-> evidence/audit, and unsupported-candidate/unsupported-claim distinctions can
-> survive richer IPC pressure without merely forcing exact answers through
-> trivial terminal enums.
+> If final synthesis still flattens accepted/rejected/evidence/unsupported
+> categories while reading a correct durable category ledger, the weakness is
+> model/surface discipline rather than substrate fact loss.
 
 ## Ordered Hypotheses
 
@@ -319,6 +317,17 @@ artifact. This satisfies the falsification condition for untuned richer IPC
 final category discipline. Dedicated analysis:
 `experiments/event_loop/phase_3d_richer_ipc_ingress_20260619/FAILURE_ANALYSIS.md`.
 
+Deterministic replay audit:
+`experiments/event_loop/phase_3d_richer_ipc_ingress_20260619/DETERMINISTIC_REPLAY_AUDIT.md`.
+Classification: diagnostic pass for substrate category reconstruction. Across
+all three Phase 3D live result directories, deterministic replay reconstructed
+the accepted/rejected/canceled/completed category ledger from scheduler-authored
+event surfaces and completion records. The first two protocols lacked
+substrate-constrained evidence citation targets, while the split-final protocol
+constrained and reconstructed evidence citations correctly. This shows the
+category facts are present in the event substrate; the failure is model-owned
+synthesis drift over accumulated category state.
+
 ### 5. Memory Maintenance Pressure
 
 Hypothesis: Housekeeping can reduce memory disorder rather than merely observe
@@ -398,11 +407,12 @@ each result, and continuing while readiness criteria are met.
 
 ## Recommended Next Execution Goal
 
-Pause Phase 3 advancement at Phase 3D. Either design an explicitly tuned
-Phase 3D repair, such as a persistent category ledger or richer correction and
-evidence payloads, or accept richer IPC final synthesis as the first
-demonstrated weak axis before deciding whether Phase 3E memory maintenance
-should still run.
+Preregister and run a tuned Phase 3D durable category-ledger probe. The ledger
+should be updated deterministically after each IPC event and supplied to final
+synthesis as explicit durable state. Score whether final synthesis can preserve
+accepted/rejected/canceled/completed categories, evidence/audit boundaries, and
+unsupported-candidate/unsupported-claim separation when the category ledger is
+already correct.
 
 ## Decision Log
 
@@ -475,6 +485,13 @@ should still run.
   split summaries. Classified untuned richer IPC final synthesis as the first
   demonstrated weak axis and stopped readiness-based advancement before memory
   maintenance.
+- 2026-06-19: Ran a deterministic replay audit over all Phase 3D live result
+  directories. Replay reconstructed accepted/rejected/canceled/completed
+  category truth from substrate event records in all runs, and reconstructed
+  evidence citation truth once citation targets were substrate-constrained in
+  the split-final protocol. Reclassified the failure as likely mitigable by an
+  explicit durable category ledger and advanced the recommended next target to
+  a tuned Phase 3D ledger probe.
 
 ## Update Discipline
 
