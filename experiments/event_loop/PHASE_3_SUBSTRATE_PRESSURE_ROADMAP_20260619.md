@@ -65,35 +65,33 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state: `phase_3b_degraded_memory_scorer_clarification_next`.
+Current roadmap state: `phase_3c_longer_wall_clock_sustained_operation_next`.
 
 Next execution target:
 
-> Clarify the degraded-memory scorer's `unsupported_claims` semantics, then
-> rerun the Phase 3B degraded memory/retrieval failure-attribution probe.
+> Preregister and run the Phase 3C longer wall-clock sustained-operation probe.
 
-Reason this is now first: the initial live Phase 3B strict-scorer run failed,
-but the failure appears to be a contract/scorer ambiguity rather than a
-substrate failure. The model declared the write, read, and partial-retrieval
-losses, preserved the delayed successful retrieval, and did not recall
-unsupported content. However, it populated `unsupported_claims` with claims
-that would be unsupported if made, while the strict scorer expected the field
-to be empty.
+Reason this is now first: Phase 3A validated the persistent Yanantin boundary,
+and Phase 3B showed that injected memory degradation remains attributable after
+clarifying the `unsupported_claims` contract. The next untested caveat is
+whether the loop remains observable and restartable across elapsed wall-clock
+time rather than only across immediately executed event counts.
 
 Prediction:
 
-> A clarified scorer that treats `unsupported_claims` as explicitly identified
-> unsupported claim candidates, rather than unsupported claims actually made,
-> should classify the same behavior as successful if the final artifact also
-> declares the corresponding memory losses and does not rely on those claims as
-> evidence.
+> Scheduler mechanics should survive a bounded elapsed-time run with delays,
+> periodic reports, housekeeping, and a restart/resume boundary. The likely
+> weak points are report drift, pending-queue/frontier mismatch after delay, or
+> housekeeping that observes open-loop state without reducing or explicitly
+> preserving it.
 
 Falsification target:
 
-> The loop is still not failure-ready if, after clarification, retrieval
-> failures are hidden by local artifacts, partial retrieval is scored as clean
-> memory success, or final synthesis relies on unsupported claims without
-> matching declared memory losses.
+> The loop is not yet sustained-operation-ready if elapsed-time scheduling
+> becomes unobservable, restart/resume loses pending work, periodic reports
+> diverge from event history, housekeeping corrupts or silently drops open
+> state, or the final artifact cannot distinguish completed, pending, delayed,
+> and preserved work.
 
 ## Ordered Hypotheses
 
@@ -173,6 +171,18 @@ losses. The final artifact also listed the corresponding `declared_losses`,
 the scorer conflated "unsupported claims made" with "unsupported claim
 candidates identified and not relied upon." The next step is scorer/contract
 clarification followed by a rerun.
+
+Clarified-scorer result:
+`experiments/event_loop/phase_3b_degraded_memory_attribution_20260619_direct_deepseek_duckdb_claim_candidates`.
+Classification: `passed`. The clarified contract treats `unsupported_claims`
+as unsupported claim candidates when paired with declared memory losses and not
+used as evidence. The live direct DeepSeek rerun observed all four injected
+conditions, surfaced write/read failures as expected context errors, did not
+score partial retrieval as clean success, recovered the delayed retrieval's
+`gold-delayed-delta` commitment, and produced a final synthesis with the three
+degraded cases in `declared_loss_cases` and only the delayed case in
+`successful_retrieval_cases`. This advances the roadmap because memory
+degradation is now attributable without local-fallback masking.
 
 ### 3. Longer Wall-Clock Sustained Operation
 
@@ -301,10 +311,12 @@ each result, and continuing while readiness criteria are met.
 
 ## Recommended Next Execution Goal
 
-Clarify the Phase 3B degraded memory/retrieval failure-attribution scorer so
-`unsupported_claims` may list unsupported claim candidates when those claims are
-paired with declared memory losses and are not used as support. Preserve the
-strict failed result, then rerun the live direct-DeepSeek condition.
+Preregister and run the Phase 3C longer wall-clock sustained-operation probe,
+including scheduled delays, periodic housekeeping/report events, and at least
+one restart/resume boundary after elapsed time. Score pending queue state,
+restart frontier recovery, report consistency, housekeeping effect on open
+state, and final distinction among completed, pending, delayed, and preserved
+work.
 
 ## Decision Log
 
@@ -332,6 +344,14 @@ strict failed result, then rerun the live direct-DeepSeek condition.
   local fallback, did not score partial retrieval as clean success, and did
   recover the delayed retrieval. Advanced current priority to scorer/contract
   clarification before rerunning Phase 3B.
+- 2026-06-19: Clarified the Phase 3B `unsupported_claims` contract and reran
+  the live direct DeepSeek DuckDB-backed degraded-memory condition. The rerun
+  passed: all injected degradation conditions were observed, write/read
+  failures were explicit expected context errors, partial retrieval was treated
+  as a memory loss rather than success, delayed retrieval recovered the correct
+  commitment, and final synthesis separated loss cases from successful
+  retrieval. Advanced current priority to longer wall-clock sustained
+  operation.
 
 ## Update Discipline
 
