@@ -65,21 +65,19 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state:
-`phase_3d_durable_category_ledger_summary_source_clarification_next`.
+Current roadmap state: `phase_3e_memory_maintenance_pressure_next`.
 
 Next execution target:
 
-> Clarify the tuned Phase 3D durable category-ledger final
-> `summary_source_labels` surface and rerun. Do not advance to memory
-> maintenance until this narrow provenance-surface failure is resolved or
-> explicitly accepted as the remaining weak axis.
+> Preregister Phase 3E memory maintenance pressure. Test whether housekeeping
+> can reduce memory disorder without unsupported deletion, authorship
+> flattening, or provenance loss.
 
-Reason this is now first: deterministic replay shows the event substrate
-contains enough information to reconstruct accepted/rejected/canceled/completed
-category truth without model synthesis. The failure is therefore likely
-mitigable by maintaining an explicit durable category ledger instead of asking
-final synthesis to reconstruct category truth from accumulated context.
+Reason this is now first: Phase 3D readiness is now met by the durable
+category-ledger repair, with the remaining untuned richer-IPC weakness
+classified as mitigable by explicit substrate state. The next ordered
+hypothesis is memory maintenance because it asks housekeeping to change the
+memory substrate rather than only observe, retrieve, or summarize state.
 
 Initial durable-ledger result:
 
@@ -99,17 +97,36 @@ Interpretation:
 > the final provenance surface was underconstrained because the final terminal
 > schema did not enum the two allowed split-summary labels.
 
-Prediction:
+Clarified summary-source result:
 
-> A clarified final `summary_source_labels` enum should repair the remaining
-> provenance-label failure while preserving the durable-ledger category pass.
+`experiments/event_loop/phase_3d_durable_category_ledger_20260619_direct_deepseek_summary_source`.
+Classification: `passed`. The clarified live direct DeepSeek run completed
+all expected events in order, produced the expected terminal-tool sequence,
+kept the durable category ledger present and equal to the expected ledger,
+used `durable_category_ledger` in category summary, claim audit, and final
+synthesis, preserved every final ledger field, cited `category-summary` and
+`claim-audit`, left no unresolved open items or unsupported claims, and
+reported no context errors, lifecycle anomalies, material outcome warnings, or
+failure-attribution records.
+
+Decision:
+
+> The Phase 3D failure is mitigable by event-loop-owned durable category state.
+> Untuned richer IPC final synthesis remains a demonstrated weak axis, but the
+> architecture can repair it by maintaining explicit durable category ledgers
+> and constraining provenance labels. Advance to memory maintenance pressure.
+
+Next prediction:
+
+> Memory maintenance is likely the next weak axis because it asks housekeeping
+> to change the memory substrate, not merely observe, recall, or summarize it.
 
 Falsification target:
 
-> If final synthesis still fails summary-source provenance after the allowed
-> split-summary labels are explicit in the terminal surface, the remaining
-> weakness is final provenance discipline rather than category-ledger state
-> loss.
+> If housekeeping cannot identify stale, duplicate, contested, and obsolete
+> records while preserving provenance and avoiding unsupported deletion, the
+> weak layer is memory maintenance discipline rather than scheduler mechanics
+> or raw memory retrieval.
 
 ## Ordered Hypotheses
 
@@ -349,6 +366,16 @@ constrained and reconstructed evidence citations correctly. This shows the
 category facts are present in the event substrate; the failure is model-owned
 synthesis drift over accumulated category state.
 
+Durable category-ledger repair:
+`experiments/event_loop/phase_3d_durable_category_ledger_20260619_direct_deepseek_summary_source`.
+Classification: `passed`. A tuned repair maintained a deterministic
+event-loop-owned category ledger in `category_ledger.jsonl` and supplied it as
+authoritative substrate-owned state to category summary, claim audit, and
+final synthesis. After clarifying final `summary_source_labels` to the two
+split-summary records, the run passed all checks. This means the richer IPC
+category failure is architecturally mitigable by durable category state, though
+untuned final category synthesis remains a real weak axis.
+
 ### 5. Memory Maintenance Pressure
 
 Hypothesis: Housekeeping can reduce memory disorder rather than merely observe
@@ -523,6 +550,14 @@ already correct.
   event labels instead of `category-summary` and `claim-audit`. Classified the
   remaining issue as an underconstrained provenance surface and advanced the
   current priority to a narrow summary-source-label clarification rerun.
+- 2026-06-19: Clarified the durable-ledger final provenance surface by
+  constraining `summary_source_labels` to `category-summary` and `claim-audit`,
+  then reran the live direct DeepSeek condition. The rerun passed all checks:
+  durable ledger correctness, category-summary ledger use, claim-audit ledger
+  use, final ledger preservation, split-summary provenance, clean terminal
+  state, and empty failure attribution. Classified the Phase 3D richer IPC
+  category failure as mitigable by event-loop-owned durable category state and
+  advanced current priority to memory maintenance pressure.
 
 ## Update Discipline
 
