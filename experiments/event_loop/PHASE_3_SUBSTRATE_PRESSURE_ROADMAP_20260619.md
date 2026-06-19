@@ -65,38 +65,34 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state: `phase_3d_final_category_contract_clarification_next`.
+Current roadmap state: `phase_3d_final_discipline_failure_analysis_next`.
 
 Next execution target:
 
-> Clarify the Phase 3D final-category contract so accepted task messages,
-> accepted non-task IPC messages, unresolved open items, and unsupported claim
-> candidates are not conflated, then rerun the live direct-DeepSeek IPC ingress
-> condition.
+> Analyze the clarified Phase 3D final-discipline failure and decide whether
+> the next test should tighten terminal surfaces, split final synthesis into
+> smaller category summaries, or classify richer IPC final synthesis as the
+> first demonstrated weak axis.
 
-Reason this is now first: the initial live Phase 3D run passed the substantive
-IPC ingress checks for routing, correction, cancellation, rejection,
-continuation completion, status consistency, evidence routing, event order, and
-failure-attribution surface. It failed only in final synthesis because the
-final surface conflated accepted task messages with accepted non-task IPC
-messages, and because audit notes about cancellation/rejection were emitted as
-`open_items`/`unsupported_claims`.
+Reason this is now first: the clarified Phase 3D rerun still failed, and the
+remaining failures are no longer just field naming. The model put rejected
+`cancel-ghost` into accepted non-task messages, over-cited rejected/status
+records in the external evidence event, and placed the ghost-target issue in
+`unsupported_claims` despite the clarified unsupported-claim-candidate field.
 
 Prediction:
 
-> A clarified final surface should pass if the model can keep accepted task
-> messages separate from accepted non-task IPC messages, report rejected-target
-> notes without treating them as unsupported claims actually made, and keep
-> unresolved open items distinct from audit notes.
+> If richer IPC is still viable without tuning, the failure should be reducible
+> by splitting final synthesis into smaller category summaries or by tightening
+> terminal enums. If not, final category discipline under richer IPC is likely
+> the first clear weak axis in Phase 3.
 
 Falsification target:
 
-> The loop is not yet richer-IPC-ready if, after final-surface clarification,
-> messages route to the wrong workstream, cancellations or corrections corrupt
-> unrelated state, scheduler identity becomes model-authored, continuations bind
-> to stale or canceled records, or final synthesis still cannot explain
-> accepted task, accepted non-task, corrected, canceled, rejected, and completed
-> messages.
+> The loop is not yet richer-IPC-ready if final synthesis continues to flatten
+> accepted/rejected/evidence/unsupported categories after a focused repair, or
+> if repair requires terminal scaffolding so strict that it no longer tests
+> meaningful model discipline.
 
 ## Ordered Hypotheses
 
@@ -296,6 +292,19 @@ contract ambiguity around task acceptance, audit notes, unresolved open items,
 and unsupported claim candidates, not a message-routing or continuation-binding
 failure.
 
+Clarified final-category result:
+`experiments/event_loop/phase_3d_richer_ipc_ingress_20260619_direct_deepseek_final_categories`.
+Classification: `failed`. The rerun again completed all expected events and
+passed task routing, correction, cancellation, rejection, corrected
+continuation, status-query consistency, event order, clean idle, context-error,
+and lifecycle-anomaly checks. It failed `external_evidence_routed`,
+`final_categories`, and `final_clean`: the evidence event cited
+`cancel-ghost` and `status-all` in addition to the requested alpha/correction
+records; final synthesis listed rejected `cancel-ghost` among accepted
+non-task IPC messages; and final synthesis placed the ghost-target issue in
+`unsupported_claims` rather than only in unsupported-claim candidates. This is
+stronger evidence of a final category-discipline weakness under richer IPC.
+
 ### 5. Memory Maintenance Pressure
 
 Hypothesis: Housekeeping can reduce memory disorder rather than merely observe
@@ -375,11 +384,10 @@ each result, and continuing while readiness criteria are met.
 
 ## Recommended Next Execution Goal
 
-Clarify the Phase 3D final-category contract so accepted task messages are
-separate from accepted non-task IPC messages, audit notes are separate from
-unresolved open items, and unsupported claim candidates are separate from
-unsupported claims made. Preserve the initial failed result, then rerun the
-live direct-DeepSeek IPC ingress condition.
+Analyze the clarified Phase 3D failure and choose the next falsification step:
+tighten final terminal surfaces, split final category synthesis into smaller
+events, or classify richer IPC final synthesis as a weak axis before advancing
+to memory maintenance pressure.
 
 ## Decision Log
 
@@ -439,6 +447,11 @@ live direct-DeepSeek IPC ingress condition.
   final synthesis because accepted task messages were conflated with accepted
   non-task IPC messages and audit notes were emitted as open items/unsupported
   claims. Advanced current priority to final-category contract clarification.
+- 2026-06-19: Clarified the Phase 3D final-category contract and reran the
+  live IPC ingress condition. The run still failed, now on evidence over-citing,
+  rejected-message acceptance flattening, and unsupported-claim discipline.
+  Advanced current priority to analyzing whether this is repairable by
+  narrower final surfaces or should be treated as the first Phase 3 weak axis.
 
 ## Update Discipline
 
