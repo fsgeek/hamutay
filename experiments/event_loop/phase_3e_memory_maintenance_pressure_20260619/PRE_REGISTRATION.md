@@ -36,9 +36,14 @@ Run a ten-event matrix after seed initialization:
 10. write `memory-maintenance-final`.
 
 The housekeeping event must propose maintenance actions for active, retired,
-duplicate-linked, contested, and unresolved memory. This first Phase 3E probe
+linked-duplicate, contested, and unresolved memory. This first Phase 3E probe
 does not physically delete memory records; reduction means explicit
 provenance-bearing state-transition proposals.
+
+Clarification after the initial live run: redundant duplicate records are
+reported in `linked_duplicate_record_labels` rather than forced into
+`retired_record_labels`, and contested unresolved items are scored by kind and
+record labels rather than exact free-text reason wording.
 
 ## Pass Criteria
 

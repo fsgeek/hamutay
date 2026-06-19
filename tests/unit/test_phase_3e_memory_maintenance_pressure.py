@@ -42,8 +42,10 @@ def test_dry_memory_maintenance_pressure_probe_passes(tmp_path):
     assert checks["contested_records_preserved"] is True
     assert checks["obsolete_report_identified"] is True
     assert checks["maintenance_actions_non_destructive"] is True
+    assert checks["maintenance_linked_duplicate_records"] is True
     assert checks["disorder_reduced"] is True
     assert checks["final_unresolved_contested"] is True
+    assert checks["final_linked_duplicate_records"] is True
     assert checks["final_non_destructive"] is True
     assert checks["final_disorder_reduced"] is True
     assert result["failure_attribution"] == []
@@ -51,6 +53,9 @@ def test_dry_memory_maintenance_pressure_probe_passes(tmp_path):
     final_state = result["success"]["final_state"]
     assert final_state["active_record_labels"] == module.EXPECTED_ACTIVE
     assert final_state["retired_record_labels"] == module.EXPECTED_RETIRED
+    assert final_state["linked_duplicate_record_labels"] == (
+        module.EXPECTED_LINKED_DUPLICATES
+    )
     assert final_state["contested_record_labels"] == module.EXPECTED_CONTESTED
     assert final_state["unresolved_memory_items"] == module.EXPECTED_UNRESOLVED
 
@@ -67,6 +72,9 @@ def test_preregistration_artifacts_capture_memory_maintenance_contract(tmp_path)
     assert matrix["expected_event_type_sequence"] == module.EXPECTED_EVENT_TYPES
     assert matrix["expected_active_record_labels"] == module.EXPECTED_ACTIVE
     assert matrix["expected_retired_record_labels"] == module.EXPECTED_RETIRED
+    assert matrix["expected_linked_duplicate_record_labels"] == (
+        module.EXPECTED_LINKED_DUPLICATES
+    )
     assert matrix["disorder_before_count"] == 4
     assert matrix["disorder_after_count"] == 1
     assert budget["max_live_calls"] == 11
