@@ -949,7 +949,9 @@ def required_success(summary: JsonDict, records: list[JsonDict], *, paths: Any) 
         "completed_expected_events": completed_types == EXPECTED_EVENT_TYPES,
         "terminal_surface_sequence": completed_tools == EXPECTED_TERMINAL_TOOLS,
         "all_memory_records_seeded": sorted(
-            state.get("record_label") for state in memory_states
+            str(state.get("record_label"))
+            for state in memory_states
+            if state.get("record_label")
         )
         == sorted(RECORD_LABELS),
         "stale_record_identified": "alpha-stale"
