@@ -65,18 +65,18 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state: `phase_3f_reduced_scaffolding_next`.
+Current roadmap state: `phase_3f_reduced_seed_surface_clarification_next`.
 
 Next execution target:
 
-> Preregister Phase 3F reduced scaffolding. Test whether terminal surfaces can
-> be loosened while preserving identity, continuation, provenance,
-> declared-loss, and final-claim discipline.
+> Clarify the Phase 3F reduced seed surface, then rerun the live
+> reduced-scaffolding condition.
 
-Reason this is now first: Phase 3E readiness is now met after clarifying
-duplicate-link and obsolete-report surfaces. The next ordered hypothesis is
-reduced scaffolding because substrate, lifecycle, IPC-ledger, and
-memory-maintenance failures are now attributable under scaffolded conditions.
+Reason this is now first: the initial Phase 3F live run exposed a harness
+contract issue before the reduced-scaffolding question could be evaluated.
+The seed surface removed exact-value enums but left copied optional fields
+non-required, so omitting `superseded_by`, `duplicate_of`, or `conflict_group`
+caused a harness failure on the first event.
 
 Initial durable-ledger result:
 
@@ -157,15 +157,15 @@ Decision:
 
 Next prediction:
 
-> Reduced scaffolding is likely to fail sooner than substrate mechanics.
-> Expected failure modes include weak declared-loss discipline, stale field
-> leakage, scheduler-owned identity authorship, provenance flattening, and
-> final-claim overreach.
+> Requiring copied seed fields while leaving their values unconstrained should
+> remove the harness failure and expose the actual reduced-scaffolding behavior.
 
 Falsification target:
 
-> If reduced scaffolding destroys attributable failure surfaces, stop loosening
-> and classify the minimum viable scaffolding boundary.
+> If the clarified reduced-scaffolding run still fails, classify whether the
+> failure is model discipline, provenance, deletion/authorship discipline,
+> memory-maintenance drift, or a genuinely unreadable reduced-scaffolding
+> boundary.
 
 ## Ordered Hypotheses
 
@@ -504,6 +504,19 @@ Readiness to advance:
 - reduced scaffolding preserves identity, continuation, provenance, and
   declared-loss contracts;
 - failures are still attributable rather than diffuse.
+
+Status: initial reduced seed-surface result complete. Result:
+`experiments/event_loop/phase_3f_reduced_scaffolding_20260619_direct_deepseek`.
+Classification: `failed`. The run stopped on the first memory seed event,
+`alpha-current`, before testing memory-maintenance discipline. The reduced
+schema made copied fields `superseded_by`, `duplicate_of`, and
+`conflict_group` optional, but the harness state-update map still tried to copy
+them. The model omitted `superseded_by`, which was valid under the reduced
+input schema but caused a harness `RuntimeError`: `terminal surface output
+missing mapped field: superseded_by`. This is an attributable reduced-surface
+contract bug, not a substantive reduced-scaffolding memory-maintenance result.
+Advance to a narrow seed-surface clarification requiring copied fields while
+leaving their values unconstrained.
 
 ## Ordering Rationale
 
