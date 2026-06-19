@@ -65,20 +65,18 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state: `phase_3e_obsolete_report_surface_clarification_next`.
+Current roadmap state: `phase_3f_reduced_scaffolding_next`.
 
 Next execution target:
 
-> Clarify the Phase 3E obsolete-report surface and maintenance-action coverage
-> scorer, then rerun the live memory-maintenance pressure condition.
+> Preregister Phase 3F reduced scaffolding. Test whether terminal surfaces can
+> be loosened while preserving identity, continuation, provenance,
+> declared-loss, and final-claim discipline.
 
-Reason this is now first: the duplicate-link clarification resolved the
-duplicate and contested-reason ambiguity, but the rerun showed a second
-surface ambiguity: obsolete reports were represented through
-`obsolete_report_record_labels` and `retire_obsolete_report`, not through the
-aggregate stale-retirement field. The action scorer also required one combined
-`mark_contested` action rather than accepting equivalent per-record contested
-actions.
+Reason this is now first: Phase 3E readiness is now met after clarifying
+duplicate-link and obsolete-report surfaces. The next ordered hypothesis is
+reduced scaffolding because substrate, lifecycle, IPC-ledger, and
+memory-maintenance failures are now attributable under scaffolded conditions.
 
 Initial durable-ledger result:
 
@@ -138,18 +136,36 @@ Interpretation:
 > contested-memory free-text reason exactly even though the kind and record
 > labels were correct.
 
+Obsolete-report clarification result:
+
+`experiments/event_loop/phase_3e_memory_maintenance_pressure_20260619_direct_deepseek_obsolete_surface`.
+Classification: `passed`. The clarified live direct DeepSeek run completed all
+expected events and passed every check: memory-record seeding, stale detection,
+duplicate linking, contested-memory preservation, obsolete-report detection,
+active/stale-retired/linked-duplicate/obsolete/contested final distinctions,
+non-destructive maintenance actions, unsupported-deletion discipline,
+authorship discipline, provenance cleanliness, disorder reduction from four
+classes to one unresolved contested class, clean idle state, context-error
+absence, lifecycle-anomaly absence, and empty failure attribution.
+
+Decision:
+
+> Phase 3E readiness is met for this bounded scaffolded probe. Housekeeping can
+> reduce stale, duplicate, and obsolete memory disorder while preserving
+> contested records, provenance, and non-destructive maintenance discipline.
+> Advance to reduced scaffolding.
+
 Next prediction:
 
-> A clarified obsolete-report field in final synthesis and action-set coverage
-> scoring should preserve the substantive maintenance success if the weakness
-> is protocol ambiguity rather than memory-maintenance failure.
+> Reduced scaffolding is likely to fail sooner than substrate mechanics.
+> Expected failure modes include weak declared-loss discipline, stale field
+> leakage, scheduler-owned identity authorship, provenance flattening, and
+> final-claim overreach.
 
 Falsification target:
 
-> If housekeeping still fails to preserve active, stale-retired,
-> linked-duplicate, obsolete-report, contested, unresolved, provenance,
-> deletion, and disorder-reduction fields after those surfaces are explicit,
-> the weak layer is memory-maintenance discipline.
+> If reduced scaffolding destroys attributable failure surfaces, stop loosening
+> and classify the minimum viable scaffolding boundary.
 
 ## Ordered Hypotheses
 
@@ -453,6 +469,18 @@ than aggregate retired labels, and emitted two per-record `mark_contested`
 actions instead of one combined action. Advance to an obsolete-report final
 surface and action-set coverage clarification before treating this as a
 memory-maintenance failure.
+
+Obsolete-report/action-coverage clarification result:
+`experiments/event_loop/phase_3e_memory_maintenance_pressure_20260619_direct_deepseek_obsolete_surface`.
+Classification: `passed`. The clarified run separated stale-retired records,
+linked duplicates, and obsolete reports into distinct structured fields, and
+scored maintenance action coverage by required action types rather than exact
+action multiplicity. The run passed all checks with empty failure attribution:
+housekeeping reduced resolvable memory disorder, kept contested gamma records
+unresolved, linked the redundant beta duplicate non-destructively, marked the
+obsolete operations report, preserved provenance, avoided unsupported deletion
+and authorship flattening, and produced a clean final artifact. This satisfies
+Phase 3E readiness to advance.
 
 ### 6. Reduced Scaffolding
 
