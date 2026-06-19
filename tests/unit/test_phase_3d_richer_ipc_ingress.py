@@ -47,6 +47,16 @@ def test_dry_richer_ipc_ingress_probe_passes(tmp_path):
     assert checks["external_evidence_routed"] is True
     assert checks["final_categories"] is True
     assert checks["final_workstream_isolation"] is True
+    final_state = result["success"]["final_state"]
+    assert final_state["accepted_task_message_labels"] == ["task-alpha", "task-beta"]
+    assert sorted(final_state["accepted_non_task_message_labels"]) == [
+        "cancel-beta",
+        "correction-alpha",
+        "evidence-alpha",
+        "status-all",
+    ]
+    assert final_state["unresolved_open_items"] == []
+    assert final_state["unsupported_claims"] == []
     assert result["failure_attribution"] == []
 
 

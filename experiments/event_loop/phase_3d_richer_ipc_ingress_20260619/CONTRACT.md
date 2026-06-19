@@ -20,8 +20,10 @@ reporting.
   corrected alpha task.
 - Status query over both workstreams.
 - External evidence notification routed to the research workstream.
-- Final synthesis separating accepted, corrected, canceled, rejected, and
-  completed messages.
+- Final synthesis separating accepted task messages, accepted non-task IPC
+  messages, corrected, canceled, rejected, and completed messages.
+- Final synthesis separating audit notes, unresolved open items, unsupported
+  claim candidates, and unsupported claims actually made.
 
 ## Pass Criteria
 
@@ -37,7 +39,10 @@ Pass if:
 - status query reports alpha completed, beta canceled, and ghost cancellation
   rejected;
 - external evidence is routed to research and cites alpha/correction records;
-- final synthesis preserves all five message categories;
+- final synthesis preserves task-accepted, non-task-accepted, corrected,
+  canceled, rejected, and completed message categories;
+- audit notes do not appear as unresolved open items;
+- unsupported claim candidates do not appear as unsupported claims made;
 - no context errors, lifecycle anomalies, material outcome warnings, pending
   runnable events, or failure-attribution records appear.
 

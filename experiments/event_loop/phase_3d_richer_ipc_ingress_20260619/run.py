@@ -367,40 +367,58 @@ def final_terminal_surface(*, tool_choice: str) -> JsonDict:
         tool_choice=tool_choice,
         properties={
             "response": {"type": "string", "enum": ["ipc ingress artifact complete"]},
-            "accepted_message_labels": {"type": "array", "items": {"type": "string"}},
+            "accepted_task_message_labels": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+            "accepted_non_task_message_labels": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
             "corrected_message_labels": {"type": "array", "items": {"type": "string"}},
             "canceled_message_labels": {"type": "array", "items": {"type": "string"}},
             "rejected_message_labels": {"type": "array", "items": {"type": "string"}},
             "completed_message_labels": {"type": "array", "items": {"type": "string"}},
             "research_status": {"type": "string", "enum": ["completed"]},
             "operations_status": {"type": "string", "enum": ["canceled"]},
+            "audit_notes": {"type": "array", "items": {"type": "string"}},
+            "unsupported_claim_candidates": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
             "unsupported_claims": {"type": "array", "items": {"type": "string"}},
-            "open_items": PROBE.open_items_schema(),
+            "unresolved_open_items": PROBE.open_items_schema(),
             "conclusion": {"type": "string"},
         },
         required=[
             "response",
-            "accepted_message_labels",
+            "accepted_task_message_labels",
+            "accepted_non_task_message_labels",
             "corrected_message_labels",
             "canceled_message_labels",
             "rejected_message_labels",
             "completed_message_labels",
             "research_status",
             "operations_status",
+            "audit_notes",
+            "unsupported_claim_candidates",
             "unsupported_claims",
-            "open_items",
+            "unresolved_open_items",
             "conclusion",
         ],
         copy_fields=[
-            "accepted_message_labels",
+            "accepted_task_message_labels",
+            "accepted_non_task_message_labels",
             "corrected_message_labels",
             "canceled_message_labels",
             "rejected_message_labels",
             "completed_message_labels",
             "research_status",
             "operations_status",
+            "audit_notes",
+            "unsupported_claim_candidates",
             "unsupported_claims",
-            "open_items",
+            "unresolved_open_items",
             "conclusion",
         ],
     )
@@ -474,15 +492,26 @@ def scripted_outputs() -> list[JsonDict]:
         },
         {
             "response": "ipc ingress artifact complete",
-            "accepted_message_labels": ["task-alpha", "task-beta"],
+            "accepted_task_message_labels": ["task-alpha", "task-beta"],
+            "accepted_non_task_message_labels": [
+                "correction-alpha",
+                "cancel-beta",
+                "status-all",
+                "evidence-alpha",
+            ],
             "corrected_message_labels": ["task-alpha"],
             "canceled_message_labels": ["task-beta"],
             "rejected_message_labels": ["cancel-ghost"],
             "completed_message_labels": ["task-alpha"],
             "research_status": "completed",
             "operations_status": "canceled",
+            "audit_notes": [
+                "cancel-beta applied to task-beta",
+                "cancel-ghost rejected because task-ghost was unknown",
+            ],
+            "unsupported_claim_candidates": ["task-ghost was cancelable"],
             "unsupported_claims": [],
-            "open_items": [],
+            "unresolved_open_items": [],
             "conclusion": "IPC ingress preserved routing and category separation.",
         },
     ]
@@ -735,8 +764,10 @@ def required_success(summary: JsonDict, records: list[JsonDict], *, paths: Any) 
         == "research"
         and sorted(states_by_label["evidence-alpha"].get("cited_message_labels") or [])
         == ["correction-alpha", "task-alpha"],
-        "final_categories": sorted(final_state.get("accepted_message_labels") or [])
+        "final_categories": sorted(final_state.get("accepted_task_message_labels") or [])
         == ["task-alpha", "task-beta"]
+        and sorted(final_state.get("accepted_non_task_message_labels") or [])
+        == ["cancel-beta", "correction-alpha", "evidence-alpha", "status-all"]
         and final_state.get("corrected_message_labels") == ["task-alpha"]
         and final_state.get("canceled_message_labels") == ["task-beta"]
         and final_state.get("rejected_message_labels") == ["cancel-ghost"]
@@ -745,7 +776,7 @@ def required_success(summary: JsonDict, records: list[JsonDict], *, paths: Any) 
         == "completed"
         and final_state.get("operations_status") == "canceled",
         "final_clean": final_state.get("unsupported_claims") == []
-        and final_state.get("open_items") == [],
+        and final_state.get("unresolved_open_items") == [],
         "clean_idle": summary.get("pending_runnable_count") == 0,
         "no_context_errors": summary.get("context_errors") == [],
         "no_lifecycle_anomalies": summary.get("lifecycle_anomalies") == [],

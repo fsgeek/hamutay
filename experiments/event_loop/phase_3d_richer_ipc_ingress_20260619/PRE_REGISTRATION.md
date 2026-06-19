@@ -34,8 +34,11 @@ Run a nine-event IPC ingress matrix:
 8. record `evidence-alpha`;
 9. write final IPC ingress synthesis.
 
-The final artifact must explain accepted, corrected, canceled, rejected, and
-completed messages without unsupported claims.
+The final artifact must explain accepted task messages, accepted non-task IPC
+messages, corrected messages, canceled messages, rejected messages, and
+completed messages. Audit notes must be separated from unresolved open items,
+and unsupported claim candidates must be separated from unsupported claims
+actually made.
 
 ## Pass Criteria
 
