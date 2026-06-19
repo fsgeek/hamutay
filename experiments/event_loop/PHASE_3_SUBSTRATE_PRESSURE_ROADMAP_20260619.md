@@ -65,12 +65,15 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state: `phase_3d_durable_category_ledger_probe_next`.
+Current roadmap state:
+`phase_3d_durable_category_ledger_summary_source_clarification_next`.
 
 Next execution target:
 
-> Preregister a tuned Phase 3D durable category-ledger probe. Do not advance to
-> memory maintenance until this repair is tested or explicitly declined.
+> Clarify the tuned Phase 3D durable category-ledger final
+> `summary_source_labels` surface and rerun. Do not advance to memory
+> maintenance until this narrow provenance-surface failure is resolved or
+> explicitly accepted as the remaining weak axis.
 
 Reason this is now first: deterministic replay shows the event substrate
 contains enough information to reconstruct accepted/rejected/canceled/completed
@@ -78,17 +81,35 @@ category truth without model synthesis. The failure is therefore likely
 mitigable by maintaining an explicit durable category ledger instead of asking
 final synthesis to reconstruct category truth from accumulated context.
 
+Initial durable-ledger result:
+
+`experiments/event_loop/phase_3d_durable_category_ledger_20260619_direct_deepseek`.
+Classification: `failed`. The durable category ledger itself was present and
+equal to the expected ledger, category summary and claim audit both declared
+`durable_category_ledger` as their source, final synthesis preserved every
+ledger category field, unsupported-claim candidate boundary, unsupported
+claim, unresolved-open-item, evidence-citation, and workstream-status field.
+The sole failed check was `final_uses_split_summaries`: final synthesis filled
+`summary_source_labels` with the underlying IPC event labels rather than the
+two split summary labels `category-summary` and `claim-audit`.
+
+Interpretation:
+
+> The durable ledger repaired the substantive category-flattening failure, but
+> the final provenance surface was underconstrained because the final terminal
+> schema did not enum the two allowed split-summary labels.
+
 Prediction:
 
-> A durable category ledger should repair accepted/rejected/canceled/completed
-> final category discipline if the failure is caused by final reconstruction
-> load rather than deeper model inability to read explicit state.
+> A clarified final `summary_source_labels` enum should repair the remaining
+> provenance-label failure while preserving the durable-ledger category pass.
 
 Falsification target:
 
-> If final synthesis still flattens accepted/rejected/evidence/unsupported
-> categories while reading a correct durable category ledger, the weakness is
-> model/surface discipline rather than substrate fact loss.
+> If final synthesis still fails summary-source provenance after the allowed
+> split-summary labels are explicit in the terminal surface, the remaining
+> weakness is final provenance discipline rather than category-ledger state
+> loss.
 
 ## Ordered Hypotheses
 
@@ -492,6 +513,16 @@ already correct.
   the split-final protocol. Reclassified the failure as likely mitigable by an
   explicit durable category ledger and advanced the recommended next target to
   a tuned Phase 3D ledger probe.
+- 2026-06-19: Ran the initial tuned Phase 3D durable category-ledger probe.
+  The durable ledger repair succeeded on the substantive category axis: the
+  ledger was present and correct, category summary and claim audit used it,
+  and final synthesis preserved accepted task, accepted non-task, corrected,
+  canceled, rejected, completed, evidence-citation, unsupported-candidate,
+  unsupported-claim, unresolved-open-item, and workstream-status fields. The
+  run still failed because final `summary_source_labels` listed underlying IPC
+  event labels instead of `category-summary` and `claim-audit`. Classified the
+  remaining issue as an underconstrained provenance surface and advanced the
+  current priority to a narrow summary-source-label clarification rerun.
 
 ## Update Discipline
 
