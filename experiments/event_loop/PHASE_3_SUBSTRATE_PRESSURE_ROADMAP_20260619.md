@@ -65,34 +65,32 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state: `phase_3d_final_discipline_failure_analysis_next`.
+Current roadmap state: `phase_3d_final_synthesis_weak_axis_identified`.
 
 Next execution target:
 
-> Analyze the clarified Phase 3D final-discipline failure and decide whether
-> the next test should tighten terminal surfaces, split final synthesis into
-> smaller category summaries, or classify richer IPC final synthesis as the
-> first demonstrated weak axis.
+> Do not advance to memory maintenance yet. Treat Phase 3D richer IPC final
+> synthesis as the first demonstrated weak axis unless a tuned Phase 3D repair
+> is explicitly planned.
 
-Reason this is now first: the clarified Phase 3D rerun still failed, and the
-remaining failures are no longer just field naming. The model put rejected
-`cancel-ghost` into accepted non-task messages, over-cited rejected/status
-records in the external evidence event, and placed the ghost-target issue in
-`unsupported_claims` despite the clarified unsupported-claim-candidate field.
+Reason this is now first: the focused split-final repair still failed. The
+model repaired evidence citation, but the category summary still listed
+rejected `cancel-ghost` as accepted non-task IPC, claim audit promoted
+substantive gaps into `unsupported_claims`, and final synthesis did not cite
+the split summaries as requested.
 
 Prediction:
 
-> If richer IPC is still viable without tuning, the failure should be reducible
-> by splitting final synthesis into smaller category summaries or by tightening
-> terminal enums. If not, final category discipline under richer IPC is likely
-> the first clear weak axis in Phase 3.
+> Untuned richer IPC final synthesis is inferior on final category discipline.
+> A future tuned variant may repair this, but the current Phase 3D readiness
+> criterion is not met.
 
 Falsification target:
 
-> The loop is not yet richer-IPC-ready if final synthesis continues to flatten
-> accepted/rejected/evidence/unsupported categories after a focused repair, or
-> if repair requires terminal scaffolding so strict that it no longer tests
-> meaningful model discipline.
+> A tuned Phase 3D repair must show that accepted/rejected,
+> evidence/audit, and unsupported-candidate/unsupported-claim distinctions can
+> survive richer IPC pressure without merely forcing exact answers through
+> trivial terminal enums.
 
 ## Ordered Hypotheses
 
@@ -305,6 +303,22 @@ non-task IPC messages; and final synthesis placed the ghost-target issue in
 `unsupported_claims` rather than only in unsupported-claim candidates. This is
 stronger evidence of a final category-discipline weakness under richer IPC.
 
+Split-final result:
+`experiments/event_loop/phase_3d_richer_ipc_ingress_20260619_direct_deepseek_split_final`.
+Classification: `failed`. This focused repair split final synthesis into
+category-summary and claim-audit events before the final artifact. The run
+again completed all expected events and passed task routing, correction,
+cancellation, rejection, corrected continuation, status-query consistency,
+evidence routing, event order, clean idle, context-error, and lifecycle-anomaly
+checks. It still failed category-summary, category-summary-clean,
+claim-audit-clean, final-clean, and final-uses-split-summaries checks. The
+model listed rejected `cancel-ghost` as accepted non-task IPC, carried summary
+checkpoint notes as open items, promoted hollow-payload concerns into
+`unsupported_claims`, and did not cite the split summaries in the final
+artifact. This satisfies the falsification condition for untuned richer IPC
+final category discipline. Dedicated analysis:
+`experiments/event_loop/phase_3d_richer_ipc_ingress_20260619/FAILURE_ANALYSIS.md`.
+
 ### 5. Memory Maintenance Pressure
 
 Hypothesis: Housekeeping can reduce memory disorder rather than merely observe
@@ -384,10 +398,11 @@ each result, and continuing while readiness criteria are met.
 
 ## Recommended Next Execution Goal
 
-Analyze the clarified Phase 3D failure and choose the next falsification step:
-tighten final terminal surfaces, split final category synthesis into smaller
-events, or classify richer IPC final synthesis as a weak axis before advancing
-to memory maintenance pressure.
+Pause Phase 3 advancement at Phase 3D. Either design an explicitly tuned
+Phase 3D repair, such as a persistent category ledger or richer correction and
+evidence payloads, or accept richer IPC final synthesis as the first
+demonstrated weak axis before deciding whether Phase 3E memory maintenance
+should still run.
 
 ## Decision Log
 
@@ -452,6 +467,14 @@ to memory maintenance pressure.
   rejected-message acceptance flattening, and unsupported-claim discipline.
   Advanced current priority to analyzing whether this is repairable by
   narrower final surfaces or should be treated as the first Phase 3 weak axis.
+- 2026-06-19: Ran a focused split-final Phase 3D repair with separate category
+  summary and claim-audit events. The run still failed on richer IPC final
+  category discipline: rejected `cancel-ghost` was treated as accepted non-task
+  IPC, audit/checkpoint notes persisted as open items, hollow-payload concerns
+  were promoted into `unsupported_claims`, and final synthesis did not cite the
+  split summaries. Classified untuned richer IPC final synthesis as the first
+  demonstrated weak axis and stopped readiness-based advancement before memory
+  maintenance.
 
 ## Update Discipline
 
