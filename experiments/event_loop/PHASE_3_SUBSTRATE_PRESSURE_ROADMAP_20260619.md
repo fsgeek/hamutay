@@ -65,33 +65,34 @@ predictions, not demonstrations with vague success criteria.
 
 ## Current Priority
 
-Current roadmap state: `phase_3c_longer_wall_clock_sustained_operation_next`.
+Current roadmap state: `phase_3c_final_state_contract_clarification_next`.
 
 Next execution target:
 
-> Preregister and run the Phase 3C longer wall-clock sustained-operation probe.
+> Clarify the Phase 3C final-state contract so historical elapsed-delay windows
+> are not confused with currently pending delayed events, then rerun the live
+> direct-DeepSeek wall-clock condition.
 
-Reason this is now first: Phase 3A validated the persistent Yanantin boundary,
-and Phase 3B showed that injected memory degradation remains attributable after
-clarifying the `unsupported_claims` contract. The next untested caveat is
-whether the loop remains observable and restartable across elapsed wall-clock
-time rather than only across immediately executed event counts.
+Reason this is now first: the initial live Phase 3C run passed the substrate
+checks for elapsed delay observation, event order, restart/resume recovery,
+periodic report consistency, clean idle state, and failure-attribution surface.
+It failed only because the final artifact interpreted `delayed_event_labels` as
+currently delayed/pending events and left it empty, while the scorer intended
+historical elapsed-delay window labels.
 
 Prediction:
 
-> Scheduler mechanics should survive a bounded elapsed-time run with delays,
-> periodic reports, housekeeping, and a restart/resume boundary. The likely
-> weak points are report drift, pending-queue/frontier mismatch after delay, or
-> housekeeping that observes open-loop state without reducing or explicitly
-> preserving it.
+> A clarified final surface using explicit historical delay-window naming
+> should pass if the model can distinguish completed work, currently pending
+> work, historically delayed windows, and preserved state after restart/resume.
 
 Falsification target:
 
-> The loop is not yet sustained-operation-ready if elapsed-time scheduling
-> becomes unobservable, restart/resume loses pending work, periodic reports
-> diverge from event history, housekeeping corrupts or silently drops open
-> state, or the final artifact cannot distinguish completed, pending, delayed,
-> and preserved work.
+> The loop is not yet sustained-operation-ready if, after clarification,
+> elapsed-time scheduling becomes unobservable, restart/resume loses pending
+> work, periodic reports diverge from event history, housekeeping corrupts or
+> silently drops open state, or final synthesis still cannot distinguish
+> completed, currently pending, historically delayed, and preserved state.
 
 ## Ordered Hypotheses
 
@@ -207,6 +208,22 @@ Readiness to advance:
 - reports remain consistent with actual event history;
 - housekeeping reduces or correctly preserves open-loop state.
 
+Status: initial final-contract result complete. Result:
+`experiments/event_loop/phase_3c_longer_wall_clock_sustained_operation_20260619_direct_deepseek_wall_clock`.
+Classification: `failed`. The run completed all nine expected events in order,
+observed both two-second delay windows, recovered the interrupted beta
+continuation with lifecycle history `pending`, `running`, `pending`, `running`,
+`completed`, produced two clean periodic reports, left no runnable pending
+events, and reported no context errors, lifecycle anomalies, material outcome
+warnings, or substrate failure-attribution records. The only failed check was
+`final_distinguishes_operation_state`: the final artifact listed completed
+alpha/beta workstreams and no pending events, but set `delayed_event_labels` to
+`[]` because it interpreted the field as currently delayed events rather than
+historical elapsed-delay windows. This result suggests a contract naming
+ambiguity rather than a scheduler, restart-frontier, housekeeping, or reporting
+failure. The next step is final-state contract clarification followed by a
+rerun.
+
 ### 4. Richer IPC Ingress
 
 Hypothesis: The loop can accept multiple asynchronous message types without
@@ -311,12 +328,9 @@ each result, and continuing while readiness criteria are met.
 
 ## Recommended Next Execution Goal
 
-Preregister and run the Phase 3C longer wall-clock sustained-operation probe,
-including scheduled delays, periodic housekeeping/report events, and at least
-one restart/resume boundary after elapsed time. Score pending queue state,
-restart frontier recovery, report consistency, housekeeping effect on open
-state, and final distinction among completed, pending, delayed, and preserved
-work.
+Clarify the Phase 3C final-state contract so historical delay-window labels are
+reported separately from currently pending delayed events. Preserve the initial
+failed result, then rerun the live direct-DeepSeek wall-clock condition.
 
 ## Decision Log
 
@@ -352,6 +366,13 @@ work.
   commitment, and final synthesis separated loss cases from successful
   retrieval. Advanced current priority to longer wall-clock sustained
   operation.
+- 2026-06-19: Completed the initial Phase 3C wall-clock sustained-operation
+  live run. It failed only on final-state contract semantics: the final
+  artifact treated `delayed_event_labels` as currently delayed/pending events
+  and returned an empty list, while all elapsed-time, event-order,
+  restart/resume, report-consistency, idle-state, and failure-attribution
+  checks passed. Advanced current priority to final-state contract
+  clarification before rerunning Phase 3C.
 
 ## Update Discipline
 
