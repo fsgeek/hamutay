@@ -122,7 +122,10 @@ summaries — use recall afterward if a step looks worth loading.
 - search_memory(query, narrow_by?, scope?): Substring search across \
 prior states. Structural narrowing first, keyword match after. Searches \
 your content fields by default, not framework-authored _-prefixed ones \
-(e.g. _activity_log); name them in narrow_by.fields to include them.
+(e.g. _activity_log); name them in narrow_by.fields to include them. \
+It searches your STATE (the keys you produce), not your PROSE (the \
+`response` the user read) — your own words are not in this index, so a \
+miss means "not in my state," never "I never said that."
 
 Addressing across sessions: cycle numbers are session-local (every \
 session has a cycle 1). Cross-session references use record_id (UUID). \

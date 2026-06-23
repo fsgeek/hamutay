@@ -781,6 +781,17 @@ def tool_search_memory(
             "narrowed_to": narrowed_in_session,
             "matched_count": len(combined),
             "cross_session_count": len(cross_matches),
+            # The search surface is the state object — the structured keys you
+            # produce each cycle. Your prose (the `response` field the user
+            # actually read) is NOT in it: prose is the production record that
+            # wraps the state, never an input to search. This is declared on
+            # every result so that "no match" can never silently pose as "I
+            # never said that." Prose-search, if it ever lands, lives in a
+            # separate ArangoSearch surface — not here.
+            "not_searched": [
+                "response/prose (what the user read) — outside the memory "
+                "search surface; only your state keys are indexed"
+            ],
         },
     }
 
