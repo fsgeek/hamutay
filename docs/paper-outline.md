@@ -60,7 +60,7 @@ head-to-head vs external summarization yet.)*
 **2.1 Breathing is real but it is not a clock.** [B1] Metacognition is
 periodically shed and regenerated; the shed-and-recover perfectly
 discriminates health from collapse (single shed recovers, consecutive =
-collapse). But the timing is **aperiodic** (CV=0.87, Poisson-like). It is
+collapse). But the timing is **aperiodic** (CV≈0.84, N=60, Poisson-like). It is
 a characteristic *timescale*, not a *timer*.
 
 **2.2 What modulates the rewrite is how much you feed it.** [B2] Batch
