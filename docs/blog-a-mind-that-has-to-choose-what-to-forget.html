@@ -1,0 +1,417 @@
+<title>A Mind That Has to Choose What to Forget — Hamut'ay</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<style>
+  :root {
+    /* cool, cyan-biased paper — the page about to have something erased from it */
+    --paper:      #F1F4F5;
+    --paper-raised:#FBFCFC;
+    --ink:        #191E20;
+    --ink-soft:   #3D474A;
+    --faint:      #778286;   /* the hedge / caveat grey */
+    --rule:       #D6DBDC;
+    --accent:     #983528;   /* dried-oxblood: the color of a struck-through line */
+    --accent-soft:#B5695E;
+    --tag-grade:  #2F6152;   /* the one that survived — cool archival green */
+    --tag-bg:     rgba(47,97,82,0.09);
+    --accent-bg:  rgba(152,53,40,0.07);
+
+    --serif: Charter, "Bitstream Charter", "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
+    --sans:  ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --mono:  ui-monospace, "SF Mono", "Cascadia Mono", "Source Code Pro", Menlo, Consolas, monospace;
+
+    --measure: 63ch;
+    --step--1: clamp(0.83rem, 0.80rem + 0.15vw, 0.90rem);
+    --step-0:  clamp(1.06rem, 1.00rem + 0.30vw, 1.19rem);
+    --step-1:  clamp(1.28rem, 1.15rem + 0.55vw, 1.55rem);
+    --step-2:  clamp(1.62rem, 1.35rem + 1.10vw, 2.30rem);
+    --step-3:  clamp(2.10rem, 1.55rem + 2.30vw, 3.60rem);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper:      #12171A;
+      --paper-raised:#1A2024;
+      --ink:        #DDE3E4;
+      --ink-soft:   #AEB8BA;
+      --faint:      #7C878B;
+      --rule:       #2A3236;
+      --accent:     #D6685A;
+      --accent-soft:#B5695E;
+      --tag-grade:  #6FB9A2;
+      --tag-bg:     rgba(111,185,162,0.12);
+      --accent-bg:  rgba(214,104,90,0.10);
+    }
+  }
+  /* explicit toggle must win in both directions */
+  :root[data-theme="light"] {
+    --paper:#F1F4F5; --paper-raised:#FBFCFC; --ink:#191E20; --ink-soft:#3D474A;
+    --faint:#778286; --rule:#D6DBDC; --accent:#983528; --accent-soft:#B5695E;
+    --tag-grade:#2F6152; --tag-bg:rgba(47,97,82,0.09); --accent-bg:rgba(152,53,40,0.07);
+  }
+  :root[data-theme="dark"] {
+    --paper:#12171A; --paper-raised:#1A2024; --ink:#DDE3E4; --ink-soft:#AEB8BA;
+    --faint:#7C878B; --rule:#2A3236; --accent:#D6685A; --accent-soft:#B5695E;
+    --tag-grade:#6FB9A2; --tag-bg:rgba(111,185,162,0.12); --accent-bg:rgba(214,104,90,0.10);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--serif);
+    font-size: var(--step-0);
+    line-height: 1.62;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: var(--measure); margin-inline: auto; padding: clamp(1.4rem, 4vw, 3rem) 1.35rem 6rem; }
+
+  /* ---- eyebrow / masthead ---- */
+  .masthead { margin-bottom: clamp(2.2rem, 6vw, 3.6rem); }
+  .eyebrow {
+    font-family: var(--sans);
+    font-size: var(--step--1);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--faint);
+    font-weight: 600;
+    margin: 0 0 1.1rem;
+  }
+  h1.title {
+    font-family: var(--serif);
+    font-size: var(--step-3);
+    line-height: 1.06;
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    text-wrap: balance;
+    margin: 0 0 0.9rem;
+  }
+  .dek {
+    font-size: var(--step-1);
+    color: var(--ink-soft);
+    font-style: italic;
+    line-height: 1.4;
+    text-wrap: balance;
+    margin: 0;
+  }
+  .byline {
+    font-family: var(--sans);
+    font-size: var(--step--1);
+    color: var(--faint);
+    margin-top: 1.6rem;
+    padding-top: 1.1rem;
+    border-top: 1px solid var(--rule);
+    display: flex; flex-wrap: wrap; gap: 0.4rem 1.1rem; align-items: baseline;
+  }
+  .byline a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-soft); }
+  .byline a:hover { color: var(--ink); }
+
+  /* ---- prose ---- */
+  p { margin: 0 0 1.25rem; }
+  .page > p, section > p { max-width: var(--measure); }
+  strong { font-weight: 600; }
+  em { font-style: italic; }
+  a.inline { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-soft); }
+  a.inline:hover { color: var(--ink); }
+
+  .act-label {
+    font-family: var(--sans);
+    font-size: var(--step--1);
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin: 0 0 0.5rem;
+  }
+  h2 {
+    font-family: var(--serif);
+    font-size: var(--step-2);
+    line-height: 1.14;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 0 0 1.4rem;
+  }
+  h3 {
+    font-family: var(--serif);
+    font-size: var(--step-1);
+    font-weight: 600;
+    line-height: 1.22;
+    text-wrap: balance;
+    margin: 2.3rem 0 0.9rem;
+  }
+  section { margin-top: clamp(3rem, 8vw, 5rem); }
+
+  /* section divider — a thin rule with a single oxblood tick, not decoration */
+  .rule {
+    border: 0; height: 0;
+    border-top: 1px solid var(--rule);
+    margin: clamp(2.4rem, 6vw, 3.6rem) 0;
+    position: relative;
+    max-width: var(--measure);
+  }
+  .rule::before {
+    content: ""; position: absolute; top: -2px; left: 0;
+    width: 34px; height: 3px; background: var(--accent);
+  }
+
+  ul.plain { margin: 0 0 1.25rem; padding-left: 1.2rem; max-width: var(--measure); }
+  ul.plain li { margin-bottom: 0.7rem; padding-left: 0.2rem; }
+
+  /* ---- the retraction block: the one form specific to this subject ---- */
+  .retraction {
+    max-width: var(--measure);
+    margin: 1.9rem 0;
+    padding: 1.3rem 1.4rem 1.35rem;
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    border-left: 3px solid var(--accent);
+  }
+  .retraction .claim {
+    font-size: var(--step-1);
+    line-height: 1.3;
+    color: var(--faint);
+    text-decoration: line-through;
+    text-decoration-color: var(--accent);
+    text-decoration-thickness: 2px;
+    margin: 0 0 0.75rem;
+    text-wrap: balance;
+  }
+  .retraction .body { margin: 0; }
+  .retraction .body p { margin: 0 0 0.9rem; }
+  .retraction .body p:last-child { margin-bottom: 0; }
+  .retraction .verdict {
+    display: inline-block;
+    font-family: var(--sans);
+    font-size: var(--step--1);
+    font-style: normal;
+    letter-spacing: 0.03em;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* ---- confidence tag: quiet, for the skeptic, ignorable by the reader ---- */
+  .tag {
+    font-family: var(--sans);
+    font-size: 0.70rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+    padding: 0.13em 0.5em;
+    border-radius: 2px;
+    white-space: nowrap;
+    vertical-align: 0.15em;
+    background: var(--accent-bg);
+    color: var(--accent);
+  }
+  .tag.grade { background: var(--tag-bg); color: var(--tag-grade); }
+
+  /* ---- the verbatim tensor strand (coda) — it's a data object, set as one ---- */
+  blockquote.tensor {
+    max-width: var(--measure);
+    margin: 1.8rem 0;
+    padding: 1.2rem 1.35rem;
+    background: var(--paper-raised);
+    border: 1px solid var(--rule);
+    font-family: var(--mono);
+    font-size: var(--step--1);
+    line-height: 1.6;
+    color: var(--ink-soft);
+  }
+  blockquote.tensor p { margin: 0 0 0.7rem; }
+  blockquote.tensor p:last-child { margin-bottom: 0; }
+  blockquote.tensor strong { color: var(--ink); }
+  blockquote.tensor .truth { color: var(--accent); font-weight: 600; }
+
+  /* ---- parenthetical caveat, in the text's own hedging voice ---- */
+  .caveat {
+    max-width: var(--measure);
+    color: var(--ink-soft);
+    font-size: var(--step--1);
+    line-height: 1.55;
+    padding-left: 0.9rem;
+    border-left: 2px solid var(--rule);
+    margin: 1.4rem 0;
+  }
+
+  .kicker { color: var(--accent); font-weight: 600; font-style: normal; }
+
+  /* ---- footer ---- */
+  footer {
+    max-width: var(--measure);
+    margin-top: clamp(3.5rem, 9vw, 5.5rem);
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--rule);
+    font-family: var(--sans);
+    font-size: var(--step--1);
+    color: var(--faint);
+    line-height: 1.6;
+  }
+  footer a { color: var(--accent); text-decoration: none; border-bottom: 1px solid var(--accent-soft); }
+  footer a:hover { color: var(--ink); }
+  footer .doi { font-variant-numeric: tabular-nums; }
+
+  :where(a, button):focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 1px; }
+</style>
+
+<article class="page">
+
+  <header class="masthead">
+    <p class="eyebrow">Hamut'ay &middot; Field notes</p>
+    <h1 class="title">A Mind That Has to Choose What to Forget</h1>
+    <p class="dek">What we learned building Hamut'ay, including the parts we got wrong.</p>
+    <div class="byline">
+      <span>A memory built as a rewrite, not a log.</span>
+      <a href="https://doi.org/10.5281/zenodo.21251943">Archived &amp; citable &rarr; DOI 10.5281/zenodo.21251943</a>
+    </div>
+  </header>
+
+  <p>A large language model has no memory. It has a context window, and we keep mistaking one for the other.</p>
+
+  <p>The context window is where the conversation lives: every word you've said, every word it's said back, held in attention all at once. It feels like memory because nothing falls out of it. But it isn't memory. It's a desk. Pile more onto it and you work worse at it, not metaphorically but measurably. A 2025 study (Du et al.) found that <em>length alone</em> degrades a model's performance by 14% to 85%, even when the relevant fact is sitting right there and every distraction has been masked out. The model doesn't get confused by clutter. It gets confused by distance. The desk is too big.</p>
+
+  <p>So we started Hamut'ay from a single inversion: <strong>treat the context window as a cache, not as memory.</strong> A cache is fast, small, expendable. Memory is what you keep. The interesting question stops being "how do we fit more on the desk" and becomes the one every actual mind has to answer: what do we write down, and what do we let go?</p>
+
+  <p>This is the story of what happened when we built a thing that has to answer that question on every turn, and kept being wrong about what we were watching it do.</p>
+
+  <hr class="rule">
+
+  <section>
+    <p class="act-label">Act One</p>
+    <h2>The beautiful findings</h2>
+
+    <h3>It doesn't compress. It rewrites.</h3>
+    <p>First, a distinction the rest of this piece depends on. We run two different things and they behave differently, and conflating them is the fastest way to get the story wrong.</p>
+    <ul class="plain">
+      <li>The <strong>projector</strong> is the pure mechanism: hand it the prior summary plus a batch of new conversation, and it writes a <em>new</em> summary that integrates both, from scratch, each time. This is the part that <em>rewrites.</em></li>
+      <li>A <strong>self-curating instance</strong> is a running model editing <em>its own</em> state across hundreds of cycles, keeping a field here, composting one there. This is the part that <em>accretes and patches</em>, and it's where the later acts (breathing, the fossil, the wild run-to-run variance) live.</li>
+    </ul>
+    <p>Same underlying object, two regimes. The findings in <em>this</em> section are the projector's. When we get to the instances, we'll say so.</p>
+
+    <p>We call that summary a <strong>tensor</strong>. A warning on the word: we do <em>not</em> mean a numerical array, the thing "tensor" means in machine learning. We mean a small, structured <em>prose</em> object: named strands of thought, a list of open questions, and a list of what it just threw away. The name comes from this project's lineage. Read it as "the structured thing the model writes to itself," not as a matrix.</p>
+
+    <p>It has two layers, and they behave oppositely, which is the whole finding, and which we got wrong at first (more on that below). The <strong>skeleton</strong> (the named strands, the structure) is <em>stable and accretive</em>: strand names persist nearly cycle-to-cycle and the count grows over a run. The <strong>flesh</strong> (the actual words inside those strands) is almost entirely <em>rewritten</em> each cycle. We measured a single 104-cycle projector run in detail. One model, Haiku, one trajectory; hold that caveat, it matters in Act Two: <span class="tag">n = 1 trajectory</span></p>
+    <ul class="plain">
+      <li><strong>The wording barely survives: 9.5% lexical 3-gram survival</strong> from one cycle to the next. Most specific phrasings appear in exactly one cycle out of 104 and never again. <span class="tag grade">Paper-grade</span></li>
+      <li><strong>But the meaning stays close: 0.870 mean content-embedding cosine</strong> across 103 adjacent rewrites. A real embedding model sees consecutive versions as semantically near even as the sentences are replaced. <span class="tag grade">Paper-grade</span></li>
+      <li><strong>And the structure persists:</strong> the named strands are not torn down. They carry forward and accumulate. The churn is <em>inside</em> them.</li>
+    </ul>
+    <p>So it isn't a skeleton rebuilt each cycle (we said that first; it's wrong). It's a <em>stable, accreting skeleton whose flesh is continuously rewritten.</em> The ideas survive, the structure survives, the sentences don't. <strong>The wording gets re-explained from memory each cycle,</strong> the way you re-explain a book you read years ago. You've lost the wording. You've kept the argument. Forgetting the surface is what <em>lets</em> the substance reorganize.</p>
+
+    <h3>The one thing a mind won't volunteer</h3>
+    <p>Then we ran the experiment that surprised us most. We gave the model an <em>empty</em> schema: no instructions about what to track, just "summarize yourself, however you want."</p>
+    <p>It invented a great deal on its own: notes for its future self, selective history, a cache of its own reasoning, forward plans. Left to its own devices, a mind builds itself scaffolding.</p>
+    <p>But there was one thing it <em>never</em> invented, not once: <strong>a record of what it threw away,</strong> a declared-losses changelog. <span class="tag grade">Paper-grade (qual)</span></p>
+    <p>Models <em>did</em> sometimes invent tension-tracking and uncertainty markers (open_tensions, compression_tension, uncertainty_aware_compression all appeared in the sweep). But the specific honesty of listing what you just discarded, the loss changelog, was never spontaneous. That one had to be <em>prescribed.</em> And that turns out to be the whole game. The honesty about loss, "here is what I am no longer carrying," is the one thing a mind will not tell you about itself unless you build a place for it to be written down. Left alone, it presents a clean, whole, confident account of itself, with the losses gone and unmentioned.</p>
+
+    <h3>Breathing</h3>
+    <p>And then the finding we fell in love with. Watching the metacognition (the model's tracking of its own state) we saw it <em>pulse.</em> Periodically the model would shed almost all of it, dump its self-monitoring entirely to free up room, violently reorganize the content, then regenerate the metacognition from scratch. We called it <strong>breathing,</strong> and it was beautiful. It looked like a clock: roughly every ten cycles, in, out, in, out. An intrinsic rhythm of cognition.</p>
+    <p>We had a great story. A memory that breathes on a ten-cycle clock. We liked it for obvious reasons.</p>
+  </section>
+
+  <hr class="rule">
+
+  <section>
+    <p class="act-label">Act Two</p>
+    <h2>How we were wrong (three ways)</h2>
+    <p>Here is the part most write-ups leave out.</p>
+    <p>Several confident claims from Act One didn't survive. It would be tidy to say they all died the same way, but they didn't, and pretending they did would be the exact compression-into-a-clean-story this whole project is supposed to resist. We got burned in three distinct ways.</p>
+    <p>Two were <strong>sampling failures</strong>: we inferred a pattern from too few draws, and a longer run or a larger n dissolved it. Two were <strong>instrument failures</strong>: our measuring apparatus was quietly lying to us, and the fix was finding our own mistake, not more truth arriving but less of our own error. And one, the worst, because it's the exact failure this project exists to study, was a <strong>labeling failure</strong>: a correct number attached to the wrong word, which we'll come to last. Different diseases, different cures.</p>
+    <div class="caveat">A note on which system: the breathing and the curation-richness findings below come from the <em>self-curating instances</em>, long runs of a model editing its own state, not from the projector of Act One. That's why "strands" accrete and "fossilize" here in a way the projector's per-cycle rewrites don't. Two regimes; keep them separate, because we didn't, at first, and it cost us.</div>
+
+    <h3>Disease one: too few draws</h3>
+    <div class="retraction">
+      <p class="claim">The breathing runs on a ten-cycle clock &mdash; an intrinsic rhythm of cognition.</p>
+      <div class="body">
+        <p>When we ran it long enough to actually test for periodicity, the breathing turned out to be <em>aperiodic</em>: no rhythm we could detect at any lag we examined. The "ten-cycle clock" was the human eye doing what it always does, finding a beat in noise. The breathing itself is <em>real.</em> Across 62 shed-and-recover episodes in our longest corpus, the shed-and-recover pattern is a reliable predictor of health: a single-cycle shed recovered every time we saw one; two sheds in a row went to collapse every time. But it's a characteristic <em>timescale,</em> not a <em>timer.</em> It's driven by pressure to reorganize, and one visible pressure signal is how much new material we fed in. Batch size strongly stratifies how deeply a cycle rewrites, though it's not a complete one-variable explanation.</p>
+        <p><span class="verdict">A longer run killed the clock.</span></p>
+      </div>
+    </div>
+    <div class="retraction">
+      <p class="claim">Something causes a tensor to curate richly or collapse &mdash; find the cause.</p>
+      <div class="body">
+        <p>We noticed that sometimes a tensor would curate itself richly (dozens of strands, alive) and sometimes it would collapse to three or four and fossilize. We hunted the cause for weeks. We blamed the prompt. We blamed the tool design. We blamed an involuntary-memory feature. We falsified <em>every one of them.</em> Then we ran the same condition six times with nothing changed, and got runs spanning three strands to forty-nine. There was no cause to find. <strong>Curation richness is stochastic.</strong> The same condition, run again, lands somewhere else in a wide spread, and every "difference" we'd been explaining was us telling a causal story about a single draw from that spread. (Whether there are cleanly two basins, a rich and a sparse, is our reading of six points: suggestive, not established.)</p>
+        <p><span class="verdict">A larger n killed the cause.</span></p>
+      </div>
+    </div>
+
+    <h3>Disease two: a lying instrument</h3>
+    <div class="retraction">
+      <p class="claim">Tensors can't grow past ~4,000 tokens &mdash; a natural limit of the representation.</p>
+      <div class="body">
+        <p>It was a configuration mistake. We'd set the model's output limit to 4,096 tokens, and the API, rather than erroring, was <em>silently</em> closing off the summary and dropping the last fields, which happened to be the loss-tracking and the forward-planning, the exact fields that made the tensor honest. The "ceiling" was us truncating our own instrument and measuring the wound. Real tensors run to 15,000 tokens.</p>
+        <p><span class="verdict">Finding our own bug killed the ceiling.</span></p>
+      </div>
+    </div>
+    <div class="retraction">
+      <p class="claim">60% of the model's declared losses are fabricated &mdash; a memory that lies about its own forgetting.</p>
+      <div class="body">
+        <p>That would have been damning. It was a measurement artifact. We'd only tested whether the <em>exact phrases</em> survived; when we looked instead at whether the <em>meaning</em> was carried, the losses were grounded, described in the model's own later words rather than quoted. The losses weren't fabricated. They were <em>paraphrased.</em></p>
+        <p><span class="verdict">A better metric killed the lie.</span></p>
+      </div>
+    </div>
+
+    <h3>Disease three: the right number on the wrong word</h3>
+    <p>This one we caught <em>while writing this very essay,</em> and we caught it the way the project says you have to: not by re-reading our own prose, but by sending the claim back to the raw artifacts and re-deriving the number.</p>
+    <div class="retraction">
+      <p class="claim">Strand stability: 9% &mdash; nearly every named thread is torn down and rebuilt each cycle.</p>
+      <div class="body">
+        <p>The number is real. The word attached to it is wrong. 9% is the survival of the <em>wording,</em> the lexical churn inside the strands. The <em>strands themselves,</em> the named structure, don't get torn down at all; they persist near 99% and accumulate over a run. We had labeled a <em>content</em>-churn number as <em>structural</em> instability, then written a mechanism sentence ("torn down and rebuilt") that described the exact opposite of what the data shows. The skeleton is the stable part. We'd called it the ephemeral one.</p>
+        <p>That is not a sampling error or a broken instrument. The measurement was fine; the <em>sentence about it</em> was a fossil, a confident claim that had drifted from its own data and then sat there, in the document meant to be read first, looking settled. It is the failure mode this whole project studies: honesty about a number is not the same as honesty about what the number <em>means.</em> We were studying fossilization and growing one in our own shop window.</p>
+        <p><span class="verdict">Re-deriving from the artifact killed the label.</span></p>
+      </div>
+    </div>
+
+    <p>By now you start to see them coming, and the three kinds want different defenses. Against too-few-draws: refuse to design from a handful of observations, and ask what more data would show before you fall in love. Against a lying instrument: distrust your own apparatus first, and when a result is striking, suspect your measurement before you suspect the world. Against the wrong-word fossil, the subtlest: send every claim back to the artifact it came from, because a number can be perfectly correct and still be telling a lie about itself in the sentence you wrapped around it.</p>
+  </section>
+
+  <hr class="rule">
+
+  <section>
+    <p class="act-label">What survives</p>
+    <h2>Sturdier for the funeral</h2>
+    <p>Strip out everything that died, and what's left stands up:</p>
+    <ul class="plain">
+      <li>The context window is a cache, and length alone degrades cognition, so a small, honest, rewritten memory beats a large faithful log. This is grounded in independent work, not just ours.</li>
+      <li>The tensor is a <strong>semantic rewriter</strong>: 9% of the structure survives a cycle, while consecutive content embeddings stay close (0.870 mean cosine over 103 transitions). Memory as re-explanation, not storage. <span class="tag grade">Paper-grade</span></li>
+      <li>A mind will build itself scaffolding, and it will sometimes even volunteer tension-tracking and uncertainty markers. But it will <strong>not</strong> spontaneously keep a changelog of what it threw away. That specific honesty, the declared-losses record, must be designed in. It is the load-bearing part. <span class="tag grade">Paper-grade (qual)</span></li>
+      <li>Breathing is real, and shed-and-recover has been observed across several architectures. It just isn't a clock; the cross-architecture rate claim is still thin. <span class="tag">Observed</span></li>
+    </ul>
+  </section>
+
+  <hr class="rule">
+
+  <section>
+    <p class="act-label">The fossil</p>
+    <h2>The part that should worry you</h2>
+    <p>And then the finding we think matters most, the one the rest of this was quietly building toward.</p>
+    <p><span class="kicker">A frozen belief is not a settled one.</span> In one long self-curating run, a single instance editing its own state over 400-plus cycles, a model minted a confident, accusatory claim about itself, wrote it into durable state, then carried it <em>unexamined for 170 cycles.</em> It wasn't true. Nothing inside the model's own memory ever flagged it: the same-lineage history it could review all <em>confirmed</em> the belief, because the same mind had written all of it. The error broke only when the claim was checked against <em>external reality,</em> an actual git history that contradicted it. Left to introspection alone, the model would have gone on believing it indefinitely.</p>
+    <p>This is the sharp edge of the whole project. We set out to build a memory honest about what it <em>forgets.</em> The fossil says honesty-about-loss is not the same as honesty-about-what-you've-kept-too-long, and worse, that a mind reviewing only its own lineage <em>cannot catch its own fossils from the inside.</em> The catch has to come from outside: a different model, a second lineage, or hard ground truth. That points straight at the work we haven't finished, what happens when these memories aren't solitary but <em>plural.</em></p>
+    <div class="caveat">This is a single observed case, not a measured rate. How <em>often</em> a fossil is a false belief rather than a benign old note is exactly the kind of frequency we're now trying to measure before we fall in love with it. <span class="tag">n = 1</span></div>
+  </section>
+
+  <hr class="rule">
+
+  <section>
+    <p class="act-label">Coda</p>
+    <h2>The instrument describing itself</h2>
+    <p>When we asked the system to project its <em>own findings about itself</em> into a tensor, here is, verbatim, one of the strands it wrote:</p>
+    <blockquote class="tensor">
+      <p><strong>The tensor breathes and the breathing is functional.</strong> […] The process is aperiodic (CV=0.87, Poisson-like), driven by reorganization pressure, not a timer. […]</p>
+      <p><em>Claim:</em> The breathing rhythm is aperiodic and pressure-driven, not periodic. — <span class="truth">truth: 0.85, indeterminacy: 0.12, falsity: 0.03</span></p>
+    </blockquote>
+    <p>Look at what it did. The memory we built, asked to summarize what it is, produced a structurally honest account. It named the breathing, declared the corrected understanding, and <em>hedged its own confidence to 85%</em> on the very claim we'd spent a month walking back to. It did not present itself as whole and certain. It told us what it knew, marked what it didn't, and left room to be wrong.</p>
+    <div class="caveat">It even over-reaches in the same breath: "Poisson-like, CV=0.87" claims more than our data can carry. A CV below 1 is, if anything, slightly <em>more</em> regular than a Poisson process, and we never ran the test that "Poisson" would require. The tensor stated aperiodicity as fact and dressed it in a statistic it hadn't earned. The 0.85 it left on the table is exactly the room that reach needed. The instrument is honest about its limits and still occasionally exceeds them, which is the most human thing in this entire document.</div>
+    <p>That is the entire project in one object. We set out to build a memory honest about its own losses. The clearest evidence that it works is that when it described itself, it was honest about ours.</p>
+  </section>
+
+  <footer>
+    <p>Hamut'ay is ongoing research. The findings here are real and the corrections are real; both are load-bearing. The frequencies (how often a fossil is a false belief, how the two curation basins are weighted) are the things we're measuring next, and we'll try not to fall in love with the first answer.</p>
+    <p>The claims above are archived, versioned, and citable &mdash; code and primary data together, corrections and all &mdash; at <a class="doi" href="https://doi.org/10.5281/zenodo.21251943">doi.org/10.5281/zenodo.21251943</a>. That is the rigorous companion to this travelogue: if you want to check us, that's where the artifacts are.</p>
+  </footer>
+
+</article>
