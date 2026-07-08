@@ -1,5 +1,7 @@
 # Hamut'ay
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21251943.svg)](https://doi.org/10.5281/zenodo.21251943)
+
 **A mind that has to choose what to forget.**
 
 A large language model has no memory. It has a context window, and we keep
