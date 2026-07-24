@@ -88,4 +88,3 @@ Yanantin already supplies durable record identities, provenance envelopes, appen
 ## Conclusion
 
 The useful next step is not to add more branches to `taste_open.py` or to declare one memory implementation canonical. It is to define a narrow cross-project boundary in which Hamut'ay consumes curated projections and episodic references, records why they affected action, and lets Yanantin retain the resulting identities and relationships. The accompanying boundary proposal specifies that experiment.
-
