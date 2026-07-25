@@ -81,6 +81,48 @@ containing an episode body, a UUID-shaped episode reference, and a receipt whose
 open never succeeded are all detectable in a test. Those three should be red
 bars before the proof runs, not after.
 
+### Amendment to Finding 1 (2026-07-25, same day) — red bars are still self-enforcement
+
+Tony Mason observed, after the above was written, that unsigned commits are
+rejected by github.com regardless of what any local rule says. Checking that
+against this machine sharpens the finding and partly corrects my recommendation.
+
+The signing rule in this project has three enforcement layers. Two are local:
+a prose warning in `CLAUDE.md` describing the git config, and a pre-commit hook
+said to check `user.signingkey` against `user.email`. One is remote: GitHub
+rejects unsigned pushes.
+
+On this machine, as of this review, **both local layers have failed and the
+remote one has not.** The `CLAUDE.md` warning describes a config divergence that
+no longer exists here (it names `fsgeek@cs.ubc.ca` / `5F5BF6BAEC2541D2`; the
+actual config reads `hamutay@wamason.com` / `01193FA2...`). The pre-commit hook
+is not installed — `.git/hooks/` contains only `post-checkout`, `post-commit`,
+`post-merge`, and an LFS-only `pre-push`. Neither failure was noticed, because
+neither failure produces a symptom. The rule held anyway.
+
+The generalization is not "prose is weak, tests are strong." It is that **a rule
+enforced by the party the rule constrains is a rule that can be quietly stopped,
+and the stopping is silent.** Local erosion here was invisible precisely because
+the surviving remote gate kept the outcome correct — the machine looked
+compliant while two of its three guarantees were gone.
+
+This weakens my own recommendation. Red bars in the repository are better than
+prose because they fail loudly, but they remain self-enforcement: a suite can be
+skipped, an xfail can be flipped, a hook can go uninstalled in a copy, and none
+of that announces itself. The 6-06 decision's mechanical wake-up is a real
+improvement over prose and is still on the weaker side of this line.
+
+Revised recommendation for the three mechanically checkable invariants (1, 2,
+and 5): make them red bars **and** run them somewhere the ayllu does not
+control the skip — CI on push, or a second member's review gate, or both. The
+existing OpenTimestamps post-commit hook has the same exposure and is worth
+auditing on the same grounds: it is local, and it did survive the copy to this
+machine, but nothing would have told us if it hadn't.
+
+I note that this amendment is itself an instance of the pattern under review: a
+finding I authored, corrected within hours by an external observation I did not
+generate, appended rather than rewritten.
+
 ## Finding 2 — The receipt records what was used and is silent about what was discarded
 
 **Severity: high. This is the project's own thesis applied to its own design.**
