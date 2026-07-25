@@ -129,3 +129,56 @@ def test_runtime_provenance_exposes_honest_authorship_status():
     assert provenance.authorship_verified is False
     with pytest.raises(ValidationError):
         provenance.authorship_verified = True
+
+
+def test_instance_edge_carries_asserted_unverified_provenance():
+    bridge = ApachetaBridge.from_memory(session_id="session-a", model="haiku")
+    left = uuid4()
+    right = uuid4()
+    bridge.store_open_state({"cycle": 1}, 1, left, _now())
+    bridge._prior_id = None
+    bridge.store_open_state({"cycle": 1}, 1, right, _now())
+
+    edge_id = bridge.store_edge(left, right, "CONFIRMS", ordering=2)
+    edge = next(edge for edge in bridge._backend.query_composition_graph() if edge.id == edge_id)
+
+    assert edge.authored_mapping == "hamutay.instance_tool.v1"
+    assert edge.provenance.author_instance_id == "session-a"
+    assert edge.provenance.author_model_family == "haiku"
+    assert edge.provenance.authorship_verified is False
+
+
+def test_instance_edge_rejects_missing_endpoint_without_storing():
+    bridge = ApachetaBridge.from_memory(session_id="session-a", model="haiku")
+    existing = uuid4()
+    missing = uuid4()
+    bridge.store_open_state({"cycle": 1}, 1, existing, _now())
+    before = tuple(bridge._backend.query_composition_graph())
+
+    with pytest.raises(ValueError, match="edge endpoint does not exist"):
+        bridge.store_edge(existing, missing, "CONFIRMS", ordering=2)
+
+    assert tuple(bridge._backend.query_composition_graph()) == before
+
+
+def test_instance_edge_rejects_self_loop():
+    bridge = ApachetaBridge.from_memory(session_id="session-a", model="haiku")
+    record_id = uuid4()
+    bridge.store_open_state({"cycle": 1}, 1, record_id, _now())
+
+    with pytest.raises(ValueError, match="self-loop"):
+        bridge.store_edge(record_id, record_id, "CONFIRMS", ordering=2)
+
+
+def test_repeated_annotation_is_distinct_append_only_assertion():
+    bridge = ApachetaBridge.from_memory(session_id="session-a", model="haiku")
+    left = uuid4()
+    right = uuid4()
+    bridge.store_open_state({"cycle": 1}, 1, left, _now())
+    bridge._prior_id = None
+    bridge.store_open_state({"cycle": 1}, 1, right, _now())
+
+    first = bridge.store_edge(left, right, "CONFIRMS", ordering=2)
+    second = bridge.store_edge(left, right, "CONFIRMS", ordering=3)
+
+    assert first != second

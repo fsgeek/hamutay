@@ -290,20 +290,34 @@ class ApachetaBridge:
         relation_type: str,
         ordering: int = 0,
     ) -> UUID:
-        """Store a CompositionEdge between two records. Returns the edge's id.
+        """Store one asserted instance annotation between existing records.
 
-        ``relation_type`` must match a RelationType enum name; KeyError
-        propagates from the lookup so callers can map it to a user-facing
-        error with the actual enum values.
+        Self-loops are rejected. Repeated non-self annotations remain distinct
+        append-only assertions with independently minted edge identities.
         """
         from yanantin.apacheta.models.composition import CompositionEdge, RelationType
+        from yanantin.apacheta.interface import NotFoundError
+        from yanantin.apacheta.models.provenance import ProvenanceEnvelope
 
-        relation = RelationType[relation_type]
+        if from_record == to_record:
+            raise ValueError("instance-authored edge cannot be a self-loop")
+        for endpoint in (from_record, to_record):
+            try:
+                self._backend.get_record(endpoint)
+            except NotFoundError as exc:
+                raise ValueError(f"edge endpoint does not exist: {endpoint}") from exc
+
         edge = CompositionEdge(
             from_tensor=from_record,
             to_tensor=to_record,
-            relation_type=relation,
+            relation_type=RelationType[relation_type],
             ordering=ordering,
+            authored_mapping="hamutay.instance_tool.v1",
+            provenance=ProvenanceEnvelope(
+                author_model_family=self._model,
+                author_instance_id=self._session_id,
+                authorship_verified=False,
+            ),
         )
         self._backend.store_composition_edge(edge)
         return edge.id
