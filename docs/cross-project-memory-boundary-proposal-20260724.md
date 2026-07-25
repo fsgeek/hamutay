@@ -2,7 +2,7 @@
 
 Date: 2026-07-24
 
-Status: revised after independent review on 2026-07-25; proposal for independent adoption; it does not bind qhaway, llm-memory, Yanantin, Hamut'ay, or any ayllu member
+Status: revised after independent and focused follow-up review on 2026-07-25; proposal for independent adoption; it does not bind qhaway, llm-memory, Yanantin, Hamut'ay, or any ayllu member
 
 ## Intent
 
@@ -57,9 +57,12 @@ The proof requires a logical episodic retrieval receipt with these fields; exact
 - consuming Hamut'ay cycle UUID and session identity;
 - asserted author instance/model identity and `authorship_verified` status;
 - retrieval purpose or decision question;
-- llm-memory corpus ID and source ID;
+- normalized query, requested corpus IDs, requested limit, strategy, and match semantics returned by llm-memory;
+- llm-memory source IDs and the per-member `indexed_through` boundaries observed in corpus standing;
 - opaque episode reference copied from `search_history`;
-- returned result count, total match count when supplied, and selected result rank;
+- returned episode count and selected episode rank;
+- `total_matches` on every receipt, using an integer when `total_standing` is `exact` and explicit `null` when `total_standing` is `unknown`;
+- `total_standing`;
 - standing observed during search and authoritative open;
 - retrieval timestamp;
 - bounded outcome: used, not-used, unavailable, withdrawn, malformed, unauthorized, or error;
@@ -68,7 +71,9 @@ The proof requires a logical episodic retrieval receipt with these fields; exact
 
 The receipt must not contain the episode body, search snippet, raw prompt context, credentials, or private diagnostic payloads.
 
-The minimum proof records the size of the candidate set and the rank selected, making selection loss visible without retaining a second index of every unopened candidate. A later experiment may justify retaining discarded opaque references, but this proof does not.
+The minimum proof records the size of the returned episode set and the episode rank selected, making selection loss visible without retaining a second index of every unopened candidate. These values are episode cardinality, not independent conversational-turn cardinality: an adapter may emit several episodes that share one native user turn. The present public result contract does not expose a trustworthy cross-adapter native-turn grouping, so no such count is inferred.
+
+The recorded query, corpus scope, limit, retrieval semantics, and member index boundaries provide a basis for a later comparable rerun without moving candidate ownership out of llm-memory. They do not guarantee exact regeneration: the current `search_history` request cannot query an historical `indexed_through` boundary, and corpus advance, withdrawal, supersession, or strategy change may alter the result. Such divergence is recorded as a standing or retrieval change rather than hidden. A later experiment may justify retaining discarded opaque references, but this proof does not.
 
 Curated orientation requires a parallel projection receipt containing:
 
@@ -113,7 +118,8 @@ The initial experiment has one deliberately small path:
 The proof succeeds only if the later cycle can establish all of the following without copied episode content:
 
 - which cycle requested evidence and why;
-- how many episodic candidates were returned and which rank was selected;
+- how many episodes were returned and which episode rank was selected, without interpreting that count as distinct native turns;
+- which query, corpus scope, limit, strategy, match semantics, and member index boundaries produced the selection;
 - which authoritative episode was opened;
 - which corpus/source supplied it;
 - what standing was observed at each access;
