@@ -88,3 +88,13 @@ Yanantin already supplies durable record identities, provenance envelopes, appen
 ## Conclusion
 
 The useful next step is not to add more branches to `taste_open.py` or to declare one memory implementation canonical. It is to define a narrow cross-project boundary in which Hamut'ay consumes curated projections and episodic references, records why they affected action, and lets Yanantin retain the resulting identities and relationships. The accompanying boundary proposal specifies that experiment.
+
+## Independent-review addendum (2026-07-25)
+
+Claude (Opus 5) independently reviewed this audit and the boundary proposal in `docs/cross-project-memory-boundary-review-20260725.md`. Verification of that review produced three additional present-state findings:
+
+- Yanantin's source tests require `ProvenanceEnvelope.authorship_verified` to exist, default to `False`, remain immutable on a default envelope, and never be set `True` by an agent-reachable Yanantin path (`../yanantin/tests/red_bar/test_single_principal_accretion.py:60-131`). Hamut'ay's currently installed Yanantin/Tiksi environment does not expose that field. A proof cannot honestly persist authorship verification status until dependency compatibility is resolved.
+- llm-memory currently enrolls one Codex rollout file and one Claude project-history directory. Five Claude project-history directories exist on this machine, so the current corpus is reciprocal but not machine-complete. Expanding enrollment is deferred from the boundary proof.
+- The two enrolled sources express different scopes: Codex enrollment uses the normalized machine identity directly, while Claude enrollment uses UUIDv5 under that machine UUID with the logical collector name `claude-code:qhaway`; its locator is one project-history directory (`../llm-memory/docs/superpowers/plans/2026-07-24-reciprocal-claude-codex-memory.md:14-20`, `:68-90`). Both are stable for their present sources, but machine-wide Codex history and project-scoped Claude history should not be treated as equivalent coverage. Reconciliation belongs to a later corpus-enrollment design.
+
+The review also identifies a qhaway observability gap: an empty projection is not, by itself, distinguishable from an unavailable projection. The revised proposal therefore requires a projection envelope with standing, record count, projection identity, and retrieval time before curated orientation participates in the proof.

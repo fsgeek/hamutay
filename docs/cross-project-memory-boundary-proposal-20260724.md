@@ -2,7 +2,7 @@
 
 Date: 2026-07-24
 
-Status: proposal for independent adoption; it does not bind qhaway, llm-memory, Yanantin, Hamut'ay, or any ayllu member
+Status: revised after independent review on 2026-07-25; proposal for independent adoption; it does not bind qhaway, llm-memory, Yanantin, Hamut'ay, or any ayllu member
 
 ## Intent
 
@@ -16,7 +16,7 @@ This proposal defines one narrow proof. It is not a merger plan and does not sel
 
 Qhaway owns deliberately curated orientations: descriptive claims, provisional interpretations, commitments, norms, disputes, and their standing. It decides how those records are promoted, acknowledged, disputed, superseded, expired, or withdrawn.
 
-For this proof, qhaway exports only a bounded projection plus its stable projection identity. Hamut'ay may use that projection as read-only context. It may not silently rewrite qhaway from working state or episodic retrieval.
+For this proof, qhaway exports a bounded projection in an envelope containing its stable projection identity, standing, record count, and retrieval time. Hamut'ay may use that projection as read-only context. It may not silently rewrite qhaway from working state or episodic retrieval.
 
 ### llm-memory: episodic evidence
 
@@ -40,10 +40,10 @@ For this proof, Yanantin links a Hamut'ay cycle UUID to a UUID-addressed retriev
 
 1. **Reference, do not duplicate.** Bodies of curated and episodic memory remain with their authority. Consumers retain references, bounded projections, and receipts.
 2. **Native identities remain native.** A Hamut'ay UUID, qhaway record/projection identity, and llm-memory episode reference are not interchangeable.
-3. **Provenance precedes shared mutation.** Every member-authored record and edge must identify its author instance, model family where applicable, session, timestamp, and production mechanism. Anonymous graph assertions are not accepted.
+3. **Honest provenance precedes shared mutation.** Every member-authored record and edge must carry its asserted author instance, model family where applicable, session, timestamp, production mechanism, and authorship-verification status. In the present single-principal substrate, authorship is self-asserted and `authorship_verified` must be `false`. An asserted identity must never be represented as verified identity.
 4. **Retrieval is an action.** A receipt records the query or selection reason, corpus and source, episode reference, observed standing, retrieval time, consuming cycle, and outcome.
 5. **Discovery is not evidence.** A search result becomes usable evidence only after authoritative open succeeds.
-6. **Standing can change.** Later consumers re-open the reference and record current standing. A previous receipt remains an accurate record of what was observed then; it does not freeze current truth.
+6. **Standing can change.** Later consumers re-open episodic references and re-check curated projection identities, recording current standing. A previous receipt remains an accurate record of what was observed then; it does not freeze current truth.
 7. **Absence is explicit.** Unavailable, malformed, withdrawn, unauthorized, or failed retrievals are recorded as outcomes and must not masquerade as empty evidence.
 8. **No automatic promotion.** An episode or working-state conclusion does not enter qhaway merely because it affected an action.
 9. **Dissent remains first-class.** Conflicting records or interpretations remain attributed and separately addressable; synthesis does not erase them.
@@ -51,14 +51,15 @@ For this proof, Yanantin links a Hamut'ay cycle UUID to a UUID-addressed retriev
 
 ## Minimal receipt contract
 
-The proof requires a logical receipt with these fields; exact storage names are an implementation decision:
+The proof requires a logical episodic retrieval receipt with these fields; exact storage names are an implementation decision:
 
 - framework-minted receipt UUID;
 - consuming Hamut'ay cycle UUID and session identity;
-- author instance/model identity;
+- asserted author instance/model identity and `authorship_verified` status;
 - retrieval purpose or decision question;
 - llm-memory corpus ID and source ID;
 - opaque episode reference copied from `search_history`;
+- returned result count, total match count when supplied, and selected result rank;
 - standing observed during search and authoritative open;
 - retrieval timestamp;
 - bounded outcome: used, not-used, unavailable, withdrawn, malformed, unauthorized, or error;
@@ -67,15 +68,33 @@ The proof requires a logical receipt with these fields; exact storage names are 
 
 The receipt must not contain the episode body, search snippet, raw prompt context, credentials, or private diagnostic payloads.
 
+The minimum proof records the size of the candidate set and the rank selected, making selection loss visible without retaining a second index of every unopened candidate. A later experiment may justify retaining discarded opaque references, but this proof does not.
+
+Curated orientation requires a parallel projection receipt containing:
+
+- consuming Hamut'ay cycle UUID and session identity;
+- asserted author identity and authorship-verification status for the receipt;
+- qhaway projection identity, standing, record count, and retrieval time;
+- the standing observed when the projection is later re-checked;
+- bounded outcome: used, not-used, empty, unavailable, withdrawn, disputed, superseded, expired, unauthorized, or error;
+- optional resulting action/state reference;
+- interface and schema versions.
+
+The projection body remains a bounded transient input and is not copied into the receipt.
+
 ## Preconditions
 
 Before a shared instance may write the proof's graph edge:
 
-1. Repair Hamut'ay's edge persistence so instance-authored edges retain author/session provenance and are distinguishable from framework-created `REFINES` edges.
-2. Validate that both edge endpoints exist.
-3. Define the principal authorized to create the edge and the trust domain in which it is visible.
-4. Make duplicate and self-loop behavior explicit.
-5. Provide backend endpoint filtering so the proof does not depend on loading the entire composition graph.
+1. Resolve the dependency mismatch so Hamut'ay's runtime provenance model exposes immutable `authorship_verified`, defaulting to `false`, consistently with Yanantin's source guards.
+2. Repair Hamut'ay's edge persistence so instance-authored edges retain asserted author/session provenance, explicit authorship-verification status, and a marker distinguishing them from framework-created `REFINES` edges.
+3. Add adversarial contract checks for invariants 1, 2, and 5: receipts reject copied episode bodies, episode references are never coerced into graph UUIDs, and no search snippet can become evidence without a successful authoritative open.
+4. Run those checks as a required remote gate whose omission or failure blocks integration, rather than relying only on prose, local tests, or optional hooks.
+5. Validate that both edge endpoints exist.
+6. Define the principal authorized to create the edge and the trust domain in which it is visible.
+7. Make duplicate and self-loop behavior explicit.
+8. Provide backend endpoint filtering so the proof does not depend on loading the entire composition graph.
+9. Require a qhaway projection envelope whose standing, record count, projection identity, and retrieval time distinguish a valid empty projection from an unavailable one.
 
 These are correctness conditions, not a general graph-governance redesign.
 
@@ -83,28 +102,34 @@ These are correctness conditions, not a general graph-governance redesign.
 
 The initial experiment has one deliberately small path:
 
-1. A Hamut'ay cycle receives a bounded qhaway orientation projection and its projection identity.
+1. A Hamut'ay cycle receives a bounded qhaway orientation projection envelope and records a projection receipt.
 2. The cycle calls llm-memory `search_history` within one explicitly enrolled corpus for evidence relevant to a stated decision question.
 3. It copies one returned `episode_ref` verbatim and calls `open_episode` against the active corpus.
 4. On an available authoritative result, Hamut'ay makes or declines one bounded decision.
 5. Hamut'ay stores a retrieval receipt and links the consuming cycle UUID to that receipt UUID with complete edge provenance.
-6. A later cycle traverses the link, reopens the same opaque episode reference, and records whether standing or availability changed.
+6. A later cycle traverses the link, reopens the same opaque episode reference, re-checks the qhaway projection identity, and records whether either standing or availability changed.
 7. No qhaway mutation occurs. Any proposed promotion is emitted separately as an attributed candidate for its normal governance process.
 
 The proof succeeds only if the later cycle can establish all of the following without copied episode content:
 
 - which cycle requested evidence and why;
+- how many episodic candidates were returned and which rank was selected;
 - which authoritative episode was opened;
 - which corpus/source supplied it;
 - what standing was observed at each access;
 - which decision followed;
 - who authored the receipt and edge;
-- whether the referenced evidence has since changed standing.
+- that each persisted author identity is asserted rather than verified in the present substrate;
+- whether the referenced episodic evidence has since changed standing;
+- whether the curated orientation that informed the decision still has the standing observed at use time.
+
+These criteria prove that the boundary can carry evidence and account for its use. They do not prove that retrieving evidence improves decision quality. Decision value is a separate, later experiment requiring an appropriate comparison and outcome measure.
 
 ## Failure behavior
 
 - Search failure produces an error receipt only when a stable reference and safe diagnostics can be recorded; it produces no invented episode reference.
 - Open failure prevents the search snippet from being used as authoritative evidence.
+- An empty qhaway projection is accepted only with an available envelope and a record count of zero; missing or failed projection access is recorded as unavailable or error.
 - Graph persistence failure is surfaced to the cycle and durable operational observability; it cannot be silently treated as a completed receipt.
 - A partial failure may leave append-only records. Recovery appends a correction or superseding record rather than rewriting history.
 - Logs contain identifiers, status, timing, versions, and error categories, not conversation bodies or secrets.
@@ -119,6 +144,8 @@ The proof succeeds only if the later cycle can establish all of the following wi
 - generalized semantic search across every substrate;
 - a complete multi-principal authorization system;
 - refactoring `taste_open.py` beyond the narrow seam required by a later approved plan.
+- enrolling every Codex or Claude project-history directory on the machine;
+- reconciling machine-wide and project-scoped corpus coverage or source identity semantics.
 
 ## Questions for independent challenge
 
@@ -134,9 +161,9 @@ Disagreement should be retained with attribution. Adoption by one project does n
 
 ## Decision requested after review
 
-If the proposal survives independent review, the next artifact should be an implementation plan for only two changes:
+The proposal has survived one independent review with the revisions above. After those revisions are reviewed, the next artifact should be an implementation plan for only two bounded work packages:
 
-1. repair and test instance-authored edge provenance and endpoint validation;
-2. implement the smallest retrieval-receipt proof through an existing narrow port.
+1. satisfy the provenance-model, edge-provenance, endpoint-validation, and externally required invariant-check preconditions;
+2. implement the smallest paired episodic-receipt and curated-projection-receipt proof through an existing narrow port.
 
 No broader reconciliation is authorized by this proposal.
