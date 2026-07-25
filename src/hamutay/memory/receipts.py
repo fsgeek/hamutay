@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Literal, Self
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class IndexedMemberBoundary(BaseModel):
@@ -55,6 +55,20 @@ class EpisodicRetrievalReceipt(BaseModel):
     resulting_action_id: UUID | None = None
     interface_version: Literal["v1"] = "v1"
     schema_version: Literal[1] = 1
+
+    @field_validator("authorship_verified", mode="before")
+    @classmethod
+    def require_literal_unverified_authorship(cls, value: object) -> bool:
+        if type(value) is not bool or value is not False:
+            raise ValueError("authorship_verified must be literal False")
+        return value
+
+    @field_validator("total_matches", mode="before")
+    @classmethod
+    def require_integer_total_matches(cls, value: object) -> object:
+        if value is not None and type(value) is not int:
+            raise ValueError("total_matches must be an integer or null")
+        return value
 
     @model_validator(mode="after")
     def validate_cross_field_standing(self) -> Self:

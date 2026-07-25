@@ -53,6 +53,11 @@ def test_valid_receipt_is_immutable_and_unverified():
         receipt.authorship_verified = True
 
 
+def test_authorship_verified_rejects_integer_false():
+    with pytest.raises(ValidationError, match="authorship_verified"):
+        valid_receipt(authorship_verified=0)
+
+
 def test_invariant_1_rejects_copied_episode_body_and_snippet():
     with pytest.raises(ValidationError, match="extra_forbidden"):
         valid_receipt(episode_body={"response": "copied"})
@@ -81,6 +86,19 @@ def test_total_unknown_is_explicit_null_not_zero_or_omission():
 def test_exact_total_requires_nonnegative_integer():
     with pytest.raises(ValidationError, match="total_matches"):
         valid_receipt(total_standing="exact", total_matches=None)
+
+
+@pytest.mark.parametrize("total_matches", [True, 1.0, "1"])
+def test_total_matches_rejects_coercible_non_integer_values(total_matches):
+    with pytest.raises(ValidationError, match="total_matches"):
+        valid_receipt(total_matches=total_matches)
+
+
+def test_total_matches_is_required_not_implicitly_defaulted():
+    values = valid_receipt().model_dump()
+    values.pop("total_matches")
+    with pytest.raises(ValidationError, match="total_matches"):
+        EpisodicRetrievalReceipt(**values)
 
 
 def test_selected_rank_cannot_exceed_returned_episode_count():
