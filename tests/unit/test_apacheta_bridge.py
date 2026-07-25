@@ -12,6 +12,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import uuid4
 
+import pytest
+
 from hamutay.apacheta_bridge import ApachetaBridge
 
 
@@ -113,3 +115,17 @@ def test_bridge_respects_limit():
         )
     results = bridge.list_open_records(limit=2)
     assert len(results) == 2
+
+
+def test_runtime_provenance_exposes_honest_authorship_status():
+    from pydantic import ValidationError
+    from yanantin.apacheta.models.provenance import ProvenanceEnvelope
+
+    assert "authorship_verified" in ProvenanceEnvelope.model_fields
+    provenance = ProvenanceEnvelope(
+        author_model_family="haiku",
+        author_instance_id="asserted-session",
+    )
+    assert provenance.authorship_verified is False
+    with pytest.raises(ValidationError):
+        provenance.authorship_verified = True
