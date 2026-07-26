@@ -305,6 +305,7 @@ def _make_backend(
     base_url: str | None = None,
     experiment_label: str = "commune",
     or_only_providers: list[str] | None = None,
+    max_tokens: int | None = None,
 ) -> TasteBackend:
     if provider == "anthropic":
         return AnthropicTasteBackend()
@@ -334,6 +335,9 @@ def _make_backend(
         env_var = "OPENROUTER_API_KEY" if provider == "openrouter" else "OPENAI_API_KEY"
         raise SystemExit(f"No API key for {provider}: set {env_var}")
 
+    if max_tokens is not None:
+        or_kwargs["max_tokens"] = max_tokens
+
     return OpenAITasteBackend(
         base_url=url, api_key=key, extra_headers=headers,
         provider_name=provider, **or_kwargs,
@@ -345,6 +349,7 @@ def _parse_participant(
     api_key: str | None = None,
     base_url: str | None = None,
     experiment_label: str = "commune",
+    max_tokens: int | None = None,
 ) -> Participant:
     """Parse 'name::provider::model::role' or 'name:provider:model:role' into a Participant.
 
@@ -361,7 +366,9 @@ def _parse_participant(
             f"Expected: name::provider::model::role"
         )
     name, provider, model, role = parts[0], parts[1], parts[2], parts[3]
-    backend = _make_backend(provider, api_key, base_url, experiment_label)
+    backend = _make_backend(
+        provider, api_key, base_url, experiment_label, max_tokens=max_tokens
+    )
     return Participant(name=name, role=role, model=model, backend=backend)
 
 
@@ -408,6 +415,12 @@ def main():
         "--base-url", default=None,
         help="Base URL override (applies to all non-Anthropic participants)",
     )
+    parser.add_argument(
+        "--max-tokens", type=int, default=None,
+        help="Max output tokens per call for non-Anthropic participants. "
+             "Omit to keep the backend default (64000). Some OpenRouter "
+             "providers enforce lower ceilings and hard-error above them.",
+    )
     args = parser.parse_args()
 
     # Fold the condition into the label so logs are self-describing.
@@ -422,6 +435,7 @@ def main():
     participants = [
         _parse_participant(
             spec, args.api_key, args.base_url, args.label,
+            max_tokens=args.max_tokens,
         )
         for spec in args.participant
     ]
