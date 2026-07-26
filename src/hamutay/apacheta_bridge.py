@@ -294,6 +294,9 @@ class ApachetaBridge:
 
         Self-loops are rejected. Repeated non-self annotations remain distinct
         append-only assertions with independently minted edge identities.
+        Endpoints are generic/open Apacheta records addressed through
+        ``get_record``; they are not required to be prescribed ``TensorRecord``
+        entries.
         """
         from yanantin.apacheta.models.composition import CompositionEdge, RelationType
         from yanantin.apacheta.interface import NotFoundError

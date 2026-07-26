@@ -182,3 +182,17 @@ def test_repeated_annotation_is_distinct_append_only_assertion():
     second = bridge.store_edge(left, right, "CONFIRMS", ordering=3)
 
     assert first != second
+
+
+def test_instance_edge_endpoints_are_generic_open_records():
+    """Endpoint validation uses get_record, not the prescribed TensorRecord path."""
+    bridge = ApachetaBridge.from_memory(session_id="session-a", model="haiku")
+    open_record = uuid4()
+    bridge.store_open_state({"cycle": 1}, 1, open_record, _now())
+    instance_record = bridge.store_instance_record(
+        {"observation": "generic open record"}, cycle=2
+    )
+
+    edge_id = bridge.store_edge(open_record, instance_record, "CONFIRMS")
+
+    assert edge_id in {edge.id for edge in bridge._backend.query_composition_graph()}
