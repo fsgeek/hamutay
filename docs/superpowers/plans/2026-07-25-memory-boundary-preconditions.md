@@ -670,18 +670,21 @@ First inspect repository rulesets without changing repository settings; legacy b
 ```bash
 gh api repos/fsgeek/hamutay/rulesets
 gh api repos/fsgeek/hamutay/rulesets/19747404
+gh api repos/fsgeek/hamutay/rulesets/13896889
 ```
 
-If the required-check rule is absent, inactive, or mismatched, stop and obtain explicit authorization before changing GitHub repository rules. Update the existing ruleset narrowly: preserve the active signed-commit requirement and every unrelated rule, and require context `boundary-invariants` with integration ID `15368` before integration to `main`.
+Ruleset `19747404` owns the required status check. If that rule is absent, inactive, or mismatched, stop and obtain explicit authorization before changing GitHub repository rules. Only ruleset `19747404` may be updated, and only narrowly enough to require context `boundary-invariants` with integration ID `15368` before integration to `main`; preserve every unrelated rule in it. Ruleset `13896889` separately owns the signature and non-fast-forward protections. It must remain active and unchanged.
 
 Re-read the result:
 
 ```bash
 gh api repos/fsgeek/hamutay/rulesets/19747404 \
   --jq '{enforcement, rules}'
+gh api repos/fsgeek/hamutay/rulesets/13896889 \
+  --jq '{enforcement, rules}'
 ```
 
-Expected: ruleset `19747404` is active, retains its signed-commit rule, and its required-status-check rule includes `{"context":"boundary-invariants","integration_id":15368}`. Merely committing the workflow is not completion; if the remote check can be omitted without blocking integration, this task remains incomplete.
+Expected: ruleset `19747404` is active and its required-status-check rule includes `{"context":"boundary-invariants","integration_id":15368}`. Separately, ruleset `13896889` is active and unchanged, with its required-signatures and non-fast-forward rules intact. Merely committing the workflow is not completion; if the remote check can be omitted without blocking integration, or the separate signature/non-fast-forward ruleset has changed, this task remains incomplete.
 
 ---
 
@@ -693,6 +696,6 @@ This plan is complete only when:
 2. Instance-authored edges preserve asserted/unverified provenance, reject missing endpoints and self-loops, and explicitly permit repeated append-only assertions.
 3. The receipt model mechanically rejects copied bodies/snippets, malformed or UUID-substituted episode references, coercible numeric values, unvalidated replacement copies, impossible cardinality/corpus combinations, naive timestamps, and `used` outcomes without authoritative open and selection.
 4. Zero-result and pre-selection failure receipts carry no invented selection data; unknown `total_matches` is explicit `null`, never omission or zero.
-5. The remote GitHub job context `boundary-invariants` from integration ID `15368` passes and is required by active ruleset `19747404`, whose signed-commit requirement remains intact.
+5. The remote GitHub job context `boundary-invariants` from integration ID `15368` passes and is required by active ruleset `19747404`; separate ruleset `13896889` remains active and unchanged with its required-signatures and non-fast-forward rules intact.
 
 Completion does **not** authorize the retrieval proof. Before planning that package, decide which production component implements Hamut'ay's `MemoryPort`: a Yanantin-backed adapter, an extension of `ApachetaBridge` behind the port, or another independently reviewed implementation. The local contract-test substrate cannot satisfy the proof.
