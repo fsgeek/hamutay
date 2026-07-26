@@ -1,0 +1,46 @@
+name: Memory boundary invariants
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/hamutay/apacheta_bridge.py"
+      - "src/hamutay/memory/receipts.py"
+      - "tests/unit/test_apacheta_bridge.py"
+      - "tests/unit/test_graph_tools.py"
+      - "tests/unit/test_memory_boundary_invariants.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/memory-boundary-invariants.yml"
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: memory-boundary-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  boundary-invariants:
+    name: boundary-invariants
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
+        with:
+          enable-cache: true
+
+      - name: Install locked dependencies
+        run: uv sync --locked --extra dev
+
+      - name: Verify boundary invariants
+        run: >-
+          uv run --no-sync pytest
+          tests/unit/test_memory_boundary_invariants.py
+          tests/unit/test_apacheta_bridge.py
+          tests/unit/test_graph_tools.py
+          -v
