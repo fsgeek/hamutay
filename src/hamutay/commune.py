@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -117,6 +118,8 @@ class Participant:
     backend: TasteBackend
     identity: dict | None = None
     premise: str | None = None
+    max_attempts: int = 3
+    retries: int = 0
 
     def _call(
         self,
@@ -131,12 +134,44 @@ class Participant:
             premise=self.premise,
         )
         messages = [{"role": "user", "content": content}]
-        return self.backend.call(
-            model=self.model,
-            system=system,
-            messages=messages,
-            experiment_label=f"commune_{self.name}",
-        )
+
+        # A model occasionally emits tool-call JSON that cannot be parsed —
+        # a truncated string, a stray control character. Without recovery one
+        # bad draw kills the whole run: a 40-cycle triad is ~120 generations,
+        # so the probability of finishing falls off with length. That is a
+        # plausible mechanical reason the long cross-model runs are missing
+        # from the record rather than a record of nobody trying.
+        #
+        # A retried cycle is a DIFFERENT DRAW from the same distribution, not
+        # the same cycle recovered. self.retries carries the count into the
+        # JSONL so no retried cycle is ever silently equivalent to a
+        # first-draw one.
+        self.retries = 0
+        last: Exception | None = None
+        for attempt in range(1, self.max_attempts + 1):
+            try:
+                return self.backend.call(
+                    model=self.model,
+                    system=system,
+                    messages=messages,
+                    experiment_label=f"commune_{self.name}",
+                )
+            except RuntimeError as e:
+                if "malformed JSON" not in str(e):
+                    raise
+                last = e
+                self.retries = attempt
+                if attempt < self.max_attempts:
+                    print(
+                        f"  WARNING: {self.name} cycle {cycle} {action} "
+                        f"unparseable tool JSON, redrawing "
+                        f"({attempt}/{self.max_attempts - 1})",
+                        file=sys.stderr,
+                    )
+        raise RuntimeError(
+            f"{self.name} cycle {cycle} {action}: "
+            f"{self.max_attempts} attempts all returned unparseable JSON"
+        ) from last
 
     def listen(
         self, content: str, conversation: dict | None, cycle: int,
@@ -213,6 +248,7 @@ class Commune:
                 prior_conversation=None,
                 conversation=None,
                 usage=result,
+                retries=p.retries,
             )
 
         # Speaker speaks
@@ -246,6 +282,7 @@ class Commune:
             prior_conversation=prior_conversation,
             conversation=self.conversation,
             usage=result,
+            retries=speaker.retries,
         )
 
         return response_text
@@ -263,6 +300,7 @@ class Commune:
         prior_conversation: dict | None,
         conversation: dict | None,
         usage: ExchangeResult,
+        retries: int = 0,
     ) -> None:
         if not self.log_path:
             return
@@ -273,6 +311,7 @@ class Commune:
             "experiment_label": self.experiment_label,
             "participant": participant,
             "model": model,
+            "retries": retries,
             "action": action,
             "content": content,
             "raw_output": raw_output,
