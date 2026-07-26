@@ -56,22 +56,22 @@ The proof requires a logical episodic retrieval receipt with these fields; exact
 - framework-minted receipt UUID;
 - consuming Hamut'ay cycle UUID and session identity;
 - asserted author instance/model identity and `authorship_verified` status;
-- retrieval purpose or decision question;
-- normalized query, requested corpus IDs, requested limit, strategy, and match semantics returned by llm-memory;
-- llm-memory source IDs and the per-member `indexed_through` boundaries observed in corpus standing;
-- opaque episode reference copied from `search_history`;
-- returned episode count and selected episode rank;
-- `total_matches` on every receipt, using an integer when `total_standing` is `exact` and explicit `null` when `total_standing` is `unknown`;
+- bounded retrieval purpose or decision question and normalized query; these are allowed inputs, but their producers must not copy prompts, episode bodies, credentials, or private diagnostics into them;
+- requested corpus IDs, requested limit, strategy, and match semantics returned by llm-memory;
+- llm-memory source IDs and the per-member `indexed_through` boundaries observed in corpus standing, with every indexed-member corpus inside the requested corpus set;
+- opaque episode reference copied from `search_history` only when an episode was actually selected; its authority/corpus must be requested, and its exact `episode` scheme, nonempty authority, two nonempty path segments, and absence of whitespace, userinfo, port, query, and fragment are validated without decoding it;
+- returned episode count, including zero, and a selected episode rank only when an episode was actually selected; reference and rank are required together and are required for `used`;
+- `total_matches` on every receipt, using a strict nonnegative integer at least as large as the returned count when `total_standing` is `exact` and explicit `null` when `total_standing` is `unknown`;
 - `total_standing`;
 - standing observed during search and authoritative open;
-- retrieval timestamp;
+- timezone-aware retrieval timestamp;
 - bounded outcome: used, not-used, unavailable, withdrawn, malformed, unauthorized, or error;
 - optional resulting action/state reference;
 - interface and schema versions.
 
-The receipt must not contain the episode body, search snippet, raw prompt context, credentials, or private diagnostic payloads.
+The receipt is content-minimized, not wholly content-free: `purpose` and `query` are legitimate bounded inputs. It must not contain the episode body, search snippet, raw prompt context, credentials, or private diagnostic payloads, including copies smuggled into those input fields.
 
-The minimum proof records the size of the returned episode set and the episode rank selected, making selection loss visible without retaining a second index of every unopened candidate. These values are episode cardinality, not independent conversational-turn cardinality: an adapter may emit several episodes that share one native user turn. The present public result contract does not expose a trustworthy cross-adapter native-turn grouping, so no such count is inferred.
+The minimum proof always records the size of the returned episode set. When selection occurred, it also records the episode reference and rank, making selection loss visible without retaining a second index of every unopened candidate. Zero-result and pre-selection failure receipts contain no invented reference or rank. These values are episode cardinality, not independent conversational-turn cardinality: an adapter may emit several episodes that share one native user turn. The present public result contract does not expose a trustworthy cross-adapter native-turn grouping, so no such count is inferred.
 
 The recorded query, corpus scope, limit, retrieval semantics, and member index boundaries provide a basis for a later comparable rerun without moving candidate ownership out of llm-memory. They do not guarantee exact regeneration: the current `search_history` request cannot query an historical `indexed_through` boundary, and corpus advance, withdrawal, supersession, or strategy change may alter the result. Such divergence is recorded as a standing or retrieval change rather than hidden. A later experiment may justify retaining discarded opaque references, but this proof does not.
 
@@ -133,7 +133,7 @@ These criteria prove that the boundary can carry evidence and account for its us
 
 ## Failure behavior
 
-- Search failure produces an error receipt only when a stable reference and safe diagnostics can be recorded; it produces no invented episode reference.
+- Search failure produces an error receipt with no invented episode reference or rank; purpose, query, identifiers, status, and safe error categories may still be recorded.
 - Open failure prevents the search snippet from being used as authoritative evidence.
 - An empty qhaway projection is accepted only with an available envelope and a record count of zero; missing or failed projection access is recorded as unavailable or error.
 - Graph persistence failure is surfaced to the cycle and durable operational observability; it cannot be silently treated as a completed receipt.
