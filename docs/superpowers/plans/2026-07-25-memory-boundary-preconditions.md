@@ -11,11 +11,14 @@
 ## Global Constraints
 
 - Authorship is self-asserted in the present substrate; every new edge and receipt sets `authorship_verified` to `false`.
-- Episode bodies, search snippets, raw prompt context, credentials, and private diagnostic payloads never enter a retrieval receipt.
-- An llm-memory `episode://` reference remains an opaque string and is never coerced into a graph UUID.
+- Episode bodies, search snippets, raw prompt context, credentials, and private diagnostic payloads never enter a retrieval receipt. `purpose` and `query` are allowed bounded inputs, but their producers must not use them to copy any of that forbidden content.
+- An llm-memory `episode://` reference remains an opaque string and is never coerced into a graph UUID. Validate its exact scheme, nonempty authority/corpus, exactly two nonempty path segments, and absence of whitespace, userinfo, port, query, or fragment without decoding it.
 - A receipt with outcome `used` requires an authoritative open with standing `available`.
+- Receipt integers are strict: bool, float, and string coercions are rejected, including during replacement copies. Retrieval timestamps are timezone-aware.
+- Zero-result and pre-selection failure receipts carry no episode reference or selected rank. Those fields occur together only after selection; exact totals are at least the returned count, returned count does not exceed the limit, and every indexed or selected corpus is requested.
 - Repeated non-self annotations are distinct append-only assertions and remain permitted; self-loop annotations are rejected.
 - Endpoint existence is checked before a composition edge is stored.
+- Instance edge endpoints are generic/open records addressed through backend `get_record`; they are not required to be prescribed `TensorRecord` entries.
 - Tests exercise in-memory storage only; this precondition package performs no live ArangoDB writes.
 - Use `uv run`; do not invoke a system Python.
 - Every commit uses the exact Hamut'ay signed identity command shown in its task.
@@ -340,7 +343,9 @@ Expected: the post-commit hook creates a separate signed OTS stamp commit.
 
 **Interfaces:**
 - Consumes: Pydantic 2; llm-memory's public `episode://` references and search metadata as plain values.
-- Produces: immutable `EpisodicRetrievalReceipt` and nested `IndexedMemberBoundary` value objects for the later production receipt port.
+- Produces: immutable `EpisodicRetrievalReceipt` and nested `IndexedMemberBoundary` value objects for the later production receipt port. Both validate every `model_copy(update=...)` replacement instead of accepting Pydantic's unvalidated update path.
+
+**Approved final-review amendment (2026-07-26):** The adversarial suite must cover strict numeric input, validated replacement copies (including forged authorship and loss of authoritative-open standing), zero-result and pre-selection failure shapes, selection pairing, impossible cardinality, indexed and selected corpus mismatch, malformed opaque URIs, and naive timestamps. The implementation skeleton below is illustrative; these amended requirements and the committed executable tests are authoritative wherever the original skeleton was incomplete.
 
 - [ ] **Step 1: Write the adversarial tests first**
 
@@ -452,15 +457,14 @@ Expected: collection ERROR with `ModuleNotFoundError: No module named 'hamutay.m
 Create `src/hamutay/memory/receipts.py`:
 
 ```python
-"""Strict, content-free receipts for cross-project episodic retrieval."""
+"""Strict, content-minimized receipts for cross-project episodic retrieval."""
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Literal, Self
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, StrictInt, model_validator
 
 
 class IndexedMemberBoundary(BaseModel):
@@ -470,7 +474,7 @@ class IndexedMemberBoundary(BaseModel):
     source_id: str = Field(min_length=1)
     member_id: str = Field(min_length=1)
     indexed_through_kind: str = Field(min_length=1)
-    indexed_through_value: int = Field(ge=0)
+    indexed_through_value: StrictInt = Field(ge=0)
 
 
 class EpisodicRetrievalReceipt(BaseModel):
@@ -485,18 +489,18 @@ class EpisodicRetrievalReceipt(BaseModel):
     purpose: str = Field(min_length=1)
     query: str = Field(min_length=1)
     corpus_ids: tuple[str, ...] = Field(min_length=1)
-    limit: int = Field(ge=1, le=100)
+    limit: StrictInt = Field(ge=1, le=100)
     strategy: str = Field(min_length=1)
     match_semantics: str = Field(min_length=1)
     indexed_members: tuple[IndexedMemberBoundary, ...] = Field(min_length=1)
-    episode_ref: str = Field(pattern=r"^episode://[^/]+/[^/]+/[^/]+$")
-    returned_episode_count: int = Field(ge=1)
-    selected_episode_rank: int = Field(ge=1)
-    total_matches: int | None = Field(ge=0)
+    episode_ref: str | None = None
+    returned_episode_count: StrictInt = Field(ge=0)
+    selected_episode_rank: StrictInt | None = Field(default=None, ge=1)
+    total_matches: StrictInt | None = Field(ge=0)
     total_standing: Literal["exact", "unknown"]
     search_index_standing: str = Field(min_length=1)
     open_standing: str = Field(min_length=1)
-    retrieved_at: datetime
+    retrieved_at: AwareDatetime
     outcome: Literal[
         "used",
         "not-used",
@@ -508,11 +512,16 @@ class EpisodicRetrievalReceipt(BaseModel):
     ]
     resulting_action_id: UUID | None = None
     interface_version: Literal["v1"] = "v1"
-    schema_version: Literal[1] = 1
+    schema_version: StrictInt = Field(default=1, ge=1, le=1)
 
     @model_validator(mode="after")
     def validate_cross_field_standing(self) -> Self:
-        if self.selected_episode_rank > self.returned_episode_count:
+        # The final implementation also validates replacement copies and the
+        # amended URI, selection, cardinality, corpus, and timestamp rules.
+        if (
+            self.selected_episode_rank is not None
+            and self.selected_episode_rank > self.returned_episode_count
+        ):
             raise ValueError(
                 "selected_episode_rank exceeds returned_episode_count"
             )
@@ -533,7 +542,7 @@ Run:
 uv run pytest tests/unit/test_memory_boundary_invariants.py -v
 ```
 
-Expected: 7 tests PASS.
+Expected: all adversarial receipt cases PASS.
 
 - [ ] **Step 5: Run the entire database-free unit suite**
 
@@ -566,7 +575,7 @@ Expected: the post-commit hook creates a separate signed OTS stamp commit.
 
 **Interfaces:**
 - Consumes: Tasks 1-3 and Hamut'ay's committed `uv.lock`.
-- Produces: GitHub status check `Memory boundary invariants / boundary-invariants`; it is useful only after repository rules require it.
+- Produces: GitHub Actions job context `boundary-invariants` from integration ID `15368` (displayed as `Memory boundary invariants / boundary-invariants`); it is useful only after repository rules require it.
 
 - [ ] **Step 1: Create the remote workflow**
 
@@ -602,10 +611,10 @@ jobs:
     name: boundary-invariants
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7
         with:
           enable-cache: true
 
@@ -636,7 +645,7 @@ uv run --no-sync pytest \
 
 Expected: PASS with no ArangoDB service and no credentials.
 
-- [ ] **Step 3: Commit and push the workflow**
+- [ ] **Step 3: Commit, push the feature branch, and open a pull request**
 
 ```bash
 git add .github/workflows/memory-boundary-invariants.yml
@@ -644,29 +653,35 @@ git -c user.email=hamutay@wamason.com \
     -c user.name="Tony Mason" \
     -c user.signingkey=01193FA2631C8AE8E4DF266E216D3C9B920813A1 \
     commit -S -m "Run memory invariants in remote CI"
-git push origin main
+git push -u origin memory-boundary-preconditions
+gh pr create \
+  --base main \
+  --head memory-boundary-preconditions \
+  --title "Enforce memory boundary preconditions" \
+  --body "Implements the reviewed memory-boundary preconditions with local and remote invariant evidence."
 ```
 
-Expected: the code commit and its OTS stamp commit push successfully; GitHub Actions reports `Memory boundary invariants / boundary-invariants`.
+Expected: the code commit and its OTS stamp commit push on the feature branch, a pull request targets `main`, and GitHub Actions reports the job context `boundary-invariants` from GitHub Actions integration ID `15368` (the UI may display `Memory boundary invariants / boundary-invariants`). Never push this feature work directly to `main`.
 
 - [ ] **Step 4: Inspect, then require the remote status check**
 
-First inspect without changing repository settings:
+First inspect repository rulesets without changing repository settings; legacy branch-protection endpoints are not authoritative for this repository:
 
 ```bash
-gh api repos/fsgeek/hamutay/branches/main/protection
+gh api repos/fsgeek/hamutay/rulesets
+gh api repos/fsgeek/hamutay/rulesets/19747404
 ```
 
-If branch protection is absent or the required-check context is missing, stop and obtain explicit authorization before changing GitHub repository rules. Configure the existing rule—without discarding unrelated protections—so `Memory boundary invariants / boundary-invariants` is required before integration to `main`.
+If the required-check rule is absent, inactive, or mismatched, stop and obtain explicit authorization before changing GitHub repository rules. Update the existing ruleset narrowly: preserve the active signed-commit requirement and every unrelated rule, and require context `boundary-invariants` with integration ID `15368` before integration to `main`.
 
 Re-read the result:
 
 ```bash
-gh api repos/fsgeek/hamutay/branches/main/protection \
-  --jq '.required_status_checks.contexts'
+gh api repos/fsgeek/hamutay/rulesets/19747404 \
+  --jq '{enforcement, rules}'
 ```
 
-Expected: the returned contexts include `Memory boundary invariants / boundary-invariants`. Merely committing the workflow is not completion; if the remote check can be omitted without blocking integration, this task remains incomplete.
+Expected: ruleset `19747404` is active, retains its signed-commit rule, and its required-status-check rule includes `{"context":"boundary-invariants","integration_id":15368}`. Merely committing the workflow is not completion; if the remote check can be omitted without blocking integration, this task remains incomplete.
 
 ---
 
@@ -676,8 +691,8 @@ This plan is complete only when:
 
 1. Hamut'ay's locked environment exposes immutable `authorship_verified=False` by default.
 2. Instance-authored edges preserve asserted/unverified provenance, reject missing endpoints and self-loops, and explicitly permit repeated append-only assertions.
-3. The receipt model mechanically rejects copied bodies/snippets, UUID-substituted episode references, and `used` outcomes without authoritative open.
-4. Unknown `total_matches` is explicit `null`, never omission or zero.
-5. The remote GitHub check passes and is required by repository rules.
+3. The receipt model mechanically rejects copied bodies/snippets, malformed or UUID-substituted episode references, coercible numeric values, unvalidated replacement copies, impossible cardinality/corpus combinations, naive timestamps, and `used` outcomes without authoritative open and selection.
+4. Zero-result and pre-selection failure receipts carry no invented selection data; unknown `total_matches` is explicit `null`, never omission or zero.
+5. The remote GitHub job context `boundary-invariants` from integration ID `15368` passes and is required by active ruleset `19747404`, whose signed-commit requirement remains intact.
 
 Completion does **not** authorize the retrieval proof. Before planning that package, decide which production component implements Hamut'ay's `MemoryPort`: a Yanantin-backed adapter, an extension of `ApachetaBridge` behind the port, or another independently reviewed implementation. The local contract-test substrate cannot satisfy the proof.
