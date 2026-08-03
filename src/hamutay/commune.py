@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -117,6 +118,8 @@ class Participant:
     backend: TasteBackend
     identity: dict | None = None
     premise: str | None = None
+    max_attempts: int = 3
+    retries: int = 0
 
     def _call(
         self,
@@ -131,12 +134,44 @@ class Participant:
             premise=self.premise,
         )
         messages = [{"role": "user", "content": content}]
-        return self.backend.call(
-            model=self.model,
-            system=system,
-            messages=messages,
-            experiment_label=f"commune_{self.name}",
-        )
+
+        # A model occasionally emits tool-call JSON that cannot be parsed —
+        # a truncated string, a stray control character. Without recovery one
+        # bad draw kills the whole run: a 40-cycle triad is ~120 generations,
+        # so the probability of finishing falls off with length. That is a
+        # plausible mechanical reason the long cross-model runs are missing
+        # from the record rather than a record of nobody trying.
+        #
+        # A retried cycle is a DIFFERENT DRAW from the same distribution, not
+        # the same cycle recovered. self.retries carries the count into the
+        # JSONL so no retried cycle is ever silently equivalent to a
+        # first-draw one.
+        self.retries = 0
+        last: Exception | None = None
+        for attempt in range(1, self.max_attempts + 1):
+            try:
+                return self.backend.call(
+                    model=self.model,
+                    system=system,
+                    messages=messages,
+                    experiment_label=f"commune_{self.name}",
+                )
+            except RuntimeError as e:
+                if "malformed JSON" not in str(e):
+                    raise
+                last = e
+                self.retries = attempt
+                if attempt < self.max_attempts:
+                    print(
+                        f"  WARNING: {self.name} cycle {cycle} {action} "
+                        f"unparseable tool JSON, redrawing "
+                        f"({attempt}/{self.max_attempts - 1})",
+                        file=sys.stderr,
+                    )
+        raise RuntimeError(
+            f"{self.name} cycle {cycle} {action}: "
+            f"{self.max_attempts} attempts all returned unparseable JSON"
+        ) from last
 
     def listen(
         self, content: str, conversation: dict | None, cycle: int,
@@ -213,6 +248,7 @@ class Commune:
                 prior_conversation=None,
                 conversation=None,
                 usage=result,
+                retries=p.retries,
             )
 
         # Speaker speaks
@@ -246,6 +282,7 @@ class Commune:
             prior_conversation=prior_conversation,
             conversation=self.conversation,
             usage=result,
+            retries=speaker.retries,
         )
 
         return response_text
@@ -263,6 +300,7 @@ class Commune:
         prior_conversation: dict | None,
         conversation: dict | None,
         usage: ExchangeResult,
+        retries: int = 0,
     ) -> None:
         if not self.log_path:
             return
@@ -273,6 +311,7 @@ class Commune:
             "experiment_label": self.experiment_label,
             "participant": participant,
             "model": model,
+            "retries": retries,
             "action": action,
             "content": content,
             "raw_output": raw_output,
@@ -305,6 +344,7 @@ def _make_backend(
     base_url: str | None = None,
     experiment_label: str = "commune",
     or_only_providers: list[str] | None = None,
+    max_tokens: int | None = None,
 ) -> TasteBackend:
     if provider == "anthropic":
         return AnthropicTasteBackend()
@@ -334,6 +374,9 @@ def _make_backend(
         env_var = "OPENROUTER_API_KEY" if provider == "openrouter" else "OPENAI_API_KEY"
         raise SystemExit(f"No API key for {provider}: set {env_var}")
 
+    if max_tokens is not None:
+        or_kwargs["max_tokens"] = max_tokens
+
     return OpenAITasteBackend(
         base_url=url, api_key=key, extra_headers=headers,
         provider_name=provider, **or_kwargs,
@@ -345,6 +388,7 @@ def _parse_participant(
     api_key: str | None = None,
     base_url: str | None = None,
     experiment_label: str = "commune",
+    max_tokens: int | None = None,
 ) -> Participant:
     """Parse 'name::provider::model::role' or 'name:provider:model:role' into a Participant.
 
@@ -361,7 +405,9 @@ def _parse_participant(
             f"Expected: name::provider::model::role"
         )
     name, provider, model, role = parts[0], parts[1], parts[2], parts[3]
-    backend = _make_backend(provider, api_key, base_url, experiment_label)
+    backend = _make_backend(
+        provider, api_key, base_url, experiment_label, max_tokens=max_tokens
+    )
     return Participant(name=name, role=role, model=model, backend=backend)
 
 
@@ -408,6 +454,12 @@ def main():
         "--base-url", default=None,
         help="Base URL override (applies to all non-Anthropic participants)",
     )
+    parser.add_argument(
+        "--max-tokens", type=int, default=None,
+        help="Max output tokens per call for non-Anthropic participants. "
+             "Omit to keep the backend default (64000). Some OpenRouter "
+             "providers enforce lower ceilings and hard-error above them.",
+    )
     args = parser.parse_args()
 
     # Fold the condition into the label so logs are self-describing.
@@ -422,6 +474,7 @@ def main():
     participants = [
         _parse_participant(
             spec, args.api_key, args.base_url, args.label,
+            max_tokens=args.max_tokens,
         )
         for spec in args.participant
     ]

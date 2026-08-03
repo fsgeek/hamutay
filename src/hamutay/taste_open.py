@@ -19,6 +19,7 @@ import json
 import os
 import random
 import re
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -1510,13 +1511,50 @@ class OpenAITasteBackend:
         return data
 
     @staticmethod
+    def _json_error_evidence(raw: str, e: json.JSONDecodeError, window: int = 40) -> str:
+        """Show the offending bytes so a failure is evidence, not inference.
+
+        The decoder message names a position and a category ("Invalid control
+        character") but never the character. repr() of a window around e.pos
+        distinguishes \\n from \\r from \\x0b, which is the difference between
+        "almost certainly a newline" and a fact.
+        """
+        start = max(0, e.pos - window)
+        end = min(len(raw), e.pos + window)
+        # e.pos == len(raw) for truncated input; indexing it would raise and
+        # hide the very error this is reporting.
+        offender = repr(raw[e.pos]) if e.pos < len(raw) else "(past end of input)"
+        return (
+            f"  raw length: {len(raw)} chars; error at pos {e.pos}\n"
+            f"  offending char: {offender}\n"
+            f"  context: {raw[start:e.pos]!r} >>> {raw[e.pos:end]!r}"
+        )
+
+    @staticmethod
     def _parse_tool_arguments(name: str, arguments: Any) -> dict:
         try:
             parsed = json.loads(arguments) if isinstance(arguments, str) else arguments
         except json.JSONDecodeError as e:
-            raise RuntimeError(
-                f"OpenAI backend: malformed JSON arguments for {name}: {e}"
-            ) from e
+            # Some models emit literal control characters inside JSON strings
+            # (a raw newline instead of \\n). strict=False accepts those; it
+            # cannot change any parse that already succeeded, so it is safe for
+            # comparability. The rescue is reported rather than silent: how
+            # often a model emits malformed tool JSON is itself a measurement,
+            # and swallowing it would hide a loss this project exists to declare.
+            evidence = OpenAITasteBackend._json_error_evidence(arguments, e)
+            try:
+                parsed = json.loads(arguments, strict=False)
+            except json.JSONDecodeError:
+                raise RuntimeError(
+                    f"OpenAI backend: malformed JSON arguments for {name}: {e}\n"
+                    f"{evidence}"
+                ) from e
+            print(
+                f"  WARNING: {name} emitted malformed JSON, rescued by "
+                f"strict=False — {e.msg.rstrip(' at')} at pos {e.pos}, "
+                f"char {arguments[e.pos]!r}",
+                file=sys.stderr,
+            )
         if not isinstance(parsed, dict):
             raise RuntimeError(
                 f"OpenAI backend: tool arguments for {name} must be an object"

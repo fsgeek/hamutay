@@ -333,3 +333,48 @@ def test_walk_adjacent_mode_is_cycle_safe():
     assert reached == [str(b), str(c)]
     assert len(reached) == len(set(reached))
     assert [step["depth"] for step in result["path"]] == [1, 2]
+
+
+def test_annotate_edge_reports_missing_endpoint_without_edge():
+    bridge = ApachetaBridge.from_memory(session_id="s", model="haiku")
+    existing = uuid4()
+    missing = uuid4()
+    bridge.store_open_state(
+        {"cycle": 1}, cycle=1, record_id=existing, timestamp=_now()
+    )
+
+    result = tool_annotate_edge(
+        {
+            "from_record_id": str(existing),
+            "to_record_id": str(missing),
+            "relation": "CONFIRMS",
+        },
+        cycle=2,
+        bridge=bridge,
+    )
+
+    assert result == {
+        "error": f"Edge creation failed: edge endpoint does not exist: {missing}"
+    }
+
+
+def test_annotate_edge_reports_self_loop():
+    bridge = ApachetaBridge.from_memory(session_id="s", model="haiku")
+    record_id = uuid4()
+    bridge.store_open_state(
+        {"cycle": 1}, cycle=1, record_id=record_id, timestamp=_now()
+    )
+
+    result = tool_annotate_edge(
+        {
+            "from_record_id": str(record_id),
+            "to_record_id": str(record_id),
+            "relation": "CONFIRMS",
+        },
+        cycle=2,
+        bridge=bridge,
+    )
+
+    assert result == {
+        "error": "Edge creation failed: instance-authored edge cannot be a self-loop"
+    }
