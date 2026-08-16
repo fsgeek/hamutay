@@ -143,6 +143,12 @@ not hard-coded token counts. Actual provider-reported token use is retained.
 Runs that never reach their registered pressure phase fail qualification for
 this purpose; they are not silently pooled with valid trajectories.
 
+The phase label is derived from cumulative raw task history so matched arms
+cross the same experimental boundary. It does not assume that H remains small.
+Every arm's actual active request is measured independently. If H's state object
+grows to the context limit, requires unregistered truncation, or cannot continue,
+that is an operational result and is scored under the same failure policy.
+
 ## Task Families
 
 Evaluation 0 qualifies four families. Each family uses independently generated
@@ -310,9 +316,9 @@ development evidence.
 
 At least three additional protocol-clean model families run two representative
 task families, two matched variants per family, and all three arms: 36
-trajectories. The task families are selected before Stage 2 outcomes are
-unblinded, using construct coverage and protocol complexity rather than effect
-size.
+trajectories. The task families are selected at the Evaluation 0 design freeze,
+before Stage 2 execution, using construct coverage and protocol complexity
+rather than effect size.
 
 This stage asks whether the apparatus transports across provider/model
 boundaries. It is not powered to establish architecture independence.
