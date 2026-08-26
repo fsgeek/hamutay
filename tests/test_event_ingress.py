@@ -64,6 +64,75 @@ def test_inbound_event_honors_not_before(tmp_path):
     assert store.next_pending() is None
 
 
+from uuid import uuid4 as _uuid4
+
+from hamutay.events import build_pending_event
+
+
+def _pending(store):
+    record = build_inbound_event(purpose="work", sender="tony")
+    store.append(record)
+    return record
+
+
+def test_append_completed_atomic_persists_both_records(tmp_path):
+    store = EventStore(str(tmp_path / "events.jsonl"))
+    event = _pending(store)
+    continuation = build_pending_event(
+        purpose="continue the work",
+        requested_context=[{"tool": "recall", "record_id": str(_uuid4())}],
+        scheduled_by_cycle=1,
+        scheduled_by_record_id=_uuid4(),
+    )
+    completed = store.append_completed_atomic(
+        event=event,
+        run_id=str(_uuid4()),
+        wake_cycle=1,
+        result_record_id=_uuid4(),
+        response_text="done",
+        auto_continuation_event=continuation,
+    )
+    latest = store.latest_by_event_id()
+    assert latest[event["event_id"]]["status"] == "completed"
+    assert latest[continuation["event_id"]]["status"] == "pending"
+    assert completed["auto_continuation_appended"] is True
+    assert completed["auto_continuation_event_id"] == continuation["event_id"]
+
+
+def test_append_completed_atomic_without_continuation(tmp_path):
+    store = EventStore(str(tmp_path / "events.jsonl"))
+    event = _pending(store)
+    store.append_completed_atomic(
+        event=event,
+        run_id=str(_uuid4()),
+        wake_cycle=1,
+        result_record_id=_uuid4(),
+        response_text="done",
+    )
+    latest = store.latest_by_event_id()
+    assert latest[event["event_id"]]["status"] == "completed"
+    assert "auto_continuation_appended" not in latest[event["event_id"]]
+
+
+def test_append_many_writes_batch_as_single_payload(tmp_path):
+    """The batch must land as one write: all lines present and well-formed."""
+    import json as _json
+
+    store = EventStore(str(tmp_path / "events.jsonl"))
+    records = [
+        build_inbound_event(purpose=f"batch {i}", sender="tony")
+        for i in range(3)
+    ]
+    store.append_many(records)
+    lines = (tmp_path / "events.jsonl").read_text().splitlines()
+    assert len(lines) == 3
+    assert [_json.loads(line)["purpose"] for line in lines] == [
+        "batch 0",
+        "batch 1",
+        "batch 2",
+    ]
+
+
 def test_send_subcommand_appends_to_store(tmp_path):
     from hamutay.events import _handle_send, default_event_log_path
 

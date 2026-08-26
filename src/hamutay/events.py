@@ -415,11 +415,19 @@ class EventStore:
             self._append_unlocked(record)
 
     def append_many(self, records: list[dict]) -> None:
+        """Append a batch as one buffer and one write syscall.
+
+        Non-interleaved and indivisible under process kill; NOT guaranteed
+        indivisible under power loss. Boot recovery covers the residue.
+        """
         if not records:
             return
+        payload = "".join(
+            json.dumps(record, default=str) + "\n" for record in records
+        )
         with self._locked():
-            for record in records:
-                self._append_unlocked(record)
+            with self.path.open("a") as f:
+                f.write(payload)
 
     def read_records(self) -> list[dict]:
         with self._locked():
@@ -493,7 +501,7 @@ class EventStore:
                 return event, running
         return None
 
-    def append_completed(
+    def _build_completed(
         self,
         *,
         event: dict,
@@ -528,7 +536,25 @@ class EventStore:
             record["auto_continuation_event_id"] = (
                 auto_continuation_event.get("event_id")
             )
+        return record
+
+    def append_completed(self, **kwargs) -> dict:
+        record = self._build_completed(**kwargs)
         self.append(record)
+        return record
+
+    def append_completed_atomic(self, **kwargs) -> dict:
+        """Persist the completed record and its bound continuation together.
+
+        One append_many batch (single write) closes the crash window between
+        "wake finished" and "its future exists" down to power-loss scale.
+        """
+        auto_continuation_event = kwargs.get("auto_continuation_event")
+        record = self._build_completed(**kwargs)
+        if auto_continuation_event is not None:
+            self.append_many([record, auto_continuation_event])
+        else:
+            self.append(record)
         return record
 
     def append_policy_disposition(
@@ -1590,7 +1616,7 @@ def run_next_event(
                     },
                     continuation_request=continuation_request,
                 )
-        completed = store.append_completed(
+        completed = store.append_completed_atomic(
             event=event,
             run_id=run_id,
             wake_cycle=wake_cycle,
@@ -1602,7 +1628,6 @@ def run_next_event(
             auto_continuation_event=auto_continuation_event,
         )
         if auto_continuation_event is not None:
-            store.append(auto_continuation_event)
             completed["auto_continuation_event"] = auto_continuation_event
         if policy_dispositions:
             policy_decision = raw_output.get("policy_decision")
