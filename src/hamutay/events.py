@@ -1728,15 +1728,8 @@ def step_pending_events(
     }
 
 
-def main() -> None:
+def build_parser():
     import argparse
-    import os
-
-    from hamutay.taste_open import (
-        AnthropicTasteBackend,
-        OpenAITasteBackend,
-        OpenTasteSession,
-    )
 
     parser = argparse.ArgumentParser(
         description="Run one pending taste_open scheduled event."
@@ -1757,8 +1750,9 @@ def main() -> None:
     run.add_argument(
         "--max-tokens",
         type=int,
-        default=4096,
-        help="Maximum output tokens for the wake cycle.",
+        default=64000,
+        help="Maximum output tokens for the wake cycle. "
+        "Matches the Projector; do not lower.",
     )
     run_all = sub.add_parser("run-all")
     run_all.add_argument("--log-path", required=True)
@@ -1775,8 +1769,9 @@ def main() -> None:
     run_all.add_argument(
         "--max-tokens",
         type=int,
-        default=4096,
-        help="Maximum output tokens for each wake cycle.",
+        default=64000,
+        help="Maximum output tokens for each wake cycle. "
+        "Matches the Projector; do not lower.",
     )
     run_all.add_argument(
         "--limit",
@@ -1811,7 +1806,19 @@ def main() -> None:
         default=10,
         help="Maximum failed/completed/context-error rows to show.",
     )
-    args = parser.parse_args()
+    return parser
+
+
+def main() -> None:
+    import os
+
+    from hamutay.taste_open import (
+        AnthropicTasteBackend,
+        OpenAITasteBackend,
+        OpenTasteSession,
+    )
+
+    args = build_parser().parse_args()
 
     if args.command == "report":
         if args.event_log_path is None and args.log_path is None:
