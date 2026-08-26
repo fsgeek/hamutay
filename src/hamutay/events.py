@@ -13,6 +13,7 @@ from uuid import UUID, uuid4
 from hamutay.terminal_surface import validate_terminal_surface
 
 EVENT_TYPE_REFLECTION = "self_scheduled_reflection"
+EVENT_TYPE_INBOUND = "inbound_message"
 VALID_CONTEXT_TOOLS = {"recall", "compare", "walk"}
 VALID_WALK_DIRECTIONS = {"forward", "backward", "both"}
 VALID_WALK_MODES = {"path", "adjacent"}
@@ -173,6 +174,49 @@ def build_pending_event(
         # Validate parseability but preserve original ISO spelling.
         datetime.fromisoformat(str(expires_at).replace("Z", "+00:00"))
         record["expires_at"] = str(expires_at)
+    return record
+
+
+def build_inbound_event(
+    *,
+    purpose: str,
+    sender: str,
+    label: str | None = None,
+    not_before: str | None = None,
+    expires_at: str | None = None,
+    requested_context: list[dict] | None = None,
+) -> dict:
+    """Create an externally-originated pending event. Does not write it.
+
+    External events carry no scheduled_by provenance: the claim and envelope
+    paths read those fields tolerantly, and fabricating scheduler provenance
+    for a human sender would be false attribution.
+    """
+    purpose = str(purpose).strip()
+    if not purpose:
+        raise ValueError("purpose is required")
+    sender = str(sender).strip()
+    if not sender:
+        raise ValueError("sender is required")
+    record = {
+        "record_type": "event_status",
+        "event_id": str(uuid4()),
+        "event_type": EVENT_TYPE_INBOUND,
+        "status": "pending",
+        "created_at": utc_now_iso(),
+        "origin": "external",
+        "sender": sender,
+        "purpose": purpose,
+    }
+    if requested_context is not None:
+        record["requested_context"] = validate_requested_context(requested_context)
+    if label:
+        record["label"] = str(label)
+    for field, value in (("not_before", not_before), ("expires_at", expires_at)):
+        if value:
+            # Validate parseability but preserve original ISO spelling.
+            datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+            record[field] = str(value)
     return record
 
 
@@ -1806,7 +1850,33 @@ def build_parser():
         default=10,
         help="Maximum failed/completed/context-error rows to show.",
     )
+    send = sub.add_parser("send", help="Append an external inbound event.")
+    send.add_argument("--log-path", required=True)
+    send.add_argument("--event-log-path", default=None)
+    send.add_argument(
+        "--message", required=True, help="The event's purpose text."
+    )
+    send.add_argument("--sender", default="tony")
+    send.add_argument("--label", default=None)
+    send.add_argument("--not-before", default=None)
     return parser
+
+
+def _handle_send(args) -> dict:
+    """Append an external inbound event to the store. Needs no API key."""
+    event_log_path = args.event_log_path or str(
+        default_event_log_path(args.log_path)
+    )
+    store = EventStore(event_log_path)
+    record = build_inbound_event(
+        purpose=args.message,
+        sender=args.sender,
+        label=args.label,
+        not_before=args.not_before,
+    )
+    store.append(record)
+    print(json.dumps(record, indent=2, default=str))
+    return record
 
 
 def main() -> None:
@@ -1819,6 +1889,10 @@ def main() -> None:
     )
 
     args = build_parser().parse_args()
+
+    if args.command == "send":
+        _handle_send(args)
+        return
 
     if args.command == "report":
         if args.event_log_path is None and args.log_path is None:
