@@ -396,3 +396,11 @@ def test_step_emits_completed_responses(tmp_path, capsys):
     out = capsys.readouterr().out
     assert "hello tony" in out
     assert "wake_completed" in out
+
+
+def test_constitution_declares_wake_ending_physics():
+    from hamutay.heartbeat import CONSTITUTION
+
+    lowered = CONSTITUTION.lower()
+    assert "wake ends" in lowered
+    assert "prose" in lowered

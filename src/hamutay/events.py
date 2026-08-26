@@ -846,7 +846,12 @@ def build_event_envelope(event: dict, context_results: list[dict], run_id: str) 
             "purpose explicitly says to change them; framework-owned fields "
             "such as cycle and _activity_log are substrate-owned. End the "
             "cycle with the declared terminal surface if terminal_surface is "
-            "present; otherwise use think_and_respond."
+            "present; otherwise use think_and_respond. Your wake ends when "
+            "you produce your terminal tool call: nothing you describe as "
+            "happening after your response will happen. Take any actions "
+            "(reading, searching, shell) BEFORE you respond, and hand any "
+            "future intention to schedule_event or a continuation_request — "
+            "an intention stated only in prose is structurally a no-op."
         ),
     }
     if event.get("event_type") == EVENT_TYPE_INBOUND:

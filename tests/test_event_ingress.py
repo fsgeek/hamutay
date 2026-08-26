@@ -153,3 +153,18 @@ def test_send_subcommand_appends_to_store(tmp_path):
     latest = store.latest_by_event_id()
     assert written["event_id"] in latest
     assert latest[written["event_id"]]["purpose"] == "first tick"
+
+
+def test_envelope_declares_wake_ending_physics():
+    """Long-standing bug: trailing prose intentions die with the wake.
+    The envelope must tell every resident the physics, every wake."""
+    import json as _json
+
+    from hamutay.events import build_event_envelope
+
+    inbound = build_inbound_event(purpose="hello", sender="tony")
+    envelope = _json.loads(build_event_envelope(inbound, [], "run-1"))
+    lowered = envelope["instruction"].lower()
+    assert "wake ends" in lowered
+    assert "before" in lowered
+    assert "schedule_event" in lowered
