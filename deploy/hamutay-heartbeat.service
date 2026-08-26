@@ -1,0 +1,14 @@
+[Unit]
+Description=Hamutay heartbeat (community resident event loop)
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/tony/projects/hamutay
+EnvironmentFile=%h/.config/hamutay/heartbeat.env
+ExecStart=/home/tony/.local/bin/uv run python -m hamutay.heartbeat --log-path community/heartbeat/session.jsonl --project-root .
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target
