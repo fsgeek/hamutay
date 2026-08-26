@@ -5,11 +5,16 @@ The log is the life; the process is weather. Boot always runs recovery.
 """
 from __future__ import annotations
 
+import json
+import time
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from hamutay.events import (
     EVENT_TYPE_REFLECTION,
     EventStore,
+    run_pending_events,
+    summarize_event_log,
     utc_now_iso,
 )
 
@@ -131,3 +136,118 @@ def recover_lost_continuations(store: EventStore) -> list[dict]:
         known.add(lost_id)
         recovered.append(replacement)
     return recovered
+
+
+class HeartbeatLoop:
+    """Wall-clock life for the event loop. Crash-only: boot always recovers."""
+
+    def __init__(
+        self,
+        session,
+        store: EventStore,
+        *,
+        poll_interval: float = 30.0,
+        batch_limit: int = 10,
+        sleep=time.sleep,
+        now=None,
+        run_pending=run_pending_events,
+        summarize=summarize_event_log,
+    ):
+        self._session = session
+        self._store = store
+        self._poll_interval = float(poll_interval)
+        self._batch_limit = int(batch_limit)
+        self._sleep = sleep
+        self._now = now or (lambda: datetime.now(timezone.utc))
+        self._run_pending = run_pending
+        self._summarize = summarize
+        self._last_transition: tuple[str, str] | None = None
+
+    @staticmethod
+    def _emit(payload: dict) -> None:
+        """One flushed JSON ops line per meaningful moment (journald-friendly)."""
+        print(json.dumps(payload, default=str), flush=True)
+
+    def _transition(
+        self, status: str, *, reason: str, detail: dict | None = None
+    ) -> None:
+        if (status, reason) == self._last_transition:
+            return
+        record = append_heartbeat_status(
+            self._store, status=status, reason=reason, detail=detail
+        )
+        self._last_transition = (status, reason)
+        self._emit(
+            {
+                "heartbeat": status,
+                "reason": reason,
+                "detail": detail,
+                "at": record["created_at"],
+            }
+        )
+
+    def _seconds_until_wake(self, summary: dict, now) -> float:
+        waiting = summary.get("oldest_waiting_pending") or {}
+        not_before = waiting.get("not_before")
+        if not not_before:
+            return self._poll_interval
+        try:
+            wake_at = datetime.fromisoformat(
+                str(not_before).replace("Z", "+00:00")
+            )
+        except ValueError:
+            return self._poll_interval
+        delta = (wake_at - now).total_seconds()
+        return min(max(delta, 0.0), self._poll_interval)
+
+    def boot(self) -> dict:
+        orphans = recover_orphaned_running(self._store)
+        lost = recover_lost_continuations(self._store)
+        report = {
+            "orphaned_running_recovered": len(orphans),
+            "lost_continuations_recovered": len(lost),
+        }
+        self._emit({"heartbeat": "boot_report", **report})
+        self._transition("waking", reason="boot", detail=report)
+        return report
+
+    def step(self) -> dict:
+        now = self._now()
+        # Record 'active' BEFORE the batch: a wake that arrives and completes
+        # inside one batch must still leave a transition trace in the log.
+        if self._store.next_pending(now=now) is not None:
+            self._transition("active", reason="runnable_pending")
+        batch = self._run_pending(
+            self._session,
+            self._store,
+            limit=self._batch_limit,
+            stop_on_failure=False,
+            now=now,
+            auto_continuations=True,
+            policy_dispositions=True,
+        )
+        summary = self._summarize(self._store.read_records(), now=now)
+        if summary.get("pending_runnable_count", 0):
+            self._transition("active", reason="runnable_pending")
+            return {"state": "active", "sleep_seconds": 0.0, "batch": batch}
+        if summary.get("pending_waiting_count", 0):
+            self._transition("waiting", reason="scheduled_wake")
+            return {
+                "state": "waiting",
+                "sleep_seconds": self._seconds_until_wake(summary, now),
+                "batch": batch,
+            }
+        reason = derive_quiet_reason(self._store.read_records())
+        self._transition("quiet", reason=reason)
+        return {
+            "state": "quiet",
+            "sleep_seconds": self._poll_interval,
+            "batch": batch,
+        }
+
+    def run_forever(self) -> None:
+        self.boot()
+        while True:
+            result = self.step()
+            if result["sleep_seconds"] > 0:
+                self._sleep(result["sleep_seconds"])

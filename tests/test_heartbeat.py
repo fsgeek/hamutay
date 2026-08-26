@@ -118,6 +118,151 @@ def test_derive_quiet_reason_chosen_after_clean_completion(tmp_path):
     assert derive_quiet_reason(store.read_records()) == "chosen_quiet"
 
 
+class _StubSession:
+    pass
+
+
+def _loop(tmp_path, *, summaries, batch=None):
+    """A HeartbeatLoop with stubbed run/summarize; summaries consumed in order."""
+    from hamutay.heartbeat import HeartbeatLoop
+
+    store = EventStore(str(tmp_path / "events.jsonl"))
+    sleeps = []
+    summary_iter = iter(summaries)
+
+    loop = HeartbeatLoop(
+        _StubSession(),
+        store,
+        poll_interval=30.0,
+        sleep=sleeps.append,
+        run_pending=lambda session, s, **kw: batch or {"results": []},
+        summarize=lambda records, now=None: next(summary_iter),
+    )
+    return loop, store, sleeps
+
+
+def test_step_active_when_runnable(tmp_path):
+    loop, store, _ = _loop(
+        tmp_path,
+        summaries=[{"pending_runnable_count": 2, "pending_waiting_count": 0}],
+    )
+    result = loop.step()
+    assert result["state"] == "active"
+    assert result["sleep_seconds"] == 0.0
+
+
+def test_step_waiting_sleeps_until_wake_capped_by_poll(tmp_path):
+    from datetime import datetime, timedelta, timezone
+
+    wake_at = (datetime.now(timezone.utc) + timedelta(seconds=7)).isoformat()
+    loop, store, _ = _loop(
+        tmp_path,
+        summaries=[
+            {
+                "pending_runnable_count": 0,
+                "pending_waiting_count": 1,
+                "oldest_waiting_pending": {"not_before": wake_at},
+            }
+        ],
+    )
+    result = loop.step()
+    assert result["state"] == "waiting"
+    assert 0.0 < result["sleep_seconds"] <= 30.0
+
+
+def test_step_quiet_appends_status_once_per_transition(tmp_path):
+    quiet_summary = {"pending_runnable_count": 0, "pending_waiting_count": 0}
+    loop, store, _ = _loop(tmp_path, summaries=[quiet_summary, quiet_summary])
+    loop.step()
+    loop.step()
+    statuses = [
+        r for r in store.read_records() if r.get("record_type") == "heartbeat_status"
+    ]
+    assert len(statuses) == 1
+    assert statuses[0]["status"] == "quiet"
+    assert statuses[0]["reason"] == "awaiting_first_event"
+
+
+def test_quiet_to_work_to_quiet_leaves_a_trace(tmp_path):
+    """Cross-family finding 2: a wake completed entirely inside one batch must
+    still record active, and the return to quiet must record chosen_quiet."""
+    from hamutay.heartbeat import HeartbeatLoop
+
+    quiet_summary = {"pending_runnable_count": 0, "pending_waiting_count": 0}
+    store = EventStore(str(tmp_path / "events.jsonl"))
+    event = build_inbound_event(purpose="quick work", sender="tony")
+
+    def fake_run(session, s, **kw):
+        if s.next_pending() is None:
+            return {"results": []}
+        s.append_running(event)
+        s.append_completed(
+            event=event,
+            run_id=str(uuid4()),
+            wake_cycle=1,
+            result_record_id=uuid4(),
+            response_text="done",
+        )
+        return {"results": [{"status": "completed"}]}
+
+    summary_iter = iter([quiet_summary, quiet_summary])
+    loop = HeartbeatLoop(
+        _StubSession(),
+        store,
+        poll_interval=30.0,
+        sleep=lambda s: None,
+        run_pending=fake_run,
+        summarize=lambda records, now=None: next(summary_iter),
+    )
+    loop.step()  # empty store: quiet/awaiting_first_event
+    store.append(event)
+    loop.step()  # work arrives and completes inside this one step
+    trace = [
+        (r["status"], r["reason"])
+        for r in store.read_records()
+        if r.get("record_type") == "heartbeat_status"
+    ]
+    assert trace == [
+        ("quiet", "awaiting_first_event"),
+        ("active", "runnable_pending"),
+        ("quiet", "chosen_quiet"),
+    ]
+
+
+def test_quiet_reason_change_is_recorded(tmp_path):
+    """Cross-family finding 2b: dedup by (status, reason) — a starvation that
+    arrives while already quiet must still be recorded."""
+    quiet_summary = {"pending_runnable_count": 0, "pending_waiting_count": 0}
+    loop, store, _ = _loop(tmp_path, summaries=[quiet_summary, quiet_summary])
+    loop.step()  # quiet/awaiting_first_event
+    event = build_inbound_event(
+        purpose="too late", sender="tony", expires_at="2000-01-01T00:00:00Z"
+    )
+    store.append(event)
+    store.append_expired(event)
+    loop.step()
+    trace = [
+        (r["status"], r["reason"])
+        for r in store.read_records()
+        if r.get("record_type") == "heartbeat_status"
+    ]
+    assert trace[-1] == ("quiet", "starved_expired")
+    assert len(trace) == 2
+
+
+def test_boot_recovers_and_announces(tmp_path):
+    loop, store, _ = _loop(tmp_path, summaries=[])
+    event = build_inbound_event(purpose="interrupted", sender="tony")
+    store.append(event)
+    store.append_running(event)
+    report = loop.boot()
+    assert report["orphaned_running_recovered"] == 1
+    statuses = [
+        r for r in store.read_records() if r.get("record_type") == "heartbeat_status"
+    ]
+    assert statuses[-1]["status"] == "waking"
+
+
 def test_recover_lost_continuations_declares_the_loss(tmp_path):
     store = EventStore(str(tmp_path / "events.jsonl"))
     event = build_inbound_event(purpose="work", sender="tony")
