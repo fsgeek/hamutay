@@ -168,3 +168,26 @@ def test_envelope_declares_wake_ending_physics():
     assert "wake ends" in lowered
     assert "before" in lowered
     assert "schedule_event" in lowered
+
+
+def test_send_message_file(tmp_path):
+    from hamutay.events import _handle_send, default_event_log_path
+
+    log_path = tmp_path / "session.jsonl"
+    body = tmp_path / "letter.txt"
+    body.write_text('A letter with "quotes" and\nnewlines intact.')
+    args = build_parser().parse_args(
+        [
+            "send",
+            "--log-path",
+            str(log_path),
+            "--message-file",
+            str(body),
+            "--sender",
+            "tony",
+        ]
+    )
+    written = _handle_send(args)
+    store = EventStore(str(default_event_log_path(str(log_path))))
+    latest = store.latest_by_event_id()[written["event_id"]]
+    assert latest["purpose"] == 'A letter with "quotes" and\nnewlines intact.'

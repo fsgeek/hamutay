@@ -1904,7 +1904,13 @@ def build_parser():
     send.add_argument("--log-path", required=True)
     send.add_argument("--event-log-path", default=None)
     send.add_argument(
-        "--message", required=True, help="The event's purpose text."
+        "--message", default=None, help="The event's purpose text."
+    )
+    send.add_argument(
+        "--message-file",
+        default=None,
+        help="Read the purpose text from a file (safe for quotes/newlines). "
+        "Overrides --message.",
     )
     send.add_argument("--sender", default="tony")
     send.add_argument("--label", default=None)
@@ -1914,12 +1920,18 @@ def build_parser():
 
 def _handle_send(args) -> dict:
     """Append an external inbound event to the store. Needs no API key."""
+    message = args.message
+    if getattr(args, "message_file", None):
+        with open(args.message_file) as f:
+            message = f.read()
+    if message is None:
+        raise SystemExit("send requires --message or --message-file")
     event_log_path = args.event_log_path or str(
         default_event_log_path(args.log_path)
     )
     store = EventStore(event_log_path)
     record = build_inbound_event(
-        purpose=args.message,
+        purpose=message,
         sender=args.sender,
         label=args.label,
         not_before=args.not_before,
