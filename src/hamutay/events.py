@@ -813,6 +813,17 @@ def resolve_requested_context(
 
 def build_event_envelope(event: dict, context_results: list[dict], run_id: str) -> str:
     """Build the explicit user-message envelope for a wake cycle."""
+    if event.get("event_type") == EVENT_TYPE_INBOUND:
+        event_instruction = (
+            "This is an external inbound event. Its origin, sender, and "
+            "purpose fields describe where it came from and what was sent. "
+        )
+    else:
+        event_instruction = (
+            "This is a self-scheduled reflection event. Use the provided "
+            "context to decide whether to revise, preserve, defer, or "
+            "declare losses. "
+        )
     envelope = {
         "event_type": event.get("event_type", EVENT_TYPE_REFLECTION),
         "event_id": event["event_id"],
@@ -827,9 +838,8 @@ def build_event_envelope(event: dict, context_results: list[dict], run_id: str) 
         "evidence_context": event.get("evidence_context"),
         "context_results": context_results,
         "instruction": (
-            "This is a self-scheduled reflection event. Use the provided "
-            "context to decide whether to revise, preserve, defer, or "
-            "declare losses. If the purpose names required durable wake "
+            event_instruction
+            + "If the purpose names required durable wake "
             "updates, those updates must be committed as top-level fields in "
             "the object you produce with think_and_respond. Visible prose is "
             "not enough. Preserve model-owned continuity fields unless the "
@@ -839,6 +849,9 @@ def build_event_envelope(event: dict, context_results: list[dict], run_id: str) 
             "present; otherwise use think_and_respond."
         ),
     }
+    if event.get("event_type") == EVENT_TYPE_INBOUND:
+        envelope["origin"] = event.get("origin")
+        envelope["sender"] = event.get("sender")
     return json.dumps(envelope, indent=2, default=str)
 
 
@@ -1577,11 +1590,18 @@ def run_next_event(
     run_id = running["run_id"]
     context_results: list[dict] | None = None
     try:
-        context_results = resolve_requested_context(
-            event.get("requested_context", []),
-            prior_states=session._prior_states,
-            bridge=session._bridge,
-        )
+        requested_context = event.get("requested_context")
+        if (
+            event.get("event_type") == EVENT_TYPE_INBOUND
+            and requested_context is None
+        ):
+            context_results = []
+        else:
+            context_results = resolve_requested_context(
+                requested_context if requested_context is not None else [],
+                prior_states=session._prior_states,
+                bridge=session._bridge,
+            )
         envelope = build_event_envelope(event, context_results, run_id)
         before_state = _json_safe_state(getattr(session, "_state", None))
         response = session.exchange(

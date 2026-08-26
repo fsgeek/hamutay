@@ -226,6 +226,12 @@ class HeartbeatLoop:
             auto_continuations=True,
             policy_dispositions=True,
         )
+        # Ingress can land after next_pending() above and still be claimed by
+        # the batch.  Use the batch result as the authoritative second signal
+        # so that such a wake cannot disappear between two identical quiet
+        # transitions.
+        if batch.get("ran", 0):
+            self._transition("active", reason="runnable_pending")
         summary = self._summarize(self._store.read_records(), now=now)
         if summary.get("pending_runnable_count", 0):
             self._transition("active", reason="runnable_pending")
