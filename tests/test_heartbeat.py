@@ -286,3 +286,48 @@ def test_recover_lost_continuations_declares_the_loss(tmp_path):
     assert "declared_loss" in replacement
     assert replacement["recovered_by"] == "boot_recovery"
     assert recover_lost_continuations(store) == []
+
+
+def test_heartbeat_parser_defaults():
+    from hamutay.heartbeat import build_parser
+
+    args = build_parser().parse_args(["--log-path", "x.jsonl"])
+    assert args.max_tokens == 64000
+    assert args.poll_interval == 30.0
+    assert args.batch_limit == 10
+    assert args.model == "claude-haiku-4-5"
+    assert args.provider == "anthropic"
+
+
+def test_no_constitution_bypass_exists():
+    import pytest
+
+    from hamutay.heartbeat import build_parser
+
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["--log-path", "x.jsonl", "--no-constitution"])
+
+
+def test_single_instance_lock(tmp_path):
+    import pytest
+
+    from hamutay.heartbeat import acquire_lock
+
+    lock_path = str(tmp_path / "hb.lock")
+    held = acquire_lock(lock_path)
+    assert held is not None
+    with pytest.raises(SystemExit):
+        acquire_lock(lock_path)
+    held.close()
+
+
+def test_constitution_is_operational_not_cognitive():
+    from hamutay.heartbeat import CONSTITUTION
+
+    lowered = CONSTITUTION.lower()
+    # Operational facts must be present.
+    assert "recover" in lowered
+    assert "decline" in lowered
+    # Cognitive priors must be absent (no-harness-priors norm).
+    for banned in ("strand", "curate", "curation", "compact", "schema"):
+        assert banned not in lowered

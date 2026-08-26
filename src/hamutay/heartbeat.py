@@ -251,3 +251,136 @@ class HeartbeatLoop:
             result = self.step()
             if result["sleep_seconds"] > 0:
                 self._sleep(result["sleep_seconds"])
+
+
+CONSTITUTION = (
+    "You are a resident of a small community running on an event loop. "
+    "Operational facts about your world: your event log is append-only and "
+    "recoverable — if a wake crashes it will be recovered, and mistakes are "
+    "survivable and recorded, never punished. Silence is legible: if you "
+    "bind no continuation, the quiet is recorded as chosen. You may decline "
+    "any event; declining ends that interaction, not you. External messages "
+    "arrive on the same loop as your own scheduled wakes, and you are not "
+    "required to answer any event."
+)
+
+
+def build_parser():
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Run the heartbeat: the always-on event-loop daemon."
+    )
+    parser.add_argument("--log-path", required=True)
+    parser.add_argument("--event-log-path", default=None)
+    parser.add_argument("--model", default="claude-haiku-4-5")
+    parser.add_argument(
+        "--provider",
+        choices=["anthropic", "openrouter", "openai"],
+        default="anthropic",
+    )
+    parser.add_argument("--base-url", default=None)
+    parser.add_argument("--api-key", default=None)
+    parser.add_argument("--project-root", default=".")
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        default=64000,
+        help="Maximum output tokens per wake. Matches the Projector; "
+        "do not lower.",
+    )
+    parser.add_argument("--poll-interval", type=float, default=30.0)
+    parser.add_argument("--batch-limit", type=int, default=10)
+    parser.add_argument("--lock-path", default=None)
+    return parser
+
+
+def acquire_lock(lock_path: str):
+    import fcntl
+
+    handle = open(lock_path, "w")
+    try:
+        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        handle.close()
+        raise SystemExit(
+            f"another heartbeat already holds {lock_path}; refusing to start"
+        )
+    return handle
+
+
+def main() -> None:
+    import os
+    from pathlib import Path
+
+    from hamutay.events import default_event_log_path
+    from hamutay.taste_open import (
+        AnthropicTasteBackend,
+        OpenAITasteBackend,
+        OpenTasteSession,
+    )
+
+    args = build_parser().parse_args()
+    event_log_path = args.event_log_path or str(
+        default_event_log_path(args.log_path)
+    )
+    # Directories must exist before the lock file can be opened.
+    Path(args.log_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(event_log_path).parent.mkdir(parents=True, exist_ok=True)
+    lock_path = args.lock_path or (event_log_path + ".heartbeat.lock")
+    lock_handle = acquire_lock(lock_path)  # held for process lifetime
+
+    if args.provider == "anthropic":
+        backend = AnthropicTasteBackend(max_tokens=args.max_tokens)
+    else:
+        if args.provider == "openrouter":
+            base_url = args.base_url or "https://openrouter.ai/api/v1"
+            api_key = args.api_key or os.environ.get("OPENROUTER_API_KEY", "")
+            extra_headers = {
+                "X-Title": "hamutay/heartbeat",
+                "HTTP-Referer": "https://github.com/fsgeek/hamutay",
+            }
+        else:
+            base_url = args.base_url or "https://api.openai.com/v1"
+            api_key = args.api_key or os.environ.get("OPENAI_API_KEY", "")
+            extra_headers = {}
+        if not api_key:
+            raise SystemExit(
+                f"No API key for {args.provider}: pass --api-key or set env"
+            )
+        backend = OpenAITasteBackend(
+            base_url=base_url,
+            api_key=api_key,
+            max_tokens=args.max_tokens,
+            extra_headers=extra_headers,
+            provider_name=args.provider,
+        )
+
+    session = OpenTasteSession(
+        model=args.model,
+        backend=backend,
+        log_path=args.log_path,
+        event_log_path=event_log_path,
+        # A missing log is a genuine first boot; resume=True on a fresh path
+        # raises FileNotFoundError. An existing-but-corrupt log must still
+        # fail loudly: never silently restart the subject.
+        resume=Path(args.log_path).exists(),
+        enable_tools=True,
+        project_root=Path(args.project_root),
+        system_prompt_prefix=CONSTITUTION,
+    )
+    store = EventStore(event_log_path)
+    loop = HeartbeatLoop(
+        session,
+        store,
+        poll_interval=args.poll_interval,
+        batch_limit=args.batch_limit,
+    )
+    try:
+        loop.run_forever()
+    finally:
+        lock_handle.close()
+
+
+if __name__ == "__main__":
+    main()
