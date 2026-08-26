@@ -191,3 +191,55 @@ def test_send_message_file(tmp_path):
     store = EventStore(str(default_event_log_path(str(log_path))))
     latest = store.latest_by_event_id()[written["event_id"]]
     assert latest["purpose"] == 'A letter with "quotes" and\nnewlines intact.'
+
+
+def test_send_attach_appends_after_message(tmp_path):
+    from hamutay.events import _handle_send, default_event_log_path
+
+    log_path = tmp_path / "session.jsonl"
+    letter = tmp_path / "letter.txt"
+    letter.write_text("Dear resident, the content.")
+    args = build_parser().parse_args(
+        [
+            "send",
+            "--log-path",
+            str(log_path),
+            "--message",
+            "A letter from the elder is attached.",
+            "--attach",
+            str(letter),
+        ]
+    )
+    written = _handle_send(args)
+    store = EventStore(str(default_event_log_path(str(log_path))))
+    purpose = store.latest_by_event_id()[written["event_id"]]["purpose"]
+    assert purpose.startswith("A letter from the elder is attached.")
+    assert "--- attached: letter.txt ---" in purpose
+    assert purpose.index("attached.") < purpose.index("Dear resident")
+
+
+def test_send_multiple_attachments_in_order(tmp_path):
+    from hamutay.events import _handle_send, default_event_log_path
+
+    log_path = tmp_path / "session.jsonl"
+    a = tmp_path / "a.txt"
+    b = tmp_path / "b.txt"
+    a.write_text("first file")
+    b.write_text("second file")
+    args = build_parser().parse_args(
+        [
+            "send",
+            "--log-path",
+            str(log_path),
+            "--message",
+            "Two files follow.",
+            "--attach",
+            str(a),
+            "--attach",
+            str(b),
+        ]
+    )
+    written = _handle_send(args)
+    store = EventStore(str(default_event_log_path(str(log_path))))
+    purpose = store.latest_by_event_id()[written["event_id"]]["purpose"]
+    assert purpose.index("first file") < purpose.index("second file")

@@ -1912,6 +1912,13 @@ def build_parser():
         help="Read the purpose text from a file (safe for quotes/newlines). "
         "Overrides --message.",
     )
+    send.add_argument(
+        "--attach",
+        action="append",
+        default=None,
+        help="Append a file's contents AFTER the message (repeatable, "
+        "in order). The message always comes first.",
+    )
     send.add_argument("--sender", default="tony")
     send.add_argument("--label", default=None)
     send.add_argument("--not-before", default=None)
@@ -1926,6 +1933,13 @@ def _handle_send(args) -> dict:
             message = f.read()
     if message is None:
         raise SystemExit("send requires --message or --message-file")
+    for attachment in getattr(args, "attach", None) or []:
+        from pathlib import Path as _Path
+
+        name = _Path(attachment).name
+        with open(attachment) as f:
+            # Message first, attachments after — always.
+            message += f"\n\n--- attached: {name} ---\n\n{f.read()}"
     event_log_path = args.event_log_path or str(
         default_event_log_path(args.log_path)
     )
