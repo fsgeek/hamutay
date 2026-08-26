@@ -374,3 +374,25 @@ def test_load_capability_profile_missing_entry_falls_back(tmp_path):
     profile, note = load_capability_profile("openrouter", "some/model", str(path))
     assert profile.supports_tools
     assert "no capabilities entry" in note
+
+
+def test_step_emits_completed_responses(tmp_path, capsys):
+    batch = {
+        "results": [
+            {
+                "status": "completed",
+                "response_text": "hello tony",
+                "event_id": "e1",
+            }
+        ],
+        "ran": 1,
+    }
+    loop, store, _ = _loop(
+        tmp_path,
+        summaries=[{"pending_runnable_count": 0, "pending_waiting_count": 0}],
+        batch=batch,
+    )
+    loop.step()
+    out = capsys.readouterr().out
+    assert "hello tony" in out
+    assert "wake_completed" in out

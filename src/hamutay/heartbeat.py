@@ -232,6 +232,17 @@ class HeartbeatLoop:
         # transitions.
         if batch.get("ran", 0):
             self._transition("active", reason="runnable_pending")
+        # Say the resident's words aloud: the human watching this terminal is
+        # a conversation participant, not just an operator.
+        for result in batch.get("results", []) or []:
+            if result.get("status") == "completed" and result.get("response_text"):
+                self._emit(
+                    {
+                        "heartbeat": "wake_completed",
+                        "event_id": result.get("event_id"),
+                        "response_text": result.get("response_text"),
+                    }
+                )
         summary = self._summarize(self._store.read_records(), now=now)
         if summary.get("pending_runnable_count", 0):
             self._transition("active", reason="runnable_pending")
