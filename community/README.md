@@ -15,6 +15,14 @@ Layout:
   `send` appends to it, the daemon reads it)
 - `heartbeat/CHECKPOINTS.txt` — committed digest ledger
 
+Provider note: the resident runs Haiku 4.5 **via OpenRouter**
+(`--provider openrouter --model anthropic/claude-haiku-4-5`). The Anthropic
+key is deliberately disabled as a billing firebreak — do not "fix" this by
+restoring it. The daemon auto-loads `experiments/taste_open/capabilities.json`
+and sets `provider.require_parameters` for OpenRouter, so tool_choice cannot
+be silently dropped (the incantation that kept evaporating is now baked in).
+`OPENROUTER_API_KEY` belongs in `~/.config/hamutay/heartbeat.env` (mode 600).
+
 Operations:
 - start: `deploy/run-heartbeat.sh` (or the systemd unit,
   `deploy/hamutay-heartbeat.service`)

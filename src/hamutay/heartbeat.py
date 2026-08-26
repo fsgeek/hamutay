@@ -271,6 +271,45 @@ CONSTITUTION = (
 )
 
 
+DEFAULT_CAPABILITIES_FILE = "experiments/taste_open/capabilities.json"
+
+
+def load_capability_profile(provider: str, model: str, capabilities_file=None):
+    """Resolve the tool-calling capability profile for a provider:model pair.
+
+    OpenRouter models need an explicit tool_choice mode or the wake dies with
+    "no tool_calls returned before think_and_respond" — the incantation that
+    keeps evaporating from shell history. The daemon therefore loads the
+    registry by default instead of relying on anyone remembering a flag.
+    Returns (profile, note); the note is emitted so the resolution is legible.
+    """
+    from hamutay.taste_open import CapabilityProfile
+
+    path = capabilities_file or DEFAULT_CAPABILITIES_FILE
+    key = f"{provider}:{model}"
+    try:
+        with open(path) as f:
+            registry = json.load(f)
+    except FileNotFoundError:
+        return (
+            CapabilityProfile(),
+            f"capabilities file {path} not found; using defaults for {key}",
+        )
+    entry = registry.get(key)
+    if entry is None:
+        return (
+            CapabilityProfile(),
+            f"no capabilities entry for {key} in {path}; using defaults",
+        )
+    profile = CapabilityProfile.from_dict(entry)
+    if not profile.supports_tools:
+        raise SystemExit(f"Capabilities mark {key} as no-tools; aborting")
+    return (
+        profile,
+        f"capabilities loaded for {key}: tool_choice={profile.tool_choice_mode}",
+    )
+
+
 def build_parser():
     import argparse
 
@@ -298,6 +337,18 @@ def build_parser():
     parser.add_argument("--poll-interval", type=float, default=30.0)
     parser.add_argument("--batch-limit", type=int, default=10)
     parser.add_argument("--lock-path", default=None)
+    parser.add_argument(
+        "--capabilities-file",
+        default=None,
+        help="Capability registry (default: experiments/taste_open/"
+        "capabilities.json for non-anthropic providers).",
+    )
+    parser.add_argument(
+        "--no-openrouter-require-parameters",
+        action="store_true",
+        help="Disable provider.require_parameters (on by default for "
+        "openrouter so tool_choice is not silently dropped upstream).",
+    )
     return parser
 
 
@@ -354,12 +405,21 @@ def main() -> None:
             raise SystemExit(
                 f"No API key for {args.provider}: pass --api-key or set env"
             )
+        capability, cap_note = load_capability_profile(
+            args.provider, args.model, args.capabilities_file
+        )
+        HeartbeatLoop._emit({"heartbeat": "capabilities", "note": cap_note})
         backend = OpenAITasteBackend(
             base_url=base_url,
             api_key=api_key,
             max_tokens=args.max_tokens,
             extra_headers=extra_headers,
             provider_name=args.provider,
+            capability=capability,
+            openrouter_require_parameters=(
+                args.provider == "openrouter"
+                and not args.no_openrouter_require_parameters
+            ),
         )
 
     session = OpenTasteSession(

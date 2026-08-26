@@ -1684,7 +1684,14 @@ Expected: no competing heartbeat or live experiment on the same logs. If anythin
 
 - [ ] **Step 2: Boot into quiet**
 
-Run: `mkdir -p community/heartbeat && uv run python -m hamutay.heartbeat --log-path community/heartbeat/session.jsonl --project-root .` (foreground, watched)
+Run: `mkdir -p community/heartbeat && uv run python -m hamutay.heartbeat --log-path community/heartbeat/session.jsonl --project-root . --provider openrouter --model anthropic/claude-haiku-4-5` (foreground, watched)
+
+(Provider amendment, 2026-08-26: the Anthropic key is a deliberate billing
+firebreak — disabled, not broken. The resident runs Haiku via OpenRouter;
+the daemon auto-loads the capabilities registry and sets
+`provider.require_parameters` so tool_choice survives the route. Expect a
+`{"heartbeat": "capabilities", ...}` ops line naming
+`openrouter:anthropic/claude-haiku-4-5` with `tool_choice=function_object`.)
 Expected: process stays alive and prints flushed JSON ops lines to stdout — first `{"heartbeat": "boot_report", "orphaned_running_recovered": 0, "lost_continuations_recovered": 0}`, then a `waking` transition, then `{"heartbeat": "quiet", "reason": "awaiting_first_event", ...}`. The same records appear in `community/heartbeat/session.events.jsonl`. No API calls occur while quiet.
 
 - [ ] **Step 3: First word** (second terminal)

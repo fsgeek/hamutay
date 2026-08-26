@@ -7,5 +7,6 @@ mkdir -p community/heartbeat
 nohup uv run python -m hamutay.heartbeat \
   --log-path community/heartbeat/session.jsonl \
   --project-root . \
+  --provider openrouter --model anthropic/claude-haiku-4-5 \
   >> community/heartbeat/daemon.out 2>&1 &
 echo "heartbeat started, pid $!"

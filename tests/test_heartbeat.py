@@ -331,3 +331,46 @@ def test_constitution_is_operational_not_cognitive():
     # Cognitive priors must be absent (no-harness-priors norm).
     for banned in ("strand", "curate", "curation", "compact", "schema"):
         assert banned not in lowered
+
+
+def test_heartbeat_parser_capability_flags():
+    from hamutay.heartbeat import build_parser
+
+    args = build_parser().parse_args(["--log-path", "x.jsonl"])
+    assert args.capabilities_file is None
+    assert args.no_openrouter_require_parameters is False
+
+
+def test_load_capability_profile_for_the_resident():
+    from hamutay.heartbeat import load_capability_profile
+
+    profile, note = load_capability_profile(
+        "openrouter",
+        "anthropic/claude-haiku-4-5",
+        "experiments/taste_open/capabilities.json",
+    )
+    assert profile.supports_tools
+    assert profile.tool_choice_mode == "function_object"
+    assert "anthropic/claude-haiku-4-5" in note
+
+
+def test_load_capability_profile_missing_file_falls_back(tmp_path):
+    from hamutay.heartbeat import load_capability_profile
+
+    profile, note = load_capability_profile(
+        "openrouter", "some/model", str(tmp_path / "nope.json")
+    )
+    assert profile.supports_tools
+    assert "not found" in note
+
+
+def test_load_capability_profile_missing_entry_falls_back(tmp_path):
+    import json as _json
+
+    from hamutay.heartbeat import load_capability_profile
+
+    path = tmp_path / "caps.json"
+    path.write_text(_json.dumps({"openrouter:other/model": {"supports_tools": True}}))
+    profile, note = load_capability_profile("openrouter", "some/model", str(path))
+    assert profile.supports_tools
+    assert "no capabilities entry" in note
