@@ -5,11 +5,51 @@ The log is the life; the process is weather. Boot always runs recovery.
 """
 from __future__ import annotations
 
+from uuid import uuid4
+
 from hamutay.events import (
     EVENT_TYPE_REFLECTION,
     EventStore,
     utc_now_iso,
 )
+
+
+def append_heartbeat_status(
+    store: EventStore,
+    *,
+    status: str,
+    reason: str,
+    detail: dict | None = None,
+) -> dict:
+    """Record a daemon state transition. Not an event; carries no event_id."""
+    record: dict = {
+        "record_type": "heartbeat_status",
+        "heartbeat_record_id": str(uuid4()),
+        "status": str(status),
+        "reason": str(reason),
+        "created_at": utc_now_iso(),
+    }
+    if detail is not None:
+        record["detail"] = detail
+    store.append(record)
+    return record
+
+
+def derive_quiet_reason(records: list[dict]) -> str:
+    """v1 heuristic (declared in the spec): expiry beats novelty beats choice."""
+    latest: dict[str | None, dict] = {}
+    completed_seen = False
+    for record in records:
+        if record.get("record_type") != "event_status":
+            continue
+        latest[record.get("event_id")] = record
+        if record.get("status") == "completed":
+            completed_seen = True
+    if any(r.get("status") == "expired" for r in latest.values()):
+        return "starved_expired"
+    if not completed_seen:
+        return "awaiting_first_event"
+    return "chosen_quiet"
 
 
 def recover_orphaned_running(store: EventStore) -> list[dict]:
