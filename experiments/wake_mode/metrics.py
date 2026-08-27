@@ -14,8 +14,8 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-RUNS = Path("experiments/wake_mode/runs")
-NAME = re.compile(r"^(terminal|natural)_(haiku|fable)_(\d+)\.jsonl$")
+RUNS = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("experiments/wake_mode/runs")
+NAME = re.compile(r"^(terminal|natural)_(.+)_(\d+)\.jsonl$")
 ACTING_TOOLS = {"read", "bash", "search_project"}
 POINTER_TARGETS = {2: "ayllu-story.md", 3: "original-taste-open-468.txt"}
 WORK_TARGETS = ("heartbeat.py", "derive_quiet_reason")
