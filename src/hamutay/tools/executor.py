@@ -121,9 +121,19 @@ class ToolExecutor:
     def execute(self, tool_name: str, tool_input: dict) -> dict:
         """Dispatch a tool call and return its result dict."""
         start = time.monotonic()
-        reason = tool_input.get("reason")
+        if not isinstance(tool_input, dict):
+            # A malformed call is still a call: record it, don't crash the wake.
+            tool_input = {"_malformed_input": repr(tool_input)}
+            reason = None
+            result: dict = {"error": f"{tool_name}: tool input must be an object"}
+            tool_name_for_dispatch = None
+        else:
+            reason = tool_input.get("reason")
+            tool_name_for_dispatch = tool_name
 
-        if tool_name == "edit":
+        if tool_name_for_dispatch is None:
+            pass
+        elif tool_name == "edit":
             result = tool_edit(tool_input, project_root=self._project_root)
         elif tool_name == "write":
             result = tool_write(tool_input, project_root=self._project_root)
@@ -218,8 +228,12 @@ class ToolExecutor:
         Last write wins within a cycle: a key written after being deleted is
         written; a key deleted after being written is deleted.
         """
-        updates = tool_input.get("updates") or {}
-        deletions = tool_input.get("deleted_regions") or []
+        # `x or default` would erase the type of a falsy wrong-type value
+        # ([] for updates, "" for deleted_regions); only None means absent.
+        updates = tool_input.get("updates")
+        updates = {} if updates is None else updates
+        deletions = tool_input.get("deleted_regions")
+        deletions = [] if deletions is None else deletions
         if not isinstance(updates, dict):
             return {"error": "update_state: updates must be an object"}
         if not isinstance(deletions, list) or not all(

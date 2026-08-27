@@ -1582,10 +1582,19 @@ class OpenAITasteBackend:
 
             message = choice.get("message", {})
             content = message.get("content")
+            content_text = self._content_text(content)
             tool_calls = message.get("tool_calls") or []
 
             if not tool_calls:
-                raw_output: dict = {"response": content if isinstance(content, str) else ""}
+                if raw_stop != "stop":
+                    # Only the trained turn-ender is terminal. content_filter,
+                    # unknown, etc. are not a reply; refusing beats recording
+                    # a silent non-answer as the resident's chosen words.
+                    raise RuntimeError(
+                        f"OpenAI backend: tool-free reply with finish_reason="
+                        f"{raw_stop!r}; only 'stop' ends a natural wake"
+                    )
+                raw_output: dict = {"response": content_text}
                 if tool_executor is not None:
                     pending = tool_executor.pending_state_updates
                     raw_output.update(pending["updates"])
@@ -1607,8 +1616,8 @@ class OpenAITasteBackend:
                     "Model called tools but no tool_executor was provided "
                     "to resolve them"
                 )
-            if isinstance(content, str) and content.strip():
-                interim_text.append(content)
+            if content_text.strip():
+                interim_text.append(content_text)
             conversation.append(
                 {"role": "assistant", "content": content, "tool_calls": tool_calls}
             )
@@ -1645,6 +1654,24 @@ class OpenAITasteBackend:
                 "parameters": OPEN_SCHEMA,
             },
         }
+
+    @staticmethod
+    def _content_text(content: Any) -> str:
+        """Flatten OpenAI-style message content to text.
+
+        Providers return either a string or a list of content parts
+        ({"type": "text", "text": ...}); non-text parts are dropped.
+        """
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            # Newline-joined so part boundaries survive in the record.
+            return "\n".join(
+                part.get("text", "")
+                for part in content
+                if isinstance(part, dict) and part.get("type", "text") == "text"
+            )
+        return ""
 
     @staticmethod
     def _openai_tool_def(tool: dict) -> dict:
@@ -2572,6 +2599,7 @@ class OpenTasteSession:
             continuity_curation=continuity_curation,
             state_validation=state_validation,
             state_merge_diagnostics=state_merge_diagnostics,
+            interim_text=result.interim_text,
         )
 
         if self._event_store is not None and tool_executor is not None:
@@ -2934,6 +2962,7 @@ class OpenTasteSession:
         protocol_recovery: dict | None = None,
         state_validation: dict | None = None,
         state_merge_diagnostics: dict | None = None,
+        interim_text: list[str] | None = None,
     ) -> None:
         """Append full record to JSONL log. Captures everything."""
         if not self._log_path:
@@ -2953,6 +2982,9 @@ class OpenTasteSession:
             "model": self._model,
             "launch": self._launch_config,
             "wake_mode": self._wake_mode,
+            # Natural mode: assistant text emitted alongside tool calls before
+            # the final reply. Durable here; never the response, never state.
+            "interim_text": interim_text,
             # Inputs
             "user_message": user_message,
             "system_prompt": system_prompt,
