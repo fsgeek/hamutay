@@ -60,7 +60,9 @@ _CAPABILITY: dict[str, str] = {
 }
 
 # Keys the state protocol owns; update_state may not write them.
-_STATE_PROTOCOL_KEYS = frozenset({"response", "updated_regions", "deleted_regions", "cycle"})
+_STATE_PROTOCOL_KEYS = frozenset(
+    {"response", "updated_regions", "deleted_regions", "cycle", "_wake_shape"}
+)
 
 
 class ToolExecutor:

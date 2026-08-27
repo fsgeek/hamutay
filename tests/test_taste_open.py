@@ -478,7 +478,8 @@ class TestExchangeCycleRollback:
             if line.strip()
         ]
         diagnostic = records[-1]["state_merge_diagnostics"]
-        assert diagnostic["protected_fields"] == ["_activity_log", "cycle"]
+        # _wake_shape is framework provenance, always protected (8-27).
+        assert diagnostic["protected_fields"] == ["_activity_log", "_wake_shape", "cycle"]
         assert diagnostic["ignored_protected_updates"] == [
             "_activity_log",
             "cycle",

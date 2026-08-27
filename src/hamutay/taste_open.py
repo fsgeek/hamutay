@@ -2093,6 +2093,11 @@ def resolve_launch(
     keys = [key for key in _LAUNCH_KEYS if key in explicit]
     resolved: dict = {}
     notes: list[str] = []
+    if inherited is not None and "wake_mode" in keys and "wake_mode" not in inherited:
+        # A resumed subject whose inherited launch predates wake shapes IS a
+        # terminal-shape subject; caller defaults are for brand-new subjects
+        # only. (Codex validation, 8-27.)
+        inherited = {**inherited, "wake_mode": "terminal"}
     for key in keys:
         given = explicit.get(key)
         if inherited is not None and key in inherited:
@@ -2198,9 +2203,13 @@ class OpenTasteSession:
         self._last_protocol_recovery: dict | None = None
         self._state_validator = state_validator
         self._state_repair_builder = state_repair_builder
+        # _wake_shape is framework provenance (which physics a cycle ran
+        # under); the model may read it, never write, spoof, or shed it.
+        # Attempts are ignored and logged by the existing protected-field
+        # machinery. (Codex validation, 8-27.)
         self._protected_state_fields = frozenset(
             str(field) for field in protected_state_fields or ()
-        )
+        ) | {"_wake_shape"}
         self._last_state_validation: dict | None = None
         self._session_start = datetime.now(timezone.utc)
         self._last_cycle_time: datetime | None = None
