@@ -1959,7 +1959,13 @@ def _curator_context_from_record(record: dict | None) -> dict | None:
 DEFAULT_MODEL = "claude-sonnet-4-6"
 DEFAULT_PROVIDER = "anthropic"
 DEFAULT_CAPABILITIES_FILE = "experiments/taste_open/capabilities.json"
-_LAUNCH_KEYS = ("model", "provider", "tools")
+_LAUNCH_KEYS = ("model", "provider", "tools", "wake_mode")
+_LAUNCH_DEFAULTS = {
+    "model": DEFAULT_MODEL,
+    "provider": DEFAULT_PROVIDER,
+    "tools": False,
+    "wake_mode": "terminal",
+}
 
 
 def infer_launch_from_log(log_path: str) -> dict | None:
@@ -1986,6 +1992,9 @@ def infer_launch_from_log(log_path: str) -> dict | None:
         record = json.loads(line)
         if record.get("state") is None:
             continue
+        # Wake shape is a top-level record field (written since 2026-08-27);
+        # every record before that ran the terminal shape.
+        wake_mode = record.get("wake_mode") or "terminal"
         launch = record.get("launch")
         if isinstance(launch, dict) and launch.get("model"):
             resolved = dict(launch)
@@ -1993,6 +2002,7 @@ def infer_launch_from_log(log_path: str) -> dict | None:
             resolved.setdefault(
                 "provider", "openrouter" if "/" in resolved["model"] else DEFAULT_PROVIDER
             )
+            resolved["wake_mode"] = wake_mode
             resolved["source_cycle"] = record.get("cycle", 0)
             resolved["inferred"] = False
             return resolved
@@ -2004,6 +2014,7 @@ def infer_launch_from_log(log_path: str) -> dict | None:
             "model": model,
             "provider": "openrouter" if "/" in model else DEFAULT_PROVIDER,
             "tools": "- bash(command" in prompt,
+            "wake_mode": wake_mode,
             "capabilities_file": None,
             "openrouter_require_parameters": None,
             "source_cycle": record.get("cycle", 0),
@@ -2013,7 +2024,7 @@ def infer_launch_from_log(log_path: str) -> dict | None:
 
 
 def resolve_launch(
-    explicit: dict, inherited: dict | None,
+    explicit: dict, inherited: dict | None, defaults: dict | None = None,
 ) -> tuple[dict, list[str]]:
     """Merge CLI flags with what the log says the session was.
 
@@ -2024,10 +2035,15 @@ def resolve_launch(
     provider, or hands is a decision, and it must be loud. New sessions (no
     ``inherited``) take the historical defaults.
     """
-    defaults = {"model": DEFAULT_MODEL, "provider": DEFAULT_PROVIDER, "tools": False}
+    # The caller chooses what a NEW subject gets (the heartbeat defaults to
+    # the natural wake shape; the interactive harness keeps terminal). Only
+    # keys the caller asks about are resolved, so older call sites keep
+    # their historical three-key result.
+    effective_defaults = {**_LAUNCH_DEFAULTS, **(defaults or {})}
+    keys = [key for key in _LAUNCH_KEYS if key in explicit]
     resolved: dict = {}
     notes: list[str] = []
-    for key in _LAUNCH_KEYS:
+    for key in keys:
         given = explicit.get(key)
         if inherited is not None and key in inherited:
             if given is None:
@@ -2035,20 +2051,24 @@ def resolve_launch(
             else:
                 resolved[key] = given
                 if given != inherited[key]:
+                    label = "WAKE SHAPE CHANGE" if key == "wake_mode" else "SUBSTRATE CHANGE"
                     notes.append(
-                        f"SUBSTRATE CHANGE: log's cycle {inherited.get('source_cycle')} "
+                        f"{label}: log's cycle {inherited.get('source_cycle')} "
                         f"ran with {key}={inherited[key]!r}; launching with {key}={given!r}"
                     )
         else:
-            resolved[key] = defaults[key] if given is None else given
+            resolved[key] = effective_defaults[key] if given is None else given
     if inherited is not None:
         how = "inferred from" if inherited.get("inferred") else "recorded in"
         notes.append(
             f"Substrate inherited from log (cycle {inherited.get('source_cycle')}, "
             f"{how} the record): "
-            + ", ".join(f"{k}={inherited.get(k)!r}" for k in _LAUNCH_KEYS)
+            + ", ".join(f"{k}={inherited.get(k)!r}" for k in keys)
         )
     return resolved, notes
+
+
+LAUNCH_CHANGE_LABELS = ("SUBSTRATE CHANGE", "WAKE SHAPE CHANGE")
 
 
 class OpenTasteSession:
@@ -2513,6 +2533,25 @@ class OpenTasteSession:
             self._state["_unprocessed_request"] = result.unprocessed_request
         else:
             self._state.pop("_unprocessed_request", None)
+
+        # Wake-shape marker (asked for by the Fable resident, c18): an
+        # in-band field naming which physics this cycle ran under and since
+        # when, so no future instance has to remember it from lore.
+        # Framework-authored (underscore), carried forward, rewritten only
+        # when the shape changes.
+        # Terminal-only subjects that have never switched carry nothing — the
+        # elder's 478 cycles and every experiment log stay byte-comparable.
+        # The marker appears on the first non-terminal wake and follows
+        # every change of shape from then on, including back to terminal.
+        marker = self._state.get("_wake_shape")
+        has_marker = isinstance(marker, dict)
+        if (self._wake_mode != "terminal" or has_marker) and (
+            not has_marker or marker.get("mode") != self._wake_mode
+        ):
+            self._state["_wake_shape"] = {
+                "mode": self._wake_mode,
+                "since_cycle": self._cycle,
+            }
 
         self._last_cycle_time = datetime.now(timezone.utc)
 
@@ -3174,7 +3213,7 @@ def main():
             args.openrouter_require_parameters = True
             launch_notes.append("OpenRouter provider.require_parameters defaulted on")
     for note in launch_notes:
-        print(("!!! " if note.startswith("SUBSTRATE CHANGE") else "") + note)
+        print(("!!! " if note.startswith(LAUNCH_CHANGE_LABELS) else "") + note)
     launch_config = {
         "model": args.model,
         "provider": args.provider,

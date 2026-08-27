@@ -187,6 +187,9 @@ def test_fresh_daemon_boots_quiet_without_calling_the_provider(tmp_path):
         output = _stop_daemon(process)
 
     ops = [json.loads(line) for line in output.splitlines() if line.strip()]
+    # Pre-boot notices (capability resolution, launch/substrate inheritance)
+    # are informational and precede the boot report since 2026-08-27.
+    ops = [op for op in ops if op["heartbeat"] not in ("capabilities", "launch")]
     assert ops[0]["heartbeat"] == "boot_report"
     assert [record["heartbeat"] for record in ops[1:3]] == ["waking", "quiet"]
 

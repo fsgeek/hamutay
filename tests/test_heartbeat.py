@@ -295,8 +295,11 @@ def test_heartbeat_parser_defaults():
     assert args.max_tokens == 64000
     assert args.poll_interval == 30.0
     assert args.batch_limit == 10
-    assert args.model == "claude-haiku-4-5"
-    assert args.provider == "anthropic"
+    # Substrate flags default to "inherit from the log"; a fresh log takes
+    # HEARTBEAT_LAUNCH_DEFAULTS (see tests/test_wake_mode_defaults.py).
+    assert args.model is None
+    assert args.provider is None
+    assert args.wake_mode is None
 
 
 def test_no_constitution_bypass_exists():

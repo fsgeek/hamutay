@@ -287,6 +287,46 @@ CONSTITUTION = (
 
 DEFAULT_CAPABILITIES_FILE = "experiments/taste_open/capabilities.json"
 
+# What a brand-new resident gets when no flag is given. Haiku via OpenRouter
+# (the Anthropic key is a disabled billing firebreak — README), tools on
+# (a resident has hands), and the natural wake shape (pre-registered
+# 2026-08-27: the terminal shape manufactures the courtier freeze).
+HEARTBEAT_LAUNCH_DEFAULTS = {
+    "model": "anthropic/claude-haiku-4-5",
+    "provider": "openrouter",
+    "tools": True,
+    "wake_mode": "natural",
+}
+
+
+def resolve_heartbeat_launch(args) -> tuple[dict, list[str]]:
+    """Decide the resident's substrate and wake shape from flags + log.
+
+    A restart inherits whatever the log last ran (model, provider, tools,
+    wake shape); explicit flags override, loudly; a fresh log takes
+    HEARTBEAT_LAUNCH_DEFAULTS. Returns (launch, notes) — notes starting with
+    SUBSTRATE CHANGE / WAKE SHAPE CHANGE mean a running subject is being
+    changed on purpose.
+    """
+    from pathlib import Path
+
+    from hamutay.taste_open import infer_launch_from_log, resolve_launch
+
+    inherited = (
+        infer_launch_from_log(args.log_path) if Path(args.log_path).exists() else None
+    )
+    launch, notes = resolve_launch(
+        {
+            "model": args.model,
+            "provider": args.provider,
+            "tools": True,
+            "wake_mode": args.wake_mode,
+        },
+        inherited,
+        defaults=HEARTBEAT_LAUNCH_DEFAULTS,
+    )
+    return launch, notes
+
 
 def load_capability_profile(provider: str, model: str, capabilities_file=None):
     """Resolve the tool-calling capability profile for a provider:model pair.
@@ -332,11 +372,33 @@ def build_parser():
     )
     parser.add_argument("--log-path", required=True)
     parser.add_argument("--event-log-path", default=None)
-    parser.add_argument("--model", default="claude-haiku-4-5")
+    # Substrate and wake shape default to "whatever the log says": a restart
+    # continues the subject as it was. Only an explicit flag changes a
+    # running subject, and that change is printed loudly. A brand-new log
+    # gets HEARTBEAT_LAUNCH_DEFAULTS. (Tony's law: make the desired behavior
+    # the default; the human should never have to remember a flag.)
+    parser.add_argument(
+        "--model",
+        default=None,
+        help=f"Inherited from the log on restart; new logs default to "
+        f"{HEARTBEAT_LAUNCH_DEFAULTS['model']}.",
+    )
     parser.add_argument(
         "--provider",
         choices=["anthropic", "openrouter", "openai"],
-        default="anthropic",
+        default=None,
+        help=f"Inherited from the log on restart; new logs default to "
+        f"{HEARTBEAT_LAUNCH_DEFAULTS['provider']}.",
+    )
+    parser.add_argument(
+        "--wake-mode",
+        choices=["terminal", "natural"],
+        default=None,
+        help="Wake shape. terminal: think_and_respond ends the wake. natural: "
+        "the final text reply ends the wake and state goes through the "
+        "update_state tool. Inherited from the log on restart; new logs "
+        f"default to {HEARTBEAT_LAUNCH_DEFAULTS['wake_mode']}. Changing a "
+        "running subject's shape prints WAKE SHAPE CHANGE.",
     )
     parser.add_argument("--base-url", default=None)
     parser.add_argument("--api-key", default=None)
@@ -401,6 +463,18 @@ def main() -> None:
     lock_path = args.lock_path or (event_log_path + ".heartbeat.lock")
     lock_handle = acquire_lock(lock_path)  # held for process lifetime
 
+    launch, launch_notes = resolve_heartbeat_launch(args)
+    args.model, args.provider = launch["model"], launch["provider"]
+    wake_mode = launch["wake_mode"]
+    for note in launch_notes:
+        loud = note.startswith(("SUBSTRATE CHANGE", "WAKE SHAPE CHANGE"))
+        HeartbeatLoop._emit({"heartbeat": "launch", "note": ("!!! " if loud else "") + note})
+    if wake_mode == "natural" and args.provider == "anthropic":
+        raise SystemExit(
+            "wake_mode=natural is not implemented on the Anthropic-direct "
+            "backend yet; use --provider openrouter or --wake-mode terminal"
+        )
+
     if args.provider == "anthropic":
         backend = AnthropicTasteBackend(max_tokens=args.max_tokens)
     else:
@@ -434,6 +508,7 @@ def main() -> None:
                 args.provider == "openrouter"
                 and not args.no_openrouter_require_parameters
             ),
+            wake_mode=wake_mode,
         )
 
     session = OpenTasteSession(
@@ -448,6 +523,21 @@ def main() -> None:
         enable_tools=True,
         project_root=Path(args.project_root),
         system_prompt_prefix=CONSTITUTION,
+        wake_mode=wake_mode,
+        launch_config={
+            "model": args.model,
+            "provider": args.provider,
+            "tools": True,
+            "capabilities_file": (
+                args.capabilities_file
+                or (DEFAULT_CAPABILITIES_FILE if args.provider != "anthropic" else None)
+            ),
+            "openrouter_require_parameters": (
+                args.provider == "openrouter"
+                and not args.no_openrouter_require_parameters
+            ),
+            "wake_mode": wake_mode,
+        },
     )
     store = EventStore(event_log_path)
     loop = HeartbeatLoop(
