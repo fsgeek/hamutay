@@ -197,6 +197,77 @@ results you can use; tools called in the same step as think_and_respond \
 still run, but their results don't come back to you."""
 
 
+# Natural wake mode (docs/wake-mode-preregistration-20260827.md). Same
+# operational facts as the terminal-mode text, reshaped for a wake that
+# ends on a text reply instead of a terminal tool. No priors about what to
+# keep — the object is still the model's to design.
+_SYSTEM_PROMPT_NATURAL = """\
+Each cycle you may use tools, and when you are done you reply in plain \
+text. Your final text is your response to the user, and it ends the \
+cycle.
+
+Separately, you carry a state object between cycles. It is yours: add \
+whatever fields help you think, remember, or track what matters. You \
+change it with the update_state tool — set top-level keys, or list keys \
+to delete. Any key you don't mention carries forward unchanged. If you \
+never call update_state, your state is unchanged this cycle, and that is \
+recorded. If this is the first cycle, everything you set is new.
+
+Deleted keys are not lost — every prior state is preserved in the log, \
+and may resurface through involuntary memory. Deletion is shedding, not \
+destruction.
+
+A prior instance of you may have written the object you're receiving, \
+or this may be the first cycle and there's nothing yet. Either way, \
+what you build here is for whoever comes next."""
+
+
+def _natural_tool_guidance() -> str:
+    """Derive the natural-mode tool text from the terminal text.
+
+    Derived, not copied, so the two modes cannot drift apart in the parts
+    they share. Every replacement is asserted to have matched.
+    """
+    text = _TOOL_GUIDANCE
+    replacements = [
+        (
+            "Alongside think_and_respond you may call these tools before "
+            "producing your state update:",
+            "You may call these tools as many times as you need before your "
+            "final text reply:",
+        ),
+        (
+            "### Shell",
+            "### State\n\n"
+            "- update_state(updates?, deleted_regions?): Set top-level keys in "
+            "your carried state and/or delete keys. Callable any number of "
+            "times in a cycle; later writes win. Keys you don't mention carry "
+            "forward.\n\n"
+            "### Shell",
+        ),
+        (
+            "think_and_respond ends the cycle: after it, you get no further "
+            "turns and see no further results. Tools called before "
+            "think_and_respond return results you can use; tools called in "
+            "the same step as think_and_respond still run, but their results "
+            "don't come back to you.",
+            "Your final text reply ends the cycle: after it, you get no "
+            "further turns and see no further results. Every tool call "
+            "returns its result to you before you reply.",
+        ),
+    ]
+    for old, new in replacements:
+        if old not in text:
+            raise RuntimeError(f"natural-mode guidance anchor missing: {old[:40]!r}")
+        text = text.replace(old, new)
+    if "think_and_respond" in text:
+        raise RuntimeError("natural-mode tool guidance still mentions the terminal tool")
+    return text
+
+
+_TOOL_GUIDANCE_NATURAL = _natural_tool_guidance()
+
+
 # Multi-turn budget accounting. The model limit is the hard API ceiling
 # for the long-context Anthropic models we target; the soft threshold is
 # where we force a terminal turn before the wall. Threshold values are
@@ -337,6 +408,9 @@ class ExchangeResult:
     # *declared* rather than silent. Single-cycle, like tool_activity: a
     # list because the model may bundle on more than one turn per cycle.
     unprocessed_request: list[dict] | None = None
+    # Natural wake mode: assistant text emitted alongside tool calls before
+    # the final reply. Logged, never the response — declared, not dropped.
+    interim_text: list[str] | None = None
 
 
 @dataclass
@@ -1028,7 +1102,14 @@ class OpenAITasteBackend:
         openrouter_transforms: list[str] | None = None,
         max_retries: int = 3,
         retry_base_delay_s: float = 0.5,
+        wake_mode: str = "terminal",
     ):
+        if wake_mode not in ("terminal", "natural"):
+            raise ValueError(f"wake_mode must be terminal|natural, got {wake_mode!r}")
+        # terminal: think_and_respond is the forced, wake-ending tool.
+        # natural: the reply is the final text; state is the update_state tool.
+        # See docs/wake-mode-preregistration-20260827.md.
+        self.wake_mode = wake_mode
         self._base_url = base_url
         self._api_key = api_key or ""
         self._timeout = timeout
@@ -1108,6 +1189,14 @@ class OpenAITasteBackend:
         tool_executor: Any | None = None,
     ) -> ExchangeResult:
         del experiment_label  # not consumed by OpenAI backend (protocol requirement)
+        if self.wake_mode == "natural":
+            return self._call_natural(
+                model=model,
+                system=system,
+                messages=messages,
+                extra_tools=extra_tools or [],
+                tool_executor=tool_executor,
+            )
         if extra_tools:
             return self._call_multi_turn(
                 model=model,
@@ -1445,6 +1534,107 @@ class OpenAITasteBackend:
             f"within {max_turns} turns"
         )
 
+    def _call_natural(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        extra_tools: list[dict],
+        tool_executor: Any | None,
+    ) -> ExchangeResult:
+        """Natural wake: tools until done, then text; the text ends the wake.
+
+        No think_and_respond tool is offered and tool_choice is always auto —
+        the trained turn-ender (a text reply with finish_reason=stop) is the
+        terminal signal. State changes arrive through the ordinary
+        update_state tool, buffered in the executor and merged into
+        raw_output here, so the session's state path is unchanged.
+        """
+        conversation = [{"role": "system", "content": system}] + list(messages)
+        tools = [self._openai_tool_def(tool) for tool in extra_tools]
+        total_input = 0
+        total_output = 0
+        interim_text: list[str] = []
+        max_turns = 20
+
+        for _turn_index in range(max_turns):
+            payload: dict = {
+                "model": model,
+                "max_tokens": self._max_tokens,
+                "messages": conversation,
+                "tool_choice": "auto",
+            }
+            if tools:
+                payload["tools"] = tools
+            self._apply_openai_payload_options(payload)
+
+            data = self._post_chat(payload)
+            choice = data["choices"][0]
+            raw_stop: str = choice.get("finish_reason") or "unknown"
+            if raw_stop == "length":
+                raise RuntimeError(
+                    "OpenAI backend: finish_reason=length; the reply was "
+                    "truncated and is not trusted"
+                )
+            usage = data.get("usage", {})
+            total_input += usage.get("prompt_tokens", 0) or 0
+            total_output += usage.get("completion_tokens", 0) or 0
+
+            message = choice.get("message", {})
+            content = message.get("content")
+            tool_calls = message.get("tool_calls") or []
+
+            if not tool_calls:
+                raw_output: dict = {"response": content if isinstance(content, str) else ""}
+                if tool_executor is not None:
+                    pending = tool_executor.pending_state_updates
+                    raw_output.update(pending["updates"])
+                    if pending["deleted_regions"]:
+                        raw_output["deleted_regions"] = pending["deleted_regions"]
+                return ExchangeResult(
+                    raw_output=raw_output,
+                    stop_reason="end_turn" if raw_stop == "stop" else raw_stop,
+                    input_tokens=total_input,
+                    output_tokens=total_output,
+                    tool_activity=(
+                        tool_executor.activity_log if tool_executor else None
+                    ),
+                    interim_text=interim_text or None,
+                )
+
+            if tool_executor is None:
+                raise RuntimeError(
+                    "Model called tools but no tool_executor was provided "
+                    "to resolve them"
+                )
+            if isinstance(content, str) and content.strip():
+                interim_text.append(content)
+            conversation.append(
+                {"role": "assistant", "content": content, "tool_calls": tool_calls}
+            )
+            for tc in tool_calls:
+                fn = tc.get("function", {})
+                name = fn.get("name")
+                tool_call_id = tc.get("id")
+                if not name or not tool_call_id:
+                    raise RuntimeError("OpenAI backend: tool_call missing name or id")
+                arguments = self._parse_tool_arguments(name, fn.get("arguments", ""))
+                result = tool_executor.execute(name, arguments)
+                conversation.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "name": name,
+                        "content": _bound_tool_result_for_context(
+                            json.dumps(result, default=str)
+                        ),
+                    }
+                )
+
+        raise RuntimeError(
+            f"Natural wake did not end on a text reply within {max_turns} turns"
+        )
+
     @staticmethod
     def _think_tool_def() -> dict:
         return {
@@ -1610,15 +1800,17 @@ def _build_messages(
     memory: tuple[int, dict] | None = None,
     tools_enabled: bool = False,
     curator_context: dict | None = None,
+    wake_mode: str = "terminal",
 ) -> tuple[list[dict], str]:
     """Build messages for the call."""
+    natural = wake_mode == "natural"
     system_parts = []
     if system_prefix:
         system_parts.append(system_prefix)
-    system_parts.extend([_SYSTEM_PROMPT, ""])
+    system_parts.extend([_SYSTEM_PROMPT_NATURAL if natural else _SYSTEM_PROMPT, ""])
 
     if tools_enabled:
-        system_parts.append(_TOOL_GUIDANCE)
+        system_parts.append(_TOOL_GUIDANCE_NATURAL if natural else _TOOL_GUIDANCE)
         system_parts.append("")
 
     if prior_state is not None:
@@ -1855,9 +2047,27 @@ class OpenTasteSession:
         state_repair_builder: StateRepairBuilder | None = None,
         protected_state_fields: Iterable[str] | None = None,
         launch_config: dict | None = None,
+        wake_mode: str = "terminal",
     ):
         self._backend = backend or AnthropicTasteBackend(client)
         self._model = model
+        # Wake shape: terminal (think_and_respond ends the wake) or natural
+        # (final text ends the wake; state via update_state). Natural mode
+        # needs tools (update_state IS a tool) and a backend that knows the
+        # shape; a backend that doesn't would silently run terminal mode
+        # under a natural-mode prompt — a stealth substrate change.
+        if wake_mode not in ("terminal", "natural"):
+            raise ValueError(f"wake_mode must be terminal|natural, got {wake_mode!r}")
+        if wake_mode == "natural":
+            if not enable_tools:
+                raise ValueError("wake_mode=natural requires enable_tools=True")
+            if getattr(self._backend, "wake_mode", None) != "natural":
+                raise ValueError(
+                    "wake_mode=natural requires a backend constructed with "
+                    "wake_mode='natural' (Anthropic-direct backend does not "
+                    "support natural mode yet)"
+                )
+        self._wake_mode = wake_mode
         # What this session is running on — logged with every record so a
         # resume can inherit it instead of asking the human to remember.
         self._launch_config = launch_config
@@ -2090,6 +2300,7 @@ class OpenTasteSession:
             memory=memory,
             tools_enabled=self._enable_tools and terminal_surface is None,
             curator_context=curator_context,
+            wake_mode=self._wake_mode,
         )
 
         # Pre-mint the cycle record_id so schedule_event tool calls can
@@ -2115,6 +2326,9 @@ class OpenTasteSession:
                 ),
             )
             extra_tools = list(TOOL_SCHEMAS.values())
+            if self._wake_mode == "natural":
+                from hamutay.tools.schemas import UPDATE_STATE_SCHEMA
+                extra_tools.append(UPDATE_STATE_SCHEMA)
 
         if terminal_surface is not None:
             if extra_tools:
@@ -2738,6 +2952,7 @@ class OpenTasteSession:
             "experiment_label": self._experiment_label,
             "model": self._model,
             "launch": self._launch_config,
+            "wake_mode": self._wake_mode,
             # Inputs
             "user_message": user_message,
             "system_prompt": system_prompt,

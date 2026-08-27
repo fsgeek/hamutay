@@ -55,8 +55,12 @@ _CAPABILITY: dict[str, str] = {
     "store": "bounded_write",
     "annotate_edge": "bounded_write",
     "schedule_event": "bounded_write",
+    "update_state": "bounded_write",
     "bash": "unbounded",
 }
+
+# Keys the state protocol owns; update_state may not write them.
+_STATE_PROTOCOL_KEYS = frozenset({"response", "updated_regions", "deleted_regions", "cycle"})
 
 
 class ToolExecutor:
@@ -86,6 +90,10 @@ class ToolExecutor:
         self._scheduled_by_record_id = scheduled_by_record_id
         self._pending_events: list[dict] = []
         self._activity_log: list[dict] = []
+        # Natural wake mode: update_state calls accumulate here and are
+        # merged into raw_output when the wake ends on text.
+        self._state_updates: dict = {}
+        self._state_deletions: list[str] = []
 
     @property
     def activity_log(self) -> list[dict]:
@@ -94,6 +102,14 @@ class ToolExecutor:
     @property
     def pending_events(self) -> list[dict]:
         return list(self._pending_events)
+
+    @property
+    def pending_state_updates(self) -> dict:
+        """What update_state has asked for this cycle: last write wins."""
+        return {
+            "updates": dict(self._state_updates),
+            "deleted_regions": list(self._state_deletions),
+        }
 
     def log_event(self, event: dict) -> None:
         """Append a framework-level event (e.g. budget pressure/recovery) to the
@@ -160,6 +176,8 @@ class ToolExecutor:
             )
         elif tool_name == "schedule_event":
             result = self._schedule_event(tool_input)
+        elif tool_name == "update_state":
+            result = self._update_state(tool_input)
         elif tool_name == "bash":
             result = tool_bash(tool_input, project_root=self._project_root)
         else:
@@ -193,6 +211,40 @@ class ToolExecutor:
         )
 
         return result
+
+    def _update_state(self, tool_input: dict) -> dict:
+        """Buffer a state update for merge when the wake ends on text.
+
+        Last write wins within a cycle: a key written after being deleted is
+        written; a key deleted after being written is deleted.
+        """
+        updates = tool_input.get("updates") or {}
+        deletions = tool_input.get("deleted_regions") or []
+        if not isinstance(updates, dict):
+            return {"error": "update_state: updates must be an object"}
+        if not isinstance(deletions, list) or not all(
+            isinstance(k, str) for k in deletions
+        ):
+            return {"error": "update_state: deleted_regions must be a list of keys"}
+        reserved = sorted(
+            (set(updates) | set(deletions)) & _STATE_PROTOCOL_KEYS
+        )
+        if reserved:
+            return {
+                "error": (
+                    f"update_state: {reserved} are protocol keys and cannot be "
+                    "written or deleted"
+                )
+            }
+        for key, value in updates.items():
+            self._state_updates[key] = value
+            if key in self._state_deletions:
+                self._state_deletions.remove(key)
+        for key in deletions:
+            self._state_updates.pop(key, None)
+            if key not in self._state_deletions:
+                self._state_deletions.append(key)
+        return {"recorded": sorted(updates), "deleted": list(deletions)}
 
     def _schedule_event(self, tool_input: dict) -> dict:
         """Validate and buffer a scheduled event for cycle-commit time."""

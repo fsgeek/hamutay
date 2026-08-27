@@ -684,3 +684,37 @@ TOOL_SCHEMAS: dict[str, dict] = {
     "schedule_event": SCHEDULE_EVENT_SCHEMA,
     "bash": BASH_SCHEMA,
 }
+
+
+# Natural wake mode only (docs/wake-mode-preregistration-20260827.md).
+# Deliberately NOT in TOOL_SCHEMAS: terminal mode must stay byte-for-byte
+# what the residents run today. The session adds this tool itself when
+# wake_mode == "natural".
+UPDATE_STATE_SCHEMA = {
+    "name": "update_state",
+    "description": (
+        "Update the state object you carry between cycles. Call it as often "
+        "as you like during a cycle; within one cycle later writes win. Keys "
+        "you don't mention carry forward unchanged. Deleted keys are shed "
+        "from working state, not from the log."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "updates": {
+                "type": "object",
+                "description": (
+                    "Top-level keys to set. Each key becomes a real field in "
+                    "your state object with the value you give it."
+                ),
+                "additionalProperties": True,
+            },
+            "deleted_regions": {
+                "type": "array",
+                "description": "Top-level keys to remove from working state.",
+                "items": {"type": "string"},
+            },
+            "reason": _REASON_FIELD,
+        },
+    },
+}
