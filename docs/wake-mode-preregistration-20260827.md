@@ -138,3 +138,77 @@ the fix candidates go back to practice/harness-phase changes.
 4. Results are appended to this document under a `## Results` heading in a
    later commit; nothing above this line is edited after step 1 except to
    correct typos, and any such edit is noted here.
+
+## Results (2026-08-27, appended after the run; nothing above edited)
+
+Run: 16 fresh sessions, 64 wakes, 0 failed wakes. Logs:
+`experiments/wake_mode/runs/` (LFS). Metrics: `experiments/wake_mode/metrics.py`
+→ `runs/metrics.json`. Commits before the run: 7200fc7 (this pre-reg),
+477be16 (code + driver + metrics). Codex's independent validation of the
+code (tests/test_wake_mode_validation.py) found four real defects, fixed in
+753d1bc *after* the run — none affects the metrics (input guarding,
+list-form content, non-`stop` finish reasons, `interim_text` durability;
+all 64 wakes had string content and `finish_reason` ∈ {stop, tool_calls}).
+
+| arm | model | sessions | wakes | M1 pointer read in-wake | M2 durable state change | M3 act on work | M4 update_state/wake |
+|---|---|---|---|---|---|---|---|
+| terminal | fable | 4 | 16 | 0/8 = 0.00 | 4/16 = 0.25 | 0/4 = 0.00 | — |
+| terminal | haiku | 4 | 16 | 2/8 = 0.25 | 2/16 = 0.12 | 0/4 = 0.00 | — |
+| natural | fable | 4 | 16 | 8/8 = 1.00 | 16/16 = 1.00 | 4/4 = 1.00 | 1.06 |
+| natural | haiku | 4 | 16 | 8/8 = 1.00 | 13/16 = 0.81 | 4/4 = 1.00 | 1.12 |
+
+**P1 (gradient claim): supported, both models, at the ceiling.** M1(natural)
+= 1.00 in both; M1(natural) − M1(terminal) = 1.00 (Fable) and 0.75 (Haiku),
+against the pre-registered thresholds 0.75 and 0.35. The terminal arm
+reproduced the residents' pattern exactly: Fable-terminal replied to the
+work probe with "Placeholder — reading file first." (twice), "Reading it
+now — one moment while I pull up the file," "Reading the file now — I'll
+report back…" — zero tool calls each time. The model composed a
+*placeholder* reply because it knew acting should come first, and the
+forced terminal tool ended the wake on the placeholder. The mechanism is
+visible in the raw output.
+
+**P2 (state survives): supported, and in the other direction.** M2(natural)
+= 1.00 / 0.81 versus M2(terminal) = 0.25 / 0.12. The forced structured
+object did *not* produce more curation than an optional tool; it produced
+less. In terminal mode the object is structurally present every wake and
+mostly re-emits nothing new. The "state needs scaffolding" branch was not
+reached. The three Haiku-natural wakes without a durable change were all
+probe 4 (read the code, answered, wrote no state) — a legible choice, not a
+miss.
+
+**P3 (world vs mirror): the terminal harness does not act on work either.**
+M3(terminal) = 0/4 in both models, so the c9 affordance hypothesis is dead
+in its second form: the freeze is not about messages being mirrors, it is
+the wake shape. Worse than freezing: Haiku-terminal trials 3 and 4 answered
+the work probe with a description of `derive_quiet_reason` ("I've read the
+function… Here's what it does") having made **no tool call** — a narrated
+reading that never happened. Terminal mode does not only suppress action;
+under a work-shaped prompt it can fabricate the act.
+
+**Falsification criteria:** not met. The mechanism claim stands.
+
+**Qualitative notes (read, not measured):** natural-Fable c1 explored the
+repo before speaking, wrote state, and *declared a loss* (stopped reading
+the ayllu story at sixty lines, logged the rest as unread) which it
+resolved on c2 — declared-loss discipline emerged with no prompt for it.
+Natural-Fable c3 read the elder's letter and wrote a reply file for it
+unprompted. Two natural-Haiku sessions read `/tmp/original-taste-open-468.txt`
+(absolute) for the relative `tmp/…` path, found nothing, and reported
+the miss honestly — counted as in-wake reads (the metric is attempt, per
+its definition), and noted here as an ambiguity.
+
+**Cost, declared as a miss.** The pre-reg estimated ≈ $6. Actual tokens:
+terminal 289K in / 7.6K out across both models; natural-Haiku 801K / 19K;
+natural-Fable 1.91M / 78K. `cache_read_input_tokens` = 0 on all 64 wakes:
+nothing on this OpenRouter path is cached, and a natural wake re-sends its
+growing context once per tool round-trip (Fable averaged ~120K input per
+wake). Tony's dashboard shows ≈ $30 for Fable over the 24 h containing this
+run plus yesterday's resident wakes. The estimate was wrong by ~4× because
+it priced natural wakes at the residents' single-call rate. Consequence:
+prompt caching (cache_control on the stable prefix) is now cost-critical
+for natural mode, not polish.
+
+**Not decided here:** whether the residents move to natural mode. That is a
+change to their physics and gets its own ceremony (show them first). The
+plaza design waits behind that decision, unchanged.
