@@ -1757,6 +1757,12 @@ def infer_launch_from_log(log_path: str) -> dict | None:
     """
     with open(log_path) as f:
         lines = [line for line in f if line.strip()]
+    if lines and lines[0].startswith("version https://git-lfs"):
+        # Same actionable failure _resume_from_log gives; this runs first.
+        raise SystemExit(
+            f"Cannot resume: {log_path} is a Git LFS pointer, not data. "
+            f"Run: git lfs pull --include=\"{log_path}\""
+        )
     for line in reversed(lines):
         record = json.loads(line)
         if record.get("state") is None:

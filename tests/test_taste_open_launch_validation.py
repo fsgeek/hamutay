@@ -140,14 +140,10 @@ def test_resume_helper_reports_git_lfs_pointer_clearly(tmp_path: Path) -> None:
         OpenTasteSession(backend=object(), log_path=str(log), resume=True)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "defect: infer_launch_from_log JSON-decodes a Git-LFS pointer instead of "
-        "matching _resume_from_log's actionable SystemExit"
-    ),
-)
 def test_launch_inference_reports_git_lfs_pointer_like_resume(tmp_path: Path) -> None:
+    # Was a strict xfail when Codex authored it (defect: infer_launch_from_log
+    # JSON-decoded the pointer); the marker was removed by the implementer
+    # after fixing the defect. The test body is Codex's, unchanged.
     log = tmp_path / "pointer.jsonl"
     log.write_text("\n" + LFS_POINTER)
 
