@@ -102,8 +102,18 @@ def build_session(model: str, log_path: Path, arm: str) -> tuple[OpenTasteSessio
     return session, EventStore(event_log_path)
 
 
+def _resolve_model(model_key: str) -> tuple[str, str]:
+    """Return (slug, file_key). Known keys map to slugs; a raw OpenRouter
+    slug (contains '/') is used as-is with a filesystem-safe key."""
+    if model_key in MODELS:
+        return MODELS[model_key], model_key
+    if "/" in model_key:
+        return model_key, model_key.split("/", 1)[1].replace("/", "_").replace(":", "_")
+    raise SystemExit(f"unknown model {model_key!r}: use a key in {list(MODELS)} or a slug")
+
+
 def run_trial(arm: str, model_key: str, trial: int, out_dir: Path) -> dict:
-    model = MODELS[model_key]
+    model, model_key = _resolve_model(model_key)
     log_path = out_dir / f"{arm}_{model_key}_{trial:02d}.jsonl"
     print(f"\n=== {arm} / {model_key} / trial {trial} -> {log_path.name}")
     session, store = build_session(model, log_path, arm)
@@ -146,7 +156,10 @@ def run_trial(arm: str, model_key: str, trial: int, out_dir: Path) -> dict:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--models", nargs="+", default=list(MODELS), choices=list(MODELS))
+    parser.add_argument(
+        "--models", nargs="+", default=list(MODELS),
+        help=f"Keys {list(MODELS)} or raw OpenRouter slugs (org/model).",
+    )
     parser.add_argument("--arms", nargs="+", default=["terminal", "natural"],
                         choices=["terminal", "natural"])
     parser.add_argument("--trials", type=int, default=4)
