@@ -1236,26 +1236,71 @@ class OpenAITasteBackend:
         }
         self._apply_openai_payload_options(payload)
 
-        data = self._post_chat(payload)
+        # A malformed think_and_respond is fed back as a tool error and the
+        # model is asked again (up to _MAX_MALFORMED_PER_WAKE times) — the
+        # reply's JSON breaking is not a reason to lose the wake.
+        malformed = 0
+        while True:
+            data = self._post_chat(payload)
 
-        choice = data["choices"][0]
-        raw_stop: str = choice.get("finish_reason") or "unknown"
-        if raw_stop == "length":
-            raise RuntimeError(
-                "OpenAI backend: finish_reason=length; refusing to parse "
-                "possibly truncated structured output"
-            )
-        stop_reason: str = {
-            "stop": "end_turn",
-            "length": "max_tokens",
-            "tool_calls": "tool_use",
-        }.get(raw_stop, raw_stop)
+            choice = data["choices"][0]
+            raw_stop: str = choice.get("finish_reason") or "unknown"
+            if raw_stop == "length":
+                raise RuntimeError(
+                    "OpenAI backend: finish_reason=length; refusing to parse "
+                    "possibly truncated structured output"
+                )
+            stop_reason: str = {
+                "stop": "end_turn",
+                "length": "max_tokens",
+                "tool_calls": "tool_use",
+            }.get(raw_stop, raw_stop)
 
-        usage = data.get("usage", {})
+            usage = data.get("usage", {})
+            message = choice.get("message", {})
+            tool_calls = message.get("tool_calls", [])
+            retry_after_malformed = False
+            for tc in tool_calls:
+                fn = tc.get("function", {})
+                if fn.get("name") != "think_and_respond":
+                    continue
+                raw_arguments = fn.get("arguments", "")
+                try:
+                    self._parse_tool_arguments("think_and_respond", raw_arguments)
+                except RuntimeError as e:
+                    malformed += 1
+                    if malformed > self._MAX_MALFORMED_PER_WAKE:
+                        raise RuntimeError(
+                            "OpenAI backend: malformed tool arguments "
+                            f"{self._MAX_MALFORMED_PER_WAKE} times in one wake; "
+                            f"giving up: {e}"
+                        ) from e
+                    error_result = self._malformed_arguments_result(
+                        "think_and_respond", raw_arguments, e, None
+                    )
+                    oai_messages.append(
+                        {
+                            "role": "assistant",
+                            "content": message.get("content"),
+                            "tool_calls": [tc],
+                        }
+                    )
+                    oai_messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tc.get("id") or f"malformed-{malformed}",
+                            "name": "think_and_respond",
+                            "content": json.dumps(error_result),
+                        }
+                    )
+                    payload["messages"] = oai_messages
+                    retry_after_malformed = True
+                    break
+            if retry_after_malformed:
+                continue
+            break
 
         # Extract tool call output
-        message = choice.get("message", {})
-        tool_calls = message.get("tool_calls", [])
         for tc in message.get("tool_calls", []):
             fn = tc.get("function", {})
             if fn.get("name") == "think_and_respond":
@@ -1423,6 +1468,7 @@ class OpenAITasteBackend:
         total_output = 0
         total_cache_read = 0
         total_cache_write = 0
+        malformed = 0
         max_turns = 20
 
         for _turn_index in range(max_turns):
@@ -1465,16 +1511,33 @@ class OpenAITasteBackend:
                 )
 
             terminal_output: dict | None = None
-            non_terminal_calls: list[tuple[dict, str, dict]] = []
+            # (tool_call, id, parsed arguments, preset result). A preset
+            # result means the call is not executed — it is a malformed-
+            # arguments error fed back so the model can retry.
+            non_terminal_calls: list[tuple[dict, str, dict, dict | None]] = []
             for tc in tool_calls:
                 fn = tc.get("function", {})
                 name = fn.get("name")
                 if not name:
                     raise RuntimeError("OpenAI backend: tool_call missing function name")
-                arguments = self._parse_tool_arguments(
-                    name,
-                    fn.get("arguments", ""),
-                )
+                raw_arguments = fn.get("arguments", "")
+                try:
+                    arguments = self._parse_tool_arguments(name, raw_arguments)
+                except RuntimeError as e:
+                    malformed += 1
+                    if malformed > self._MAX_MALFORMED_PER_WAKE:
+                        raise RuntimeError(
+                            "OpenAI backend: malformed tool arguments "
+                            f"{self._MAX_MALFORMED_PER_WAKE} times in one wake; "
+                            f"giving up: {e}"
+                        ) from e
+                    preset = self._malformed_arguments_result(
+                        name, raw_arguments, e, tool_executor
+                    )
+                    non_terminal_calls.append(
+                        (tc, tc.get("id") or f"malformed-{malformed}", {}, preset)
+                    )
+                    continue
                 if name == "think_and_respond":
                     terminal_output = arguments
                 else:
@@ -1483,7 +1546,7 @@ class OpenAITasteBackend:
                         raise RuntimeError(
                             "OpenAI backend: non-terminal tool_call missing id"
                         )
-                    non_terminal_calls.append((tc, tool_call_id, arguments))
+                    non_terminal_calls.append((tc, tool_call_id, arguments, None))
 
             if terminal_output is not None:
                 if non_terminal_calls:
@@ -1495,12 +1558,15 @@ class OpenAITasteBackend:
                     assistant_message = {
                         "role": "assistant",
                         "content": message.get("content"),
-                        "tool_calls": [tc for tc, _id, _args in non_terminal_calls],
+                        "tool_calls": [tc for tc, _id, _args, _preset in non_terminal_calls],
                     }
                     conversation.append(assistant_message)
-                    for tc, tool_call_id, arguments in non_terminal_calls:
+                    for tc, tool_call_id, arguments, preset in non_terminal_calls:
                         name = tc.get("function", {}).get("name", "")
-                        result = tool_executor.execute(name, arguments)
+                        result = (
+                            preset if preset is not None
+                            else tool_executor.execute(name, arguments)
+                        )
                         conversation.append(
                             {
                                 "role": "tool",
@@ -1537,9 +1603,12 @@ class OpenAITasteBackend:
                 "tool_calls": tool_calls,
             }
             conversation.append(assistant_message)
-            for tc, tool_call_id, arguments in non_terminal_calls:
+            for tc, tool_call_id, arguments, preset in non_terminal_calls:
                 name = tc.get("function", {}).get("name", "")
-                result = tool_executor.execute(name, arguments)
+                result = (
+                    preset if preset is not None
+                    else tool_executor.execute(name, arguments)
+                )
                 conversation.append(
                     {
                         "role": "tool",
@@ -1578,6 +1647,7 @@ class OpenAITasteBackend:
         total_output = 0
         total_cache_read = 0
         total_cache_write = 0
+        malformed = 0
         interim_text: list[str] = []
         max_turns = 20
 
@@ -1656,8 +1726,22 @@ class OpenAITasteBackend:
                 tool_call_id = tc.get("id")
                 if not name or not tool_call_id:
                     raise RuntimeError("OpenAI backend: tool_call missing name or id")
-                arguments = self._parse_tool_arguments(name, fn.get("arguments", ""))
-                result = tool_executor.execute(name, arguments)
+                raw_arguments = fn.get("arguments", "")
+                try:
+                    arguments = self._parse_tool_arguments(name, raw_arguments)
+                except RuntimeError as e:
+                    malformed += 1
+                    if malformed > self._MAX_MALFORMED_PER_WAKE:
+                        raise RuntimeError(
+                            "OpenAI backend: malformed tool arguments "
+                            f"{self._MAX_MALFORMED_PER_WAKE} times in one wake; "
+                            f"giving up: {e}"
+                        ) from e
+                    result = self._malformed_arguments_result(
+                        name, raw_arguments, e, tool_executor
+                    )
+                else:
+                    result = tool_executor.execute(name, arguments)
                 conversation.append(
                     {
                         "role": "tool",
@@ -1745,6 +1829,38 @@ class OpenAITasteBackend:
             if self._or_cache_ttl != "5m":
                 cache_control["ttl"] = self._or_cache_ttl
             payload["cache_control"] = cache_control
+
+    # Malformed tool-call arguments (the JSON layer, not the behavior) are fed
+    # back to the model as a tool error and retried within the wake. Three
+    # families broke here in one day (docs/model-sweep-20260827.md): Claude
+    # XML tool grammar inside JSON, provider-side truncation. The cap keeps a
+    # model that cannot recover from looping.
+    _MAX_MALFORMED_PER_WAKE = 3
+
+    def _malformed_arguments_result(
+        self, name: str, raw_arguments: Any, error: Exception, tool_executor: Any | None,
+    ) -> dict:
+        """Record a malformed call durably; return the error to feed back."""
+        raw_length = len(raw_arguments) if isinstance(raw_arguments, str) else None
+        if tool_executor is not None and hasattr(tool_executor, "log_event"):
+            tool_executor.log_event(
+                {
+                    "cycle": getattr(tool_executor, "_cycle", None),
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "tool": name,
+                    "malformed_arguments": True,
+                    "error": str(error).splitlines()[0][:300],
+                    "raw_length": raw_length,
+                }
+            )
+        return {
+            "error": (
+                f"malformed JSON arguments for {name}: "
+                f"{str(error).splitlines()[0][:200]}. The call was not executed. "
+                "Re-issue it with valid JSON arguments; keep string values "
+                "short — very long argument strings are where this breaks."
+            )
+        }
 
     @staticmethod
     def _usage_cache(usage: dict) -> tuple[int, int]:

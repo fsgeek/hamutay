@@ -304,20 +304,32 @@ def test_openai_backend_length_finish_reason_raises():
         )
 
 
-def test_openai_backend_malformed_tool_arguments_raise_clear_error():
+def test_openai_backend_malformed_tool_arguments_are_fed_back_then_retried():
+    # Since 2026-08-27 a malformed call is returned to the model as a tool
+    # error (clear text, same tool_call_id) and the wake continues; only
+    # repeated failure raises (tests/test_malformed_args_retry.py).
     backend = ScriptedOpenAIBackend(
-        [_response([_tool_call("read_1", "read", '{"path":')])]
+        [
+            _response([_tool_call("read_1", "read", '{"path":')]),
+            _response([_tool_call("t_1", "think_and_respond", '{"response": "ok"}')]),
+        ]
     )
 
-    with pytest.raises(RuntimeError, match="malformed JSON arguments for read"):
-        backend.call(
-            model="test-model",
-            system="system",
-            messages=[{"role": "user", "content": "read"}],
-            experiment_label="test",
-            extra_tools=[READ_TOOL],
-            tool_executor=FakeToolExecutor(),
-        )
+    result = backend.call(
+        model="test-model",
+        system="system",
+        messages=[{"role": "user", "content": "read"}],
+        experiment_label="test",
+        extra_tools=[READ_TOOL],
+        tool_executor=FakeToolExecutor(),
+    )
+
+    assert result.raw_output == {"response": "ok"}
+    fed_back = [
+        m for m in backend.payloads[1]["messages"] if m.get("role") == "tool"
+    ]
+    assert fed_back[0]["tool_call_id"] == "read_1"
+    assert "malformed JSON arguments for read" in fed_back[0]["content"]
 
 
 def test_openai_backend_provider_error_payload_propagates():
