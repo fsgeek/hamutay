@@ -425,6 +425,18 @@ def build_parser():
         help="Disable provider.require_parameters (on by default for "
         "openrouter so tool_choice is not silently dropped upstream).",
     )
+    parser.add_argument(
+        "--no-openrouter-cache",
+        action="store_true",
+        help="Disable OpenRouter automatic prompt caching (on by default: "
+        "a natural wake re-sends its growing context once per tool call).",
+    )
+    parser.add_argument(
+        "--openrouter-cache-ttl",
+        choices=["5m", "1h"],
+        default="5m",
+        help="Cache TTL for OpenRouter automatic prompt caching.",
+    )
     return parser
 
 
@@ -509,6 +521,8 @@ def main() -> None:
                 and not args.no_openrouter_require_parameters
             ),
             wake_mode=wake_mode,
+            openrouter_cache=not args.no_openrouter_cache,
+            openrouter_cache_ttl=args.openrouter_cache_ttl,
         )
 
     session = OpenTasteSession(

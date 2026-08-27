@@ -1103,7 +1103,18 @@ class OpenAITasteBackend:
         max_retries: int = 3,
         retry_base_delay_s: float = 0.5,
         wake_mode: str = "terminal",
+        openrouter_cache: bool = True,
+        openrouter_cache_ttl: str = "5m",
     ):
+        # OpenRouter automatic prompt caching: a top-level cache_control puts
+        # the breakpoint on the last cacheable block and advances it as the
+        # conversation grows — which is exactly the intra-wake repetition a
+        # natural wake produces (one round trip per tool call, same growing
+        # prefix each time). Measured via usage.prompt_tokens_details.
+        if openrouter_cache_ttl not in ("5m", "1h"):
+            raise ValueError(f"openrouter_cache_ttl must be 5m|1h, got {openrouter_cache_ttl!r}")
+        self._or_cache = openrouter_cache
+        self._or_cache_ttl = openrouter_cache_ttl
         if wake_mode not in ("terminal", "natural"):
             raise ValueError(f"wake_mode must be terminal|natural, got {wake_mode!r}")
         # terminal: think_and_respond is the forced, wake-ending tool.
@@ -1257,6 +1268,8 @@ class OpenAITasteBackend:
                     stop_reason=stop_reason,
                     input_tokens=usage.get("prompt_tokens", 0),
                     output_tokens=usage.get("completion_tokens", 0),
+                    cache_read_tokens=self._usage_cache(usage)[0],
+                    cache_creation_tokens=self._usage_cache(usage)[1],
                 )
 
         # If there were tool calls but not our target function, fail explicitly.
@@ -1278,6 +1291,8 @@ class OpenAITasteBackend:
                     stop_reason=stop_reason,
                     input_tokens=usage.get("prompt_tokens", 0),
                     output_tokens=usage.get("completion_tokens", 0),
+                    cache_read_tokens=self._usage_cache(usage)[0],
+                    cache_creation_tokens=self._usage_cache(usage)[1],
                 )
 
         raise RuntimeError("OpenAI backend: no think_and_respond output in response")
@@ -1406,6 +1421,8 @@ class OpenAITasteBackend:
         ]
         total_input = 0
         total_output = 0
+        total_cache_read = 0
+        total_cache_write = 0
         max_turns = 20
 
         for _turn_index in range(max_turns):
@@ -1435,6 +1452,9 @@ class OpenAITasteBackend:
             usage = data.get("usage", {})
             total_input += usage.get("prompt_tokens", 0) or 0
             total_output += usage.get("completion_tokens", 0) or 0
+            cache_read, cache_write = self._usage_cache(usage)
+            total_cache_read += cache_read
+            total_cache_write += cache_write
 
             message = choice.get("message", {})
             tool_calls = message.get("tool_calls") or []
@@ -1501,6 +1521,8 @@ class OpenAITasteBackend:
                     tool_activity=(
                         tool_executor.activity_log if tool_executor else None
                     ),
+                    cache_read_tokens=total_cache_read,
+                    cache_creation_tokens=total_cache_write,
                 )
 
             if tool_executor is None:
@@ -1554,6 +1576,8 @@ class OpenAITasteBackend:
         tools = [self._openai_tool_def(tool) for tool in extra_tools]
         total_input = 0
         total_output = 0
+        total_cache_read = 0
+        total_cache_write = 0
         interim_text: list[str] = []
         max_turns = 20
 
@@ -1579,6 +1603,9 @@ class OpenAITasteBackend:
             usage = data.get("usage", {})
             total_input += usage.get("prompt_tokens", 0) or 0
             total_output += usage.get("completion_tokens", 0) or 0
+            cache_read, cache_write = self._usage_cache(usage)
+            total_cache_read += cache_read
+            total_cache_write += cache_write
 
             message = choice.get("message", {})
             content = message.get("content")
@@ -1609,6 +1636,8 @@ class OpenAITasteBackend:
                         tool_executor.activity_log if tool_executor else None
                     ),
                     interim_text=interim_text or None,
+                    cache_read_tokens=total_cache_read,
+                    cache_creation_tokens=total_cache_write,
                 )
 
             if tool_executor is None:
@@ -1711,6 +1740,27 @@ class OpenAITasteBackend:
         # truncate a 20-cycle context — measuring the gateway, not the model).
         if self._or_transforms is not None:
             payload["transforms"] = self._or_transforms
+        if self._or_cache:
+            cache_control: dict = {"type": "ephemeral"}
+            if self._or_cache_ttl != "5m":
+                cache_control["ttl"] = self._or_cache_ttl
+            payload["cache_control"] = cache_control
+
+    @staticmethod
+    def _usage_cache(usage: dict) -> tuple[int, int]:
+        """(cache read tokens, cache write tokens) from an OpenAI-format usage.
+
+        OpenRouter reports Anthropic cache accounting under
+        usage.prompt_tokens_details.{cached_tokens, cache_write_tokens};
+        absent fields read as zero, never as an error.
+        """
+        details = usage.get("prompt_tokens_details") or {}
+        if not isinstance(details, dict):
+            return 0, 0
+        return (
+            int(details.get("cached_tokens") or 0),
+            int(details.get("cache_write_tokens") or 0),
+        )
 
     def _post_chat(self, payload: dict) -> dict:
         headers = {
