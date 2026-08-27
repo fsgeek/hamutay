@@ -3220,6 +3220,14 @@ def main():
              "log unless --tools/--no-tools is given)",
     )
     parser.add_argument(
+        "--wake-mode", choices=["terminal", "natural"], default=None,
+        help="Wake shape. terminal: think_and_respond ends the wake. natural: "
+             "the final text reply ends the wake and state goes through the "
+             "update_state tool (needs --tools and a non-anthropic provider). "
+             "New session default: terminal; on --resume, inherited from the "
+             "log unless given — changing it prints WAKE SHAPE CHANGE.",
+    )
+    parser.add_argument(
         "--curator", action="store_true",
         help="Enable model-backed continuity curator summaries",
     )
@@ -3247,12 +3255,25 @@ def main():
     # of the last incantation. Explicit flags still win, loudly.
     inherited = infer_launch_from_log(args.log_path) if resume else None
     launch, launch_notes = resolve_launch(
-        {"model": args.model, "provider": args.provider, "tools": args.tools},
+        {
+            "model": args.model,
+            "provider": args.provider,
+            "tools": args.tools,
+            "wake_mode": args.wake_mode,
+        },
         inherited,
     )
-    args.model, args.provider, args.tools = (
-        launch["model"], launch["provider"], launch["tools"],
+    args.model, args.provider, args.tools, args.wake_mode = (
+        launch["model"], launch["provider"], launch["tools"], launch["wake_mode"],
     )
+    if args.wake_mode == "natural":
+        if not args.tools:
+            raise SystemExit("--wake-mode natural requires --tools")
+        if args.provider == "anthropic":
+            raise SystemExit(
+                "--wake-mode natural is not implemented on the Anthropic-direct "
+                "backend yet; use --provider openrouter"
+            )
     if inherited is not None:
         if args.capabilities_file is None:
             args.capabilities_file = inherited.get("capabilities_file")
@@ -3279,6 +3300,7 @@ def main():
         "tools": bool(args.tools),
         "capabilities_file": args.capabilities_file,
         "openrouter_require_parameters": bool(args.openrouter_require_parameters),
+        "wake_mode": args.wake_mode,
     }
 
     experiment_label = args.label or "taste_open"
@@ -3349,6 +3371,7 @@ def main():
             ],
             max_retries=args.max_retries,
             retry_base_delay_s=args.retry_base_delay,
+            wake_mode=args.wake_mode,
         )
 
         if args.probe_capability:
@@ -3408,6 +3431,7 @@ def main():
         project_root=Path.cwd(),
         continuity_curator=continuity_curator,
         launch_config=launch_config,
+        wake_mode=args.wake_mode,
     )
 
     if resume:

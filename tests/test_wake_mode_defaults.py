@@ -205,3 +205,22 @@ def test_marker_moves_when_a_resumed_subject_changes_shape(tmp_path):
     record = json.loads((tmp_path / "s.jsonl").read_text().splitlines()[-1])
     assert record["wake_mode"] == "natural"
     assert record["state"]["_wake_shape"]["since_cycle"] == 3
+
+
+# --- the interactive CLI (the elder's harness) exposes it too ------------
+
+
+def test_interactive_cli_help_documents_wake_mode_inheritance():
+    import subprocess
+    import sys
+    from pathlib import Path as _P
+
+    completed = subprocess.run(
+        [sys.executable, "-m", "hamutay.taste_open", "--help"],
+        cwd=_P(__file__).resolve().parents[1],
+        capture_output=True, text=True, check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "--wake-mode {terminal,natural}" in completed.stdout
+    compact = "".join(completed.stdout.split())
+    assert "WAKESHAPECHANGE" in compact
