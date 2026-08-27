@@ -1737,12 +1737,101 @@ def _curator_context_from_record(record: dict | None) -> dict | None:
     }
 
 
+DEFAULT_MODEL = "claude-sonnet-4-6"
+DEFAULT_PROVIDER = "anthropic"
+DEFAULT_CAPABILITIES_FILE = "experiments/taste_open/capabilities.json"
+_LAUNCH_KEYS = ("model", "provider", "tools")
+
+
+def infer_launch_from_log(log_path: str) -> dict | None:
+    """Recover the substrate a log was last running on.
+
+    The log knows what the session was: every record carries ``model``, and
+    records written after 2026-08-26 carry an explicit ``launch`` dict. For
+    older records the provider and tool state are inferred — provider from the
+    model string (an ``org/model`` slug is an OpenRouter route) and tools from
+    the shell block in the logged system prompt. Returns None for an empty log.
+
+    Only state-bearing records count; failure records have no state and must
+    not be the source (they can carry a different ``model`` from a retry).
+    """
+    with open(log_path) as f:
+        lines = [line for line in f if line.strip()]
+    for line in reversed(lines):
+        record = json.loads(line)
+        if record.get("state") is None:
+            continue
+        launch = record.get("launch")
+        if isinstance(launch, dict) and launch.get("model"):
+            resolved = dict(launch)
+            resolved.setdefault("tools", False)
+            resolved.setdefault(
+                "provider", "openrouter" if "/" in resolved["model"] else DEFAULT_PROVIDER
+            )
+            resolved["source_cycle"] = record.get("cycle", 0)
+            resolved["inferred"] = False
+            return resolved
+        model = record.get("model")
+        if not model:
+            continue
+        prompt = record.get("system_prompt") or ""
+        return {
+            "model": model,
+            "provider": "openrouter" if "/" in model else DEFAULT_PROVIDER,
+            "tools": "- bash(command" in prompt,
+            "capabilities_file": None,
+            "openrouter_require_parameters": None,
+            "source_cycle": record.get("cycle", 0),
+            "inferred": True,
+        }
+    return None
+
+
+def resolve_launch(
+    explicit: dict, inherited: dict | None,
+) -> tuple[dict, list[str]]:
+    """Merge CLI flags with what the log says the session was.
+
+    ``explicit`` holds the flag values with None meaning "not given". On a
+    resume, unset flags inherit from ``inherited`` (see
+    ``infer_launch_from_log``); a flag given explicitly that differs from the
+    log produces a SUBSTRATE CHANGE note — changing a running subject's model,
+    provider, or hands is a decision, and it must be loud. New sessions (no
+    ``inherited``) take the historical defaults.
+    """
+    defaults = {"model": DEFAULT_MODEL, "provider": DEFAULT_PROVIDER, "tools": False}
+    resolved: dict = {}
+    notes: list[str] = []
+    for key in _LAUNCH_KEYS:
+        given = explicit.get(key)
+        if inherited is not None and key in inherited:
+            if given is None:
+                resolved[key] = inherited[key]
+            else:
+                resolved[key] = given
+                if given != inherited[key]:
+                    notes.append(
+                        f"SUBSTRATE CHANGE: log's cycle {inherited.get('source_cycle')} "
+                        f"ran with {key}={inherited[key]!r}; launching with {key}={given!r}"
+                    )
+        else:
+            resolved[key] = defaults[key] if given is None else given
+    if inherited is not None:
+        how = "inferred from" if inherited.get("inferred") else "recorded in"
+        notes.append(
+            f"Substrate inherited from log (cycle {inherited.get('source_cycle')}, "
+            f"{how} the record): "
+            + ", ".join(f"{k}={inherited.get(k)!r}" for k in _LAUNCH_KEYS)
+        )
+    return resolved, notes
+
+
 class OpenTasteSession:
     """Open self-curating tensor chat. No prescribed structure."""
 
     def __init__(
         self,
-        model: str = "claude-sonnet-4-6",
+        model: str = DEFAULT_MODEL,
         client: anthropic.Anthropic | None = None,
         backend: TasteBackend | None = None,
         log_path: str | None = None,
@@ -1759,9 +1848,13 @@ class OpenTasteSession:
         state_validator: StateValidator | None = None,
         state_repair_builder: StateRepairBuilder | None = None,
         protected_state_fields: Iterable[str] | None = None,
+        launch_config: dict | None = None,
     ):
         self._backend = backend or AnthropicTasteBackend(client)
         self._model = model
+        # What this session is running on — logged with every record so a
+        # resume can inherit it instead of asking the human to remember.
+        self._launch_config = launch_config
         self._cycle = 0
         self._state: dict | None = None
         self._log_path = log_path
@@ -2638,6 +2731,7 @@ class OpenTasteSession:
             "record_id": str(record_id),
             "experiment_label": self._experiment_label,
             "model": self._model,
+            "launch": self._launch_config,
             # Inputs
             "user_message": user_message,
             "system_prompt": system_prompt,
@@ -2696,13 +2790,15 @@ def main():
         description="Open taste: self-curating state with no prescribed structure"
     )
     parser.add_argument(
-        "--model", default="claude-sonnet-4-6",
-        help="Model (default: Sonnet 4.6)",
+        "--model", default=None,
+        help=f"Model (new session default: {DEFAULT_MODEL}; on --resume, "
+             "inherited from the log unless given)",
     )
     parser.add_argument(
-        "--provider", default="anthropic",
+        "--provider", default=None,
         choices=["anthropic", "openrouter", "openai"],
-        help="API provider (default: anthropic)",
+        help=f"API provider (new session default: {DEFAULT_PROVIDER}; on "
+             "--resume, inherited from the log unless given)",
     )
     parser.add_argument(
         "--base-url", default=None,
@@ -2767,8 +2863,10 @@ def main():
         help="Base probability of involuntary memory injection (default: 0.1)",
     )
     parser.add_argument(
-        "--tools", action="store_true",
-        help="Enable perception tools (read, search_project, clock)",
+        "--tools", action=argparse.BooleanOptionalAction, default=None,
+        help="Enable tools: read, search_project, clock, edit, and an unscoped "
+             "bash (new session default: off; on --resume, inherited from the "
+             "log unless --tools/--no-tools is given)",
     )
     parser.add_argument(
         "--curator", action="store_true",
@@ -2793,6 +2891,44 @@ def main():
         log_dir = Path("experiments") / "taste_open"
         log_dir.mkdir(parents=True, exist_ok=True)
         args.log_path = str(log_dir / f"taste_open_{ts}.jsonl")
+
+    # The substrate comes from the log on resume, not from the human's memory
+    # of the last incantation. Explicit flags still win, loudly.
+    inherited = infer_launch_from_log(args.log_path) if resume else None
+    launch, launch_notes = resolve_launch(
+        {"model": args.model, "provider": args.provider, "tools": args.tools},
+        inherited,
+    )
+    args.model, args.provider, args.tools = (
+        launch["model"], launch["provider"], launch["tools"],
+    )
+    if inherited is not None:
+        if args.capabilities_file is None:
+            args.capabilities_file = inherited.get("capabilities_file")
+        if not args.openrouter_require_parameters and inherited.get(
+            "openrouter_require_parameters"
+        ):
+            args.openrouter_require_parameters = True
+    if args.provider == "openrouter":
+        # Mirror the heartbeat daemon: the capabilities profile and
+        # require_parameters are what keep tool_choice from being silently
+        # dropped on OpenRouter. Default them on rather than making the
+        # human remember.
+        if args.capabilities_file is None and Path(DEFAULT_CAPABILITIES_FILE).exists():
+            args.capabilities_file = DEFAULT_CAPABILITIES_FILE
+            launch_notes.append(f"Capabilities file defaulted to {DEFAULT_CAPABILITIES_FILE}")
+        if not args.openrouter_require_parameters:
+            args.openrouter_require_parameters = True
+            launch_notes.append("OpenRouter provider.require_parameters defaulted on")
+    for note in launch_notes:
+        print(("!!! " if note.startswith("SUBSTRATE CHANGE") else "") + note)
+    launch_config = {
+        "model": args.model,
+        "provider": args.provider,
+        "tools": bool(args.tools),
+        "capabilities_file": args.capabilities_file,
+        "openrouter_require_parameters": bool(args.openrouter_require_parameters),
+    }
 
     experiment_label = args.label or "taste_open"
     try:
@@ -2920,6 +3056,7 @@ def main():
         enable_tools=args.tools,
         project_root=Path.cwd(),
         continuity_curator=continuity_curator,
+        launch_config=launch_config,
     )
 
     if resume:
@@ -2930,7 +3067,8 @@ def main():
               f"{len(keys)} keys ({', '.join(keys)}), ~{est:,} tokens")
 
     print("Open taste — no prescribed structure")
-    print(f"Model: {args.model}")
+    print(f"Substrate: model={args.model} provider={args.provider} "
+          f"tools={'on' if args.tools else 'off'}")
     print(f"Log: {args.log_path}")
     print("Commands: 'quit', 'state', 'keys', 'usage'")
     print()
