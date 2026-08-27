@@ -1258,7 +1258,7 @@ class OpenAITasteBackend:
 
             usage = data.get("usage", {})
             message = choice.get("message", {})
-            tool_calls = message.get("tool_calls", [])
+            tool_calls = message.get("tool_calls") or []
             retry_after_malformed = False
             for tc in tool_calls:
                 fn = tc.get("function", {})
@@ -1278,17 +1278,18 @@ class OpenAITasteBackend:
                     error_result = self._malformed_arguments_result(
                         "think_and_respond", raw_arguments, e, None
                     )
+                    call_id = tc.get("id") or f"malformed-{malformed}"
                     oai_messages.append(
                         {
                             "role": "assistant",
                             "content": message.get("content"),
-                            "tool_calls": [tc],
+                            "tool_calls": [{**tc, "id": call_id}],
                         }
                     )
                     oai_messages.append(
                         {
                             "role": "tool",
-                            "tool_call_id": tc.get("id") or f"malformed-{malformed}",
+                            "tool_call_id": call_id,
                             "name": "think_and_respond",
                             "content": json.dumps(error_result),
                         }
@@ -1301,7 +1302,7 @@ class OpenAITasteBackend:
             break
 
         # Extract tool call output
-        for tc in message.get("tool_calls", []):
+        for tc in tool_calls:
             fn = tc.get("function", {})
             if fn.get("name") == "think_and_respond":
                 raw_output = self._parse_tool_arguments(
@@ -1534,9 +1535,11 @@ class OpenAITasteBackend:
                     preset = self._malformed_arguments_result(
                         name, raw_arguments, e, tool_executor
                     )
-                    non_terminal_calls.append(
-                        (tc, tc.get("id") or f"malformed-{malformed}", {}, preset)
-                    )
+                    # A call with no id gets a synthetic one, inserted into
+                    # the echoed assistant tool_call too so the provider
+                    # sees matching ids.
+                    call_id = tc.get("id") or f"malformed-{malformed}"
+                    non_terminal_calls.append(({**tc, "id": call_id}, call_id, {}, preset))
                     continue
                 if name == "think_and_respond":
                     terminal_output = arguments
@@ -1600,7 +1603,9 @@ class OpenAITasteBackend:
             assistant_message = {
                 "role": "assistant",
                 "content": message.get("content"),
-                "tool_calls": tool_calls,
+                # Echo from the tuples, not the raw list, so a synthetic id
+                # given to a malformed id-less call matches its tool result.
+                "tool_calls": [tc for tc, _id, _args, _preset in non_terminal_calls],
             }
             conversation.append(assistant_message)
             for tc, tool_call_id, arguments, preset in non_terminal_calls:
