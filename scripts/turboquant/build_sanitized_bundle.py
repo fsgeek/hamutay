@@ -107,6 +107,81 @@ def extract_interfaces(plan_text: str) -> tuple[str, list[str]]:
         elif line.strip():
             dropped.append(f"{number}: {line.strip()[:60]}")
 
+    # Declared public conventions that live in plan prose rather than in an
+    # Interfaces block. Omitting them is over-stripping: a clean validator can
+    # reasonably choose a column-vector convention, the opposite zero-sign
+    # rule, or a different bit order, and manufacture false failures against a
+    # correct implementation. These are wire/representation semantics, stated
+    # as declarations with no worked values, test names, or assertions.
+    kept.append(
+        "\n## Declared numerical and representation conventions\n\n"
+        "- Registered dimension is 128. Inputs are arbitrary nonzero vectors: "
+        "normalize before applying a spherical quantizer and restore the "
+        "original norm on reconstruction.\n"
+        "- A zero vector has norm zero, all-zero codes and sketches, and "
+        "exact-zero reconstruction.\n"
+        "- Vectors are rows. Rotation is `y = x @ rotation.T`; inverse "
+        "rotation is `x_hat = y_hat @ rotation`. QJL projections are stored "
+        "as rows, so a batch sketch is `residual @ projection.T`.\n"
+        "- In the transparent reference every zero sign maps to `+1`. The "
+        "pinned author kernel maps exact zero to `-1`; this is a declared, "
+        "documented convention difference, not a defect.\n"
+        "- Bit packing is little-endian within each byte: sketch coordinate "
+        "`j` occupies bit `j % 8` of byte `j // 8`.\n"
+        "- `derive_seed` wire format: SHA-256 over the UTF-8 string formed by "
+        "joining the study seed and the given fields with `|`, taking the "
+        "first 16 bytes as an unsigned big-endian integer. Integer fields "
+        "serialize as unpadded base-10.\n"
+        "- A `b`-bit product quantizer contains a `b-1`-bit Algorithm 1 "
+        "codebook plus its fixed QJL sketch and residual norm. Total bits 1 "
+        "through 4 therefore use 0- through 3-bit MSE codebooks.\n"
+        "- Rotations and codebooks are constructed in FP64 and frozen as "
+        "FP32. Quantization, reconstruction, and diagnostic reductions are "
+        "FP32 unless otherwise stated.\n"
+    )
+
+    kept.append(
+        "\n## Public result types\n\n"
+        "The gate-evaluation API consumes and returns declared types. Field "
+        "names and roles are public contract; no worked values are given.\n\n"
+        "- `QualificationMetrics` carries, per bit width: `bits`, "
+        "`mse_observed`, `mse_analytic_target`, `mse_paper_target`, "
+        "`product_observed`, `product_paper_target`, `normalized_bias_mean`, "
+        "`normalized_bias_rmse`, `normalized_bias_ci95`, and "
+        "`normalized_bias_ci9875`. The two interval fields are "
+        "`(low, high)` pairs.\n"
+        "- `QualificationResult` carries `metrics` (a sequence of "
+        "`QualificationMetrics`) and `determinism_passed`.\n"
+        "- `GateResult` carries `name`, `passed`, `observed`, `threshold`, "
+        "and `detail`; the author-differential gate additionally carries "
+        "`status`, whose values include `not_run`.\n"
+        "- `partition_block_ids(sample_count, block_count)` forms contiguous "
+        "equal blocks and rejects non-divisible inputs.\n"
+    )
+
+    kept.append(
+        "\n## Public CLI and evidence behavior\n\n"
+        "Stated as behavior, not implementation.\n\n"
+        "- Registered mode freezes the declared scientific counts and rejects "
+        "any attempt to override them. Development mode may accept explicit "
+        "counts and is non-certifying.\n"
+        "- Options include `--profile`, `--output-root`, `--run-id`, the "
+        "scientific-count options, `--author-qjl-checkout`, and "
+        "`--allow-dirty-path`. Registered mode requires a clean worktree "
+        "except for declared dirty paths.\n"
+        "- A run directory contains a manifest, resolved inputs, one record "
+        "per process execution, a terminal qualification record, and a log. "
+        "All five gates and the terminal status appear in the terminal "
+        "qualification record.\n"
+        "- Evidence is append-only: creating a run directory that already "
+        "exists is refused. Terminal status is one of `passed`, `failed`, or "
+        "`error`.\n"
+        "- Registered exit success is possible only when all five named gates "
+        "are present and pass.\n"
+        "- Canonical JSON is sorted, compact, non-ASCII-preserving, "
+        "newline-terminated, and rejects non-finite floats.\n"
+    )
+
     # The registered CLI's required arguments are declared contract, stated in
     # Task 7 Step 3 prose rather than in an Interfaces block. Omitting it
     # would reproduce finding F1, in which the first validator wrote tests
@@ -138,7 +213,16 @@ def extract_interfaces(plan_text: str) -> tuple[str, list[str]]:
     return header + "\n".join(kept).rstrip() + "\n", dropped
 
 
-def build(plan: Path, spec: Path, output: Path, *, force: bool = False) -> dict:
+def build(
+    plan: Path,
+    spec: Path,
+    output: Path,
+    *,
+    audit_dir: Path,
+    paper: Path | None = None,
+    implementation_commit: str | None = None,
+    force: bool = False,
+) -> dict:
     if output.exists():
         if not force:
             raise FileExistsError(
@@ -151,8 +235,9 @@ def build(plan: Path, spec: Path, output: Path, *, force: bool = False) -> dict:
     contract = output / "interface-contract.md"
     contract.write_text(contract_text, encoding="utf-8")
 
-    spec_copy = output / spec.name
-    shutil.copy2(spec, spec_copy)
+    shutil.copy2(spec, output / spec.name)
+    if paper is not None:
+        shutil.copy2(paper, output / paper.name)
 
     # Fail loudly if any forbidden token survived into the contract.
     forbidden = ("def test_", "assert ", "np.testing", "pytest", "1.0049", "0.00199")
@@ -171,6 +256,14 @@ def build(plan: Path, spec: Path, output: Path, *, force: bool = False) -> dict:
     manifest = {
         "bundle_version": 1,
         "built_from_commit": commit,
+        "implementation_under_review": implementation_commit
+        or "(not supplied -- condition 3 requires this explicitly)",
+        "builder_script_sha256": sha256_file(Path(__file__)),
+        "paper_artifact": (
+            "supplied and hashed below"
+            if paper is not None
+            else "MISSING -- condition 3 requires a local arXiv 2504.19874 v1 copy"
+        ),
         "source_plan_sha256": sha256_file(plan),
         "source_spec_sha256": sha256_file(spec),
         "files": {
@@ -208,9 +301,37 @@ def build(plan: Path, spec: Path, output: Path, *, force: bool = False) -> dict:
     manifest_path.write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
-    (output / "dropped-from-plan.txt").write_text(
-        "\n".join(dropped) + "\n", encoding="utf-8"
+    # VERIFIER-ONLY. The dropped-lines log quotes the implementer test code
+    # that caused F5 -- constants, test names, mock structure. Writing it into
+    # the delivery directory would ship the exact contamination the bundle
+    # exists to prevent. It is written outside the bundle and must never be
+    # supplied to the clean validator.
+    audit_dir.mkdir(parents=True, exist_ok=True)
+    audit_log = audit_dir / "dropped-from-plan.VERIFIER-ONLY.txt"
+    audit_log.write_text(
+        "# VERIFIER-ONLY AUDIT LOG -- DO NOT SUPPLY TO THE CLEAN VALIDATOR.\n"
+        "# Quotes implementer test code (finding F5).\n\n"
+        + "\n".join(dropped)
+        + "\n",
+        encoding="utf-8",
     )
+
+    # Every delivered file must be hashed, and nothing undelivered may sit in
+    # the bundle directory.
+    delivered = sorted(path for path in output.iterdir() if path.is_file())
+    manifest["files"] = {path.name: sha256_file(path) for path in delivered}
+    manifest["audit_log_written_outside_bundle"] = str(audit_log)
+    manifest_path.write_text(
+        json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
+    # Anchor: the manifest's own hash, to be retained out of band in the
+    # signed freeze record. A manifest that hashes only its payloads proves
+    # internal consistency, not provenance.
+    manifest_digest = sha256_file(manifest_path)
+    (audit_dir / "MANIFEST.sha256").write_text(
+        f"{manifest_digest}  MANIFEST.json\n", encoding="utf-8"
+    )
+    manifest["_manifest_sha256_anchor"] = manifest_digest
     return manifest
 
 
@@ -219,10 +340,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--spec", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--audit-dir", type=Path, required=True)
+    parser.add_argument("--paper", type=Path, default=None)
+    parser.add_argument("--implementation-commit", default=None)
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args(argv)
 
-    manifest = build(args.plan, args.spec, args.output, force=args.force)
+    manifest = build(
+        args.plan,
+        args.spec,
+        args.output,
+        audit_dir=args.audit_dir,
+        paper=args.paper,
+        implementation_commit=args.implementation_commit,
+        force=args.force,
+    )
     print(json.dumps(manifest, indent=2, sort_keys=True))
     return 0
 

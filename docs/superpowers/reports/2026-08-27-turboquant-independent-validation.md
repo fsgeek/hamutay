@@ -359,6 +359,59 @@ closed.
 
 Suite total 197 → 198 collected; 198 passed with no skips.
 
+### F12 — The F5 remediation shipped F5
+
+**Disposition: accepted (Codex bundle check, condition 2). Corrected.**
+
+The sanitized bundle builder written to prevent F5 wrote its dropped-lines
+audit log **into the delivery directory**. That log quotes the exact
+implementer test code that caused F5 — `1.0049`, `1.0049 / 1.149`, `1.149`,
+`0.00199`, `def test_values_inside_registered_gate_boundaries_pass`,
+`def test_registered_workers_are_three_fresh_processes`, `monkeypatch.setattr`,
+the mock structure, and hundreds of further assertion prefixes. Sixty-character
+truncation does not sanitize a design.
+
+Handing that directory to the clean validator as a unit would have reproduced
+F5 exactly, through the artifact built to prevent it.
+
+The author's own leak audit passed because it grepped `interface-contract.md`
+rather than the directory. The delivered set was never audited as a set. This
+is the same negative-space failure as F2, F9, and the F8 and F10 closures: the
+check examined the object the author was thinking about, not the object that
+would actually be handed over.
+
+Corrected: the audit log is written outside the bundle, prefixed
+`VERIFIER-ONLY`, named in the manifest as excluded from delivery, and the leak
+audit now runs over every file in the delivery directory.
+
+**This is the third consecutive finding whose remediation reproduced the defect
+being remediated** (F8's tolerance test, F10's stderr capture, and now the
+bundle builder). The recurrence is recorded as data, not as contrition.
+
+### F13 — The first bundle was over-stripped
+
+**Disposition: accepted (Codex bundle check). Corrected.**
+
+Over-stripping manufactures false findings as surely as leakage manufactures
+false confidence. The first bundle omitted public contract a clean validator
+needs and cannot obtain from the paper or specification:
+
+- the `QualificationResult`, `QualificationMetrics`, and `GateResult` field
+  contracts — the exact area where the contaminated round copied a plan
+  constructor, because the schema was otherwise unavailable;
+- the row-vector convention (`x @ rotation.T`), zero-vector handling, the
+  transparent `+1` zero-sign rule against the kernel's `-1`, little-endian bit
+  packing, the `derive_seed` wire format, and the `b-1` bit accounting;
+- the public CLI and evidence behavior needed to test the five gates as a
+  black box.
+
+Without these a clean validator can reasonably choose a column-vector
+convention, the opposite zero-sign rule, or a different bit order, and produce
+false failures against a correct implementation.
+
+All are now declared in the contract as behavior, with no worked values, test
+names, assertions, or implementation steps.
+
 ### F11 — The proposed "second arm" framing was unsound
 
 **Disposition: accepted (Codex round 2; its omission from the first draft of
