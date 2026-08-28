@@ -217,14 +217,65 @@ provenance for the freeze rests on testimony, not evidence.
 
 ### F7 — CLAUDE.md supplied before freeze
 
-**Disposition: disclosed, non-material, PI disposition pending.**
+**Disposition: RESOLVED 2026-08-28. Recorded as a disclosed, non-material
+protocol deviation. Accepted by the principal investigator (Tony Mason).**
 
-No TurboQuant implementation or interface detail was identified in the
-supplied CLAUDE.md; it contains repository, signing, and experiment guidance.
-That is weaker than "it cannot have shaped an assertion," which the evidence
-does not support. It is a formal protocol deviation that independently
-prevents a clean-envelope claim. Less material than F5. **PI disposition
-pending — this is an open item, not a resolved one.**
+`CLAUDE.md` (116 lines, nine sections) was supplied to the validation author
+before the freeze and was declared in the freeze commit's materials list from
+the outset. It was not an undisclosed exposure.
+
+**Evidence.** A case-insensitive search of `CLAUDE.md` for every relevant
+term — `turboquant`, `qjl`, `lloyd`, `codebook`, `quantiz`, `rotation`,
+`sketch`, `distortion`, `bootstrap`, `gate`, `128`, `0.047`, `1.57` — returns
+zero matches. This is not "no implementation details were identified"; it is
+the absence of any occurrence.
+
+```
+grep -in "turboquant\|qjl\|lloyd\|codebook\|quantiz\|rotation\|sketch\|\
+distortion\|bootstrap\|gate\|128\|0.047\|1.57" CLAUDE.md   # no output
+```
+
+The document's sections are: git signing and OpenTimestamps stamping
+(process — and the reason the file was supplied, the task having named it as
+the source of the signing identity); running experiments and the chat
+interface (process); and four sections of methodological guidance about
+**tensor projection**, a different subsystem — `max_tokens` truncation, the
+`Projector` comparability rule, tensor capture, and batch size as confound.
+
+**The strongest argument against non-materiality, and why it fails.** The four
+methodological sections are not empty of transferable disposition: they concern
+silent truncation, stripped-down schemas producing structurally different
+results, and controlling confounds. One could argue that reading them primed an
+adversarial testing posture.
+
+That argument proves too much — any exposure to sound methodology would then
+count as contamination, making independence unattainable rather than merely
+difficult. It also points the wrong way. This validator's actual failures (F2,
+F9, and the first version of the F8 tolerance test) were three silently vacuous
+assertions. `CLAUDE.md`'s central lesson is that silent failure is worse than a
+crash. Had that transferred, those are precisely the defects it would have
+prevented. It did not.
+
+**Contrast with F5.** F5 is a specific numeric value (`1.0049 / 1.149`)
+appearing byte-identical in the implementer's plan and the validator's test —
+a demonstrated channel carrying implementer test design to the validator. F7
+has no such channel, because the document contains nothing about this
+algorithm.
+
+**PI disposition.** The principal investigator reviewed the evidence and
+judged the deviation non-material, accepting it for this record. The
+specification requires a written technical disposition for findings that are
+not treated as blocking; this is that disposition.
+
+**What this resolution does not do.** It does not unblock the gate. F5 and F6
+keep this record `blocked` regardless of how F7 resolves. Non-material is not
+harmless: F7 independently prevents describing this record as a clean
+sealed-envelope validation, and the suite README states that.
+
+**Forward condition (new, condition 13).** The clean re-freeze must receive the
+signing identity as a bare identity string in its prompt rather than the whole
+`CLAUDE.md` file, removing the deviation entirely from the next round rather
+than re-litigating it.
 
 ### F8 — The independent suite never exercises the author differential
 
@@ -457,11 +508,15 @@ alone does not satisfy them.
     the author differential active, and a signed, timestamped R1 evidence and
     report commit. **Only a passing Task 9 record authorizes writing the second
     model/cache-path plan; a passing Task 8 alone does not.**
+13. Supply the clean validator with the signing identity as a bare string
+    (email, name, key fingerprint) in its prompt. Do not supply `CLAUDE.md`.
+    This removes F7's deviation from the next round at negligible cost.
 
 ## Disposition requested from the principal investigator
 
-- **F7 (CLAUDE.md):** the author recommends recording it as a disclosed,
-  non-material deviation.
+- **F7 (CLAUDE.md): RESOLVED.** Recorded as a disclosed, non-material
+  deviation and accepted by the PI on 2026-08-28. Condition 13 removes it from
+  the next round.
 - **F5, F6:** the author does not recommend waiving these. They are the reason
   this report is `blocked` rather than `passed`.
 - If the PI elects to proceed for internal engineering purposes despite F5 and
