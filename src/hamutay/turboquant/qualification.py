@@ -7,7 +7,7 @@ import operator
 from dataclasses import dataclass
 from functools import lru_cache
 from numbers import Real
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -266,6 +266,64 @@ class GateResult:
     observed: Any
     threshold: Any
     detail: str
+    status: str | None = None
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name:
+            raise ValueError("gate name must be a nonempty string")
+        if not isinstance(self.passed, bool):
+            raise ValueError("gate passed must be boolean")
+        if not isinstance(self.detail, str) or not self.detail:
+            raise ValueError("gate detail must be a nonempty string")
+        status = self.status or ("passed" if self.passed else "failed")
+        if status not in {"passed", "failed", "not_run"}:
+            raise ValueError("gate status must be passed, failed, or not_run")
+        if self.passed != (status == "passed"):
+            raise ValueError("gate passed must agree with gate status")
+        object.__setattr__(self, "status", status)
+
+
+def author_code_differential_gate(
+    oracle_result: Mapping[str, Any] | None,
+) -> GateResult:
+    """Return the fifth gate, explicitly retaining a development non-run."""
+    threshold = {"atol": 1e-5, "rtol": 1e-4}
+    if oracle_result is None:
+        return GateResult(
+            name="author_code_differential",
+            passed=False,
+            observed="not_run",
+            threshold=threshold,
+            detail="Author QJL checkout was omitted in development mode.",
+            status="not_run",
+        )
+    if not isinstance(oracle_result, Mapping):
+        raise ValueError("author QJL oracle result must be a mapping")
+    record = oracle_result.get("gate")
+    if not isinstance(record, Mapping):
+        raise ValueError("author QJL oracle result is missing its gate")
+    if record.get("name") != "author_code_differential":
+        raise ValueError("author QJL oracle returned the wrong gate name")
+    passed = record.get("passed")
+    if not isinstance(passed, bool):
+        raise ValueError("author QJL oracle gate passed value must be boolean")
+    oracle_status = oracle_result.get("status")
+    expected_status = "passed" if passed else "failed"
+    if oracle_status != expected_status:
+        raise ValueError("author QJL oracle status disagrees with its gate")
+    if record.get("threshold") != threshold:
+        raise ValueError("author QJL oracle changed the frozen FP32 tolerance")
+    detail = record.get("detail")
+    if not isinstance(detail, str) or not detail:
+        raise ValueError("author QJL oracle gate detail must be nonempty")
+    return GateResult(
+        name="author_code_differential",
+        passed=passed,
+        observed=record.get("observed"),
+        threshold=threshold,
+        detail=detail,
+        status=expected_status,
+    )
 
 
 def partition_block_ids(sample_count: int, block_count: int) -> NDArray[np.int64]:

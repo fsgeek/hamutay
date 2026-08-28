@@ -20,6 +20,7 @@ from hamutay.turboquant.qualify import (
     _completion_exit_status,
     _compare_worker_outputs,
     _publish_terminal_pair,
+    _terminal_certification,
     _validate_output_root,
     _validate_registered_cleanliness,
     build_parser,
@@ -27,7 +28,9 @@ from hamutay.turboquant.qualify import (
     run_registered_workers,
 )
 from hamutay.turboquant.qualification import (
+    GateResult,
     QualificationConfig,
+    author_code_differential_gate,
     run_synthetic_qualification,
 )
 
@@ -57,7 +60,16 @@ def development_output_root(tmp_path: Path):
 
 def test_registered_profile_freezes_all_scientific_counts():
     args = build_parser().parse_args(
-        ["--profile", "registered", "--output-root", "out", "--run-id", "r1"]
+        [
+            "--profile",
+            "registered",
+            "--output-root",
+            "out",
+            "--run-id",
+            "r1",
+            "--author-qjl-checkout",
+            "/tmp/QJL",
+        ]
     )
 
     assert args.dimension == 128
@@ -78,6 +90,8 @@ def test_registered_profile_rejects_count_overrides():
                 "out",
                 "--run-id",
                 "r1",
+                "--author-qjl-checkout",
+                "/tmp/QJL",
                 "--sample-count",
                 "10",
             ]
@@ -106,6 +120,8 @@ def test_registered_profile_rejects_every_scientific_override(flag, value):
                 "out",
                 "--run-id",
                 "r1",
+                "--author-qjl-checkout",
+                "/tmp/QJL",
                 flag,
                 value,
             ]
@@ -116,16 +132,87 @@ def test_registered_profile_rejects_every_scientific_override(flag, value):
 
 def test_registered_profile_uses_divisible_batch_size():
     args = build_parser().parse_args(
-        ["--profile", "registered", "--output-root", "out", "--run-id", "r1"]
+        [
+            "--profile",
+            "registered",
+            "--output-root",
+            "out",
+            "--run-id",
+            "r1",
+            "--author-qjl-checkout",
+            "/tmp/QJL",
+        ]
     )
 
     assert args.batch_size == 4000
     assert args.sample_count % args.batch_size == 0
 
 
-def test_interim_exit_policy_distinguishes_development_from_registered():
-    assert _completion_exit_status("development") == 0
-    assert _completion_exit_status("registered") == 1
+def test_registered_profile_requires_author_checkout():
+    with pytest.raises(SystemExit) as error:
+        build_parser().parse_args(
+            ["--profile", "registered", "--output-root", "out", "--run-id", "r1"]
+        )
+
+    assert error.value.code == 2
+
+
+def test_development_profile_may_omit_author_checkout():
+    args = build_parser().parse_args(
+        ["--profile", "development", "--output-root", "out", "--run-id", "dev"]
+    )
+
+    assert args.author_qjl_checkout is None
+
+
+def test_registered_exit_policy_is_zero_only_when_all_five_gates_pass():
+    assert _completion_exit_status("development", all_five_passed=False) == 0
+    assert _completion_exit_status("development", all_five_passed=True) == 0
+    assert _completion_exit_status("registered", all_five_passed=False) == 1
+    assert _completion_exit_status("registered", all_five_passed=True) == 0
+
+
+def test_author_gate_reports_not_run_without_checkout():
+    gate = author_code_differential_gate(None)
+
+    assert asdict(gate) == {
+        "name": "author_code_differential",
+        "passed": False,
+        "observed": "not_run",
+        "threshold": {"atol": 1e-5, "rtol": 1e-4},
+        "detail": "Author QJL checkout was omitted in development mode.",
+        "status": "not_run",
+    }
+
+
+def test_registered_certification_requires_five_passed_gates():
+    passed = tuple(
+        GateResult(
+            name=name,
+            passed=True,
+            observed=True,
+            threshold=True,
+            detail="passed",
+        )
+        for name in (
+            "round_trip_determinism",
+            "mse_distortion",
+            "qjl_bias_equivalence",
+            "published_qjl_distortion",
+            "author_code_differential",
+        )
+    )
+    assert _terminal_certification("registered", passed) == {
+        "scope": "r1",
+        "certifying": True,
+        "reason": "All five registered R1 qualification gates passed.",
+    }
+    failed = (*passed[:-1], author_code_differential_gate(None))
+    assert _terminal_certification("registered", failed) == {
+        "scope": "r1",
+        "certifying": False,
+        "reason": "At least one of the five registered R1 gates did not pass.",
+    }
 
 
 def test_registered_cleanliness_allows_only_exact_declared_dirty_paths():
@@ -165,6 +252,8 @@ def _namespace_args(profile: str, output_root: Path, run_id: str):
                 "1",
             ]
         )
+    else:
+        command.extend(["--author-qjl-checkout", "/tmp/QJL"])
     return build_parser().parse_args(command)
 
 
@@ -488,7 +577,7 @@ def test_development_cli_writes_complete_noncertifying_fresh_process_evidence(
         "reason": CERTIFICATION_REASON,
         "scope": "development",
     }
-    assert manifest["schema"] == "hamutay.turboquant.manifest.v1"
+    assert manifest["schema"] == "hamutay.turboquant.manifest.v2"
     assert manifest["status"] in {"passed", "failed"}
     assert manifest["certification"] == certification
     assert manifest["run_id"] == run_id
@@ -520,7 +609,7 @@ def test_development_cli_writes_complete_noncertifying_fresh_process_evidence(
     assert manifest["source_paper_targets"]["qjl_numerator"] == {"1": 1.57}
     assert manifest["provenance"]["source_sha256"]
 
-    assert qualification["schema"] == "hamutay.turboquant.qualification.v1"
+    assert qualification["schema"] == "hamutay.turboquant.qualification.v2"
     assert qualification["status"] == manifest["status"]
     assert qualification["certification"] == certification
     assert [gate["name"] for gate in qualification["gates"]] == [
@@ -528,9 +617,18 @@ def test_development_cli_writes_complete_noncertifying_fresh_process_evidence(
         "mse_distortion",
         "qjl_bias_equivalence",
         "published_qjl_distortion",
+        "author_code_differential",
     ]
     assert qualification["gates"][0]["passed"] is True
-    assert "author_code_differential" not in json.dumps(qualification["gates"])
+    assert qualification["gates"][-1] == {
+        "name": "author_code_differential",
+        "passed": False,
+        "observed": "not_run",
+        "threshold": {"atol": 1e-5, "rtol": 1e-4},
+        "detail": "Author QJL checkout was omitted in development mode.",
+        "status": "not_run",
+    }
+    assert qualification["author_code_differential"] == "not_run"
     assert qualification["process_determinism"]["passed"] is True
     assert len(qualification["metrics"]) == 1
     assert np.isfinite(qualification["metrics"][0]["mse_observed"])

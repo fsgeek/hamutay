@@ -7,13 +7,16 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 import hashlib
 import importlib.metadata
+import importlib.util
 import os
 from pathlib import Path
 import platform
 import subprocess
 import sys
+import tempfile
 import traceback
 from typing import Sequence
+from types import ModuleType
 import uuid
 
 import numpy as np
@@ -31,17 +34,28 @@ from .artifacts import (
 )
 from .codebook import lloyd_max_codebook
 from .qualification import (
+    GateResult,
     QualificationConfig,
     QualificationMetrics,
     QualificationResult,
+    author_code_differential_gate,
     evaluate_algorithm_gates,
 )
 from .rotation import canonical_qr, gaussian_rotation
 from .seeding import STUDY_SEED_HEX, rng_for
 
-CERTIFICATION_REASON = (
-    "Task 7 has not joined the author_code_differential gate; this four-gate "
-    "result cannot certify R1."
+CERTIFICATION_REASON = "Development qualification output cannot certify R1."
+_REGISTERED_PENDING_REASON = (
+    "Registered R1 certification requires successful completion of all five gates."
+)
+_MANIFEST_SCHEMA = "hamutay.turboquant.manifest.v2"
+_QUALIFICATION_SCHEMA = "hamutay.turboquant.qualification.v2"
+_EXPECTED_GATE_NAMES = (
+    "round_trip_determinism",
+    "mse_distortion",
+    "qjl_bias_equivalence",
+    "published_qjl_distortion",
+    "author_code_differential",
 )
 
 _REGISTERED_COUNTS = {
@@ -83,6 +97,7 @@ _NUMERICAL_CONVENTIONS = {
     "qjl_projection": "projection rows; batch sketches = residual @ projection.T",
     "zero_vectors": ("zero norm, zero codes/sketches, and exact zero reconstruction"),
     "transparent_zero_sign": "+1",
+    "author_zero_sign": "-1 (declared differential convention only)",
     "bit_packing": "little-endian within each byte",
 }
 
@@ -145,6 +160,8 @@ class _QualificationParser(argparse.ArgumentParser):
         for name, default in defaults.items():
             if getattr(parsed, name) is None:
                 setattr(parsed, name, default)
+        if parsed.profile == "registered" and parsed.author_qjl_checkout is None:
+            self.error("registered profile requires --author-qjl-checkout")
         return parsed
 
 
@@ -162,6 +179,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--bootstrap-blocks", type=int)
     parser.add_argument("--bootstrap-resamples", type=int)
     parser.add_argument("--bits", type=_bits)
+    parser.add_argument("--author-qjl-checkout", type=Path)
     parser.add_argument("--allow-dirty-path", action="append", default=[])
     return parser
 
@@ -297,10 +315,24 @@ def _validate_registered_cleanliness(
 
 def _source_hashes(repository: Path) -> dict[str, str]:
     source_root = repository / "src" / "hamutay" / "turboquant"
-    return {
+    hashes = {
         path.relative_to(repository).as_posix(): sha256_file(path)
         for path in sorted(source_root.glob("*.py"))
     }
+    oracle = repository / "scripts" / "turboquant" / "author_qjl_oracle.py"
+    if oracle.is_file():
+        hashes[oracle.relative_to(repository).as_posix()] = sha256_file(oracle)
+    return dict(sorted(hashes.items()))
+
+
+def _load_author_qjl_oracle(repository: Path) -> ModuleType:
+    path = repository / "scripts" / "turboquant" / "author_qjl_oracle.py"
+    spec = importlib.util.spec_from_file_location("hamutay_author_qjl_oracle", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load author QJL oracle from {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _package_version(distribution: str) -> str:
@@ -413,18 +445,50 @@ class _RunLog:
 
 
 def _certification(profile: str) -> dict[str, object]:
+    if profile not in {"development", "registered"}:
+        raise ValueError("unknown qualification profile")
     return {
-        "scope": "development" if profile == "development" else "interim_r1",
+        "scope": "development" if profile == "development" else "r1",
         "certifying": False,
-        "reason": CERTIFICATION_REASON,
+        "reason": (
+            CERTIFICATION_REASON
+            if profile == "development"
+            else _REGISTERED_PENDING_REASON
+        ),
     }
 
 
-def _completion_exit_status(profile: str) -> int:
+def _terminal_certification(
+    profile: str, gates: Sequence[GateResult]
+) -> dict[str, object]:
+    resolved = tuple(gates)
+    if tuple(gate.name for gate in resolved) != _EXPECTED_GATE_NAMES:
+        raise ValueError("terminal R1 evidence requires exactly five named gates")
+    if profile == "development":
+        return {
+            "scope": "development",
+            "certifying": False,
+            "reason": CERTIFICATION_REASON,
+        }
+    if profile == "registered":
+        certifying = all(gate.status == "passed" and gate.passed for gate in resolved)
+        return {
+            "scope": "r1",
+            "certifying": certifying,
+            "reason": (
+                "All five registered R1 qualification gates passed."
+                if certifying
+                else "At least one of the five registered R1 gates did not pass."
+            ),
+        }
+    raise ValueError("unknown qualification profile")
+
+
+def _completion_exit_status(profile: str, *, all_five_passed: bool) -> int:
     if profile == "development":
         return 0
     if profile == "registered":
-        return 1
+        return 0 if all_five_passed else 1
     raise ValueError("unknown qualification profile")
 
 
@@ -448,12 +512,17 @@ def _provisional_manifest(
 ) -> dict[str, object]:
     configuration = _configuration_dict(config)
     return {
-        "schema": "hamutay.turboquant.manifest.v1",
+        "schema": _MANIFEST_SCHEMA,
         "run_id": args.run_id,
         "run_uuid": str(_new_uuid()),
         "started_at_utc": started_at,
         "ended_at_utc": None,
         "profile": args.profile,
+        "author_qjl_checkout": (
+            str(args.author_qjl_checkout)
+            if args.author_qjl_checkout is not None
+            else None
+        ),
         "status": "running",
         "certification": _certification(args.profile),
         "configuration": configuration,
@@ -585,6 +654,28 @@ def _result_from_execution(
     )
 
 
+def _run_author_qjl_oracle(
+    *, checkout: Path, run_directory: Path, oracle: ModuleType
+) -> dict[str, object]:
+    """Run the pinned oracle in disposable storage and retain its full JSON record."""
+    with tempfile.TemporaryDirectory(
+        prefix=f".{run_directory.name}.author-qjl.", dir=run_directory.parent
+    ) as temporary:
+        output = Path(temporary)
+        result = oracle.run_author_qjl_differential(
+            checkout=checkout, output=output, device="cuda:0"
+        )
+        persisted = read_canonical_json(output / "author_qjl_differential.json")
+        if persisted != result:
+            raise ValueError("author QJL in-memory and canonical records differ")
+        npz = result.get("npz")
+        if not isinstance(npz, dict) or npz.get("sha256") != sha256_file(
+            output / "author_qjl_differential.npz"
+        ):
+            raise ValueError("author QJL NPZ hash is invalid")
+        return result
+
+
 def _existing_artifact_hashes(
     run_directory: Path, *, include_manifest: bool
 ) -> dict[str, str]:
@@ -606,13 +697,22 @@ def _terminal_error_record(
     recovery_errors: list[dict[str, str]],
 ) -> dict[str, object]:
     return {
-        "schema": "hamutay.turboquant.qualification.v1",
+        "schema": _QUALIFICATION_SCHEMA,
         "run_id": args.run_id,
         "profile": args.profile,
         "status": "error",
         "certification": _certification(args.profile),
         "metrics": [],
-        "gates": [],
+        "gates": (
+            [asdict(author_code_differential_gate(None))]
+            if args.profile == "development" and args.author_qjl_checkout is None
+            else []
+        ),
+        "author_code_differential": (
+            "not_run"
+            if args.profile == "development" and args.author_qjl_checkout is None
+            else "error"
+        ),
         "process_determinism": None,
         "declared_losses": _DECLARED_LOSSES,
         "numerical_conventions": _NUMERICAL_CONVENTIONS,
@@ -636,12 +736,17 @@ def _emergency_manifest(
 ) -> dict[str, object]:
     """Return a no-fail, partial manifest suitable for terminal recovery."""
     return {
-        "schema": "hamutay.turboquant.manifest.v1",
+        "schema": _MANIFEST_SCHEMA,
         "run_id": args.run_id,
         "run_uuid": None,
         "started_at_utc": None,
         "ended_at_utc": None,
         "profile": args.profile,
+        "author_qjl_checkout": (
+            str(args.author_qjl_checkout)
+            if args.author_qjl_checkout is not None
+            else None
+        ),
         "status": "running",
         "certification": _certification(args.profile),
         "configuration": _configuration_dict(config),
@@ -720,23 +825,38 @@ def _normal_terminal_pair(
     run_directory: Path,
     status: str,
     result: QualificationResult,
-    gates: tuple[object, ...],
+    gates: tuple[GateResult, ...],
+    author_result: dict[str, object] | None,
     process_determinism: dict[str, object],
 ) -> _TerminalPair:
     terminal_manifest = dict(manifest)
     terminal_manifest["ended_at_utc"] = _utc_now()
     terminal_manifest["status"] = status
+    terminal_manifest["certification"] = _terminal_certification(args.profile, gates)
+    terminal_manifest["author_code_differential"] = (
+        {
+            "status": author_result["status"],
+            "upstream": author_result["upstream"],
+            "extensions": author_result["extensions"],
+            "npz_sha256": author_result["npz"]["sha256"],
+        }
+        if author_result is not None
+        else "not_run"
+    )
     terminal_manifest["artifact_sha256"] = _existing_artifact_hashes(
         run_directory, include_manifest=False
     )
     qualification = {
-        "schema": "hamutay.turboquant.qualification.v1",
+        "schema": _QUALIFICATION_SCHEMA,
         "run_id": args.run_id,
         "profile": args.profile,
         "status": status,
-        "certification": _certification(args.profile),
+        "certification": _terminal_certification(args.profile, gates),
         "metrics": [asdict(metric) for metric in result.metrics],
         "gates": [asdict(gate) for gate in gates],
+        "author_code_differential": (
+            author_result if author_result is not None else "not_run"
+        ),
         "process_determinism": process_determinism,
         "declared_losses": _DECLARED_LOSSES,
         "numerical_conventions": _NUMERICAL_CONVENTIONS,
@@ -840,7 +960,7 @@ def _error_terminal_pair(
         except BaseException as error:
             _record_recovery_error(recovery_errors, "emergency_manifest", error)
             manifest = {
-                "schema": "hamutay.turboquant.manifest.v1",
+                "schema": _MANIFEST_SCHEMA,
                 "run_id": str(getattr(args, "run_id", "unknown")),
                 "profile": str(getattr(args, "profile", "unknown")),
             }
@@ -872,6 +992,13 @@ def execute_qualification(args: argparse.Namespace) -> int:
     args.output_root = _validate_output_root(args.profile, args.output_root, repository)
     commit, dirty_paths = _git_state(repository)
     _validate_registered_cleanliness(args.profile, dirty_paths, args.allow_dirty_path)
+    author_preflight: dict[str, object] | None = None
+    author_oracle: ModuleType | None = None
+    if args.author_qjl_checkout is not None:
+        author_oracle = _load_author_qjl_oracle(repository)
+        author_preflight = author_oracle.preflight_author_qjl(
+            checkout=args.author_qjl_checkout, device="cuda:0"
+        )
 
     try:
         run_directory = create_run_directory(args.output_root, args.run_id)
@@ -907,6 +1034,9 @@ def execute_qualification(args: argparse.Namespace) -> int:
             "torch": _package_version("torch"),
         }
         manifest["platform"] = _platform_metadata()
+        manifest["author_qjl_preflight"] = (
+            author_preflight if author_preflight is not None else "not_run"
+        )
         run_log.write("inputs", "constructing resolved FP32 arrays")
         array_hashes, resolved_inputs_sha256 = _freeze_resolved_inputs(
             resolved_inputs_path, config
@@ -936,9 +1066,25 @@ def execute_qualification(args: argparse.Namespace) -> int:
         )
         first_execution = _read_execution(outputs[0])
         result = _result_from_execution(first_execution, config)
-        gates = tuple(evaluate_algorithm_gates(result))
-        status = "passed" if all(gate.passed for gate in gates) else "failed"
-        run_log.write("gates", f"four interim gates evaluated with status {status}")
+        core_gates = tuple(evaluate_algorithm_gates(result))
+        author_result = (
+            _run_author_qjl_oracle(
+                checkout=args.author_qjl_checkout,
+                run_directory=run_directory,
+                oracle=author_oracle,
+            )
+            if args.author_qjl_checkout is not None
+            else None
+        )
+        gates = (*core_gates, author_code_differential_gate(author_result))
+        all_five_passed = all(gate.passed for gate in gates)
+        completed_gates_passed = (
+            all(gate.passed for gate in core_gates)
+            if author_result is None
+            else all_five_passed
+        )
+        status = "passed" if completed_gates_passed else "failed"
+        run_log.write("gates", f"five gates evaluated with status {status}")
         run_log.write("terminal", "terminal artifacts written; run is now immutable")
         run_log.close()
 
@@ -949,10 +1095,11 @@ def execute_qualification(args: argparse.Namespace) -> int:
             status=status,
             result=result,
             gates=gates,
+            author_result=author_result,
             process_determinism=process_determinism,
         )
         _publish_terminal_pair(run_directory, terminal_pair)
-        return _completion_exit_status(args.profile)
+        return _completion_exit_status(args.profile, all_five_passed=all_five_passed)
     except BaseException as error:
         traceback_text = traceback.format_exc()
         recovery_pair = terminal_pair
