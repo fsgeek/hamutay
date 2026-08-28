@@ -43,6 +43,8 @@ QUANT_EXTENSION_NAME = "hamutay_qjl_quant_648b3641"
 SCORE_EXTENSION_NAME = "hamutay_qjl_score_648b3641"
 CUDA_HOME = Path("/usr/local/cuda-12.8")
 NVCC = CUDA_HOME / "bin" / "nvcc"
+DEFAULT_CUDA = Path("/usr/local/cuda")
+EXPECTED_DEFAULT_CUDA = Path("/usr/local/cuda-13.2")
 DIMENSION = 128
 GROUP_SIZE = 32
 OUTLIER_COORDINATE = 127
@@ -73,6 +75,16 @@ def _validate_compiler_and_device(device: str) -> dict[str, Any]:
         raise RuntimeError("/usr/local/cuda-12.8/bin must be first on PATH")
     if not NVCC.is_file():
         raise RuntimeError("/usr/local/cuda-12.8/bin/nvcc does not exist")
+    try:
+        resolved_default_cuda = DEFAULT_CUDA.resolve(strict=True)
+    except FileNotFoundError as error:
+        raise RuntimeError(
+            "default /usr/local/cuda must resolve exactly to /usr/local/cuda-13.2"
+        ) from error
+    if resolved_default_cuda != EXPECTED_DEFAULT_CUDA:
+        raise RuntimeError(
+            "default /usr/local/cuda must resolve exactly to /usr/local/cuda-13.2"
+        )
     nvcc_output = _run_text(str(NVCC), "--version")
     release_match = re.search(r"release\s+(\d+\.\d+)", nvcc_output)
     version_match = re.search(r"V(\d+\.\d+\.\d+)", nvcc_output)
@@ -81,6 +93,8 @@ def _validate_compiler_and_device(device: str) -> dict[str, Any]:
     properties = torch.cuda.get_device_properties(0)
     return {
         "cuda_home": str(CUDA_HOME),
+        "default_cuda": str(DEFAULT_CUDA),
+        "default_cuda_resolved": str(resolved_default_cuda),
         "device": "cuda:0",
         "device_name": properties.name,
         "device_compute_capability": [properties.major, properties.minor],
@@ -297,6 +311,30 @@ def _comparison_record(
     return comparisons, passed
 
 
+def _gate_detail(comparisons: Mapping[str, Any]) -> str:
+    """Describe the comparison outcome without claiming failed conditions agree."""
+    failures: list[str] = []
+    if not comparisons["generic_projection_has_no_exact_zero"]:
+        failures.append("the generic projection contains exact FP32 zeros")
+    if not comparisons["inlier_sign_bytes_equal"]:
+        failures.append("packed inlier sign bytes differ")
+    if not comparisons["dummy_outlier_norms_exact_zero"]:
+        failures.append("dummy outlier norms are not exact zero")
+    if not comparisons["scores"]["within_tolerance"]:
+        failures.append(f"scores exceed atol={ATOL} and rtol={RTOL}")
+    if not comparisons["constructed_zero_projection"]["expected_declared_difference"]:
+        failures.append(
+            "the exact-zero signs do not preserve the declared "
+            "author-negative/transparent-positive difference"
+        )
+    if failures:
+        return "Pinned author QJL differential failed: " + "; ".join(failures) + "."
+    return (
+        "Pinned author QJL FP32 packed inlier signs and scores agree with the "
+        "transparent paper-literal reference; the dummy outlier channel is exact zero."
+    )
+
+
 def run_author_qjl_differential(
     *, checkout: Path, output: Path, device: str = "cuda:0"
 ) -> dict[str, Any]:
@@ -321,6 +359,7 @@ def run_author_qjl_differential(
                 keys, outlier_indices, projection, OUTLIER_SKETCH_DIM
             )
         )
+        author_outlier_signs_evidence = _cpu_array(author_outlier_signs)
         author_scores = score_extension.qjl_score_cuda_float_float(
             author_signs,
             author_outlier_signs,
@@ -336,6 +375,10 @@ def run_author_qjl_differential(
             keys, outlier_indices, zero_projection, OUTLIER_SKETCH_DIM
         )
     torch.cuda.synchronize(torch.device(device))
+    if not np.array_equal(
+        author_outlier_signs_evidence, _cpu_array(author_outlier_signs)
+    ):
+        raise RuntimeError("author score kernel mutated its outlier-sign input")
 
     zero_transparent = pack_signs(
         np.zeros_like(batch["keys"], dtype=np.float32) >= np.float32(0.0)
@@ -344,6 +387,7 @@ def run_author_qjl_differential(
         **batch,
         "author_inlier_sign_bytes": _cpu_array(author_signs),
         "author_outlier_norms": _cpu_array(author_outlier_norms),
+        "author_outlier_signs": author_outlier_signs_evidence,
         "author_scores": _cpu_array(author_scores),
         "zero_projection": np.zeros_like(batch["projection"], dtype=np.float32),
         "zero_author_inlier_sign_bytes": _cpu_array(zero_author_signs),
@@ -364,6 +408,7 @@ def run_author_qjl_differential(
         for name in (
             "author_inlier_sign_bytes",
             "author_outlier_norms",
+            "author_outlier_signs",
             "author_scores",
             "key_norms",
             "keys",
@@ -380,10 +425,7 @@ def run_author_qjl_differential(
     }
     atomic_savez(npz_path, artifact_arrays)
 
-    detail = (
-        "Pinned author QJL FP32 packed inlier signs and scores agree with the "
-        "transparent paper-literal reference; the dummy outlier channel is exact zero."
-    )
+    detail = _gate_detail(comparisons)
     gate = {
         "name": "author_code_differential",
         "passed": passed,

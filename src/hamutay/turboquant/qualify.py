@@ -523,6 +523,9 @@ def _provisional_manifest(
             if args.author_qjl_checkout is not None
             else None
         ),
+        "author_qjl_preflight": (
+            "pending" if args.author_qjl_checkout is not None else "not_run"
+        ),
         "status": "running",
         "certification": _certification(args.profile),
         "configuration": configuration,
@@ -994,11 +997,6 @@ def execute_qualification(args: argparse.Namespace) -> int:
     _validate_registered_cleanliness(args.profile, dirty_paths, args.allow_dirty_path)
     author_preflight: dict[str, object] | None = None
     author_oracle: ModuleType | None = None
-    if args.author_qjl_checkout is not None:
-        author_oracle = _load_author_qjl_oracle(repository)
-        author_preflight = author_oracle.preflight_author_qjl(
-            checkout=args.author_qjl_checkout, device="cuda:0"
-        )
 
     try:
         run_directory = create_run_directory(args.output_root, args.run_id)
@@ -1026,6 +1024,12 @@ def execute_qualification(args: argparse.Namespace) -> int:
         )
         atomic_write_json(manifest_path, manifest)
         run_log.write("manifest", "provisional manifest written")
+        if args.author_qjl_checkout is not None:
+            author_oracle = _load_author_qjl_oracle(repository)
+            author_preflight = author_oracle.preflight_author_qjl(
+                checkout=args.author_qjl_checkout, device="cuda:0"
+            )
+            manifest["author_qjl_preflight"] = author_preflight
         manifest["provenance"]["source_sha256"] = _source_hashes(repository)
         manifest["software"] = {
             "python": platform.python_version(),
@@ -1034,9 +1038,6 @@ def execute_qualification(args: argparse.Namespace) -> int:
             "torch": _package_version("torch"),
         }
         manifest["platform"] = _platform_metadata()
-        manifest["author_qjl_preflight"] = (
-            author_preflight if author_preflight is not None else "not_run"
-        )
         run_log.write("inputs", "constructing resolved FP32 arrays")
         array_hashes, resolved_inputs_sha256 = _freeze_resolved_inputs(
             resolved_inputs_path, config
@@ -1102,6 +1103,14 @@ def execute_qualification(args: argparse.Namespace) -> int:
         return _completion_exit_status(args.profile, all_five_passed=all_five_passed)
     except BaseException as error:
         traceback_text = traceback.format_exc()
+        if manifest is not None and manifest.get("author_qjl_preflight") == "pending":
+            manifest["author_qjl_preflight"] = {
+                "status": "error",
+                "error": {
+                    "type": type(error).__name__,
+                    "message": str(error),
+                },
+            }
         recovery_pair = terminal_pair
         recovery_attempts = 1
         if recovery_pair is None:

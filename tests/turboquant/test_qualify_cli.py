@@ -6,6 +6,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 import zipfile
 
 import numpy as np
@@ -803,6 +804,202 @@ def test_execution_exception_preserves_partial_run_and_terminal_error(
     assert qualification["error"]["message"] == "controlled worker failure"
     assert "controlled worker failure" in (run_directory / "run.log").read_text()
     assert not any(path.name.endswith(".tmp") for path in run_directory.iterdir())
+
+
+@pytest.mark.parametrize(
+    ("error_type", "message"),
+    [
+        (FileNotFoundError, "controlled missing author checkout"),
+        (ValueError, "controlled pinned checkout mismatch"),
+        (RuntimeError, "controlled CUDA compiler mismatch"),
+    ],
+)
+def test_author_preflight_fault_writes_terminal_error_pair_before_reraising(
+    error_type, message, monkeypatch, development_output_root
+):
+    run_id = f"author-preflight-{error_type.__name__.lower()}"
+    args = _namespace_args("development", development_output_root, run_id)
+    args.author_qjl_checkout = Path("/controlled/QJL")
+
+    def fail_preflight(**_kwargs):
+        raise error_type(message)
+
+    monkeypatch.setattr(
+        "hamutay.turboquant.qualify._load_author_qjl_oracle",
+        lambda _repository: SimpleNamespace(preflight_author_qjl=fail_preflight),
+    )
+
+    with pytest.raises(error_type, match=message):
+        execute_qualification(args)
+
+    run_directory = development_output_root / run_id
+    assert {path.name for path in run_directory.iterdir()} == {
+        "manifest.json",
+        "qualification.json",
+        "run.log",
+    }
+    manifest = _load_canonical_json(run_directory / "manifest.json")
+    qualification = _load_canonical_json(run_directory / "qualification.json")
+    assert manifest["status"] == qualification["status"] == "error"
+    assert manifest["author_qjl_preflight"] == {
+        "error": {"message": message, "type": error_type.__name__},
+        "status": "error",
+    }
+    assert qualification["author_code_differential"] == "error"
+    assert qualification["error"] == {
+        "message": message,
+        "traceback": qualification["error"]["traceback"],
+        "type": error_type.__name__,
+    }
+
+
+def test_real_cli_missing_author_checkout_is_nonzero_with_terminal_error_pair(
+    development_output_root, tmp_path
+):
+    run_id = "real-missing-author-checkout"
+    missing_checkout = tmp_path / "missing-QJL"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "hamutay.turboquant.qualify",
+            "--profile",
+            "development",
+            "--output-root",
+            str(development_output_root),
+            "--run-id",
+            run_id,
+            "--dimension",
+            "8",
+            "--sample-count",
+            "24",
+            "--batch-size",
+            "12",
+            "--bootstrap-blocks",
+            "6",
+            "--bootstrap-resamples",
+            "11",
+            "--bits",
+            "1",
+            "--author-qjl-checkout",
+            str(missing_checkout),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode != 0
+    assert "FileNotFoundError" in completed.stderr
+    run_directory = development_output_root / run_id
+    assert {path.name for path in run_directory.iterdir()} == {
+        "manifest.json",
+        "qualification.json",
+        "run.log",
+    }
+    manifest = _load_canonical_json(run_directory / "manifest.json")
+    qualification = _load_canonical_json(run_directory / "qualification.json")
+    assert manifest["status"] == qualification["status"] == "error"
+    assert manifest["author_qjl_preflight"]["status"] == "error"
+    assert qualification["error"]["type"] == "FileNotFoundError"
+
+
+def test_author_gate_contract_fault_uses_existing_terminal_recovery(
+    monkeypatch, development_output_root
+):
+    run_id = "author-contract-error"
+    args = _namespace_args("development", development_output_root, run_id)
+    args.author_qjl_checkout = Path("/controlled/QJL")
+    preflight = {
+        "environment": {
+            "default_cuda": "/usr/local/cuda",
+            "default_cuda_resolved": "/usr/local/cuda-13.2",
+        },
+        "upstream": {"commit": "648b3641f96b6e95e091217220b94e4739fd4d82"},
+    }
+    monkeypatch.setattr(
+        "hamutay.turboquant.qualify._load_author_qjl_oracle",
+        lambda _repository: SimpleNamespace(
+            preflight_author_qjl=lambda **_kwargs: preflight
+        ),
+    )
+    monkeypatch.setattr(
+        "hamutay.turboquant.qualify._run_author_qjl_oracle",
+        lambda **_kwargs: {
+            "status": "passed",
+            "gate": {
+                "name": "author_code_differential",
+                "passed": True,
+                "threshold": {"atol": 9.0, "rtol": 9.0},
+                "detail": "invalid contract",
+            },
+        },
+    )
+
+    with pytest.raises(ValueError, match="changed the frozen FP32 tolerance"):
+        execute_qualification(args)
+
+    run_directory = development_output_root / run_id
+    assert {path.name for path in run_directory.iterdir()} == {
+        "execution-0.json",
+        "execution-1.json",
+        "execution-2.json",
+        "manifest.json",
+        "qualification.json",
+        "resolved_inputs.npz",
+        "run.log",
+    }
+    manifest = _load_canonical_json(run_directory / "manifest.json")
+    qualification = _load_canonical_json(run_directory / "qualification.json")
+    assert manifest["status"] == qualification["status"] == "error"
+    assert manifest["author_qjl_preflight"] == preflight
+    assert qualification["author_code_differential"] == "error"
+    assert qualification["error"]["type"] == "ValueError"
+    assert qualification["error"]["message"] == (
+        "author QJL oracle changed the frozen FP32 tolerance"
+    )
+
+
+def test_development_with_checkout_embeds_complete_passed_author_oracle(
+    development_output_root,
+):
+    checkout_value = os.environ.get("QJL_AUTHOR_CHECKOUT")
+    if checkout_value is None:
+        pytest.skip("development author integration requires QJL_AUTHOR_CHECKOUT")
+    args = _namespace_args(
+        "development", development_output_root, "development-with-author"
+    )
+    args.author_qjl_checkout = Path(checkout_value)
+
+    exit_status = execute_qualification(args)
+
+    run_directory = development_output_root / "development-with-author"
+    assert exit_status == 0
+    assert {path.name for path in run_directory.iterdir()} == {
+        "execution-0.json",
+        "execution-1.json",
+        "execution-2.json",
+        "manifest.json",
+        "qualification.json",
+        "resolved_inputs.npz",
+        "run.log",
+    }
+    manifest = _load_canonical_json(run_directory / "manifest.json")
+    qualification = _load_canonical_json(run_directory / "qualification.json")
+    assert manifest["certification"] == {
+        "certifying": False,
+        "reason": CERTIFICATION_REASON,
+        "scope": "development",
+    }
+    assert (
+        manifest["author_qjl_preflight"]["environment"]
+        == (qualification["author_code_differential"]["environment"])
+    )
+    assert qualification["gates"][-1]["name"] == "author_code_differential"
+    assert qualification["gates"][-1]["status"] == "passed"
+    assert qualification["author_code_differential"]["status"] == "passed"
+    assert "author_outlier_signs" in qualification["author_code_differential"]["arrays"]
+    assert qualification["certification"]["certifying"] is False
 
 
 def test_metadata_exception_after_directory_creation_is_terminally_recorded(
