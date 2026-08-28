@@ -1,4 +1,5 @@
 import json
+import math
 from dataclasses import asdict
 
 import numpy as np
@@ -254,6 +255,37 @@ def _independent_product_block_means(
     return squared_blocks, bias_blocks
 
 
+def _independent_product_summaries(
+    squared_blocks: tuple[float, ...],
+    bias_blocks: tuple[float, ...],
+    *,
+    purpose: str,
+    bits: int,
+    resamples: int,
+) -> tuple[
+    float,
+    float,
+    float,
+    tuple[float, float],
+    tuple[float, float],
+]:
+    observed = math.fsum(squared_blocks) / len(squared_blocks)
+    bias_mean = math.fsum(bias_blocks) / len(bias_blocks)
+    ci95 = bootstrap_mean_interval(
+        bias_blocks,
+        rng=rng_for("qualification", "bootstrap", purpose, "0.95", bits),
+        resamples=resamples,
+        confidence=0.95,
+    )
+    ci9875 = bootstrap_mean_interval(
+        bias_blocks,
+        rng=rng_for("qualification", "bootstrap", purpose, "0.9875", bits),
+        resamples=resamples,
+        confidence=0.9875,
+    )
+    return observed, bias_mean, math.sqrt(observed), ci95, ci9875
+
+
 def test_streaming_metrics_wire_iid_and_sensitivity_projections_separately():
     config = QualificationConfig(
         dimension=8,
@@ -273,7 +305,23 @@ def test_streaming_metrics_wire_iid_and_sensitivity_projections_separately():
         _independent_product_block_means(config, expected_sensitivity)
     )
 
-    metric = run_synthetic_qualification(config).metrics[0]
+    expected_paper_summary = _independent_product_summaries(
+        expected_paper_squared,
+        expected_paper_bias,
+        purpose="bias",
+        bits=1,
+        resamples=config.bootstrap_resamples,
+    )
+    expected_sensitivity_summary = _independent_product_summaries(
+        expected_sensitivity_squared,
+        expected_sensitivity_bias,
+        purpose="sensitivity_bias",
+        bits=1,
+        resamples=config.bootstrap_resamples,
+    )
+
+    result = run_synthetic_qualification(config)
+    metric = result.metrics[0]
 
     np.testing.assert_allclose(
         metric.product_block_means, expected_paper_squared, rtol=0.0, atol=0.0
@@ -297,6 +345,45 @@ def test_streaming_metrics_wire_iid_and_sensitivity_projections_separately():
         atol=0.0,
     )
     assert metric.product_block_means != metric.sensitivity_product_block_means
+
+    paper_fields = (
+        metric.product_observed,
+        metric.normalized_bias_mean,
+        metric.normalized_bias_rmse,
+        metric.normalized_bias_ci95,
+        metric.normalized_bias_ci9875,
+    )
+    sensitivity_fields = (
+        metric.sensitivity_product_observed,
+        metric.sensitivity_normalized_bias_mean,
+        metric.sensitivity_normalized_bias_rmse,
+        metric.sensitivity_normalized_bias_ci95,
+        metric.sensitivity_normalized_bias_ci9875,
+    )
+    assert paper_fields == expected_paper_summary
+    assert sensitivity_fields == expected_sensitivity_summary
+
+    bias_gate = _gate(result, "qjl_bias_equivalence")
+    product_gate = _gate(result, "published_qjl_distortion")
+    paper_observed, _, paper_rmse, _, paper_ci9875 = expected_paper_summary
+    paper_target = 1.57 / config.dimension
+    assert bias_gate.observed == (
+        (
+            1,
+            paper_ci9875[0],
+            paper_ci9875[1],
+            -0.02 * paper_rmse,
+            0.02 * paper_rmse,
+        ),
+    )
+    assert product_gate.observed == (
+        (
+            1,
+            abs(paper_observed - paper_target) / paper_target,
+            paper_observed / paper_target,
+            metric.product_analytic_target,
+        ),
+    )
 
 
 def test_values_inside_registered_gate_boundaries_pass():
