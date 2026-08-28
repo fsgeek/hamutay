@@ -7,6 +7,8 @@ cannot be overridden from the command line. These tests attack both.
 
 from __future__ import annotations
 
+import contextlib
+import io
 import json
 import subprocess
 import sys
@@ -20,6 +22,14 @@ from hamutay.turboquant.artifacts import (
     sha256_file,
 )
 from hamutay.turboquant.qualify import build_parser, run_registered_workers
+
+
+@contextlib.contextmanager
+def _captured_stderr():
+    """Capture argparse's refusal message so a test can assert *why* it exited."""
+    buffer = io.StringIO()
+    with contextlib.redirect_stderr(buffer):
+        yield buffer
 
 
 class TestCanonicalJson:
@@ -171,11 +181,12 @@ class TestRegisteredProfile:
         certifying R1 without the author comparison is exactly the silent
         weakening the fifth gate exists to prevent.
         """
-        with pytest.raises(SystemExit) as raised:
+        with pytest.raises(SystemExit) as raised, _captured_stderr() as stderr:
             build_parser().parse_args(
                 ["--profile", "registered", "--output-root", "out", "--run-id", "r1"]
             )
         assert raised.value.code != 0
+        assert "requires --author-qjl-checkout" in stderr.getvalue()
 
     def test_development_profile_does_not_require_the_author_checkout(self):
         args = build_parser().parse_args(
@@ -201,11 +212,23 @@ class TestRegisteredProfile:
         missing checkout and this test passed without ever exercising the
         override guard. It now supplies a valid checkout so the only remaining
         reason to exit is the forbidden override.
+
+        Revised again the same day, on review: asserting a nonzero exit alone
+        cannot distinguish the override guard from any other parser error, so
+        the test could silently regress to passing for the wrong reason a
+        second time. It now asserts the specific refusal, and names the
+        overridden option in the message.
         """
         parser = build_parser()
-        with pytest.raises(SystemExit) as raised:
+        option = override[0].lstrip("-").replace("-", "_")
+
+        with pytest.raises(SystemExit) as raised, _captured_stderr() as stderr:
             parser.parse_args([*self.REGISTERED_ARGV, *override])
+
         assert raised.value.code != 0
+        message = stderr.getvalue()
+        assert "freezes scientific counts" in message, message
+        assert option in message, message
 
     def test_development_profile_permits_explicit_counts(self):
         args = build_parser().parse_args(
@@ -243,6 +266,112 @@ class TestRegisteredProfile:
         ):
             with pytest.raises(SystemExit):
                 build_parser().parse_args(argv)
+
+
+class TestTerminalEvidence:
+    """End-to-end evidence assertions against a real run artifact.
+
+    Added 2026-08-28. An earlier correction asserted the five-gate requirement
+    by calling a private helper; this exercises the same property through the
+    public console entry point and the artifact it writes, which is what a
+    reviewer of the evidence record actually reads.
+    """
+
+    @staticmethod
+    @contextlib.contextmanager
+    def _run(run_id_stem: str):
+        """Execute one real development run and yield its qualification record.
+
+        The implementation anchors the development namespace to the repository
+        (see `_validate_output_root`), so a run cannot be redirected into
+        pytest's tmp_path. The directory is therefore created under the real
+        namespace and removed afterwards: a test suite must not accumulate
+        artifacts in the space reserved for the project's own records.
+        """
+        import shutil
+        import uuid
+
+        from hamutay.turboquant.qualify import main
+
+        root = Path("experiments/turboquant/development")
+        run_id = f"independent-{run_id_stem}-{uuid.uuid4().hex[:8]}"
+        created_namespace = not root.exists()
+        try:
+            exit_code = main(
+                [
+                    "--profile",
+                    "development",
+                    "--output-root",
+                    str(root),
+                    "--run-id",
+                    run_id,
+                    "--sample-count",
+                    "2000",
+                    "--batch-size",
+                    "500",
+                    "--bootstrap-blocks",
+                    "20",
+                    "--bootstrap-resamples",
+                    "50",
+                ]
+            )
+            payload = json.loads(
+                (root / run_id / "qualification.json").read_text(encoding="utf-8")
+            )
+            payload["_exit_code"] = exit_code
+            yield payload
+        finally:
+            shutil.rmtree(root / run_id, ignore_errors=True)
+            if created_namespace:
+                for parent in (root, root.parent):
+                    try:
+                        parent.rmdir()
+                    except OSError:
+                        break
+
+    def test_artifact_reports_all_five_named_gates(self):
+        with self._run("evidence") as payload:
+            names = [gate["name"] for gate in payload["gates"]]
+
+        assert len(names) == 5
+        assert set(names) == {
+            "round_trip_determinism",
+            "mse_distortion",
+            "qjl_bias_equivalence",
+            "published_qjl_distortion",
+            "author_code_differential",
+        }
+
+    def test_development_run_never_certifies_and_says_so(self):
+        """A development artifact must be self-describing as non-certifying,
+        so it cannot be mistaken for R1 evidence by a later reader."""
+        with self._run("noncert") as payload:
+            certification = payload["certification"]
+
+        assert certification["certifying"] is False
+        assert certification["scope"] == "development"
+        assert isinstance(certification["reason"], str) and certification["reason"]
+        assert payload["status"] in {"passed", "failed", "error"}
+
+    def test_absent_author_checkout_leaves_the_fifth_gate_not_run(self):
+        """Development omits the oracle; the gate must be present and not_run,
+        never absent and never passed."""
+        with self._run("notrun") as payload:
+            differential = next(
+                gate
+                for gate in payload["gates"]
+                if gate["name"] == "author_code_differential"
+            )
+
+        assert differential["passed"] is False
+        assert differential["status"] == "not_run"
+
+    def test_artifact_json_is_canonically_encodable(self):
+        """Evidence must round-trip through the canonical encoder, which
+        rejects NaN/Infinity; a non-finite metric would make it unreadable."""
+        with self._run("canon") as payload:
+            payload.pop("_exit_code", None)
+            canonical_json_bytes(payload)
 
 
 class TestProcessLevelDeterminism:

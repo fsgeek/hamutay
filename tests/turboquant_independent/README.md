@@ -95,6 +95,47 @@ The intent of the corrected tests was preserved rather than deleted:
 `test_terminal_certification_requires_all_five_gates` assert the same
 properties at the layers where the plan actually locates them.
 
+## Second correction after external review (2026-08-28)
+
+Codex reviewed the first correction and raised two objections, both accepted.
+
+1. **A test reached into a private helper.** The five-gate requirement was
+   asserted by calling `qualify._terminal_certification`, which is not part of
+   the black-box surface. It is now asserted end-to-end in
+   `TestTerminalEvidence`, which executes a real development run through the
+   public console entry point and reads the five gates out of the resulting
+   `qualification.json`.
+
+2. **The override test asserted only a nonzero exit.** That could not
+   distinguish the frozen-count guard from any other parser error, so the test
+   was one refactor away from silently passing for the wrong reason a second
+   time. It now asserts the specific refusal text and that the message names
+   the option that was overridden.
+
+Adding the end-to-end tests surfaced a defect in the tests themselves: they
+wrote run directories into `experiments/turboquant/development/`, the
+project's own evidence namespace, and left them there. The namespace is
+anchored to the repository by `_validate_output_root` and cannot be
+redirected to a temporary directory, so the tests now remove their runs in a
+`finally` block. A validation suite must not accumulate artifacts in the space
+reserved for scientific records.
+
+Verified after the second correction: `tests/turboquant_independent` 193
+passed, with no residue in the evidence namespace.
+
+## Independence caveat
+
+The commit message for `86b896b` lists CLAUDE.md among the pre-freeze
+materials. It contains repository, signing, and experiment guidance and no
+TurboQuant implementation details, and is recorded as a disclosed,
+non-material protocol deviation, subject to the principal investigator's
+disposition.
+
+For a publication-grade sealed envelope, the stronger protocol -- recommended
+by the reviewing Codex instance and endorsed here -- is a fresh session given
+a sanitized bundle containing exactly the permitted materials, with the
+prompt and material hashes retained. This suite does not claim that standard.
+
 ## Running
 
 ```bash

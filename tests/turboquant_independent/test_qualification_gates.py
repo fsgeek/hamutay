@@ -363,35 +363,20 @@ class TestGateEvaluation:
         )
         assert not gate_named(result, "round_trip_determinism").passed
 
-    def test_terminal_certification_requires_all_five_gates(self):
-        """Added 2026-08-28, relocating the intent of the corrected test above.
+    def test_absent_author_differential_is_reported_not_run_not_passed(self):
+        """The fifth gate's public constructor must never fabricate a pass.
 
-        The five-gate requirement is real and belongs to the terminal evidence
-        layer. Certification must refuse a four-gate record outright, and must
-        refuse to certify when the fifth gate is present but did not run.
-
-        This reaches for a private helper because that is where the plan puts
-        the check; it is asserted through the public gate objects.
+        Replaces an earlier version of this correction that reached into the
+        private `_terminal_certification` helper. The five-gate requirement is
+        asserted end-to-end against a real run artifact in
+        test_artifact_contract.py::TestTerminalEvidence instead.
         """
         from hamutay.turboquant.qualification import author_code_differential_gate
-        from hamutay.turboquant.qualify import _terminal_certification
-
-        result = QualificationResult(
-            metrics=tuple(passing_metric(b) for b in (1, 2, 3, 4)),
-            determinism_passed=True,
-        )
-        core = tuple(evaluate_algorithm_gates(result))
-        assert len(core) == 4
-
-        with pytest.raises(ValueError):
-            _terminal_certification("registered", core)
 
         not_run = author_code_differential_gate(None)
+        assert not_run.name == "author_code_differential"
         assert not_run.passed is False
         assert not_run.status == "not_run"
-
-        verdict = _terminal_certification("registered", (*core, not_run))
-        assert verdict["certifying"] is False
 
     def test_author_differential_is_never_silently_passed_when_absent(self):
         """Development mode omits the checkout; the gate must then report
