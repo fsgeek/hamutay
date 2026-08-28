@@ -89,6 +89,63 @@ def test_product_quantizer_matches_literal_formula():
     )
 
 
+def test_rectangular_projection_matches_hand_computed_paired_formula():
+    projection = np.array(
+        [
+            [1, 2, 0, -1],
+            [-2, 0, 1, 1],
+            [0, -1, 3, 0],
+            [1, 0, -2, 2],
+            [-1, 1, 0, 1],
+        ],
+        dtype=np.float32,
+    )
+    q = ProductQuantizer(
+        MSEQuantizer(np.eye(4, dtype=np.float32), lloyd_max_codebook(4, 0)),
+        projection,
+    )
+    keys = np.array(
+        [
+            [[1, 0, 0, 0], [0, 1, 0, 0]],
+            [[0, 0, 1, 0], [0, 0, 0, 2]],
+        ],
+        dtype=np.float32,
+    )
+    queries = np.array(
+        [
+            [[1, 2, 3, 4], [-1, 0, 2, 1]],
+            [[0.5, -1, 0, 2], [1, -2, 0.5, 0]],
+        ],
+        dtype=np.float32,
+    )
+
+    codes = q.quantize(keys)
+
+    # Hand-derived sign rows are + - + + -, + + - + +,
+    # + + + - +, and - + + + +. Their products with the projection are
+    # [5, 0, 0, -1], [-1, 4, -4, 3], [-3, 2, 6, -1], and [-3, -2, 2, 5].
+    coefficient = np.float32(np.sqrt(np.pi / 2.0) / 5.0)
+    expected_reconstruction = coefficient * np.array(
+        [
+            [[5, 0, 0, -1], [-1, 4, -4, 3]],
+            [[-3, 2, 6, -1], [-6, -4, 4, 10]],
+        ],
+        dtype=np.float32,
+    )
+    expected_estimates = coefficient * np.array([[1, -4], [-5.5, 4]], dtype=np.float32)
+
+    assert q.sketch_dim == 5
+    np.testing.assert_array_equal(
+        codes.packed_signs,
+        np.array([[[13], [27]], [[23], [30]]], dtype=np.uint8),
+    )
+    np.testing.assert_array_equal(codes.residual_norms, [[1, 1], [1, 2]])
+    np.testing.assert_allclose(q.dequantize(codes), expected_reconstruction)
+    np.testing.assert_allclose(
+        q.estimate_inner_products(queries, codes), expected_estimates
+    )
+
+
 def test_estimator_sketches_the_original_query_not_an_mse_reconstruction():
     q = product_quantizer(total_bits=1)
     keys = np.array([[2.0, -1.0, 0.5, -0.25]], dtype=np.float32)
@@ -255,6 +312,21 @@ def test_product_methods_reject_nonfinite_or_negative_residual_norms(bad_norm):
         q.dequantize(malformed)
     with pytest.raises(ValueError, match="residual_norms"):
         q.estimate_inner_products(np.ones(4, dtype=np.float32), malformed)
+
+
+def test_product_methods_reject_residual_norm_for_zero_original_norm():
+    q = product_quantizer()
+    zero = q.quantize(np.zeros(4, dtype=np.float32))
+    impossible = ProductCodes(
+        mse=zero.mse,
+        packed_signs=zero.packed_signs,
+        residual_norms=np.array(1.0, dtype=np.float32),
+    )
+
+    with pytest.raises(ValueError, match="zero original norm"):
+        q.dequantize(impossible)
+    with pytest.raises(ValueError, match="zero original norm"):
+        q.estimate_inner_products(np.ones(4, dtype=np.float32), impossible)
 
 
 def test_dequantize_returns_an_owning_fp32_copy():

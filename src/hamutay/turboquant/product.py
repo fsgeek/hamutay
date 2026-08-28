@@ -168,6 +168,9 @@ class ProductQuantizer:
                 "residual_norms must be finite nonnegative FP32 with the MSE "
                 "codes' leading shape"
             )
+        original_norms = np.asarray(codes.mse.norms)
+        if np.any((original_norms == 0.0) & (residual_norms != 0.0)):
+            raise ValueError("residual_norms must be zero for a zero original norm")
         return mse_hat, packed_signs, residual_norms
 
     def dequantize(self, codes: ProductCodes) -> np.ndarray:
