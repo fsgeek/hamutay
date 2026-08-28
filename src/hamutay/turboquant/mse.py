@@ -19,7 +19,30 @@ def _float32_copy(values: np.ndarray, *, name: str) -> np.ndarray:
     array = np.asarray(values)
     if array.dtype.kind != "f":
         raise ValueError(f"{name} must have a floating-point dtype")
-    return np.array(array, dtype=np.float32, order="C", copy=True)
+    with np.errstate(over="ignore"):
+        resolved = np.array(array, dtype=np.float32, order="C", copy=True)
+    if not np.all(np.isfinite(resolved)):
+        raise ValueError(f"{name} must contain only finite values")
+    return resolved
+
+
+def _fp32_norms(vectors: np.ndarray) -> np.ndarray:
+    """Return robust FP32 vector norms or reject values outside FP32 range."""
+    scales = np.max(np.abs(vectors), axis=-1)
+    scaled = np.zeros_like(vectors)
+    nonzero = scales != 0.0
+    np.divide(
+        vectors,
+        scales[..., np.newaxis],
+        out=scaled,
+        where=nonzero[..., np.newaxis],
+    )
+    with np.errstate(over="ignore"):
+        norms = scales * np.sqrt(np.sum(scaled * scaled, axis=-1, dtype=np.float32))
+    norms = np.array(norms, dtype=np.float32, order="C", copy=True)
+    if not np.all(np.isfinite(norms)):
+        raise ValueError("vector norms cannot be represented in FP32")
+    return norms
 
 
 class MSEQuantizer:
@@ -74,12 +97,7 @@ class MSEQuantizer:
         ):
             raise ValueError("vectors must have final dimension matching the rotation")
 
-        norms = np.array(
-            np.linalg.norm(resolved_vectors, axis=-1),
-            dtype=np.float32,
-            order="C",
-            copy=True,
-        )
+        norms = _fp32_norms(resolved_vectors)
         normalized = np.zeros_like(resolved_vectors)
         nonzero = norms != 0.0
         np.divide(
@@ -112,6 +130,8 @@ class MSEQuantizer:
             raise ValueError("indices must be uint8 with final dimension matching the rotation")
         if norms.dtype != np.float32 or norms.shape != indices.shape[:-1]:
             raise ValueError("norms must be FP32 with indices' leading shape")
+        if not np.all(np.isfinite(norms)) or np.any(norms < 0.0):
+            raise ValueError("norms must be finite and nonnegative")
         if np.any(indices >= self._codebook.size):
             raise ValueError("indices contain a value outside the codebook")
 

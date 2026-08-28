@@ -47,6 +47,25 @@ def test_quantization_uses_row_vector_rotation_and_its_inverse():
     np.testing.assert_array_equal(q.dequantize(codes), [1.0, 0.0])
 
 
+def test_nonunit_vector_normalizes_before_quantization_and_restores_norm():
+    q = MSEQuantizer(
+        np.eye(2, dtype=np.float32),
+        np.array([-1.0, -0.5, 0.0, 0.5, 1.0], dtype=np.float32),
+    )
+
+    codes = q.quantize(np.array([3.0, 4.0], dtype=np.float32))
+    reconstructed = q.dequantize(codes)
+
+    np.testing.assert_array_equal(codes.indices, [3, 4])
+    np.testing.assert_array_equal(codes.norms, np.array(5.0, dtype=np.float32))
+    np.testing.assert_allclose(reconstructed, [2.5, 5.0])
+    np.testing.assert_allclose(np.linalg.norm(reconstructed), np.sqrt(31.25))
+    np.testing.assert_allclose(
+        reconstructed / np.linalg.norm(reconstructed),
+        [1.0 / np.sqrt(5.0), 2.0 / np.sqrt(5.0)],
+    )
+
+
 def test_codes_and_reconstruction_are_bit_repeatable():
     q = quantizer(4)
     vectors = np.arange(32, dtype=np.float32).reshape(8, 4) - 15.5
@@ -108,3 +127,51 @@ def test_quantize_and_dequantize_reject_bad_shapes_and_codes():
                 norms=np.zeros((2, 1), dtype=np.float32),
             )
         )
+
+
+@pytest.mark.parametrize("bad_codebook", [[np.nan], [np.inf], [-np.inf]])
+def test_constructor_rejects_nonfinite_codebook(bad_codebook):
+    with pytest.raises(ValueError, match="finite"):
+        MSEQuantizer(np.eye(2, dtype=np.float32), np.array(bad_codebook, dtype=np.float32))
+
+
+@pytest.mark.parametrize("bad_value", [np.nan, np.inf, -np.inf])
+def test_quantize_rejects_nonfinite_vectors(bad_value):
+    with pytest.raises(ValueError, match="finite"):
+        MSEQuantizer(
+            np.eye(2, dtype=np.float32), np.array([-1.0, 1.0], dtype=np.float32)
+        ).quantize(np.array([bad_value, 0.0], dtype=np.float32))
+
+
+@pytest.mark.parametrize("bad_norm", [np.nan, np.inf, -np.inf, -1.0])
+def test_dequantize_rejects_nonfinite_or_negative_norms(bad_norm):
+    with pytest.raises(ValueError, match="norms"):
+        MSEQuantizer(
+            np.eye(2, dtype=np.float32), np.array([-1.0, 1.0], dtype=np.float32)
+        ).dequantize(
+            MSECodes(
+                indices=np.zeros(2, dtype=np.uint8),
+                norms=np.array(bad_norm, dtype=np.float32),
+            )
+        )
+
+
+def test_quantize_rejects_norms_that_cannot_be_represented_in_fp32():
+    q = MSEQuantizer(
+        np.eye(2, dtype=np.float32), np.array([-1.0, 0.0, 1.0], dtype=np.float32)
+    )
+
+    with pytest.raises(ValueError, match="represented.*FP32"):
+        q.quantize(np.array([3e38, 3e38], dtype=np.float32))
+
+
+def test_quantize_uses_a_finite_fp32_norm_when_representable():
+    q = MSEQuantizer(
+        np.eye(2, dtype=np.float32), np.array([-1.0, 0.0, 1.0], dtype=np.float32)
+    )
+
+    codes = q.quantize(np.array([3e38, 0.0], dtype=np.float32))
+
+    assert np.isfinite(codes.norms)
+    np.testing.assert_allclose(codes.norms, np.array(3e38, dtype=np.float32))
+    np.testing.assert_allclose(q.dequantize(codes), [3e38, 0.0])
