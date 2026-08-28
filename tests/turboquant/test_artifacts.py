@@ -78,19 +78,29 @@ def test_atomic_publication_never_overwrites_racing_destination(
 
 
 @pytest.mark.parametrize("kind", ["bytes", "npz"])
-def test_atomic_publication_cleans_temporary_after_link_fault(
-    kind, monkeypatch, tmp_path
+@pytest.mark.parametrize("cleanup_fsync_fails", [False, True])
+def test_atomic_publication_durably_cleans_temporary_without_masking_link_fault(
+    kind, cleanup_fsync_fails, monkeypatch, tmp_path
 ):
     destination = tmp_path / f"artifact.{kind}"
+    events = []
 
     def fail_link(_source, _target):
+        events.append("link")
         raise OSError("controlled link fault")
 
+    def cleanup_fsync(_directory):
+        events.append("cleanup-fsync")
+        if cleanup_fsync_fails:
+            raise OSError("controlled cleanup fsync fault")
+
     monkeypatch.setattr(artifacts.os, "link", fail_link)
+    monkeypatch.setattr(artifacts, "_fsync_directory", cleanup_fsync)
 
     with pytest.raises(OSError, match="controlled link fault"):
         _publish_test_artifact(kind, destination)
 
+    assert events == ["link", "cleanup-fsync"]
     assert not os.path.lexists(destination)
     assert _publication_temporaries(destination) == []
 

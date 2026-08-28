@@ -11,12 +11,16 @@ import zipfile
 import numpy as np
 import pytest
 
+import hamutay.turboquant.artifacts as artifact_io
 from hamutay.turboquant.artifacts import canonical_json_bytes, sha256_file
 from hamutay.turboquant.qualify import (
     CERTIFICATION_REASON,
     QualificationValidationError,
+    _TerminalPair,
     _completion_exit_status,
     _compare_worker_outputs,
+    _publish_terminal_pair,
+    _validate_output_root,
     _validate_registered_cleanliness,
     build_parser,
     execute_qualification,
@@ -221,6 +225,24 @@ def test_development_rejects_symlink_that_resolves_outside_namespace(tmp_path):
         output_root.unlink(missing_ok=True)
 
 
+@pytest.mark.parametrize(
+    ("profile", "namespace_name"),
+    [("development", "development"), ("registered", "qualification")],
+)
+def test_profile_rejects_symlinked_trusted_namespace_root(
+    profile, namespace_name, tmp_path
+):
+    repository = tmp_path / "repository"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    namespace = repository / "experiments" / "turboquant" / namespace_name
+    namespace.parent.mkdir(parents=True)
+    namespace.symlink_to(outside, target_is_directory=True)
+
+    with pytest.raises(QualificationValidationError, match="must not be a symlink"):
+        _validate_output_root(profile, namespace, repository)
+
+
 def test_registered_workers_are_three_fresh_processes(monkeypatch, tmp_path):
     calls: list[list[str]] = []
 
@@ -352,6 +374,14 @@ def test_process_comparison_rejects_one_differing_child(tmp_path):
             canonical_json_bytes(_execution_fixture(index, payload=payload))
         )
 
+    with pytest.raises(ValueError, match="byte-identical"):
+        _compare_worker_outputs(
+            paths,
+            configuration_sha256="3" * 64,
+            resolved_inputs_sha256="4" * 64,
+            parent_pid=os.getpid(),
+        )
+
 
 @pytest.mark.parametrize(
     ("field", "differing_value"),
@@ -376,14 +406,6 @@ def test_process_comparison_rejects_differing_deterministic_evidence(
         path.write_bytes(canonical_json_bytes(record))
 
     with pytest.raises(ValueError, match="deterministic evidence"):
-        _compare_worker_outputs(
-            paths,
-            configuration_sha256="3" * 64,
-            resolved_inputs_sha256="4" * 64,
-            parent_pid=os.getpid(),
-        )
-
-    with pytest.raises(ValueError, match="byte-identical"):
         _compare_worker_outputs(
             paths,
             configuration_sha256="3" * 64,
@@ -812,3 +834,143 @@ def test_final_hash_failure_after_log_close_preserves_original_terminal_error(
     assert qualification["status"] == "error"
     assert qualification["error"]["type"] == "ValueError"
     assert qualification["error"]["message"] == "controlled final hash failure"
+
+
+def _install_terminal_publication_fault(monkeypatch, stage, *, persistent=False):
+    real_link = artifact_io.os.link
+    real_replace = artifact_io.os.replace
+    real_fsync_directory = artifact_io._fsync_directory
+    state = {"faulted": False, "qualification_linked": False}
+    history = []
+
+    def should_fault(selected_stage):
+        if stage != selected_stage or (state["faulted"] and not persistent):
+            return False
+        state["faulted"] = True
+        return True
+
+    def record(destination):
+        path = Path(destination)
+        if path.name in {"manifest.json", "qualification.json"}:
+            history.append((path.name, _load_canonical_json(path)["status"]))
+
+    def controlled_link(source, destination):
+        path = Path(destination)
+        if path.name == "qualification.json" and should_fault("qualification_link"):
+            raise OSError("controlled qualification link failure")
+        result = real_link(source, destination)
+        record(path)
+        if path.name == "qualification.json":
+            state["qualification_linked"] = True
+        return result
+
+    def controlled_replace(source, destination):
+        path = Path(destination)
+        if path.name == "manifest.json" and should_fault("manifest_replace"):
+            raise OSError("controlled manifest replacement failure")
+        result = real_replace(source, destination)
+        record(path)
+        return result
+
+    def controlled_fsync_directory(directory):
+        if state["qualification_linked"] and should_fault("qualification_fsync"):
+            raise OSError("controlled qualification fsync failure")
+        return real_fsync_directory(directory)
+
+    monkeypatch.setattr(artifact_io.os, "link", controlled_link)
+    monkeypatch.setattr(artifact_io.os, "replace", controlled_replace)
+    monkeypatch.setattr(artifact_io, "_fsync_directory", controlled_fsync_directory)
+    return history
+
+
+def _assert_terminal_history_never_transitions(history):
+    terminal_by_name = {}
+    for name, status in history:
+        if status == "running":
+            continue
+        terminal_by_name.setdefault(name, status)
+        assert terminal_by_name[name] == status
+
+
+@pytest.mark.parametrize(
+    ("stage", "message", "expected_status"),
+    [
+        ("manifest_replace", "controlled manifest replacement failure", None),
+        ("qualification_link", "controlled qualification link failure", None),
+        ("qualification_fsync", "controlled qualification fsync failure", None),
+    ],
+)
+def test_terminal_pair_fault_recovery_never_changes_terminal_status(
+    stage,
+    message,
+    expected_status,
+    monkeypatch,
+    development_output_root,
+):
+    run_id = f"terminal-{stage}"
+    args = _namespace_args("development", development_output_root, run_id)
+    history = _install_terminal_publication_fault(monkeypatch, stage)
+
+    with pytest.raises(OSError, match=message):
+        execute_qualification(args)
+
+    run_directory = development_output_root / run_id
+    manifest_path = run_directory / "manifest.json"
+    qualification_path = run_directory / "qualification.json"
+    manifest = _load_canonical_json(manifest_path)
+    qualification = _load_canonical_json(qualification_path)
+    assert manifest["status"] == qualification["status"]
+    if expected_status is not None:
+        assert manifest["status"] == expected_status
+    else:
+        assert manifest["status"] in {"passed", "failed"}
+    _assert_terminal_history_never_transitions(history)
+
+    immutable = (manifest_path.read_bytes(), qualification_path.read_bytes())
+    with pytest.raises(QualificationValidationError):
+        execute_qualification(args)
+    assert immutable == (manifest_path.read_bytes(), qualification_path.read_bytes())
+
+
+def test_persistent_qualification_link_fault_leaves_immutable_manifest_only(
+    monkeypatch, development_output_root
+):
+    run_id = "terminal-persistent-qualification-link"
+    args = _namespace_args("development", development_output_root, run_id)
+    history = _install_terminal_publication_fault(
+        monkeypatch, "qualification_link", persistent=True
+    )
+
+    with pytest.raises(OSError, match="controlled qualification link failure"):
+        execute_qualification(args)
+
+    run_directory = development_output_root / run_id
+    manifest_path = run_directory / "manifest.json"
+    manifest_before = manifest_path.read_bytes()
+    assert _load_canonical_json(manifest_path)["status"] in {"passed", "failed"}
+    assert not (run_directory / "qualification.json").exists()
+    _assert_terminal_history_never_transitions(history)
+
+    with pytest.raises(QualificationValidationError):
+        execute_qualification(args)
+    assert manifest_path.read_bytes() == manifest_before
+
+
+def test_terminal_pair_rejects_contradictory_qualification_before_commit(tmp_path):
+    run_directory = tmp_path / "run"
+    run_directory.mkdir()
+    manifest_path = run_directory / "manifest.json"
+    qualification_path = run_directory / "qualification.json"
+    manifest_path.write_bytes(canonical_json_bytes({"status": "running"}))
+    qualification_path.write_bytes(canonical_json_bytes({"status": "error"}))
+    pair = _TerminalPair(
+        status="passed",
+        manifest_bytes=canonical_json_bytes({"status": "passed"}),
+        qualification_bytes=canonical_json_bytes({"status": "passed"}),
+    )
+
+    with pytest.raises(RuntimeError, match="qualification is immutable"):
+        _publish_terminal_pair(run_directory, pair)
+
+    assert _load_canonical_json(manifest_path)["status"] == "running"
+    assert _load_canonical_json(qualification_path)["status"] == "error"

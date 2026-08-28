@@ -78,6 +78,7 @@ def atomic_write_bytes(path: Path, content: bytes, *, replace: bool = False) -> 
         prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
     )
     temporary = Path(temporary_name)
+    original_error: BaseException | None = None
     try:
         artifact = os.fdopen(descriptor, "wb")
         descriptor = -1
@@ -91,10 +92,19 @@ def atomic_write_bytes(path: Path, content: bytes, *, replace: bool = False) -> 
             os.link(temporary, destination)
             temporary.unlink()
         _fsync_directory(destination.parent)
+    except BaseException as error:
+        original_error = error
+        raise
     finally:
         if descriptor >= 0:
             os.close(descriptor)
-        temporary.unlink(missing_ok=True)
+        if os.path.lexists(temporary):
+            try:
+                temporary.unlink()
+                _fsync_directory(destination.parent)
+            except BaseException:
+                if original_error is None:
+                    raise
 
 
 def atomic_write_json(path: Path, value: object, *, replace: bool = False) -> None:
@@ -109,6 +119,7 @@ def atomic_savez(path: Path, arrays: dict[str, np.ndarray]) -> None:
         prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
     )
     temporary = Path(temporary_name)
+    original_error: BaseException | None = None
     try:
         artifact = os.fdopen(descriptor, "wb")
         descriptor = -1
@@ -119,10 +130,19 @@ def atomic_savez(path: Path, arrays: dict[str, np.ndarray]) -> None:
         os.link(temporary, destination)
         temporary.unlink()
         _fsync_directory(destination.parent)
+    except BaseException as error:
+        original_error = error
+        raise
     finally:
         if descriptor >= 0:
             os.close(descriptor)
-        temporary.unlink(missing_ok=True)
+        if os.path.lexists(temporary):
+            try:
+                temporary.unlink()
+                _fsync_directory(destination.parent)
+            except BaseException:
+                if original_error is None:
+                    raise
 
 
 def read_canonical_json(path: Path) -> object:

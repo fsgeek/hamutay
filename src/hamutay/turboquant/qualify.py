@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import argparse
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 import hashlib
 import importlib.metadata
@@ -18,8 +18,10 @@ import uuid
 
 import numpy as np
 
+from . import artifacts as artifact_io
 from .artifacts import (
     atomic_savez,
+    atomic_write_bytes,
     atomic_write_json,
     canonical_json_bytes,
     create_run_directory,
@@ -97,6 +99,15 @@ _DECLARED_LOSSES = {
 
 class QualificationValidationError(ValueError):
     """A pre-run validation error that must not create a run directory."""
+
+
+@dataclass(frozen=True)
+class _TerminalPair:
+    """Canonically frozen bytes for one immutable terminal outcome."""
+
+    status: str
+    manifest_bytes: bytes
+    qualification_bytes: bytes
 
 
 def _bits(value: str) -> tuple[int, ...]:
@@ -240,9 +251,12 @@ def _repository_root() -> Path:
 
 def _validate_output_root(profile: str, output_root: Path, repository: Path) -> Path:
     namespace_name = "development" if profile == "development" else "qualification"
-    namespace = (repository / "experiments" / "turboquant" / namespace_name).resolve(
-        strict=False
-    )
+    namespace_path = repository / "experiments" / "turboquant" / namespace_name
+    if namespace_path.is_symlink():
+        raise QualificationValidationError(
+            f"{profile} namespace root must not be a symlink: {namespace_path}"
+        )
+    namespace = namespace_path.resolve(strict=False)
     candidate = Path(output_root).resolve(strict=False)
     if candidate != namespace and not candidate.is_relative_to(namespace):
         raise QualificationValidationError(
@@ -589,7 +603,6 @@ def _terminal_error_record(
     args: argparse.Namespace,
     error: BaseException,
     traceback_text: str,
-    artifact_hashes: dict[str, str],
     recovery_errors: list[dict[str, str]],
 ) -> dict[str, object]:
     return {
@@ -603,7 +616,7 @@ def _terminal_error_record(
         "process_determinism": None,
         "declared_losses": _DECLARED_LOSSES,
         "numerical_conventions": _NUMERICAL_CONVENTIONS,
-        "artifact_sha256": artifact_hashes,
+        "artifact_sha256": {},
         "error": {
             "type": type(error).__name__,
             "message": str(error),
@@ -680,7 +693,111 @@ def _best_effort_hashes(
         return {}
 
 
-def _publish_terminal_error(
+def _freeze_terminal_pair(
+    manifest: dict[str, object], qualification: dict[str, object]
+) -> _TerminalPair:
+    status = manifest.get("status")
+    if status not in {"passed", "failed", "error"}:
+        raise ValueError("terminal manifest must have a terminal status")
+    if qualification.get("status") != status:
+        raise ValueError("terminal manifest and qualification statuses must agree")
+    manifest_bytes = canonical_json_bytes(manifest)
+    artifact_hashes = dict(manifest.get("artifact_sha256", {}))
+    artifact_hashes["manifest.json"] = hashlib.sha256(manifest_bytes).hexdigest()
+    qualification = dict(qualification)
+    qualification["artifact_sha256"] = artifact_hashes
+    return _TerminalPair(
+        status=str(status),
+        manifest_bytes=manifest_bytes,
+        qualification_bytes=canonical_json_bytes(qualification),
+    )
+
+
+def _normal_terminal_pair(
+    *,
+    args: argparse.Namespace,
+    manifest: dict[str, object],
+    run_directory: Path,
+    status: str,
+    result: QualificationResult,
+    gates: tuple[object, ...],
+    process_determinism: dict[str, object],
+) -> _TerminalPair:
+    terminal_manifest = dict(manifest)
+    terminal_manifest["ended_at_utc"] = _utc_now()
+    terminal_manifest["status"] = status
+    terminal_manifest["artifact_sha256"] = _existing_artifact_hashes(
+        run_directory, include_manifest=False
+    )
+    qualification = {
+        "schema": "hamutay.turboquant.qualification.v1",
+        "run_id": args.run_id,
+        "profile": args.profile,
+        "status": status,
+        "certification": _certification(args.profile),
+        "metrics": [asdict(metric) for metric in result.metrics],
+        "gates": [asdict(gate) for gate in gates],
+        "process_determinism": process_determinism,
+        "declared_losses": _DECLARED_LOSSES,
+        "numerical_conventions": _NUMERICAL_CONVENTIONS,
+        "artifact_sha256": {},
+    }
+    return _freeze_terminal_pair(terminal_manifest, qualification)
+
+
+def _visible_canonical_record(path: Path) -> tuple[bytes, dict[str, object]] | None:
+    if not os.path.lexists(path):
+        return None
+    value = read_canonical_json(path)
+    if not isinstance(value, dict):
+        raise ValueError(f"{path} must contain a JSON object")
+    return canonical_json_bytes(value), value
+
+
+def _publish_terminal_pair(run_directory: Path, pair: _TerminalPair) -> None:
+    """Idempotently publish one immutable, status-consistent terminal pair.
+
+    The manifest is the commit point. A process-level exception is recoverable
+    by retrying these exact frozen bytes. A hard crash can still leave the
+    terminal manifest durable before qualification publication; the two files
+    cannot be made atomically visible by a portable filesystem operation.
+    """
+    manifest_path = run_directory / "manifest.json"
+    qualification_path = run_directory / "qualification.json"
+    visible_qualification = _visible_canonical_record(qualification_path)
+    if (
+        visible_qualification is not None
+        and visible_qualification[0] != pair.qualification_bytes
+    ):
+        raise RuntimeError("visible terminal qualification is immutable")
+
+    visible_manifest = _visible_canonical_record(manifest_path)
+    if visible_manifest is None:
+        atomic_write_bytes(manifest_path, pair.manifest_bytes)
+    else:
+        manifest_bytes, manifest = visible_manifest
+        manifest_status = manifest.get("status")
+        if manifest_status == "running":
+            atomic_write_bytes(manifest_path, pair.manifest_bytes, replace=True)
+        elif manifest_bytes != pair.manifest_bytes:
+            raise RuntimeError("visible terminal manifest is immutable")
+        else:
+            artifact_io._fsync_directory(run_directory)
+
+    visible_manifest = _visible_canonical_record(manifest_path)
+    if visible_manifest is None or visible_manifest[0] != pair.manifest_bytes:
+        raise RuntimeError("intended terminal manifest is not visible")
+
+    visible_qualification = _visible_canonical_record(qualification_path)
+    if visible_qualification is None:
+        atomic_write_bytes(qualification_path, pair.qualification_bytes)
+    elif visible_qualification[0] != pair.qualification_bytes:
+        raise RuntimeError("visible terminal qualification is immutable")
+    else:
+        artifact_io._fsync_directory(run_directory)
+
+
+def _error_terminal_pair(
     *,
     args: argparse.Namespace,
     config: QualificationConfig,
@@ -692,8 +809,8 @@ def _publish_terminal_error(
     manifest: dict[str, object] | None,
     original_error: BaseException,
     traceback_text: str,
-) -> None:
-    """Best-effort terminal publication that never masks the original error."""
+) -> _TerminalPair:
+    """Freeze one error pair before either terminal member becomes visible."""
     recovery_errors: list[dict[str, str]] = []
     if run_log is not None:
         try:
@@ -727,48 +844,25 @@ def _publish_terminal_error(
                 "run_id": str(getattr(args, "run_id", "unknown")),
                 "profile": str(getattr(args, "profile", "unknown")),
             }
-    manifest["ended_at_utc"] = None
+    terminal_manifest = dict(manifest)
+    terminal_manifest["ended_at_utc"] = None
     try:
-        manifest["ended_at_utc"] = _utc_now()
+        terminal_manifest["ended_at_utc"] = _utc_now()
     except BaseException as error:
         _record_recovery_error(recovery_errors, "ended_at_utc", error)
-    manifest["status"] = "error"
-    manifest["artifact_sha256"] = _best_effort_hashes(
+    terminal_manifest["status"] = "error"
+    terminal_manifest["artifact_sha256"] = _best_effort_hashes(
         run_directory,
         include_manifest=False,
         recovery_errors=recovery_errors,
     )
-    manifest_path = run_directory / "manifest.json"
-    try:
-        atomic_write_json(
-            manifest_path,
-            manifest,
-            replace=os.path.lexists(manifest_path),
-        )
-    except BaseException as error:
-        _record_recovery_error(recovery_errors, "terminal_manifest", error)
-
-    artifact_hashes = _best_effort_hashes(
-        run_directory,
-        include_manifest=True,
+    qualification = _terminal_error_record(
+        args=args,
+        error=original_error,
+        traceback_text=traceback_text,
         recovery_errors=recovery_errors,
     )
-    qualification_path = run_directory / "qualification.json"
-    try:
-        atomic_write_json(
-            qualification_path,
-            _terminal_error_record(
-                args=args,
-                error=original_error,
-                traceback_text=traceback_text,
-                artifact_hashes=artifact_hashes,
-                recovery_errors=recovery_errors,
-            ),
-        )
-    except BaseException:
-        # No remaining append-only channel exists for a qualification writer
-        # failure. Preserve the original exception rather than masking it.
-        pass
+    return _freeze_terminal_pair(terminal_manifest, qualification)
 
 
 def execute_qualification(args: argparse.Namespace) -> int:
@@ -784,12 +878,11 @@ def execute_qualification(args: argparse.Namespace) -> int:
     except (FileExistsError, ValueError) as error:
         raise QualificationValidationError(str(error)) from error
     manifest_path = run_directory / "manifest.json"
-    qualification_path = run_directory / "qualification.json"
     resolved_inputs_path = run_directory / "resolved_inputs.npz"
     run_log: _RunLog | None = None
     manifest: dict[str, object] | None = None
     worker_config_path: Path | None = None
-    terminal_written = False
+    terminal_pair: _TerminalPair | None = None
     try:
         run_log = _RunLog(run_directory / "run.log")
         started_at = _utc_now()
@@ -849,47 +942,43 @@ def execute_qualification(args: argparse.Namespace) -> int:
         run_log.write("terminal", "terminal artifacts written; run is now immutable")
         run_log.close()
 
-        manifest["ended_at_utc"] = _utc_now()
-        manifest["status"] = status
-        manifest["artifact_sha256"] = _existing_artifact_hashes(
-            run_directory, include_manifest=False
+        terminal_pair = _normal_terminal_pair(
+            args=args,
+            manifest=manifest,
+            run_directory=run_directory,
+            status=status,
+            result=result,
+            gates=gates,
+            process_determinism=process_determinism,
         )
-        atomic_write_json(manifest_path, manifest, replace=True)
-        artifact_hashes = _existing_artifact_hashes(
-            run_directory, include_manifest=True
-        )
-        qualification = {
-            "schema": "hamutay.turboquant.qualification.v1",
-            "run_id": args.run_id,
-            "profile": args.profile,
-            "status": status,
-            "certification": _certification(args.profile),
-            "metrics": [asdict(metric) for metric in result.metrics],
-            "gates": [asdict(gate) for gate in gates],
-            "process_determinism": process_determinism,
-            "declared_losses": _DECLARED_LOSSES,
-            "numerical_conventions": _NUMERICAL_CONVENTIONS,
-            "artifact_sha256": artifact_hashes,
-        }
-        atomic_write_json(qualification_path, qualification)
-        terminal_written = True
+        _publish_terminal_pair(run_directory, terminal_pair)
         return _completion_exit_status(args.profile)
     except BaseException as error:
-        if terminal_written:
-            raise
         traceback_text = traceback.format_exc()
-        _publish_terminal_error(
-            args=args,
-            config=config,
-            repository=repository,
-            commit=commit,
-            dirty_paths=dirty_paths,
-            run_directory=run_directory,
-            run_log=run_log,
-            manifest=manifest,
-            original_error=error,
-            traceback_text=traceback_text,
-        )
+        recovery_pair = terminal_pair
+        if recovery_pair is None:
+            try:
+                recovery_pair = _error_terminal_pair(
+                    args=args,
+                    config=config,
+                    repository=repository,
+                    commit=commit,
+                    dirty_paths=dirty_paths,
+                    run_directory=run_directory,
+                    run_log=run_log,
+                    manifest=manifest,
+                    original_error=error,
+                    traceback_text=traceback_text,
+                )
+            except BaseException:
+                recovery_pair = None
+        if recovery_pair is not None:
+            try:
+                _publish_terminal_pair(run_directory, recovery_pair)
+            except BaseException:
+                # A persistent publication fault must fail closed without
+                # changing the intended status or masking the original error.
+                pass
         raise
     finally:
         if worker_config_path is not None:
