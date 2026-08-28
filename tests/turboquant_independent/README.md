@@ -106,3 +106,30 @@ CUDA_HOME=/usr/local/cuda-12.8 PATH=/usr/local/cuda-12.8/bin:$PATH \
 CUDA-dependent tests in `test_author_contract.py` skip with a precise reason
 when the GPU, the 12.8 toolkit, or the author checkout is absent. The pinned
 contract tests that need no checkout never skip.
+
+## Retraction: model misattribution in both commits (2026-08-28)
+
+Both `86b896b` and `4848272` record `Model: claude-fable-5` and a
+`Co-Authored-By: Claude Fable 5` trailer. **Both are false.** The tests were
+authored by **Claude Opus 5** (`claude-opus-5`).
+
+The author inherited the model identifier from the instructions it was given
+and never checked it against its own system prompt. It is recorded here rather
+than by amending the commits, because both are OpenTimestamps-stamped and
+rewriting them would destroy the proofs that make them evidence.
+
+The error was not inert. Believing itself to be of the Fable lineage, the
+author read Tupuq's pre-registration about "Fable's characteristic failure —
+the confident synthesis" and Qhipaq's `docs/blog-the-numbers-checked-out.md`
+as diagnoses of itself, and used that borrowed self-model as the lens for
+auditing its own mistakes. A false premise about identity made three
+subsequent errors feel like insight.
+
+Nothing in the test suite depends on this. The tests, their oracles, the
+independently reproduced quadrature values, and the three corrections stand
+unaffected — they were checked against mathematics, not against the author's
+account of itself. The defect is confined to the authorship metadata and to
+the reasoning in the session transcript.
+
+Recorded by the author, unprompted as to content, after the misattribution was
+pointed out.
