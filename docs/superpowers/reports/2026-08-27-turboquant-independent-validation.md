@@ -412,6 +412,45 @@ false failures against a correct implementation.
 All are now declared in the contract as behavior, with no worked values, test
 names, assertions, or implementation steps.
 
+### F14 — The sanitized contract stated two facts that were false
+
+**Disposition: accepted (Codex final delivery audit). Corrected.**
+
+The delivery set and chain of custody passed the final audit. The contract did
+not: two of its declarations were wrong in ways that would have manufactured
+false findings against a correct implementation.
+
+1. **"All-zero codes and sketches" for a zero vector.** Verified against the
+   implementation: a zero vector's `packed_signs` is `[255, 255]` — every
+   in-range bit set — because a zero projected value maps to `+1`. What is
+   all-zero is the indices and the norms, and the zero norm is what forces
+   exact-zero reconstruction. A clean validator reading the original wording
+   would have asserted all-zero bytes, observed `255`, and filed a false
+   finding.
+2. **"The author-differential gate additionally carries `status`."** False.
+   `status` is a field of every `GateResult`. A validator could have asserted
+   the first four gates lack it and manufactured a failure.
+
+Also corrected: `QualificationMetrics` publicly carries 23 fields, not the 10
+declared — the omitted ones carry the sensitivity arm, sample accounting, the
+analytic diagnostic, and the block-bootstrap evidence. `QualificationResult`
+carries eight, not two. The CLI declaration named no concrete options or
+artifact filenames, leaving a pre-access validator to guess both, and omitted
+the enforced output namespaces and the development exit-status behavior. Two
+representation boundaries — the midpoint tie direction and the non-broadcasting
+query/key shape rule — were undeclared, and either could be reasonably guessed
+wrong.
+
+All are now declared and were verified programmatically before commit: every
+public dataclass field, every CLI option in `--help`, and every artifact
+filename appears in the contract.
+
+**The pattern, again.** The first contract was written from what the author
+remembered of the interfaces rather than from the implementation's actual
+public surface. Reading is not verifying. This is the same shape as F12: the
+author checked the artifact he was thinking about rather than the artifact
+that would be handed over.
+
 ### F11 — The proposed "second arm" framing was unsound
 
 **Disposition: accepted (Codex round 2; its omission from the first draft of
