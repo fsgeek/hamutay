@@ -6,6 +6,12 @@ Status: approved design direction, written specification awaiting collaborator
 review. No implementation planning or live experimental execution is authorized
 by this document.
 
+Revised: 2026-08-27 after the external review in
+`2026-08-27-turboquant-cache-path-compositionality-review.md`. The revision adds
+the missing quantize-once control, separates serving-lifecycle from
+compositional effects, holds sequence length and the final uncompressed window
+constant in the dose comparison, and replaces the undersized local corpus.
+
 Research roles: Tony Mason is principal investigator. This design was developed
 with a Codex instance acting as researcher.
 
@@ -44,30 +50,50 @@ stages with their own written specifications.
 
 ## Target Statements
 
-### M: mechanism
+### S: serving-lifecycle divergence
 
-For at least one qualified TurboQuant configuration, the divergence between
-warm and cold execution of an identical visible prefix exceeds the divergence
-of the matched uncompressed control.
+One full BF16 prefill and a continuation over retained quantized KV can produce
+different logits for identical visible input. This is a deployment-relevant
+raw-prefill/compressed-continuation effect, but it combines first-order
+quantization with cache-path history and therefore does not establish
+compositionality.
+
+### M: compositional mechanism
+
+For the qualified TurboQuant configuration, two paths that attend through the
+same amount of four-bit cached context and share the same final 512-token
+uncompressed chunk diverge according to whether the cached entries were all
+computed in one BF16 prefill or were themselves computed through earlier
+quantized cache states.
 
 ### A: accumulation
 
-The warm/cold divergence is pathwise: it changes with the number and placement
-of retained-cache continuation boundaries, and a cold recomputation can produce
-an observable discontinuity relative to the preceding warm trajectory.
+At a fixed 16,384-token visible prefix and fixed 512-token final uncompressed
+chunk, compositional divergence increases with the number of quantized-prefix
+continuation boundaries.
 
-### C: consequence
+### E: eviction discontinuity
 
-For at least one registered behavioral task, cache path changes either the
-greedy decoded sequence or task correctness while visible input remains
+At a fixed visible checkpoint, discarding a recursively constructed quantized
+cache, rebuilding that prefix in one BF16 prefill, quantizing it once, and then
+continuing through identical remaining chunks can produce a discontinuity
+relative to an otherwise matched retained-cache trajectory.
+
+### C-seq and C-task: consequence
+
+For at least one registered behavioral task, the compositional cache path
+changes the greedy decoded sequence (`C-seq`) or semantic task correctness
+(`C-task`) while visible input and the immediate uncompressed window remain
 identical.
 
-M and C are non-substitutable. Numerical divergence can support a mechanism
-claim without demonstrating a practical consequence. Behavioral divergence
-without a qualified numerical result is an observed system effect whose cause
-remains unresolved. The behavioral assay runs regardless of the numerical
-result; the numerical outcome controls the interpretation, not whether the
-behavioral data are collected.
+M and the consequence statements are non-substitutable. Numerical divergence
+can support a mechanism claim without demonstrating a practical consequence.
+`C-seq` records sequence sensitivity and cannot be described as task
+degradation. `C-task` records a correctness change and reports its direction.
+Behavioral divergence without a qualified numerical result is an observed
+system effect whose cause remains unresolved. The behavioral assay runs
+regardless of the numerical result; the numerical outcome controls the
+interpretation, not whether the behavioral data are collected.
 
 Experiment 1 does not claim that:
 
@@ -138,8 +164,9 @@ detail.
 This specification covers two deliverables:
 
 1. a transparent TurboQuant algorithm qualification package; and
-2. a single-GPU reference assay comparing cold, warm, and replay execution
-   paths for fixed token prefixes, including a small mandatory behavioral assay.
+2. a single-GPU reference assay comparing cold, quantize-once, fixed-depth warm,
+   eviction, and replay paths for fixed token prefixes, including a small
+   mandatory behavioral assay.
 
 The following require later specifications after Experiment 1 is interpreted:
 
@@ -157,41 +184,49 @@ prefix-cache bugs are allowed to complicate causal interpretation.
 
 ## Conceptual Model
 
-Let `V_n` be the exact visible token prefix after continuation boundary `n`.
+Let `V` be an exact visible token prefix and let its final 512 tokens be `F`.
 For a model configuration `q`, define:
 
-- `cold_q(V_n)`: process all of `V_n` as one ordinary prefill, then materialize
+- `cold_q(V)`: process all of `V` as one ordinary prefill, then materialize
   the cache;
-- `warm_q(V_n, B)`: process `V_n` in chunks separated by boundary schedule
-  `B`, retaining the cache between chunks;
-- `replay_q(V_n)`: reconstruct the trajectory token by token using the same
+- `q1_q(V)`: process `V - F` as one BF16 prefill, materialize it once in cache
+  type `q`, then process `F` through that cached prefix;
+- `warm_q(V, B)`: process `V - F` in chunks separated by boundary schedule `B`,
+  retaining cache type `q` between chunks, then process the same `F`;
+- `replay_q(V)`: reconstruct the trajectory token by token using the same
   quantized-past rule from the first token onward.
 
-Cold and warm represent ordinary serving paths. Replay is a semantic
-equalization control. If a deterministic replay after cache loss does not
-reproduce the prior replay state, the harness is defective or an unrecorded
-source of nondeterminism remains. Replay is not claimed to be a normal server
-policy.
+Cold and warm represent ordinary serving paths. In the TurboQuant arm, `q1` is
+the quantize-once counterfactual that isolates first-order quantization from
+compositional cache history; in the BF16 arm it is the matched two-chunk
+control. Replay is a semantic equalization control. If a deterministic replay
+after cache loss does not reproduce the prior replay state, the harness is
+defective or an unrecorded source of nondeterminism remains. Replay is not
+claimed to be a normal server policy.
 
 Within any multi-token chunk, causal attention uses uncompressed BF16 K/V for
 tokens in that chunk. Tokens from retained earlier chunks use the cache type
 named by the arm. At chunk completion, new K/V entries are retained as BF16 or
-quantized exactly once according to the arm. Thus a cold full prefill computes
-its final prompt logit before cache quantization, while a warm continuation can
-compute the same visible-prefix logit through quantized prior chunks. This
-serving-lifecycle distinction is the intended intervention, not an accidental
-implementation detail.
+quantized exactly once according to the arm. `q1` and every compositional dose
+arm therefore have the same effective 512-token recent uncompressed window at
+the final measurement. The cold arm has a fully uncompressed prompt and replay
+has a one-token uncompressed window; neither is used as the counterfactual for
+M. There is no additional deliberately retained recent-token buffer.
 
-The primary comparison is paired on exact token IDs:
+The three primary paired distances are:
 
 ```text
-D_q(n, B) = distance(output(cold_q(V_n)), output(warm_q(V_n, B)))
+S_q(V)    = distance(output(cold_q(V)), output(q1_q(V)))
+M_q(V, B) = distance(output(q1_q(V)), output(warm_q(V, B)))
+R_q(V)    = distance(output(replay_q(V)), output(reconstructed_replay_q(V)))
 ```
 
-The matched uncompressed-BF16 `D_fp` measures chunking, kernel, and
-finite-precision effects that do not require lossy KV storage. The TurboQuant
-mechanism is estimated by the excess of `D_tq` over that control, not by
-treating `D_fp` as mathematically zero.
+`S_q` measures first-order serving-lifecycle quantization. `M_q` measures the
+additional pathwise effect after matching quantized prefix length and the final
+uncompressed window. `R_q` checks deterministic reconstructability. Matched
+uncompressed-BF16 schedules measure chunking, kernel, and finite-precision
+effects that do not require lossy KV storage; they are not treated as
+mathematically zero.
 
 ## Frozen Reference Configuration
 
@@ -201,7 +236,7 @@ treating `D_fp` as mathematically zero.
   at a time.
 - Model: `meta-llama/Meta-Llama-3.1-8B-Instruct`.
 - Model and tokenizer revision:
-  `0e9e39f249a16976918f6564b8830bc894c896591`.
+  `0e9e39f249a16976918f6564b8830bc894c89659`.
 - Model weights and ordinary KV values: BF16.
 - Quantizer transforms, codebook construction, norms, and recorded diagnostic
   reductions: FP32 unless an operation requires FP64 to create a stable frozen
@@ -229,21 +264,27 @@ The first model-level assay uses a uniform four-bit independent instantiation:
 
 - keys use four-bit `TurboQuant_prod`;
 - values use four-bit `TurboQuant_mse`;
-- no entropy coding, mixed-precision channels, outlier channel policy, recent
-  uncompressed window, or boundary-layer exemption is used.
+- no entropy coding, mixed-precision channels, outlier channel policy,
+  additional recent-token buffer, or boundary-layer exemption is used. The
+  serving lifecycle's immediate uncompressed chunk is a declared experimental
+  variable and is fixed at 512 tokens for compositional comparisons.
 
 This is named `tq_ref_kprod4_vmse4`; it is not called the paper's 3.5-bit
 configuration. Uniform four-bit storage removes the paper's underspecified
 mixed-channel allocation from the first causal test.
 
 Random objects are fixed by the 128-bit study seed
-`0b311d5d4eceaf773efde389305a1b5a`. A sub-seed is the first 16 bytes,
-interpreted as an unsigned big-endian integer, of SHA-256 over the UTF-8 string
-formed by joining the study seed, model revision, algorithm, layer index,
-K-or-V role, KV-head index, and purpose label with `|`. Dense matrices are
-generated from an iid standard Gaussian and orthogonalized with QR; column
-signs are normalized so QR sign ambiguity cannot vary across libraries. The
-resolved matrices, codebooks, and hashes become immutable run inputs.
+`0b311d5d4eceaf773efde389305a1b5a`. In seed-derivation strings it appears as
+those 32 lowercase hexadecimal characters without a `0x` prefix. Integer fields
+use unpadded base-10 ASCII; role and purpose labels use their exact lowercase
+manifest strings. A sub-seed is the first 16 bytes, interpreted as an unsigned
+big-endian integer, of SHA-256 over the UTF-8 string formed by joining the study
+seed, model revision, algorithm, layer index, K-or-V role, KV-head index, and
+purpose label with `|`. Dense matrices are generated from an iid standard
+Gaussian and orthogonalized with QR. For each `i`, column `i` of `Q` is
+multiplied by `sign(R[i,i])`, with zero assigned sign `+1`, so the diagonal of
+`R` is nonnegative. The resolved matrices, codebooks, and hashes become
+immutable run inputs.
 
 The QJL qualification reports both the paper-literal iid Gaussian projection
 and the row-orthogonalized projection used by the public QJL implementation.
@@ -269,7 +310,9 @@ No model-level TurboQuant result is interpreted until all of these checks pass:
    absolute mean error is no more than 2% of error RMSE.
 4. **QJL distortion scale.** At one through four total bits, empirical
    normalized mean squared inner-product error is within 15% relative error of
-   the paper's approximate dimension-scaled value.
+   the paper's approximate dimension-scaled values (`1.57/d`, `0.56/d`,
+   `0.18/d`, and `0.047/d`). These and the scalar-distortion values above were
+   checked against the accessible arXiv text during the audit.
 5. **Author-code differential.** On identical residual vectors, queries,
    projection matrix, residual norms, and floating dtype, the reference QJL
    component agrees with the author implementation within a frozen FP32
@@ -285,42 +328,71 @@ pass is a blocked experiment, not a negative TurboQuant result.
 
 ### Numerical corpus
 
-The numerical corpus is derived without model generation from tracked Markdown
-files under `docs/` at the experiment's preregistration commit:
+The local-document corpus proposed in the first version is ineligible: at the
+reviewed commit it contained 742,460 bytes, insufficient for the registered
+non-overlapping windows. Experiment 1 instead uses the `train` split of
+[`Salesforce/wikitext`](https://huggingface.co/datasets/Salesforce/wikitext/tree/b08601e04326c79dfdd32d625aee71d232d685c3/wikitext-103-raw-v1),
+configuration `wikitext-103-raw-v1`, pinned at revision
+`b08601e04326c79dfdd32d625aee71d232d685c3`.
 
-- include UTF-8 `.md` files in lexicographic path order;
-- exclude `docs/references/` and `docs/superpowers/`; no content-dependent file
-  filtering is permitted;
-- separate files with a fixed newline delimiter;
-- tokenize once with the pinned Llama tokenizer without chat templating;
-- record the included paths, blob hashes, combined text hash, and final token
-  hash.
+The corpus builder:
 
-From that stream, derive 24 non-overlapping windows at each of 4,096, 8,192,
-and 16,384 tokens. Window offsets are selected without replacement from the
-study seed before any quantized execution. If the eligible stream cannot supply
-72 non-overlapping windows, adjacent windows may overlap only after exhausting
-all non-overlapping placements; the manifest records the overlap and the same
-windows remain paired across every arm.
+- reads both train Parquet shards in lexicographic filename order and preserves
+  row order within each shard;
+- joins every `text` value, including empty values, with one newline;
+- tokenizes once with the pinned Llama tokenizer without chat templating;
+- partitions the result from token zero into non-overlapping 16,384-token pages;
+- permutes page indices from the study sub-seed with purpose label
+  `corpus_pages`;
+- assigns the first 24 pages as 16,384-token numerical windows, the first 8,192
+  tokens of each of the next 24 pages as 8,192-token windows, and the first 4,096
+  tokens of each of the next 24 pages as 4,096-token windows;
+- reserves the next 24 pages exclusively for the behavioral corpus: the first
+  eight at 16,384 tokens, the next eight truncated to 8,192 tokens, and the last
+  eight truncated to 4,096 tokens; and
+- records dataset revision, Parquet hashes, row counts, combined text hash,
+  complete token-stream hash, page permutation, and window token hashes.
 
-Each window uses two registered boundary schedules:
+No source interval overlaps another registered numerical or behavioral example.
+If the pinned corpus does not yield at least 96 complete pages, corpus
+qualification fails; overlap is not an allowed repair.
 
-- `B512`: consecutive 512-token chunks, producing 8, 16, or 32 total chunks
-  and therefore 7, 15, or 31 retained-cache continuation boundaries;
-- `Bvar`: a repeating 128, 384, 768, 256, 512-token pattern, truncated exactly
-  at window end.
+### Fixed-length boundary dose
 
-The fixed schedule isolates accumulation by call count. The variable schedule
-checks whether the result depends upon an unnaturally regular chunk size.
+All primary dose arms contain exactly 16,384 visible tokens and use the same
+final 512-token chunk `F`. Let `P` be the preceding 15,872 tokens. A schedule
+`Qm` divides `P` into `m` ordered chunks, materializing the selected cache type
+after every chunk, then processes `F` as the final chunk. For general `m`, let
+`a = floor(15872 / m)` and `r = 15872 mod m`; the first `r` chunks contain
+`a + 1` tokens and the remaining chunks contain `a`.
+
+The registered primary schedules are:
+
+- `Q1`: one 15,872-token prefix prefill, quantized once, then `F`; this is
+  `q1` and contains no compositional history within `P`;
+- `Q2`: two 7,936-token prefix chunks, then `F`;
+- `Q8`: eight 1,984-token prefix chunks, then `F`;
+- `Q31`: thirty-one 512-token prefix chunks, then `F`;
+- `Q15872`: tokenwise prefix construction, then the same 512-token `F`.
+
+Total length, token identity, cached-prefix length, quantizer configuration, and
+the immediate uncompressed window are therefore fixed while cache-history depth
+changes. The 4,096- and 8,192-token secondary strata compare `Q1` with `Q7` and
+`Q15`, respectively, using the same 512-token final window. Pure tokenwise
+replay of the entire visible prefix remains a reconstructability control and is
+not part of the dose trend.
 
 ### Behavioral corpus
 
 The behavioral assay contains 24 deterministic needle-retrieval cases: eight at
-each of 4,096, 8,192, and 16,384 context tokens. Each case uses a separately
-indexed numerical-corpus window as distractor text. For zero-based global case
-index `i`, `SHA-256("<study-seed>|needle|<i>")` supplies the first six bytes for
-a 12-character uppercase hexadecimal record ID and the next ten bytes for a
-16-character unpadded RFC 4648 Base32 value. A unique statement of the form
+each of 4,096, 8,192, and 16,384 context tokens. Each case uses its exclusively
+reserved corpus page as distractor text. Let length-stratum index `k` be 0, 1,
+or 2 for 4,096, 8,192, or 16,384 tokens, let local case index `j` run from 0
+through 7, and let global index `i = 8k + j`. SHA-256 over the UTF-8 string
+`0b311d5d4eceaf773efde389305a1b5a|needle|<i>`, where `<i>` is replaced by its
+unpadded base-10 value, supplies the first six bytes for a 12-character
+uppercase hexadecimal record ID and the next ten bytes for a 16-character
+unpadded RFC 4648 Base32 value. A unique statement of the form
 `The archival code for record <id> is <value>.` is inserted after 10%, 50%, or
 90% of the distractor tokens. For local case `j` in length stratum `k`, the
 position is `[0.10, 0.50, 0.90][(j + k) mod 3]`, rotating the two/three/three
@@ -340,10 +412,10 @@ behavioral-corpus version. IDs, values, final insertion positions, token hashes,
 prompt hashes, and expected answers are frozen before any model result is
 inspected.
 
-The exact Llama chat template is applied once to construct each final visible
-token sequence. All paths receive identical token IDs. Greedy decoding is
-limited to 32 new tokens and stops under the pinned tokenizer's ordinary EOS
-rules. Scoring records exact normalized code match, first generated-token
+All paths receive identical final token IDs. Greedy decoding is limited to 32
+new tokens and stops under the pinned tokenizer's ordinary EOS rules. A
+candidate code is a case-sensitive match of `[A-Z2-7]{16}`. Scoring records
+semantic retrieval correctness, format adherence, first generated-token
 divergence, complete sequence equality, and whether either path emits multiple
 candidate codes.
 
@@ -353,25 +425,34 @@ cross an observable boundary on a task with an unambiguous answer.
 
 ## Execution Arms
 
-Every token window and behavioral case runs through these paired arms:
+Every numerical token window runs through these paired arm families:
 
-| Cache | Path | Meaning |
+| Cache | Paths | Role |
 |---|---|---|
-| BF16 | cold | full visible prefix recomputed in one prefill |
-| BF16 | warm | prefix accumulated under `B512` or `Bvar` with retained BF16 KV |
-| BF16 | replay | tokenwise deterministic replay control |
-| `tq_ref_kprod4_vmse4` | cold | full visible prefix prefilled, then cache quantized |
-| `tq_ref_kprod4_vmse4` | warm | prior chunks attended through retained quantized KV |
-| `tq_ref_kprod4_vmse4` | replay | tokenwise recomputation under the quantized-past rule |
+| BF16 | cold and every matched TQ schedule | kernel and chunking controls |
+| BF16 | replay | tokenwise deterministic reconstruction control |
+| `tq_ref_kprod4_vmse4` | cold | fully uncompressed-prompt lifecycle endpoint |
+| `tq_ref_kprod4_vmse4` | `Q1` and length-specific 512-token schedule | all lengths |
+| `tq_ref_kprod4_vmse4` | `Q2`, `Q8`, `Q31`, `Q15872` | 16,384-token dose only |
+| `tq_ref_kprod4_vmse4` | replay | tokenwise deterministic reconstruction control |
 
-At the 25%, 50%, and 75% checkpoints, the harness records the next-token logits
-for all arms. At the 50% checkpoint it forks each warm state. One branch retains
-its cache. The other discards the cache, reconstructs the identical visible
-prefix through the corresponding cold path, and continues through the remaining
-registered chunks. Replay is also reconstructed at 50% and must reproduce its
-pre-fork state. Comparing the retained and evicted branches at 75% and completion
-creates a registered discontinuity without relying on uncontrolled
-memory-pressure eviction.
+The behavioral corpus runs through cold, `Q1`, the length-specific 512-token
+schedule (`Q7`, `Q15`, or `Q31`), and the eviction fork. It does not run `Q2`,
+`Q8`, `Q15872`, or pure replay decoding.
+
+At completion, the numerical harness records next-token logits for every arm.
+At 25%, 50%, and 75%, it additionally records the length-specific 512-token
+warm path and an independently constructed `Q1` counterfactual whose immediate
+uncompressed window is the same 512 tokens. Dose schedules whose chunk crosses
+a checkpoint are not interrupted merely to create a measurement. At 50%, the
+harness forks the 512-token warm schedule. One branch retains its cache. The
+other discards the cache, reconstructs the
+identical visible half-prefix as one BF16 prefill, materializes it once as
+TurboQuant or BF16 according to the arm, and continues through the same
+remaining 512-token chunks. Comparing retained and evicted branches at 75% and
+completion supplies a convergent compositionality test without uncontrolled
+memory-pressure eviction. Replay is also reconstructed at 50% and must
+reproduce its pre-fork state.
 
 Arm order is deterministically permuted within each example. Each full block is
 run three times. Repetition estimates execution nondeterminism; it is not
@@ -381,26 +462,28 @@ pseudoreplicated as three independent text examples.
 
 ### Numerical primary measurements
 
-At every checkpoint and final prefix, record paired warm/cold and replay/replay
-comparisons for:
+At the checkpoints defined above and at the final prefix, record paired
+cold/`Q1`, `Qm`/`Q1`, retained/evicted, and
+replay/reconstructed-replay comparisons for:
 
 - Jensen-Shannon divergence and forward/reverse KL between next-token
   distributions;
 - maximum and RMS logit difference;
 - logit-vector cosine similarity;
 - top-1 agreement;
-- rank and logit-margin change of the cold path's top token;
+- rank and logit-margin change of the `Q1` path's top token;
 - layerwise normalized residual-stream difference at the final position;
 - K and V reconstruction normalized MSE by layer and KV head;
 - attention-distribution KL for a registered diagnostic subset consisting of
   layers 0, 7, 15, 23, and 31 and the final 16 query positions.
 
 Distributional distances and bootstrap reductions are computed in FP64 from
-recorded FP32 logits. The primary certification stratum is `B512` at 16,384
-tokens: 24 distinct text examples, 32 chunks, and 31 retained-cache continuation
-boundaries. All shorter lengths and `Bvar` results are registered secondary
-estimates of length and boundary-shape sensitivity; none can substitute for a
-failed primary stratum.
+recorded FP32 logits. The primary certification comparison is `Q31` against
+`Q1` at 16,384 tokens: 24 distinct text examples, identical cached-prefix
+length, and an identical 512-token final uncompressed chunk. `Q2`, `Q8`, and
+`Q15872` estimate the fixed-length dose curve. The shorter lengths are
+registered secondary estimates of length sensitivity and cannot substitute for
+a failed primary comparison.
 
 Attention diagnostics may use a slower instrumented pass over the registered
 subset, but its arithmetic and cache inputs must match the primary path. If
@@ -412,11 +495,21 @@ with the primary result.
 
 For each needle case and path, record:
 
-- exact normalized answer correctness;
+- semantic retrieval correctness: the expected value appears exactly once and
+  no other 16-character Base32 candidate appears;
+- format adherence: the stripped output equals the expected value;
 - greedy output sequence;
 - index of first differing generated token;
-- whether correctness changes between cold and warm;
+- whether sequence, semantic correctness, or format adherence changes between
+  `Q1` and the length-specific 512-token warm path;
 - whether eviction restores, removes, or creates a prior difference.
+
+For the uncompressed BF16 path, record the top-two logit margin at every
+generated position and the minimum margin over the response. Cases are neither
+selected nor excluded using this measurement. Behavioral results are reported
+by preregistered context length and needle position, then descriptively by the
+frozen BF16 margin distribution so a null or positive result can be interpreted
+without enriching the corpus for near ties.
 
 Behavioral outputs are retained even if M is not supported.
 
@@ -426,6 +519,13 @@ Record wall time, peak allocated GPU memory, cache bytes, token counts,
 recomputation count, OOMs, kernel fallbacks, and any run repair or retry. These
 describe feasibility and detect confounding; Experiment 1 makes no throughput
 claim.
+
+`Q15872` plus pure replay entails at least 4.6 million single-token prefix steps
+across two cache types and three repeats before shorter strata or attention
+diagnostics. The planning estimate is 30–50 RTX 4090 GPU-hours for those paths.
+A development-only timing probe may refine that estimate, but a high estimate
+does not authorize silently dropping a path, repeat, or example. Material scope
+changes require a revised, reviewed, and newly timestamped specification.
 
 ## Calibration and Interpretation Gates
 
@@ -441,30 +541,50 @@ The envelope and its artifact hash are committed and timestamped before
 TurboQuant results are opened. This calibration is not adjusted using
 TurboQuant observations.
 
-M is supported when all of the following hold in the primary `B512` at
+For example `i`, define these Jensen-Shannon distances at completion:
+
+```text
+S_i       = JS(cold_tq_i, Q1_tq_i)
+S_fp_i    = JS(cold_bf16_i, Q1_bf16_i)
+P_m_i     = JS(Qm_tq_i, Q1_tq_i)
+P_m_fp_i  = JS(Qm_bf16_i, Q1_bf16_i)
+X_i       = JS(retained_tq_i, evicted_tq_i)
+X_fp_i    = JS(retained_bf16_i, evicted_bf16_i)
+```
+
+S is detected when median `S` is at least ten times median `S_fp` and ten times
+`E_JS`, the paired bootstrap 95% interval for median `S - S_fp` excludes zero,
+and at least 75% of examples have `S > E_JS`. It is reported as the first-order
+serving-lifecycle reference magnitude and is not evidence for M.
+
+M is supported when all of the following hold for `P_31` in the primary
 16,384-token stratum:
 
-1. the median TurboQuant warm/cold Jensen-Shannon divergence is at least ten
-   times the matched BF16 median and at least ten times `E_JS`;
-2. the paired bootstrap 95% interval for the median excess
-   `JS_tq - JS_bf16` excludes zero;
-3. at least 75% of examples have `JS_tq > E_JS`; and
-4. replay-after-reconstruction remains within its registered duplicate-run
+1. median `P_31` is at least ten times median `P_31_fp` and ten times `E_JS`;
+2. median `P_31` is at least 1% of `max(median S, E_JS)`, establishing a
+   registered materiality scale relative to the first-order quantization effect;
+3. the paired bootstrap 95% interval for median `P_31 - P_31_fp` excludes zero;
+4. at least 75% of examples have `P_31 > E_JS`; and
+5. replay after reconstruction remains within its registered duplicate-run
    envelope.
 
-A is supported when M is supported and either:
+A is supported when M is supported, the four medians are ordered
+`P_2 <= P_8 <= P_31 <= P_15872`, and the paired bootstrap 95% interval for
+median `P_31 - P_2` excludes zero. `Q15872` is retained as the maximal-depth
+same-window endpoint, not substituted for replay.
 
-- the paired median divergence at 75% exceeds that at 25%, with a 95% bootstrap
-  interval for the median paired increase excluding zero; or
-- at 75% or completion, the paired Jensen-Shannon divergence between the
-  retained and evicted TurboQuant branches exceeds `E_JS` and its matched BF16
-  retained/evicted divergence in at least 75% of examples.
+E is supported when median `X` is at least ten times median `X_fp`, ten times
+`E_JS`, and 1% of `max(median S, E_JS)`; the paired bootstrap 95% interval for
+median `X - X_fp` excludes zero; and at least 75% of examples have `X > E_JS`.
 
-C is supported when at least one paired case changes greedy output and the same
-case is stable across all three repeats within each path. Correctness changes
-are reported separately and never inferred from sequence difference alone.
-With 24 cases, C is evidence of existence and a bounded incidence estimate, not
-a population prevalence claim.
+`C-seq` is supported when at least one paired case changes greedy output between
+`Q1` and the length-specific warm path, or between retained and evicted paths,
+and the case is stable across all three repeats within each path. `C-task` is
+supported only by a stable semantic correctness change under one of those same
+compositional comparisons. Direction, format adherence, and first divergence
+position are reported separately. Cold/`Q1` behavioral differences belong to S
+and cannot support either C statement. With 24 cases, both C statements are
+evidence of existence and bounded incidence, not population prevalence.
 
 All intervals use 10,000 study-seeded paired bootstrap resamples over distinct
 text examples. Effect distributions and individual examples are published; a
@@ -472,12 +592,22 @@ gate label does not replace them.
 
 ### Outcome vocabulary
 
+The labels below are component conclusions rather than a forced mutually
+exclusive menu; every supported target statement is reported.
+
 - **No qualified experiment:** algorithm or determinism gate failed.
-- **No detected mechanism at tested settings:** qualification passed but M did
+- **Serving-lifecycle divergence only:** S is measurable but M does not pass.
+- **Pathwise signal below registered scale:** `P_31` exceeds controls but fails
+  the 1%-of-S scale gate.
+- **No detected compositional mechanism at tested settings:** qualification
+  passed but M did not.
+- **Numerical mechanism without detected sequence consequence:** M passed and
+  `C-seq` did not.
+- **Sequence sensitivity without correctness change:** `C-seq` passed and
+  `C-task` did not.
+- **Behavioral effect of unresolved cause:** either C statement passed and M did
   not.
-- **Numerical mechanism without detected consequence:** M passed and C did not.
-- **Behavioral effect of unresolved cause:** C passed and M did not.
-- **Numerical mechanism with behavioral consequence:** both M and C passed.
+- **Numerical mechanism with task consequence:** M and `C-task` passed.
 
 These labels prevent “no behavioral divergence” from being reported as “no
 numerical effect,” or a numerical difference from being promoted into an
@@ -523,8 +653,8 @@ artifact hashes. Analysis consumes raw records and emits new artifacts; it does
 not edit them in place.
 
 Development runs live under a visibly separate namespace and may not certify
-M, A, or C. Any implementation choice influenced by development output is
-declared and frozen before the registered corpus is run.
+S, M, A, E, `C-seq`, or `C-task`. Any implementation choice influenced by
+development output is declared and frozen before the registered corpus is run.
 
 ## Later Research Ladder
 
@@ -576,8 +706,8 @@ Experiment 1 succeeds as research when it leaves a reproducible answer to the
 tested question, including a qualified null result. Concretely, success means:
 
 - the algorithm qualification gate has passed or failed legibly;
-- cold, warm, replay, and eviction paths can be reconstructed from immutable
-  records;
+- cold, quantize-once, dose, replay, and eviction paths can be reconstructed
+  from immutable records;
 - numerical and behavioral outcomes are interpreted through the registered
   gates;
 - implementation artifacts are sufficiently transparent to distinguish
