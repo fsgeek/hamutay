@@ -956,6 +956,7 @@ def execute_qualification(args: argparse.Namespace) -> int:
     except BaseException as error:
         traceback_text = traceback.format_exc()
         recovery_pair = terminal_pair
+        recovery_attempts = 1
         if recovery_pair is None:
             try:
                 recovery_pair = _error_terminal_pair(
@@ -970,15 +971,19 @@ def execute_qualification(args: argparse.Namespace) -> int:
                     original_error=error,
                     traceback_text=traceback_text,
                 )
+                recovery_attempts = 2
             except BaseException:
                 recovery_pair = None
         if recovery_pair is not None:
-            try:
-                _publish_terminal_pair(run_directory, recovery_pair)
-            except BaseException:
-                # A persistent publication fault must fail closed without
-                # changing the intended status or masking the original error.
-                pass
+            for _ in range(recovery_attempts):
+                try:
+                    _publish_terminal_pair(run_directory, recovery_pair)
+                    break
+                except BaseException:
+                    # A persistent publication fault must fail closed without
+                    # changing the intended status or masking the original
+                    # error. Error-pair recovery is bounded to two attempts.
+                    pass
         raise
     finally:
         if worker_config_path is not None:

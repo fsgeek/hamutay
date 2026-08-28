@@ -892,6 +892,20 @@ def _assert_terminal_history_never_transitions(history):
         assert terminal_by_name[name] == status
 
 
+def _record_terminal_pair_attempts(monkeypatch):
+    real_publish = _publish_terminal_pair
+    attempts = []
+
+    def record_and_publish(run_directory, pair):
+        attempts.append((pair.manifest_bytes, pair.qualification_bytes))
+        return real_publish(run_directory, pair)
+
+    monkeypatch.setattr(
+        "hamutay.turboquant.qualify._publish_terminal_pair", record_and_publish
+    )
+    return attempts
+
+
 @pytest.mark.parametrize(
     ("stage", "message", "expected_status"),
     [
@@ -974,3 +988,63 @@ def test_terminal_pair_rejects_contradictory_qualification_before_commit(tmp_pat
 
     assert _load_canonical_json(manifest_path)["status"] == "running"
     assert _load_canonical_json(qualification_path)["status"] == "error"
+
+
+@pytest.mark.parametrize("stage", ["manifest_replace", "qualification_link"])
+def test_preterminal_error_pair_retries_same_frozen_bytes_after_one_shot_fault(
+    stage, monkeypatch, development_output_root
+):
+    run_id = f"preterminal-one-shot-{stage}"
+    args = _namespace_args("development", development_output_root, run_id)
+    history = _install_terminal_publication_fault(monkeypatch, stage)
+    attempts = _record_terminal_pair_attempts(monkeypatch)
+
+    def fail_metadata():
+        raise RuntimeError("controlled preterminal metadata failure")
+
+    monkeypatch.setattr("hamutay.turboquant.qualify._platform_metadata", fail_metadata)
+
+    with pytest.raises(RuntimeError, match="controlled preterminal metadata failure"):
+        execute_qualification(args)
+
+    run_directory = development_output_root / run_id
+    manifest = _load_canonical_json(run_directory / "manifest.json")
+    qualification = _load_canonical_json(run_directory / "qualification.json")
+    assert manifest["status"] == qualification["status"] == "error"
+    assert qualification["error"]["type"] == "RuntimeError"
+    assert (
+        qualification["error"]["message"] == "controlled preterminal metadata failure"
+    )
+    _assert_terminal_history_never_transitions(history)
+    assert len(attempts) == 2
+    assert attempts[0] == attempts[1]
+
+
+@pytest.mark.parametrize(
+    ("stage", "visible_manifest_status"),
+    [("manifest_replace", "running"), ("qualification_link", "error")],
+)
+def test_preterminal_error_pair_persistent_fault_fails_closed(
+    stage, visible_manifest_status, monkeypatch, development_output_root
+):
+    run_id = f"preterminal-persistent-{stage}"
+    args = _namespace_args("development", development_output_root, run_id)
+    history = _install_terminal_publication_fault(monkeypatch, stage, persistent=True)
+    attempts = _record_terminal_pair_attempts(monkeypatch)
+
+    def fail_metadata():
+        raise RuntimeError("controlled persistent preterminal failure")
+
+    monkeypatch.setattr("hamutay.turboquant.qualify._platform_metadata", fail_metadata)
+
+    with pytest.raises(RuntimeError, match="controlled persistent preterminal failure"):
+        execute_qualification(args)
+
+    run_directory = development_output_root / run_id
+    assert _load_canonical_json(run_directory / "manifest.json")["status"] == (
+        visible_manifest_status
+    )
+    assert not (run_directory / "qualification.json").exists()
+    _assert_terminal_history_never_transitions(history)
+    assert len(attempts) == 2
+    assert attempts[0] == attempts[1]
