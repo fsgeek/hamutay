@@ -1,15 +1,31 @@
 import hashlib
+import os
+from pathlib import Path
 import struct
 
 import numpy as np
 import pytest
 
+import hamutay.turboquant.artifacts as artifacts
 from hamutay.turboquant.artifacts import (
     ArrayStreamHasher,
+    atomic_savez,
+    atomic_write_bytes,
     canonical_json_bytes,
     create_run_directory,
     sha256_file,
 )
+
+
+def _publish_test_artifact(kind: str, destination) -> None:
+    if kind == "bytes":
+        atomic_write_bytes(destination, b"new evidence\n")
+    else:
+        atomic_savez(destination, {"values": np.array([1, 2], dtype=np.float32)})
+
+
+def _publication_temporaries(destination):
+    return list(destination.parent.glob(f".{destination.name}.*.tmp"))
 
 
 def test_canonical_json_is_sorted_compact_and_newline_terminated():
@@ -24,6 +40,59 @@ def test_run_directory_refuses_overwrite(tmp_path):
     assert created.is_dir()
     with pytest.raises(FileExistsError):
         create_run_directory(tmp_path, "registered-001")
+
+
+@pytest.mark.parametrize("kind", ["bytes", "npz"])
+def test_atomic_publication_refuses_dangling_symlink(kind, tmp_path):
+    destination = tmp_path / f"artifact.{kind}"
+    missing_target = tmp_path / "missing-target"
+    destination.symlink_to(missing_target)
+
+    with pytest.raises(FileExistsError):
+        _publish_test_artifact(kind, destination)
+
+    assert destination.is_symlink()
+    assert os.readlink(destination) == str(missing_target)
+    assert not missing_target.exists()
+    assert _publication_temporaries(destination) == []
+
+
+@pytest.mark.parametrize("kind", ["bytes", "npz"])
+def test_atomic_publication_never_overwrites_racing_destination(
+    kind, monkeypatch, tmp_path
+):
+    destination = tmp_path / f"artifact.{kind}"
+    real_link = os.link
+
+    def create_racing_destination_then_link(source, target):
+        Path(target).write_bytes(b"racing evidence\n")
+        return real_link(source, target)
+
+    monkeypatch.setattr(artifacts.os, "link", create_racing_destination_then_link)
+
+    with pytest.raises(FileExistsError):
+        _publish_test_artifact(kind, destination)
+
+    assert destination.read_bytes() == b"racing evidence\n"
+    assert _publication_temporaries(destination) == []
+
+
+@pytest.mark.parametrize("kind", ["bytes", "npz"])
+def test_atomic_publication_cleans_temporary_after_link_fault(
+    kind, monkeypatch, tmp_path
+):
+    destination = tmp_path / f"artifact.{kind}"
+
+    def fail_link(_source, _target):
+        raise OSError("controlled link fault")
+
+    monkeypatch.setattr(artifacts.os, "link", fail_link)
+
+    with pytest.raises(OSError, match="controlled link fault"):
+        _publish_test_artifact(kind, destination)
+
+    assert not os.path.lexists(destination)
+    assert _publication_temporaries(destination) == []
 
 
 def test_canonical_json_preserves_utf8_and_refuses_nonfinite_values():

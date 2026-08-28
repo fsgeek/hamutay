@@ -92,12 +92,12 @@ def _load_configuration(path: Path) -> tuple[QualificationConfig, dict[str, obje
 def _load_resolved_inputs(
     path: Path, config: QualificationConfig
 ) -> dict[str, np.ndarray]:
+    required_codebook_bits = {*config.bits, *(bits - 1 for bits in config.bits)}
     required_names = {
         "rotation",
         "paper_projection",
         "sensitivity_projection",
-        *(f"codebook_bits_{bits}" for bits in {0, *config.bits}),
-        *(f"codebook_bits_{bits - 1}" for bits in config.bits),
+        *(f"codebook_bits_{bits}" for bits in required_codebook_bits),
     }
     with np.load(path, allow_pickle=False) as archive:
         if set(archive.files) != required_names:
@@ -114,7 +114,7 @@ def _load_resolved_inputs(
         array = arrays[name]
         if array.dtype != np.float32 or array.shape != (dimension, dimension):
             raise ValueError(f"{name} must be FP32 with shape (dimension, dimension)")
-    for bits in {0, *config.bits, *(bits - 1 for bits in config.bits)}:
+    for bits in required_codebook_bits:
         name = f"codebook_bits_{bits}"
         codebook = arrays[name]
         if codebook.dtype != np.float32 or codebook.shape != (2**bits,):

@@ -190,6 +190,10 @@ def _utc_now() -> str:
     return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
 
 
+def _new_uuid() -> uuid.UUID:
+    return uuid.uuid4()
+
+
 def _configuration(args: argparse.Namespace) -> QualificationConfig:
     try:
         return QualificationConfig(
@@ -232,6 +236,19 @@ def _repository_root() -> Path:
         raise QualificationValidationError(
             "qualification must run inside a Git worktree"
         ) from error
+
+
+def _validate_output_root(profile: str, output_root: Path, repository: Path) -> Path:
+    namespace_name = "development" if profile == "development" else "qualification"
+    namespace = (repository / "experiments" / "turboquant" / namespace_name).resolve(
+        strict=False
+    )
+    candidate = Path(output_root).resolve(strict=False)
+    if candidate != namespace and not candidate.is_relative_to(namespace):
+        raise QualificationValidationError(
+            f"{profile} namespace requires --output-root at or beneath {namespace}"
+        )
+    return candidate
 
 
 def _git_state(repository: Path) -> tuple[str, list[str]]:
@@ -419,7 +436,7 @@ def _provisional_manifest(
     return {
         "schema": "hamutay.turboquant.manifest.v1",
         "run_id": args.run_id,
-        "run_uuid": str(uuid.uuid4()),
+        "run_uuid": str(_new_uuid()),
         "started_at_utc": started_at,
         "ended_at_utc": None,
         "profile": args.profile,
@@ -471,6 +488,7 @@ def _compare_worker_outputs(
         raise ValueError("process determinism requires exactly three executions")
     records = [_read_execution(path) for path in outputs]
     payload_bytes: list[bytes] = []
+    deterministic_evidence_bytes: list[bytes] = []
     worker_pids: list[int] = []
     for expected_index, record in enumerate(records):
         if record.get("schema") != "hamutay.turboquant.execution.v1":
@@ -492,6 +510,14 @@ def _compare_worker_outputs(
         if provenance.get("parent_pid") != parent_pid:
             raise ValueError("worker parent PID does not match the launching parent")
         worker_pids.append(pid)
+        deterministic_evidence = dict(record)
+        deterministic_evidence.pop("execution_index")
+        deterministic_provenance = dict(provenance)
+        deterministic_provenance.pop("pid")
+        deterministic_evidence["provenance"] = deterministic_provenance
+        deterministic_evidence_bytes.append(
+            canonical_json_bytes(deterministic_evidence)
+        )
         payload = record.get("determinism_payload")
         if not isinstance(payload, dict):
             raise ValueError("worker determinism payload is missing")
@@ -504,8 +530,12 @@ def _compare_worker_outputs(
         payload_bytes.append(encoded)
     if len(set(worker_pids)) != 3:
         raise ValueError("process determinism requires three distinct worker PIDs")
-    if not payload_bytes[0] == payload_bytes[1] == payload_bytes[2]:
-        raise ValueError("worker determinism payloads are not byte-identical")
+    if not (
+        deterministic_evidence_bytes[0]
+        == deterministic_evidence_bytes[1]
+        == deterministic_evidence_bytes[2]
+    ):
+        raise ValueError("worker deterministic evidence is not byte-identical")
     return {
         "canonical_payload_sha256": hashlib.sha256(payload_bytes[0]).hexdigest(),
         "execution_indices": [0, 1, 2],
@@ -558,7 +588,9 @@ def _terminal_error_record(
     *,
     args: argparse.Namespace,
     error: BaseException,
+    traceback_text: str,
     artifact_hashes: dict[str, str],
+    recovery_errors: list[dict[str, str]],
 ) -> dict[str, object]:
     return {
         "schema": "hamutay.turboquant.qualification.v1",
@@ -575,15 +607,175 @@ def _terminal_error_record(
         "error": {
             "type": type(error).__name__,
             "message": str(error),
-            "traceback": traceback.format_exc(),
+            "traceback": traceback_text,
         },
+        "recovery_errors": recovery_errors,
     }
+
+
+def _emergency_manifest(
+    *,
+    args: argparse.Namespace,
+    config: QualificationConfig,
+    repository: Path,
+    commit: str,
+    dirty_paths: list[str],
+) -> dict[str, object]:
+    """Return a no-fail, partial manifest suitable for terminal recovery."""
+    return {
+        "schema": "hamutay.turboquant.manifest.v1",
+        "run_id": args.run_id,
+        "run_uuid": None,
+        "started_at_utc": None,
+        "ended_at_utc": None,
+        "profile": args.profile,
+        "status": "running",
+        "certification": _certification(args.profile),
+        "configuration": _configuration_dict(config),
+        "configuration_sha256": None,
+        "provenance": {
+            "git_commit": commit,
+            "dirty_paths": dirty_paths,
+            "allowed_dirty_paths": sorted(args.allow_dirty_path),
+            "repository": str(repository),
+            "source_sha256": {},
+        },
+        "study": {
+            "seed_hex": STUDY_SEED_HEX,
+            "seed_derivation": (
+                "SHA-256 of study_seed|field..., first 16 bytes interpreted as an "
+                "unsigned big-endian integer; PCG64 uses the derived integer"
+            ),
+        },
+        "software": {},
+        "platform": {},
+        "resolved_inputs": None,
+        "source_paper_targets": _paper_targets(config),
+        "numerical_conventions": _NUMERICAL_CONVENTIONS,
+        "declared_losses": _DECLARED_LOSSES,
+        "artifact_sha256": {},
+    }
+
+
+def _record_recovery_error(
+    recovery_errors: list[dict[str, str]], stage: str, error: BaseException
+) -> None:
+    recovery_errors.append(
+        {"stage": stage, "type": type(error).__name__, "message": str(error)}
+    )
+
+
+def _best_effort_hashes(
+    run_directory: Path,
+    *,
+    include_manifest: bool,
+    recovery_errors: list[dict[str, str]],
+) -> dict[str, str]:
+    try:
+        return _existing_artifact_hashes(
+            run_directory, include_manifest=include_manifest
+        )
+    except BaseException as error:
+        _record_recovery_error(recovery_errors, "artifact_hashes", error)
+        return {}
+
+
+def _publish_terminal_error(
+    *,
+    args: argparse.Namespace,
+    config: QualificationConfig,
+    repository: Path,
+    commit: str,
+    dirty_paths: list[str],
+    run_directory: Path,
+    run_log: _RunLog | None,
+    manifest: dict[str, object] | None,
+    original_error: BaseException,
+    traceback_text: str,
+) -> None:
+    """Best-effort terminal publication that never masks the original error."""
+    recovery_errors: list[dict[str, str]] = []
+    if run_log is not None:
+        try:
+            run_log.write(
+                "error",
+                f"{type(original_error).__name__}: {original_error}; retaining partial evidence",
+            )
+            run_log.write(
+                "terminal", "terminal error artifact written; run is immutable"
+            )
+        except BaseException as error:
+            _record_recovery_error(recovery_errors, "run_log_write", error)
+        try:
+            run_log.close()
+        except BaseException as error:
+            _record_recovery_error(recovery_errors, "run_log_close", error)
+
+    if manifest is None:
+        try:
+            manifest = _emergency_manifest(
+                args=args,
+                config=config,
+                repository=repository,
+                commit=commit,
+                dirty_paths=dirty_paths,
+            )
+        except BaseException as error:
+            _record_recovery_error(recovery_errors, "emergency_manifest", error)
+            manifest = {
+                "schema": "hamutay.turboquant.manifest.v1",
+                "run_id": str(getattr(args, "run_id", "unknown")),
+                "profile": str(getattr(args, "profile", "unknown")),
+            }
+    manifest["ended_at_utc"] = None
+    try:
+        manifest["ended_at_utc"] = _utc_now()
+    except BaseException as error:
+        _record_recovery_error(recovery_errors, "ended_at_utc", error)
+    manifest["status"] = "error"
+    manifest["artifact_sha256"] = _best_effort_hashes(
+        run_directory,
+        include_manifest=False,
+        recovery_errors=recovery_errors,
+    )
+    manifest_path = run_directory / "manifest.json"
+    try:
+        atomic_write_json(
+            manifest_path,
+            manifest,
+            replace=os.path.lexists(manifest_path),
+        )
+    except BaseException as error:
+        _record_recovery_error(recovery_errors, "terminal_manifest", error)
+
+    artifact_hashes = _best_effort_hashes(
+        run_directory,
+        include_manifest=True,
+        recovery_errors=recovery_errors,
+    )
+    qualification_path = run_directory / "qualification.json"
+    try:
+        atomic_write_json(
+            qualification_path,
+            _terminal_error_record(
+                args=args,
+                error=original_error,
+                traceback_text=traceback_text,
+                artifact_hashes=artifact_hashes,
+                recovery_errors=recovery_errors,
+            ),
+        )
+    except BaseException:
+        # No remaining append-only channel exists for a qualification writer
+        # failure. Preserve the original exception rather than masking it.
+        pass
 
 
 def execute_qualification(args: argparse.Namespace) -> int:
     """Execute one append-only qualification, retaining terminal error evidence."""
     config = _configuration(args)
     repository = _repository_root()
+    args.output_root = _validate_output_root(args.profile, args.output_root, repository)
     commit, dirty_paths = _git_state(repository)
     _validate_registered_cleanliness(args.profile, dirty_paths, args.allow_dirty_path)
 
@@ -591,24 +783,27 @@ def execute_qualification(args: argparse.Namespace) -> int:
         run_directory = create_run_directory(args.output_root, args.run_id)
     except (FileExistsError, ValueError) as error:
         raise QualificationValidationError(str(error)) from error
-    run_log = _RunLog(run_directory / "run.log")
-    started_at = _utc_now()
-    manifest = _provisional_manifest(
-        args=args,
-        config=config,
-        repository=repository,
-        commit=commit,
-        dirty_paths=dirty_paths,
-        started_at=started_at,
-    )
     manifest_path = run_directory / "manifest.json"
     qualification_path = run_directory / "qualification.json"
     resolved_inputs_path = run_directory / "resolved_inputs.npz"
-    worker_config_path = run_directory.parent / (
-        f".{args.run_id}.worker-config.{uuid.uuid4().hex}.json"
-    )
+    run_log: _RunLog | None = None
+    manifest: dict[str, object] | None = None
+    worker_config_path: Path | None = None
     terminal_written = False
     try:
+        run_log = _RunLog(run_directory / "run.log")
+        started_at = _utc_now()
+        manifest = _provisional_manifest(
+            args=args,
+            config=config,
+            repository=repository,
+            commit=commit,
+            dirty_paths=dirty_paths,
+            started_at=started_at,
+        )
+        worker_config_path = run_directory.parent / (
+            f".{args.run_id}.worker-config.{_new_uuid().hex}.json"
+        )
         atomic_write_json(manifest_path, manifest)
         run_log.write("manifest", "provisional manifest written")
         manifest["provenance"]["source_sha256"] = _source_hashes(repository)
@@ -682,34 +877,26 @@ def execute_qualification(args: argparse.Namespace) -> int:
     except BaseException as error:
         if terminal_written:
             raise
-        try:
-            run_log.write(
-                "error", f"{type(error).__name__}: {error}; retaining partial evidence"
-            )
-            run_log.write(
-                "terminal", "terminal error artifact written; run is immutable"
-            )
-        finally:
-            run_log.close()
-        manifest["ended_at_utc"] = _utc_now()
-        manifest["status"] = "error"
-        manifest["artifact_sha256"] = _existing_artifact_hashes(
-            run_directory, include_manifest=False
+        traceback_text = traceback.format_exc()
+        _publish_terminal_error(
+            args=args,
+            config=config,
+            repository=repository,
+            commit=commit,
+            dirty_paths=dirty_paths,
+            run_directory=run_directory,
+            run_log=run_log,
+            manifest=manifest,
+            original_error=error,
+            traceback_text=traceback_text,
         )
-        atomic_write_json(manifest_path, manifest, replace=True)
-        artifact_hashes = _existing_artifact_hashes(
-            run_directory, include_manifest=True
-        )
-        atomic_write_json(
-            qualification_path,
-            _terminal_error_record(
-                args=args, error=error, artifact_hashes=artifact_hashes
-            ),
-        )
-        terminal_written = True
         raise
     finally:
-        worker_config_path.unlink(missing_ok=True)
+        if worker_config_path is not None:
+            try:
+                worker_config_path.unlink(missing_ok=True)
+            except OSError:
+                pass
 
 
 def main(argv: Sequence[str] | None = None) -> int:

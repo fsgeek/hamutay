@@ -7,8 +7,8 @@ import json
 import os
 from pathlib import Path
 import struct
+import tempfile
 from typing import BinaryIO
-import uuid
 
 import numpy as np
 
@@ -74,19 +74,26 @@ def _fsync_directory(directory: Path) -> None:
 def atomic_write_bytes(path: Path, content: bytes, *, replace: bool = False) -> None:
     """Publish flushed bytes atomically, refusing replacement by default."""
     destination = Path(path)
-    if destination.exists() and not replace:
-        raise FileExistsError(destination)
-    temporary = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
+    )
+    temporary = Path(temporary_name)
     try:
-        with temporary.open("xb") as artifact:
+        artifact = os.fdopen(descriptor, "wb")
+        descriptor = -1
+        with artifact:
             artifact.write(content)
             artifact.flush()
             os.fsync(artifact.fileno())
-        if destination.exists() and not replace:
-            raise FileExistsError(destination)
-        os.replace(temporary, destination)
+        if replace:
+            os.replace(temporary, destination)
+        else:
+            os.link(temporary, destination)
+            temporary.unlink()
         _fsync_directory(destination.parent)
     finally:
+        if descriptor >= 0:
+            os.close(descriptor)
         temporary.unlink(missing_ok=True)
 
 
@@ -98,19 +105,23 @@ def atomic_write_json(path: Path, value: object, *, replace: bool = False) -> No
 def atomic_savez(path: Path, arrays: dict[str, np.ndarray]) -> None:
     """Publish an uncompressed NPZ atomically without replacing an artifact."""
     destination = Path(path)
-    if destination.exists():
-        raise FileExistsError(destination)
-    temporary = destination.with_name(f".{destination.name}.{uuid.uuid4().hex}.tmp")
+    descriptor, temporary_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
+    )
+    temporary = Path(temporary_name)
     try:
-        with temporary.open("xb") as artifact:
+        artifact = os.fdopen(descriptor, "wb")
+        descriptor = -1
+        with artifact:
             np.savez(artifact, **arrays)
             artifact.flush()
             os.fsync(artifact.fileno())
-        if destination.exists():
-            raise FileExistsError(destination)
-        os.replace(temporary, destination)
+        os.link(temporary, destination)
+        temporary.unlink()
         _fsync_directory(destination.parent)
     finally:
+        if descriptor >= 0:
+            os.close(descriptor)
         temporary.unlink(missing_ok=True)
 
 

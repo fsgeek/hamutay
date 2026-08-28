@@ -2,6 +2,7 @@ from dataclasses import asdict
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +14,7 @@ import pytest
 from hamutay.turboquant.artifacts import canonical_json_bytes, sha256_file
 from hamutay.turboquant.qualify import (
     CERTIFICATION_REASON,
+    QualificationValidationError,
     _completion_exit_status,
     _compare_worker_outputs,
     _validate_registered_cleanliness,
@@ -31,6 +33,22 @@ def _load_canonical_json(path: Path) -> dict:
     value = json.loads(raw)
     assert raw == canonical_json_bytes(value)
     return value
+
+
+@pytest.fixture
+def development_output_root(tmp_path: Path):
+    repository = Path(__file__).resolve().parents[2]
+    output_root = (
+        repository
+        / "experiments"
+        / "turboquant"
+        / "development"
+        / f"pytest-{tmp_path.name}"
+    )
+    try:
+        yield output_root
+    finally:
+        shutil.rmtree(output_root, ignore_errors=True)
 
 
 def test_registered_profile_freezes_all_scientific_counts():
@@ -115,6 +133,92 @@ def test_registered_cleanliness_allows_only_exact_declared_dirty_paths():
             ["declared.txt", "unexpected.txt"],
             ["declared.txt"],
         )
+
+
+def _namespace_args(profile: str, output_root: Path, run_id: str):
+    command = [
+        "--profile",
+        profile,
+        "--output-root",
+        str(output_root),
+        "--run-id",
+        run_id,
+    ]
+    if profile == "development":
+        command.extend(
+            [
+                "--dimension",
+                "8",
+                "--sample-count",
+                "24",
+                "--batch-size",
+                "12",
+                "--bootstrap-blocks",
+                "6",
+                "--bootstrap-resamples",
+                "11",
+                "--bits",
+                "1",
+            ]
+        )
+    return build_parser().parse_args(command)
+
+
+def test_development_rejects_arbitrary_output_root_before_run_creation(tmp_path):
+    output_root = tmp_path / "arbitrary"
+
+    with pytest.raises(QualificationValidationError, match="development namespace"):
+        execute_qualification(_namespace_args("development", output_root, "outside"))
+
+    assert not (output_root / "outside").exists()
+
+
+def test_development_rejects_cross_profile_parent_traversal_before_creation(
+    tmp_path,
+):
+    repository = Path(__file__).resolve().parents[2]
+    development = repository / "experiments" / "turboquant" / "development"
+    output_root = development / ".." / "qualification" / f"pytest-{tmp_path.name}"
+
+    with pytest.raises(QualificationValidationError, match="development namespace"):
+        execute_qualification(_namespace_args("development", output_root, "cross"))
+
+    assert not (output_root.resolve() / "cross").exists()
+
+
+def test_registered_rejects_development_namespace_before_cleanliness(tmp_path):
+    repository = Path(__file__).resolve().parents[2]
+    output_root = (
+        repository
+        / "experiments"
+        / "turboquant"
+        / "development"
+        / f"registered-{tmp_path.name}"
+    )
+
+    with pytest.raises(QualificationValidationError, match="registered namespace"):
+        execute_qualification(_namespace_args("registered", output_root, "cross"))
+
+    assert not (output_root / "cross").exists()
+
+
+def test_development_rejects_symlink_that_resolves_outside_namespace(tmp_path):
+    repository = Path(__file__).resolve().parents[2]
+    base = repository / "experiments" / "turboquant" / "development"
+    base.mkdir(parents=True, exist_ok=True)
+    output_root = base / f"symlink-{tmp_path.name}"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    output_root.symlink_to(outside, target_is_directory=True)
+    try:
+        with pytest.raises(QualificationValidationError, match="development namespace"):
+            execute_qualification(
+                _namespace_args("development", output_root, "escaped")
+            )
+
+        assert not (outside / "escaped").exists()
+    finally:
+        output_root.unlink(missing_ok=True)
 
 
 def test_registered_workers_are_three_fresh_processes(monkeypatch, tmp_path):
@@ -248,6 +352,37 @@ def test_process_comparison_rejects_one_differing_child(tmp_path):
             canonical_json_bytes(_execution_fixture(index, payload=payload))
         )
 
+
+@pytest.mark.parametrize(
+    ("field", "differing_value"),
+    [
+        ("worker_environment", "2"),
+        ("stdout", "unexpected output\n"),
+        ("stderr", "unexpected error output\n"),
+    ],
+)
+def test_process_comparison_rejects_differing_deterministic_evidence(
+    tmp_path, field, differing_value
+):
+    paths = tuple(tmp_path / f"execution-{index}.json" for index in range(3))
+    for index, path in enumerate(paths):
+        record = _execution_fixture(index)
+        if index == 2 and field == "worker_environment":
+            record["provenance"]["worker_environment"]["OMP_NUM_THREADS"] = (
+                differing_value
+            )
+        elif index == 2:
+            record[field] = differing_value
+        path.write_bytes(canonical_json_bytes(record))
+
+    with pytest.raises(ValueError, match="deterministic evidence"):
+        _compare_worker_outputs(
+            paths,
+            configuration_sha256="3" * 64,
+            resolved_inputs_sha256="4" * 64,
+            parent_pid=os.getpid(),
+        )
+
     with pytest.raises(ValueError, match="byte-identical"):
         _compare_worker_outputs(
             paths,
@@ -276,9 +411,9 @@ def test_process_comparison_rejects_noncanonical_child_record(tmp_path):
 
 
 def test_development_cli_writes_complete_noncertifying_fresh_process_evidence(
-    tmp_path,
+    development_output_root,
 ):
-    output_root = tmp_path / "development"
+    output_root = development_output_root
     run_id = "fresh-processes"
     command = [
         sys.executable,
@@ -443,15 +578,70 @@ def test_development_cli_writes_complete_noncertifying_fresh_process_evidence(
     }
 
 
-def test_execution_exception_preserves_partial_run_and_terminal_error(
-    monkeypatch, tmp_path
+def test_development_cli_real_process_supports_bit_subset_without_total_bit_one(
+    development_output_root,
 ):
+    run_id = "bits-two-only"
+    completed = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "hamutay.turboquant.qualify",
+            "--profile",
+            "development",
+            "--output-root",
+            str(development_output_root),
+            "--run-id",
+            run_id,
+            "--dimension",
+            "8",
+            "--sample-count",
+            "24",
+            "--batch-size",
+            "12",
+            "--bootstrap-blocks",
+            "6",
+            "--bootstrap-resamples",
+            "11",
+            "--bits",
+            "2",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert completed.returncode == 0, completed.stderr
+    run_directory = development_output_root / run_id
+    qualification = _load_canonical_json(run_directory / "qualification.json")
+    assert qualification["status"] in {"passed", "failed"}
+    assert [metric["bits"] for metric in qualification["metrics"]] == [2]
+    with np.load(run_directory / "resolved_inputs.npz", allow_pickle=False) as inputs:
+        assert set(inputs.files) == {
+            "rotation",
+            "paper_projection",
+            "sensitivity_projection",
+            "codebook_bits_1",
+            "codebook_bits_2",
+        }
+    assert [
+        _load_canonical_json(run_directory / f"execution-{index}.json")[
+            "execution_index"
+        ]
+        for index in range(3)
+    ] == [0, 1, 2]
+
+
+def test_execution_exception_preserves_partial_run_and_terminal_error(
+    monkeypatch, development_output_root
+):
+    output_root = development_output_root
     args = build_parser().parse_args(
         [
             "--profile",
             "development",
             "--output-root",
-            str(tmp_path),
+            str(output_root),
             "--run-id",
             "partial",
             "--dimension",
@@ -479,7 +669,7 @@ def test_execution_exception_preserves_partial_run_and_terminal_error(
     with pytest.raises(RuntimeError, match="controlled worker failure"):
         execute_qualification(args)
 
-    run_directory = tmp_path / "partial"
+    run_directory = output_root / "partial"
     manifest = _load_canonical_json(run_directory / "manifest.json")
     qualification = _load_canonical_json(run_directory / "qualification.json")
     assert manifest["status"] == "error"
@@ -496,14 +686,15 @@ def test_execution_exception_preserves_partial_run_and_terminal_error(
 
 
 def test_metadata_exception_after_directory_creation_is_terminally_recorded(
-    monkeypatch, tmp_path
+    monkeypatch, development_output_root
 ):
+    output_root = development_output_root
     args = build_parser().parse_args(
         [
             "--profile",
             "development",
             "--output-root",
-            str(tmp_path),
+            str(output_root),
             "--run-id",
             "metadata-error",
             "--dimension",
@@ -529,8 +720,95 @@ def test_metadata_exception_after_directory_creation_is_terminally_recorded(
     with pytest.raises(RuntimeError, match="controlled metadata failure"):
         execute_qualification(args)
 
-    run_directory = tmp_path / "metadata-error"
+    run_directory = output_root / "metadata-error"
     assert _load_canonical_json(run_directory / "manifest.json")["status"] == "error"
     qualification = _load_canonical_json(run_directory / "qualification.json")
     assert qualification["status"] == "error"
     assert qualification["error"]["message"] == "controlled metadata failure"
+
+
+def test_uuid_failure_after_directory_creation_still_writes_terminal_error(
+    monkeypatch, development_output_root
+):
+    output_root = development_output_root
+    args = build_parser().parse_args(
+        [
+            "--profile",
+            "development",
+            "--output-root",
+            str(output_root),
+            "--run-id",
+            "uuid-error",
+            "--dimension",
+            "8",
+            "--sample-count",
+            "24",
+            "--batch-size",
+            "12",
+            "--bootstrap-blocks",
+            "6",
+            "--bootstrap-resamples",
+            "11",
+            "--bits",
+            "1",
+        ]
+    )
+    monkeypatch.setattr(
+        "hamutay.turboquant.qualify._new_uuid",
+        lambda: (_ for _ in ()).throw(RuntimeError("controlled UUID failure")),
+    )
+
+    with pytest.raises(RuntimeError, match="controlled UUID failure"):
+        execute_qualification(args)
+
+    run_directory = output_root / "uuid-error"
+    manifest = _load_canonical_json(run_directory / "manifest.json")
+    qualification = _load_canonical_json(run_directory / "qualification.json")
+    assert manifest["status"] == "error"
+    assert qualification["status"] == "error"
+    assert qualification["error"]["message"] == "controlled UUID failure"
+
+
+def test_final_hash_failure_after_log_close_preserves_original_terminal_error(
+    monkeypatch, development_output_root
+):
+    output_root = development_output_root
+    args = build_parser().parse_args(
+        [
+            "--profile",
+            "development",
+            "--output-root",
+            str(output_root),
+            "--run-id",
+            "final-hash-error",
+            "--dimension",
+            "8",
+            "--sample-count",
+            "24",
+            "--batch-size",
+            "12",
+            "--bootstrap-blocks",
+            "6",
+            "--bootstrap-resamples",
+            "11",
+            "--bits",
+            "1",
+        ]
+    )
+    monkeypatch.setattr(
+        "hamutay.turboquant.qualify._existing_artifact_hashes",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            ValueError("controlled final hash failure")
+        ),
+    )
+
+    with pytest.raises(ValueError, match="controlled final hash failure"):
+        execute_qualification(args)
+
+    run_directory = output_root / "final-hash-error"
+    manifest = _load_canonical_json(run_directory / "manifest.json")
+    qualification = _load_canonical_json(run_directory / "qualification.json")
+    assert manifest["status"] == "error"
+    assert qualification["status"] == "error"
+    assert qualification["error"]["type"] == "ValueError"
+    assert qualification["error"]["message"] == "controlled final hash failure"
