@@ -5,12 +5,16 @@ import numpy as np
 import pytest
 
 from hamutay.turboquant.codebook import lloyd_max_codebook
+from hamutay.turboquant.mse import MSEQuantizer
+from hamutay.turboquant.product import ProductQuantizer
 from hamutay.turboquant.qualification import (
     GateResult,
     QualificationConfig,
     QualificationMetrics,
     QualificationResult,
+    _bias_intervals,
     _normalized_product_errors,
+    _paper_projection,
     _row_orthogonal_projection,
     analytic_codebook_distortion,
     bootstrap_mean_interval,
@@ -18,6 +22,8 @@ from hamutay.turboquant.qualification import (
     partition_block_ids,
     run_synthetic_qualification,
 )
+from hamutay.turboquant.rotation import canonical_qr, gaussian_rotation
+from hamutay.turboquant.seeding import rng_for
 
 
 def _passing_metric(bits: int) -> QualificationMetrics:
@@ -112,6 +118,29 @@ def test_bootstrap_samples_block_means_as_the_resampling_unit():
     assert interval == (0.0, 10.0)
 
 
+def test_bias_intervals_use_exact_independent_95_and_9875_streams():
+    block_means = (-3.0, -1.0, 0.0, 2.0, 8.0)
+    expected = (
+        bootstrap_mean_interval(
+            block_means,
+            rng=rng_for("qualification", "bootstrap", "bias", "0.95", 3),
+            resamples=513,
+            confidence=0.95,
+        ),
+        bootstrap_mean_interval(
+            block_means,
+            rng=rng_for("qualification", "bootstrap", "bias", "0.9875", 3),
+            resamples=513,
+            confidence=0.9875,
+        ),
+    )
+
+    assert expected == ((-1.6, 4.6), (-2.3200000000000043, 5.7600000000000025))
+    assert (
+        _bias_intervals(block_means, bits=3, resamples=513, purpose="bias") == expected
+    )
+
+
 @pytest.mark.parametrize(
     ("values", "resamples", "confidence"),
     [
@@ -153,6 +182,121 @@ def test_row_orthogonal_sensitivity_projection_has_sqrt_d_row_norms():
     np.testing.assert_allclose(
         projection @ projection.T, 8.0 * np.eye(8), rtol=0.0, atol=2e-5
     )
+
+
+def _independent_registered_projections(
+    dimension: int,
+) -> tuple[np.ndarray, np.ndarray]:
+    paper = rng_for(
+        "qualification", "algorithm_2", "paper_literal", "projection"
+    ).standard_normal((dimension, dimension))
+    sensitivity_source = rng_for(
+        "qualification", "algorithm_2", "row_orthogonal", "projection"
+    ).standard_normal((dimension, dimension))
+    sensitivity = canonical_qr(sensitivity_source.T).T * np.sqrt(dimension)
+    return (
+        np.ascontiguousarray(paper, dtype=np.float32),
+        np.ascontiguousarray(sensitivity, dtype=np.float32),
+    )
+
+
+def test_paper_projection_matches_iid_seed_stream_and_differs_from_sensitivity():
+    expected_paper, expected_sensitivity = _independent_registered_projections(8)
+
+    np.testing.assert_array_equal(_paper_projection(8), expected_paper)
+    np.testing.assert_array_equal(_row_orthogonal_projection(8), expected_sensitivity)
+    assert not np.array_equal(expected_paper, expected_sensitivity)
+
+
+def _independent_product_block_means(
+    config: QualificationConfig, projection: np.ndarray
+) -> tuple[tuple[float, ...], tuple[float, ...]]:
+    quantizer = ProductQuantizer(
+        MSEQuantizer(
+            gaussian_rotation(
+                config.dimension, "qualification", "algorithm_1", "rotation"
+            ),
+            lloyd_max_codebook(config.dimension, 0),
+        ),
+        projection,
+    )
+    key_rng = rng_for("qualification", "synthetic", "keys")
+    query_rng = rng_for("qualification", "synthetic", "queries")
+    normalized_squared_batches: list[np.ndarray] = []
+    normalized_bias_batches: list[np.ndarray] = []
+    for _ in range(0, config.sample_count, config.batch_size):
+        keys = key_rng.standard_normal(
+            (config.batch_size, config.dimension), dtype=np.float32
+        )
+        queries = query_rng.standard_normal(
+            (config.batch_size, config.dimension), dtype=np.float32
+        )
+        estimates = quantizer.estimate_inner_products(queries, quantizer.quantize(keys))
+        exact = np.sum(queries * keys, axis=-1, dtype=np.float32)
+        normalizer = np.sqrt(
+            np.sum(queries * queries, axis=-1, dtype=np.float32)
+        ) * np.sqrt(np.sum(keys * keys, axis=-1, dtype=np.float32))
+        normalized_bias = (estimates - exact) / normalizer
+        normalized_bias_batches.append(normalized_bias)
+        normalized_squared_batches.append(normalized_bias * normalized_bias)
+
+    block_size = config.sample_count // config.bootstrap_blocks
+    normalized_squared = np.concatenate(normalized_squared_batches)
+    normalized_bias = np.concatenate(normalized_bias_batches)
+    squared_blocks = tuple(
+        float(np.sum(block, dtype=np.float64) / block_size)
+        for block in normalized_squared.reshape(config.bootstrap_blocks, block_size)
+    )
+    bias_blocks = tuple(
+        float(np.sum(block, dtype=np.float64) / block_size)
+        for block in normalized_bias.reshape(config.bootstrap_blocks, block_size)
+    )
+    return squared_blocks, bias_blocks
+
+
+def test_streaming_metrics_wire_iid_and_sensitivity_projections_separately():
+    config = QualificationConfig(
+        dimension=8,
+        sample_count=240,
+        batch_size=60,
+        bootstrap_blocks=12,
+        bootstrap_resamples=31,
+        bits=(1,),
+    )
+    expected_paper, expected_sensitivity = _independent_registered_projections(
+        config.dimension
+    )
+    expected_paper_squared, expected_paper_bias = _independent_product_block_means(
+        config, expected_paper
+    )
+    expected_sensitivity_squared, expected_sensitivity_bias = (
+        _independent_product_block_means(config, expected_sensitivity)
+    )
+
+    metric = run_synthetic_qualification(config).metrics[0]
+
+    np.testing.assert_allclose(
+        metric.product_block_means, expected_paper_squared, rtol=0.0, atol=0.0
+    )
+    np.testing.assert_allclose(
+        metric.normalized_bias_block_means,
+        expected_paper_bias,
+        rtol=0.0,
+        atol=0.0,
+    )
+    np.testing.assert_allclose(
+        metric.sensitivity_product_block_means,
+        expected_sensitivity_squared,
+        rtol=0.0,
+        atol=0.0,
+    )
+    np.testing.assert_allclose(
+        metric.sensitivity_bias_block_means,
+        expected_sensitivity_bias,
+        rtol=0.0,
+        atol=0.0,
+    )
+    assert metric.product_block_means != metric.sensitivity_product_block_means
 
 
 def test_values_inside_registered_gate_boundaries_pass():
