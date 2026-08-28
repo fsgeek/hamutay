@@ -236,8 +236,12 @@ def build(
     contract.write_text(contract_text, encoding="utf-8")
 
     shutil.copy2(spec, output / spec.name)
-    if paper is not None:
-        shutil.copy2(paper, output / paper.name)
+    if paper is None:
+        raise ValueError(
+            "condition 3 requires a local arXiv 2504.19874 v1 copy; pass --paper. "
+            "A URL in external_materials is not a supplied-file hash."
+        )
+    shutil.copy2(paper, output / paper.name)
 
     # Fail loudly if any forbidden token survived into the contract.
     forbidden = ("def test_", "assert ", "np.testing", "pytest", "1.0049", "0.00199")
@@ -259,11 +263,7 @@ def build(
         "implementation_under_review": implementation_commit
         or "(not supplied -- condition 3 requires this explicitly)",
         "builder_script_sha256": sha256_file(Path(__file__)),
-        "paper_artifact": (
-            "supplied and hashed below"
-            if paper is not None
-            else "MISSING -- condition 3 requires a local arXiv 2504.19874 v1 copy"
-        ),
+        "paper_artifact": "arXiv 2504.19874v1, supplied locally and hashed below",
         "source_plan_sha256": sha256_file(plan),
         "source_spec_sha256": sha256_file(spec),
         "files": {
@@ -318,8 +318,19 @@ def build(
 
     # Every delivered file must be hashed, and nothing undelivered may sit in
     # the bundle directory.
-    delivered = sorted(path for path in output.iterdir() if path.is_file())
+    # The manifest cannot hash itself: any self-referential digest is stale
+    # the instant the manifest is rewritten. Payload files are hashed here;
+    # the manifest's own integrity is anchored out of band below.
+    delivered = sorted(
+        path
+        for path in output.iterdir()
+        if path.is_file() and path.name != "MANIFEST.json"
+    )
     manifest["files"] = {path.name: sha256_file(path) for path in delivered}
+    manifest["manifest_self_hash"] = (
+        "not self-referential; see MANIFEST.sha256 in the verifier audit "
+        "directory and the signed freeze record"
+    )
     manifest["audit_log_written_outside_bundle"] = str(audit_log)
     manifest_path.write_text(
         json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -341,7 +352,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--spec", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--audit-dir", type=Path, required=True)
-    parser.add_argument("--paper", type=Path, default=None)
+    parser.add_argument("--paper", type=Path, required=True)
     parser.add_argument("--implementation-commit", default=None)
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args(argv)
