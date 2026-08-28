@@ -228,7 +228,9 @@ pending — this is an open item, not a resolved one.**
 
 ### F8 — The independent suite never exercises the author differential
 
-**Disposition: accepted (Codex round 2). Open; corrective work not yet done.**
+**Disposition: accepted (Codex round 2). CLOSED 2026-08-28 as corroborative
+post-access coverage; see the note below on what that does and does not
+satisfy.**
 
 `test_author_contract.py` verifies the pinned commit and file hashes, the
 declared zero-sign convention difference, and CUDA preconditions. It never
@@ -236,8 +238,34 @@ compiles the author kernels, performs a byte comparison, or compares scores.
 The end-to-end tests run development mode and assert the fifth gate is
 `not_run`, so `author_code_differential` is never observed passing.
 
-One of five mandatory R1 gates has no independent coverage. Implementer
+One of five mandatory R1 gates had no independent coverage. Implementer
 coverage exists but is not independent coverage.
+
+**Closure.** `TestAuthorDifferentialExecution` now compiles the pinned author
+kernels, runs the real differential on CUDA, and observes the gate reach
+`passed` rather than asserting `not_run`. Measured on the GPU host:
+
+| quantity | observed | pinned tolerance |
+|---|---:|---:|
+| max absolute score error | 3.814697265625e-06 | 1e-5 |
+| max relative score error | 3.85266366720316e-06 | 1e-4 |
+| inlier packed sign bytes equal | true | — |
+| dummy outlier norms exact zero | true | — |
+
+Suite total 193 → 197 collected; 197 passed with no skips.
+
+**This is corroborative coverage on a compromised suite.** Per condition 6 it
+does not supply sealed independent coverage: the new frozen suite must carry
+its own author-differential execution.
+
+**Defect found while closing this finding.** The first version of
+`test_frozen_tolerance_is_not_widened_by_the_oracle` iterated the comparison
+records and asserted only where `max_absolute_error` was present, with an
+`or passed is True` escape clause. Three of five comparisons contributed no
+assertion. That is the exact label-stronger-than-evidence shape named below,
+reproduced inside the test written to close a finding about it, and caught by
+the author only because the reviewer had just named the pattern. Rewritten to
+assert the gate's observed values directly.
 
 ### F9 — Smaller assertion/description mismatches
 

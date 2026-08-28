@@ -189,3 +189,121 @@ class TestCudaPreconditions:
         if result.returncode != 0:
             pytest.skip("nvidia-smi present but no device is visible")
         assert result.stdout.strip()
+
+
+class TestAuthorDifferentialExecution:
+    """Independent execution of the author-code differential (closes F8).
+
+    Added 2026-08-28, post-access corroborative coverage. The frozen suite
+    verified the pinned contract and the declared zero-sign convention but
+    never compiled the author kernels, never compared sketches or scores, and
+    never observed `author_code_differential` reach `passed`. One of five
+    mandatory R1 gates therefore had no independent coverage at all.
+
+    These tests do not assert a label. They run the real differential on the
+    real CUDA kernels and read the outcome.
+    """
+
+    @staticmethod
+    def _preconditions() -> str | None:
+        """Return a precise skip reason, or None if the differential can run."""
+        checkout = author_checkout()
+        if checkout is None:
+            return "QJL_AUTHOR_CHECKOUT is not set to an existing checkout"
+        if not Path("/usr/local/cuda-12.8/bin/nvcc").exists():
+            return "CUDA 12.8 nvcc is not present"
+        try:
+            import torch
+        except ImportError:
+            return "torch is not installed"
+        if not torch.cuda.is_available():
+            return "no CUDA device is available"
+        if torch.version.cuda is None or not torch.version.cuda.startswith("12.8"):
+            return f"torch is built for CUDA {torch.version.cuda}, not 12.8"
+        return None
+
+    def _differential(self, tmp_path):
+        reason = self._preconditions()
+        if reason is not None:
+            pytest.skip(reason)
+
+        import importlib.util
+
+        spec = importlib.util.spec_from_file_location(
+            "author_qjl_oracle", Path("scripts/turboquant/author_qjl_oracle.py")
+        )
+        assert spec is not None and spec.loader is not None
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        return module.run_author_qjl_differential(
+            checkout=author_checkout(),
+            output=tmp_path / "author_differential.json",
+            device="cuda:0",
+        )
+
+    def test_differential_runs_and_its_gate_passes(self, tmp_path):
+        """The gate must be observed passing, not merely reported not_run."""
+        result = self._differential(tmp_path)
+
+        assert result["status"] == "passed", result.get("gate")
+        gate = result["gate"]
+        assert gate["name"] == "author_code_differential"
+        assert gate["passed"] is True
+        assert gate["threshold"] == {"atol": 1e-5, "rtol": 1e-4}
+
+    def test_gate_constructor_accepts_the_real_oracle_result(self, tmp_path):
+        """The oracle's output must satisfy the package's own gate contract.
+
+        A differential that runs but produces a record the gate rejects would
+        leave R1 uncertifiable; the frozen suite could not have detected that.
+        """
+        from hamutay.turboquant.qualification import author_code_differential_gate
+
+        gate = author_code_differential_gate(self._differential(tmp_path))
+        assert gate.name == "author_code_differential"
+        assert gate.passed is True
+        assert gate.status == "passed"
+
+    def test_frozen_tolerance_is_not_widened_by_the_oracle(self, tmp_path):
+        """Task 7 pins atol=1e-5 / rtol=1e-4. Assert the observed errors.
+
+        Rewritten before commit. The first version iterated comparisons and
+        only asserted where `max_absolute_error` was present, with an
+        `or passed is True` escape clause -- three of five comparisons
+        contributed no assertion at all. That is precisely the
+        label-stronger-than-evidence defect this test was written to close,
+        reproduced inside the closing test. It now reads the gate's own
+        observed values and asserts them directly.
+        """
+        result = self._differential(tmp_path)
+        observed = result["gate"]["observed"]
+
+        absolute = observed["max_absolute_score_error"]
+        relative = observed["max_relative_score_error"]
+        assert isinstance(absolute, float) and isinstance(relative, float)
+        assert absolute <= 1e-5, absolute
+        assert relative <= 1e-4, relative
+
+        # The declared convention facts the differential must establish.
+        assert observed["inlier_sign_bytes_equal"] is True
+        assert observed["outlier_norms_exact_zero"] is True
+
+        # The tolerance itself must not have been widened.
+        assert result["gate"]["threshold"] == {"atol": 1e-5, "rtol": 1e-4}
+
+    def test_author_packed_signs_match_the_reference_packing(self, tmp_path):
+        """The differential must compare packed sign bytes, not only scores.
+
+        A score-only comparison can pass while the two implementations
+        disagree on bit order, because sign errors cancel in a dot product.
+        """
+        result = self._differential(tmp_path)
+        comparisons = result["comparisons"]
+
+        assert "inlier_sign_bytes_equal" in comparisons, sorted(comparisons)
+        assert result["gate"]["observed"]["inlier_sign_bytes_equal"] is True
+
+        # The declared zero-sign convention difference must be exercised too,
+        # not merely asserted in prose.
+        assert "constructed_zero_projection" in comparisons, sorted(comparisons)
