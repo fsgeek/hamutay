@@ -330,17 +330,34 @@ Now requires the option on every command and pins its value. Also: `OWNDATA`
 asserted where the test name promised it; codebook immutability asserted
 alongside rotation; CLI exit code asserted.
 
-### F10 — Two harness items remain open
+### F10 — Two harness items
 
-**Disposition: accepted, NOT corrected. Open.**
+**Disposition: accepted. CLOSED 2026-08-28 as corroborative post-access work.**
 
-1. `TestTerminalEvidence` claims to exercise the public console entry point but
-   imports and calls `main()` in-process. It does not execute the installed
-   `turboquant-qualify` command or a fresh interpreter.
-2. Those tests still write into the real evidence namespace and rely on
-   `finally` cleanup. Abrupt process death can leave residue.
+1. `TestTerminalEvidence` claimed to exercise the public console entry point
+   but imported and called `main()` in-process. An in-process call shares the
+   test's interpreter, its imported modules, and its initialized NumPy state,
+   and would pass even if the installed `turboquant-qualify` script were broken
+   or absent. It now invokes the installed console script as a subprocess in a
+   fresh interpreter. A guard test, `test_console_script_runs_in_a_fresh_
+   interpreter`, fails if a future refactor reverts to an in-process call.
+2. Those tests wrote into the real evidence namespace and relied on `finally`
+   cleanup, so abrupt process death could leave residue. Cleanup is now
+   belt-and-braces: the run directory is removed in a `finally`, **and** any
+   residue from a previously killed process is swept on entry. Verified after
+   a full suite run: `experiments/turboquant/development` contains no run
+   artifacts. The namespace directory itself is retained when it pre-existed,
+   which is correct — the tests must not delete a namespace they did not
+   create.
 
-Lower severity than F1-F9, but they are open, not closed.
+**Defect found while closing this finding.** The rewritten helper captured the
+subprocess's `stderr` and never asserted it — the same recorded-but-unasserted
+shape as the `_exit_code` defect corrected earlier. Now asserted: a development
+run must not emit a traceback even when its gates fail. This is the second
+consecutive finding whose closure reproduced, in miniature, the defect being
+closed.
+
+Suite total 197 → 198 collected; 198 passed with no skips.
 
 ### F11 — The proposed "second arm" framing was unsound
 
@@ -517,6 +534,9 @@ alone does not satisfy them.
 - **F7 (CLAUDE.md): RESOLVED.** Recorded as a disclosed, non-material
   deviation and accepted by the PI on 2026-08-28. Condition 13 removes it from
   the next round.
+- **F8, F10: CLOSED** 2026-08-28 as corroborative post-access coverage. Per
+  condition 6 neither supplies sealed independent coverage; the new frozen
+  suite must carry its own.
 - **F5, F6:** the author does not recommend waiving these. They are the reason
   this report is `blocked` rather than `passed`.
 - If the PI elects to proceed for internal engineering purposes despite F5 and

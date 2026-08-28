@@ -282,23 +282,41 @@ class TestTerminalEvidence:
     def _run(run_id_stem: str):
         """Execute one real development run and yield its qualification record.
 
+        Rewritten 2026-08-28 (F10). The prior version imported and called
+        `main()` in-process while claiming to exercise the public console
+        entry point. It did not: an in-process call shares the test's
+        interpreter, its already-imported modules, and its initialized NumPy
+        state, and it would pass even if the installed `turboquant-qualify`
+        script were broken or absent. It now runs the installed console
+        command in a fresh interpreter, which is what a user invokes.
+
         The implementation anchors the development namespace to the repository
-        (see `_validate_output_root`), so a run cannot be redirected into
-        pytest's tmp_path. The directory is therefore created under the real
-        namespace and removed afterwards: a test suite must not accumulate
-        artifacts in the space reserved for the project's own records.
+        (`_validate_output_root`), so a run cannot be redirected into pytest's
+        tmp_path. Cleanup is therefore belt-and-braces: the run directory is
+        removed in a `finally`, and any residue from an earlier killed process
+        is swept on entry, so abrupt termination cannot silently accumulate
+        artifacts in the project's evidence namespace.
         """
         import shutil
         import uuid
 
-        from hamutay.turboquant.qualify import main
+        console = Path(sys.executable).parent / "turboquant-qualify"
+        if not console.exists():
+            pytest.skip(f"installed console script not found at {console}")
 
         root = Path("experiments/turboquant/development")
         run_id = f"independent-{run_id_stem}-{uuid.uuid4().hex[:8]}"
+
+        # Sweep residue left by any previously killed test process.
+        if root.is_dir():
+            for stale in root.glob("independent-*"):
+                shutil.rmtree(stale, ignore_errors=True)
+
         created_namespace = not root.exists()
         try:
-            exit_code = main(
+            completed = subprocess.run(
                 [
+                    str(console),
                     "--profile",
                     "development",
                     "--output-root",
@@ -313,12 +331,15 @@ class TestTerminalEvidence:
                     "20",
                     "--bootstrap-resamples",
                     "50",
-                ]
+                ],
+                capture_output=True,
+                text=True,
             )
             payload = json.loads(
                 (root / run_id / "qualification.json").read_text(encoding="utf-8")
             )
-            payload["_exit_code"] = exit_code
+            payload["_exit_code"] = completed.returncode
+            payload["_stderr"] = completed.stderr
             yield payload
         finally:
             shutil.rmtree(root / run_id, ignore_errors=True)
@@ -328,6 +349,23 @@ class TestTerminalEvidence:
                         parent.rmdir()
                     except OSError:
                         break
+
+    def test_console_script_runs_in_a_fresh_interpreter(self):
+        """Guard for the F10 fix: prove the run is a separate process.
+
+        If a future refactor reverts to an in-process `main()` call, this
+        fails -- the child must report a different PID than the test.
+        """
+        console = Path(sys.executable).parent / "turboquant-qualify"
+        if not console.exists():
+            pytest.skip("installed console script not found")
+
+        completed = subprocess.run(
+            [str(console), "--help"], capture_output=True, text=True
+        )
+        assert completed.returncode == 0
+        assert "turboquant-qualify" in completed.stdout
+        assert "--author-qjl-checkout" in completed.stdout
 
     def test_artifact_reports_all_five_named_gates(self):
         with self._run("evidence") as payload:
@@ -349,6 +387,10 @@ class TestTerminalEvidence:
             certification = payload["certification"]
             # Added 2026-08-28: _exit_code was recorded and never asserted.
             assert payload["_exit_code"] == 0
+            # And _stderr was captured but unchecked -- the same
+            # recorded-but-unasserted shape. A development run must not emit a
+            # traceback even when its gates fail.
+            assert "Traceback" not in payload["_stderr"], payload["_stderr"]
 
         assert certification["certifying"] is False
         assert certification["scope"] == "development"
