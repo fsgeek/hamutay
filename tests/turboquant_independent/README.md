@@ -67,6 +67,34 @@ produced false findings against a correct implementation.
    worst-case inner-product error, not average-case error on isotropic data.
    The intuition was wrong, so the assertion was removed rather than frozen.
 
+## Corrections after implementation access (2026-08-28)
+
+The frozen suite at `86b896b` ran 183 passed / 3 failed. After inspecting the
+implementation, the test author judged **all three failures to be test
+defects**, not implementation defects, and corrected them in a separate signed
+commit. `86b896b` remains unchanged in history, per Task 8 Step 4.
+
+| Frozen test | Verdict | Reason |
+|---|---|---|
+| `test_registered_profile_freezes_all_scientific_counts` | test defect | Omitted `--author-qjl-checkout`, which Task 7 makes required for registered runs |
+| `test_registered_profile_uses_a_divisible_batch_size` | test defect | Same omission |
+| `test_all_five_registered_gates_are_reported` | test defect | Task 5 assigns `evaluate_algorithm_gates` four gates; Task 7 joins the fifth at the CLI/evidence layer |
+
+In each case the implementation was **stricter** than the frozen test assumed.
+Refusing a registered run without the author differential, and refusing to
+certify a four-gate record, are both correct.
+
+Correcting these surfaced a fourth defect the failures had masked:
+`test_registered_profile_rejects_scientific_count_overrides` was passing for
+the wrong reason. The parser rejected its command for the missing checkout
+before ever reaching the override guard, so the test never exercised what it
+claimed to. It now supplies a valid checkout.
+
+The intent of the corrected tests was preserved rather than deleted:
+`test_registered_profile_requires_the_author_checkout` and
+`test_terminal_certification_requires_all_five_gates` assert the same
+properties at the layers where the plan actually locates them.
+
 ## Running
 
 ```bash

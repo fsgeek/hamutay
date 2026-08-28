@@ -168,7 +168,15 @@ class TestBootstrap:
 
 
 class TestGateEvaluation:
-    def test_all_five_registered_gates_are_reported(self):
+    def test_the_four_task_five_gates_are_reported(self):
+        """Corrected 2026-08-28. The frozen suite asserted that this function
+        returns all five gates. The plan assigns it four; Task 7 joins
+        `author_code_differential` at the CLI/evidence layer. The original
+        assertion tested a layering the plan never specified.
+
+        The five-gate requirement is still tested, one layer up, in
+        test_terminal_certification_requires_all_five_gates below.
+        """
         result = QualificationResult(
             metrics=tuple(passing_metric(b) for b in (1, 2, 3, 4)),
             determinism_passed=True,
@@ -176,7 +184,9 @@ class TestGateEvaluation:
         gates = evaluate_algorithm_gates(result)
         assert all(isinstance(gate, GateResult) for gate in gates)
         names = {gate.name for gate in gates}
-        assert REQUIRED_GATE_NAMES.issubset(names)
+
+        assert names == REQUIRED_GATE_NAMES - {"author_code_differential"}
+        assert "author_code_differential" not in names
 
     def test_values_inside_every_boundary_pass(self):
         metrics = tuple(
@@ -352,6 +362,36 @@ class TestGateEvaluation:
             determinism_passed=False,
         )
         assert not gate_named(result, "round_trip_determinism").passed
+
+    def test_terminal_certification_requires_all_five_gates(self):
+        """Added 2026-08-28, relocating the intent of the corrected test above.
+
+        The five-gate requirement is real and belongs to the terminal evidence
+        layer. Certification must refuse a four-gate record outright, and must
+        refuse to certify when the fifth gate is present but did not run.
+
+        This reaches for a private helper because that is where the plan puts
+        the check; it is asserted through the public gate objects.
+        """
+        from hamutay.turboquant.qualification import author_code_differential_gate
+        from hamutay.turboquant.qualify import _terminal_certification
+
+        result = QualificationResult(
+            metrics=tuple(passing_metric(b) for b in (1, 2, 3, 4)),
+            determinism_passed=True,
+        )
+        core = tuple(evaluate_algorithm_gates(result))
+        assert len(core) == 4
+
+        with pytest.raises(ValueError):
+            _terminal_certification("registered", core)
+
+        not_run = author_code_differential_gate(None)
+        assert not_run.passed is False
+        assert not_run.status == "not_run"
+
+        verdict = _terminal_certification("registered", (*core, not_run))
+        assert verdict["certifying"] is False
 
     def test_author_differential_is_never_silently_passed_when_absent(self):
         """Development mode omits the checkout; the gate must then report

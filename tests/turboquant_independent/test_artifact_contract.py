@@ -128,22 +128,60 @@ class TestFileHashing:
 
 
 class TestRegisteredProfile:
+    """Corrected 2026-08-28.
+
+    The frozen suite invoked the registered profile without
+    `--author-qjl-checkout`. Task 7 makes that argument required for
+    registered runs ("Extend the registered qualification CLI with required
+    `--author-qjl-checkout`"), so the original two tests asserted a CLI that
+    would accept a registered run with no author differential -- a weaker
+    contract than the plan specifies. The refusal is the correct behavior and
+    is now asserted directly in
+    test_registered_profile_requires_the_author_checkout.
+    """
+
+    REGISTERED_ARGV = [
+        "--profile",
+        "registered",
+        "--output-root",
+        "out",
+        "--run-id",
+        "r1",
+        "--author-qjl-checkout",
+        "/tmp/hamutay-turboquant-author/QJL",
+    ]
+
     def test_registered_profile_freezes_all_scientific_counts(self):
-        args = build_parser().parse_args(
-            ["--profile", "registered", "--output-root", "out", "--run-id", "r1"]
-        )
+        args = build_parser().parse_args(list(self.REGISTERED_ARGV))
         assert args.dimension == 128
         assert args.sample_count == 1_000_000
         assert args.bootstrap_resamples == 10_000
         assert tuple(args.bits) == (1, 2, 3, 4)
 
     def test_registered_profile_uses_a_divisible_batch_size(self):
-        args = build_parser().parse_args(
-            ["--profile", "registered", "--output-root", "out", "--run-id", "r1"]
-        )
+        args = build_parser().parse_args(list(self.REGISTERED_ARGV))
         assert args.batch_size == 4000
         assert args.sample_count % args.batch_size == 0
         assert args.sample_count % 1000 == 0
+
+    def test_registered_profile_requires_the_author_checkout(self):
+        """A registered run with no differential oracle must be refused.
+
+        This is the assertion the two corrected tests should have carried:
+        certifying R1 without the author comparison is exactly the silent
+        weakening the fifth gate exists to prevent.
+        """
+        with pytest.raises(SystemExit) as raised:
+            build_parser().parse_args(
+                ["--profile", "registered", "--output-root", "out", "--run-id", "r1"]
+            )
+        assert raised.value.code != 0
+
+    def test_development_profile_does_not_require_the_author_checkout(self):
+        args = build_parser().parse_args(
+            ["--profile", "development", "--output-root", "dev", "--run-id", "smoke"]
+        )
+        assert args.author_qjl_checkout is None
 
     @pytest.mark.parametrize(
         "override",
@@ -156,20 +194,17 @@ class TestRegisteredProfile:
         ],
     )
     def test_registered_profile_rejects_scientific_count_overrides(self, override):
-        """Any of these would silently produce a weaker registered result."""
+        """Any of these would silently produce a weaker registered result.
+
+        Corrected 2026-08-28: the frozen version omitted
+        `--author-qjl-checkout`, so the parser rejected the command for the
+        missing checkout and this test passed without ever exercising the
+        override guard. It now supplies a valid checkout so the only remaining
+        reason to exit is the forbidden override.
+        """
         parser = build_parser()
         with pytest.raises(SystemExit) as raised:
-            parser.parse_args(
-                [
-                    "--profile",
-                    "registered",
-                    "--output-root",
-                    "out",
-                    "--run-id",
-                    "r1",
-                    *override,
-                ]
-            )
+            parser.parse_args([*self.REGISTERED_ARGV, *override])
         assert raised.value.code != 0
 
     def test_development_profile_permits_explicit_counts(self):
