@@ -260,12 +260,22 @@ class TestValidationAndImmutability:
         quantizer = MSEQuantizer(rotation, codebook)
         snapshot = np.asarray(quantizer.rotation).copy()
 
+        codebook_snapshot = np.asarray(quantizer.codebook).copy()
+
         rotation[0, 0] = 999.0
         codebook[0] = -999.0
         np.testing.assert_array_equal(np.asarray(quantizer.rotation), snapshot)
+        # Added 2026-08-28: the codebook half was asserted only for the
+        # rotation. A quantizer that copied the rotation but aliased the
+        # codebook passed the frozen version of this test.
+        np.testing.assert_array_equal(
+            np.asarray(quantizer.codebook), codebook_snapshot
+        )
 
         with pytest.raises(Exception):
             quantizer.rotation[0, 0] = 1234.0
+        with pytest.raises(Exception):
+            quantizer.codebook[0] = 1234.0
 
     def test_repeated_quantization_is_bit_identical(self):
         quantizer = build_quantizer(REGISTERED_DIMENSION, 4)

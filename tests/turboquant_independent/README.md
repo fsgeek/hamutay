@@ -47,25 +47,30 @@ spec's registered analytic distortions to within 4e-13 relative error:
 | 3 | 0.0339659258 | 0.03 | 13.2% |
 | 4 | 0.0093147880 | 0.009 | 3.5% |
 
-## Two deliberate non-assertions
+## One deliberate non-assertion, and one retracted
 
-Both were found by simulating the tests against independently written
-reference implementations before freezing, and both would otherwise have
-produced false findings against a correct implementation.
+**Retracted 2026-08-28 after external review.** The frozen suite excluded four
+total bits from the `published_qjl_distortion` 15% assertion and substituted a
+50%-wide diagnostic band, justified here by a pre-freeze simulation showing
+~15.4% relative error.
 
-1. **Four-bit QJL distortion is a diagnostic, not a gate.** Simulation put a
-   correct implementation at ~15.4% relative error against the paper's
-   `0.047/d`, just outside the registered 15% band. This is the inherited
-   rounding the spec explicitly designates non-gating (the paper's 3-bit
-   scalar value is rounded to `0.03` against a true `0.033966`). Gating on it
-   would penalize the implementation for the paper's rounding.
+That justification was wrong twice over. The simulation used a hand-rolled
+reference rather than the implementation; re-measured against the real
+quantizer, four-bit relative error is 12.2-12.9% across 20k/100k/200k pairs,
+inside the registered band. And the exclusion was forbidden: the spec
+designates the *analytic scalar residual and its pi/2 scaling* as the
+non-gating diagnostics -- not the four-bit QJL distortion -- and states that
+"the registered 15% tolerance is not adjusted after observation". Task 5
+directs that the four-bit rounding be called out "without changing its gate".
 
-2. **No assertion that the product quantizer beats a plain MSE codebook at
-   equal total bits.** Simulation showed the opposite for iid Gaussian keys:
-   a 3-bit MSE codebook achieved ~2.6e-4 normalized inner-product error
-   against ~1.4e-3 for the 3-bit product quantizer. Algorithm 2 targets
-   worst-case inner-product error, not average-case error on isotropic data.
-   The intuition was wrong, so the assertion was removed rather than frozen.
+Loosening a registered scientific tolerance to accommodate a defect in the
+validator's own simulation is the most serious error in this suite's history.
+The gate is restored at all four bit widths.
+
+**Still standing:** no assertion that the product quantizer beats a plain MSE
+codebook at equal total bits. Simulation showed the opposite for iid Gaussian
+keys (~2.6e-4 against ~1.4e-3 at three bits). Algorithm 2 targets worst-case
+inner-product error, not average-case error on isotropic data.
 
 ## Corrections after implementation access (2026-08-28)
 
@@ -120,8 +125,44 @@ redirected to a temporary directory, so the tests now remove their runs in a
 `finally` block. A validation suite must not accumulate artifacts in the space
 reserved for scientific records.
 
-Verified after the second correction: `tests/turboquant_independent` 193
-passed, with no residue in the evidence namespace.
+### Test provenance (corrected)
+
+"193 independent tests pass" is false as a provenance statement. The accurate
+accounting is **186 frozen cases**, three of which were invalid as written and
+were corrected, **plus seven post-access cases** added during the corrections.
+Task 8 permits correcting invalid frozen tests; it does not make newly
+designed post-access tests part of the sealed arm. The seven additions are
+corroborative, not independent.
+
+## Independence defect: exposure to plan-prescribed test cases
+
+**Disclosed 2026-08-28 after external review; not disclosed by the author
+before then.** This is more material than the CLAUDE.md deviation.
+
+The "Materials used before test freeze" section above says the author received
+"The qualification plan's 'Interfaces' sections (public names only)". That is
+inaccurate. The author read the entire plan, which embeds complete
+implementer-authored test code, and reproduced some of it.
+
+Verified overlaps:
+
+- `test_values_inside_every_boundary_pass` shares the plan's constructor shape
+  and its peculiar constants `1.0049`, `1.0049 / 1.149`, `1.149`, `0.1`, and
+  `0.00199`. These are reverse-engineered boundary values, not numbers two
+  authors derive independently.
+- `test_registered_workers_are_three_fresh_processes` reproduces the plan's
+  mock-subprocess structure, command slicing, execution indices, and expected
+  output tuple nearly verbatim.
+
+Task 8 states the task "intentionally does not prescribe test cases: doing so
+would make the implementer the independent-test author." For those cases, it
+did. They are not independently authored, and no prompt or material hashes
+were retained, so the record cannot bound the exposure.
+
+The mathematical tests -- the FP64 quadrature oracles, the QJL unbiasedness
+and distortion checks, the packing and convention tests -- were derived from
+the paper and verified numerically, and are unaffected. The defect is
+concentrated in the gate-logic and CLI tests.
 
 ## Independence caveat
 

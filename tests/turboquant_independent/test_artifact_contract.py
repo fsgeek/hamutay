@@ -347,6 +347,8 @@ class TestTerminalEvidence:
         so it cannot be mistaken for R1 evidence by a later reader."""
         with self._run("noncert") as payload:
             certification = payload["certification"]
+            # Added 2026-08-28: _exit_code was recorded and never asserted.
+            assert payload["_exit_code"] == 0
 
         assert certification["certifying"] is False
         assert certification["scope"] == "development"
@@ -420,13 +422,18 @@ class TestProcessLevelDeterminism:
         resolved = tmp_path / "resolved_inputs.npz"
         run_registered_workers(tmp_path, tmp_path / "worker-config.json", resolved)
 
-        resolved_arguments = {
-            command[command.index("--resolved-inputs") + 1]
-            for command in calls
-            if "--resolved-inputs" in command
-        }
-        assert len(resolved_arguments) <= 1
+        # Corrected 2026-08-28 after external review. The frozen version built
+        # this set only from commands that contained the option, then asserted
+        # len <= 1 -- which an empty set satisfies. If every worker omitted
+        # --resolved-inputs the test passed, contrary to its name. It now
+        # requires the option on every command and pins its exact value.
         assert len(calls) == 3
+        for command in calls:
+            assert "--resolved-inputs" in command, command
+        resolved_arguments = {
+            command[command.index("--resolved-inputs") + 1] for command in calls
+        }
+        assert resolved_arguments == {str(resolved)}
 
     def test_a_failing_worker_propagates_rather_than_being_swallowed(
         self, monkeypatch, tmp_path

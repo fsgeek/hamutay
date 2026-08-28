@@ -170,6 +170,8 @@ class TestGaussianRotation:
     def test_rotation_is_c_contiguous_and_owns_its_memory(self):
         rotation = gaussian_rotation(16, "algorithm_1", 0, "k", 0, "rotation")
         assert rotation.flags["C_CONTIGUOUS"]
+        # Added 2026-08-28: the name promised owndata and never checked it.
+        assert rotation.flags["OWNDATA"]
 
     def test_invalid_dimension_is_rejected(self):
         for bad in (0, -1):

@@ -285,20 +285,31 @@ class TestStatisticalProperties:
         assert abs(mean) < 4.0 * standard_error
         assert abs(mean) <= 0.02 * rmse
 
-    @pytest.mark.parametrize("total_bits", [1, 2, 3])
+    @pytest.mark.parametrize("total_bits", [1, 2, 3, 4])
     def test_inner_product_distortion_matches_the_published_scale(self, total_bits):
-        """Normalized MSE against the paper's (1.57, 0.56, 0.18)/d values.
+        """Normalized MSE against the paper's (1.57, 0.56, 0.18, 0.047)/d values.
 
-        Four total bits is deliberately excluded from this gating assertion.
-        The spec records that the 4-bit target inherits sensitivity to the
-        paper's rounded 3-bit scalar value (0.03 against a true 0.033966),
-        and directs that the residual be reported as a non-gating diagnostic.
-        See test_four_bit_distortion_is_reported_as_a_diagnostic below.
+        Corrected 2026-08-28 after external review. The frozen suite excluded
+        four total bits from this gate and replaced it with a 50%-wide
+        diagnostic band, on the strength of a pre-freeze simulation that put a
+        correct implementation at ~15.4% relative error.
+
+        That simulation used a hand-rolled reference, not the implementation.
+        Re-measured against the real quantizer, four-bit relative error is
+        12.2-12.9% across 20k/100k/200k pairs -- inside the registered 15%
+        band. The exclusion was unnecessary.
+
+        It was also forbidden. The spec designates the *analytic scalar
+        residual and its pi/2 scaling* as the non-gating diagnostics, not the
+        four-bit QJL distortion, and states plainly that "the registered 15%
+        tolerance is not adjusted after observation". Task 5 likewise says
+        `published_qjl_distortion` retains <= 0.15 and directs that the
+        four-bit rounding be called out "without changing its gate".
         """
         dimension = REGISTERED_DIMENSION
         quantizer = build_product_quantizer(dimension, total_bits)
         rng = np.random.default_rng(30 + total_bits)
-        count = 30000
+        count = 30000 if total_bits <= 3 else 100000
         keys = rng.standard_normal((count, dimension)).astype(np.float32)
         queries = rng.standard_normal((count, dimension)).astype(np.float32)
 
@@ -316,37 +327,6 @@ class TestStatisticalProperties:
         expected = PAPER_PROD_DISTORTION_NUMERATOR[total_bits] / dimension
 
         assert abs(observed - expected) / expected <= 0.15
-
-    def test_four_bit_distortion_is_reported_as_a_diagnostic(self):
-        """Non-gating: assert only the loose order of magnitude.
-
-        The paper's 0.047/d four-bit target inherits rounding from its 3-bit
-        scalar value, so a correct implementation can sit slightly outside the
-        registered 15% band here. Failing the suite on that would punish the
-        implementation for the paper's rounding, so this test bounds the value
-        generously and exists to surface the number, not to gate it.
-        """
-        dimension = REGISTERED_DIMENSION
-        quantizer = build_product_quantizer(dimension, 4)
-        rng = np.random.default_rng(34)
-        count = 20000
-        keys = rng.standard_normal((count, dimension)).astype(np.float32)
-        queries = rng.standard_normal((count, dimension)).astype(np.float32)
-
-        codes = quantizer.quantize(keys)
-        estimates = np.asarray(
-            quantizer.estimate_inner_products(queries, codes), dtype=np.float64
-        )
-        truth = np.sum(
-            queries.astype(np.float64) * keys.astype(np.float64), axis=-1
-        )
-        squared = np.sum(queries.astype(np.float64) ** 2, axis=-1) * np.sum(
-            keys.astype(np.float64) ** 2, axis=-1
-        )
-        observed = float(np.mean((estimates - truth) ** 2 / squared))
-        expected = PAPER_PROD_DISTORTION_NUMERATOR[4] / dimension
-
-        assert 0.5 * expected < observed < 1.5 * expected
 
     def test_distortion_decreases_with_total_bits(self):
         dimension = REGISTERED_DIMENSION
