@@ -6,13 +6,16 @@
 
 **Architecture:** A small `hamutay.turboquant` package separates deterministic random-object construction, the spherical Lloyd-Max scalar quantizer, the QJL product estimator, streaming qualification statistics, and append-only evidence artifacts. Unit tests establish each mathematical convention before the one-million-sample registered run. A CUDA-only differential adapter compiles the two unmodified, hash-pinned author kernels outside the package and compares their packed sketches and scores with the transparent reference. Passing R1 is a hard gate: the model cache-path harness, corpus builder, and behavioral assay receive a second implementation plan only after this plan's registered evidence passes.
 
-**Tech Stack:** Python >=3.14, `uv`, NumPy 2.4.x, SciPy 1.17.x, PyTorch 2.10.x/CUDA 12.8, pytest, author QJL CUDA extensions compiled with `torch.utils.cpp_extension.load`, canonical JSON and NPZ evidence artifacts.
+**Tech Stack:** WSL2 Ubuntu 22.04.5, Python >=3.14, `uv`, NumPy 2.4.x, SciPy 1.17.x, PyTorch 2.10.x built for CUDA 12.8, side-by-side CUDA 12.8 WSL-Ubuntu toolkit, pytest, author QJL CUDA extensions compiled with `torch.utils.cpp_extension.load`, canonical JSON and NPZ evidence artifacts.
 
 **Spec:** `docs/superpowers/specs/2026-08-27-turboquant-cache-path-compositionality-design.md`
+
+**Revision:** Updated after independent review on 2026-08-27. The approved amendment adds analytic scalar-distortion consistency, simultaneous QJL-bias equivalence, process-level determinism, a pinned WSL CUDA compiler environment, and an independent adversarial-test checkpoint.
 
 ## Global Constraints
 
 - Run all Python through `uv run`; do not use system Python.
+- Compile the author QJL extensions only with `CUDA_HOME=/usr/local/cuda-12.8` and `/usr/local/cuda-12.8/bin` first on `PATH`. Do not change the system CUDA 13.2 default and never install a Linux NVIDIA driver inside WSL.
 - Before Task 1, invoke `superpowers:using-git-worktrees` and create an isolated feature worktree. The present checkout contains unrelated user-owned changes, while the registered run requires a clean scientific execution tree.
 - This plan implements only replication-ladder stage R1. It does not download Llama weights or WikiText, build a model KV cache, run a language model, or evaluate S, M, A, E, C-seq, or C-task.
 - Treat the accessible arXiv v1 equations and Algorithms 1/2 as normative for the transparent reference. Treat author QJL commit `648b3641f96b6e95e091217220b94e4739fd4d82` as a differential oracle, not as a substitute specification.
@@ -32,7 +35,7 @@
 - Use FP64 to construct rotations and codebooks, then freeze FP32 resolved arrays. Reference quantization, reconstruction, and diagnostic reductions use FP32 unless the plan explicitly says FP64.
 - The registered dimension is 128. Inputs are arbitrary nonzero vectors: normalize each vector before applying a spherical quantizer and restore its original norm on reconstruction. Zero vectors have norm zero, all-zero codes/sketches, and exact zero reconstruction.
 - Vector convention is row-major: rotation is `y = x @ rotation.T`; inverse rotation is `x_hat = y_hat @ rotation`. QJL projections are stored as rows, so sketches are `projection @ residual` for one vector and `residual @ projection.T` for a batch.
-- For every sign sketch, zero maps to `+1`. Bit packing is little-endian within each byte: sketch coordinate `j` occupies bit `j % 8` of byte `j // 8`.
+- In the transparent reference, every zero sign maps to `+1`. The author kernel maps exact zero to `-1`; Task 7 records and tests this declared convention difference. Bit packing is little-endian within each byte: sketch coordinate `j` occupies bit `j % 8` of byte `j // 8`.
 - Do not add entropy coding, mixed precision, outlier selection, recent-token buffers, or model-serving behavior to this package.
 
 ---
@@ -91,7 +94,7 @@ def test_gaussian_rotation_is_repeatable_fp32():
     second = gaussian_rotation(128, "algorithm_1", 0, "v", 0, "rotation")
     assert first.dtype == np.float32
     assert np.array_equal(first, second)
-    np.testing.assert_allclose(first @ first.T, np.eye(128), atol=2e-6)
+    np.testing.assert_allclose(first @ first.T, np.eye(128), atol=2e-5)
 ```
 
 - [ ] **Step 2: Run the tests and observe the import failure**
@@ -426,8 +429,9 @@ Co-Authored-By: Codex <noreply@openai.com>"
 - Modify: `src/hamutay/turboquant/__init__.py`
 
 **Interfaces:**
-- `QualificationConfig(dimension=128, sample_count=1_000_000, batch_size=4096, bootstrap_blocks=1000, bootstrap_resamples=10_000, bits=(1,2,3,4))`
+- `QualificationConfig(dimension=128, sample_count=1_000_000, batch_size=4000, bootstrap_blocks=1000, bootstrap_resamples=10_000, bits=(1,2,3,4))`
 - `run_synthetic_qualification(config: QualificationConfig) -> QualificationResult`
+- `analytic_codebook_distortion(codebook: NDArray[np.float32], dimension: int) -> float`
 - `bootstrap_mean_interval(block_means, *, rng, resamples=10_000, confidence=0.95) -> tuple[float, float]`
 - `evaluate_algorithm_gates(result: QualificationResult) -> Sequence[GateResult]`
 
@@ -438,7 +442,7 @@ Co-Authored-By: Codex <noreply@openai.com>"
 - Normalized signed bias: `signed_error / (||q|| ||x||)`.
 - Paper targets for Algorithm 1 bits 1..4: `(0.36, 0.117, 0.03, 0.009)`.
 - Paper targets for Algorithm 2 total bits 1..4: `(1.57/d, 0.56/d, 0.18/d, 0.047/d)`.
-- The terminal R1 record has exactly five gates named `round_trip_determinism`, `published_mse_distortion`, `qjl_bias`, `published_qjl_distortion`, and `author_code_differential`. Overall R1 status passes only when all five are present and true.
+- The terminal R1 record has exactly five gates named `round_trip_determinism`, `mse_distortion`, `qjl_bias_equivalence`, `published_qjl_distortion`, and `author_code_differential`. Overall R1 status passes only when all five are present and true.
 
 - [ ] **Step 1: Write failing unit tests with small deterministic batches**
 
@@ -458,8 +462,8 @@ from hamutay.turboquant.qualification import (
 
 
 def test_partition_block_ids_covers_each_sample_once():
-    ids = partition_block_ids(sample_count=11, block_count=4)
-    assert ids.tolist() == [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3]
+    ids = partition_block_ids(sample_count=12, block_count=4)
+    assert ids.tolist() == [0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3]
 
 
 def test_bootstrap_mean_interval_is_repeatable():
@@ -470,24 +474,21 @@ def test_bootstrap_mean_interval_is_repeatable():
     assert first[0] < values.mean() < first[1]
 
 
-def test_gate_boundaries_are_inclusive():
+def test_values_inside_registered_gate_boundaries_pass():
     metrics = tuple(
         QualificationMetrics(
             bits=bits,
-            mse_observed=mse,
-            mse_target=mse,
-            product_observed=product,
-            product_target=product,
+            mse_observed=1.0049,
+            mse_analytic_target=1.0,
+            mse_paper_target=1.0049 / 1.149,
+            product_observed=1.149,
+            product_paper_target=1.0,
             normalized_bias_mean=0.0,
             normalized_bias_rmse=0.1,
-            normalized_bias_ci=(-0.001, 0.001),
+            normalized_bias_ci95=(-0.0001, 0.0001),
+            normalized_bias_ci9875=(-0.00199, 0.00199),
         )
-        for bits, mse, product in zip(
-            (1, 2, 3, 4),
-            (0.36, 0.117, 0.03, 0.009),
-            (1.57 / 128, 0.56 / 128, 0.18 / 128, 0.047 / 128),
-            strict=True,
-        )
+        for bits in (1, 2, 3, 4)
     )
     result = QualificationResult(metrics=metrics, determinism_passed=True)
     gates = evaluate_algorithm_gates(result)
@@ -495,19 +496,46 @@ def test_gate_boundaries_are_inclusive():
     assert all(gate.passed for gate in gates)
 
 
-def test_bias_gate_rejects_ci_away_from_zero():
+def test_bias_gate_rejects_interval_outside_equivalence_region():
     metric = QualificationMetrics(
         bits=1,
         mse_observed=0.36,
-        mse_target=0.36,
+        mse_analytic_target=0.36,
+        mse_paper_target=0.36,
         product_observed=1.57 / 128,
-        product_target=1.57 / 128,
-        normalized_bias_mean=0.003,
+        product_paper_target=1.57 / 128,
+        normalized_bias_mean=0.0005,
         normalized_bias_rmse=0.1,
-        normalized_bias_ci=(0.001, 0.005),
+        normalized_bias_ci95=(-0.0005, 0.0015),
+        normalized_bias_ci9875=(-0.001, 0.0021),
     )
     result = QualificationResult(metrics=(metric,), determinism_passed=True)
-    assert not next(g for g in evaluate_algorithm_gates(result) if g.name == "qjl_bias").passed
+    gate = next(
+        g for g in evaluate_algorithm_gates(result)
+        if g.name == "qjl_bias_equivalence"
+    )
+    assert not gate.passed
+
+
+def test_mse_gate_rejects_analytic_mismatch_even_when_paper_matches():
+    metric = QualificationMetrics(
+        bits=1,
+        mse_observed=0.36,
+        mse_analytic_target=0.35,
+        mse_paper_target=0.36,
+        product_observed=1.57 / 128,
+        product_paper_target=1.57 / 128,
+        normalized_bias_mean=0.0,
+        normalized_bias_rmse=0.1,
+        normalized_bias_ci95=(-0.0001, 0.0001),
+        normalized_bias_ci9875=(-0.001, 0.001),
+    )
+    result = QualificationResult(metrics=(metric,), determinism_passed=True)
+    gate = next(
+        g for g in evaluate_algorithm_gates(result)
+        if g.name == "mse_distortion"
+    )
+    assert not gate.passed
 ```
 
 - [ ] **Step 2: Run the tests and observe failure**
@@ -518,21 +546,25 @@ Expected: FAIL because `qualification.py` does not exist.
 
 - [ ] **Step 3: Implement typed results and exact gates**
 
-Use frozen slotted dataclasses whose fields match the test constructors. `GateResult` contains `name`, `passed`, `observed`, `threshold`, and `detail`. `QualificationResult` also retains per-bit block means for artifact serialization but excludes million-row raw vectors.
+Use frozen slotted dataclasses whose fields match the test constructors. `GateResult` contains `name`, `passed`, `observed`, `threshold`, and `detail`. `QualificationResult` also retains per-bit block means for artifact serialization but excludes million-row raw vectors. Validate at construction that `sample_count`, `batch_size`, and `bootstrap_blocks` are positive, that `sample_count` is divisible by both `batch_size` and `bootstrap_blocks`, and that every requested bit width is in 1 through 4.
 
-`partition_block_ids` forms exactly `block_count` contiguous blocks, assigning remainder samples to the earliest blocks. The registered values divide evenly: one million pairs become 1,000 blocks of 1,000 pairs. Bootstrap the 1,000 block means, not one million individual rows: for each of 10,000 resamples, sample 1,000 block indices with replacement and take their mean. Use an independently derived PCG64 stream for each metric and bit width; for example, the one-bit MSE stream's final seed fields are `qualification`, `bootstrap`, `mse`, and `1`. Adding a diagnostic must not perturb another interval.
+`partition_block_ids` forms exactly `block_count` contiguous blocks. Reject non-divisible registered inputs rather than creating a shorter final block. One million pairs become 1,000 blocks of 1,000 pairs. Bootstrap the 1,000 block means, not one million individual rows: for each of 10,000 resamples, sample 1,000 block indices with replacement and take their mean. Use an independently derived PCG64 stream for each metric, confidence level, and bit width; for example, the one-bit 98.75% bias stream's final seed fields are `qualification`, `bootstrap`, `bias`, `0.9875`, and `1`. Adding a diagnostic must not perturb another interval.
 
-`run_synthetic_qualification` streams batches. Generate independent standard-Gaussian key and query vectors from distinct purpose-derived PCG64 generators. Build one registered rotation for Algorithm 1, one iid `(128,128)` paper-literal QJL projection, and one independently derived row-orthogonalized sensitivity projection. Accumulate FP64 sums and fixed block sums without retaining all vectors. Record the paper-literal metrics as gates and the orthogonalized metrics as non-gating sensitivity output.
+`analytic_codebook_distortion` reconstructs midpoint cell boundaries, integrates `(x - centroid)^2 * sphere_coordinate_density(x, dimension)` over every cell with the same FP64 quadrature tolerances as Task 2, sums the cells, and multiplies by `dimension`. This target comes from the frozen codebook rather than a second Lloyd-Max solve.
 
-Evaluate Algorithm 1 relative error with `abs(observed-target)/target <= 0.10`; Algorithm 2 with `<= 0.15`. The QJL bias gate requires every total-bit setting's 95% block-bootstrap interval to include zero and `abs(mean) <= 0.02 * rmse`. Determinism is passed in from the three-run artifact comparison in Task 6. The author differential is joined in Task 7; the overall R1 status cannot become `passed` until all five named gates exist and pass.
+`run_synthetic_qualification` streams batches. Generate independent standard-Gaussian key and query vectors from distinct purpose-derived PCG64 generators. Build one registered rotation for Algorithm 1, one iid `(128,128)` paper-literal QJL projection, and one independently derived row-orthogonalized sensitivity projection. Scale the orthogonalized matrix by `sqrt(dimension)` so each row has norm `sqrt(dimension)`, matching the expected iid-Gaussian row norm used by the estimator. Accumulate FP64 sums and fixed block sums without retaining all vectors. Record paper-literal metrics as gates and orthogonalized metrics as non-gating sensitivity output.
+
+The composite `mse_distortion` gate requires every bit width to satisfy both `abs(observed-analytic)/analytic <= 0.005` and `abs(observed-paper)/paper <= 0.15`. `published_qjl_distortion` retains `<= 0.15`. Report the ratio between each observed product distortion and the paper table separately; specifically call out the four-bit target's inherited rounding from the paper's three-bit scalar value without changing its gate.
+
+For `qjl_bias_equivalence`, compute both ordinary 95% and Bonferroni-adjusted 98.75% block-bootstrap intervals. Every 98.75% interval must be contained in the closed interval `[-0.02 * rmse, +0.02 * rmse]`; inclusion of zero is not itself a gate. Determinism comes from Task 6's separate-process comparison. The author differential joins in Task 7; overall R1 status cannot become `passed` until all five named gates exist and pass.
 
 - [ ] **Step 4: Add and run a reduced integration test**
 
-Append a test that runs `QualificationConfig(dimension=128, sample_count=20_000, batch_size=1000, bootstrap_blocks=100, bootstrap_resamples=200, bits=(1, 2))`, asserts finite metrics, exact sample counts, and identical serialized results on two runs. It is a development consistency test; it does not assert the paper-scale gates at reduced sample count.
+Append tests that run `QualificationConfig(dimension=128, sample_count=20_000, batch_size=1000, bootstrap_blocks=100, bootstrap_resamples=200, bits=(1, 2))`, assert finite metrics, exact sample counts, both interval levels, and identical serialized results on two runs. Add a direct quadrature regression asserting the dimension-128 analytic values round to `(0.36089, 0.11600, 0.03397, 0.00931)` for bits 1 through 4. These are development consistency tests; the reduced synthetic run does not assert paper-scale gates.
 
 Run: `uv run pytest tests/turboquant/test_qualification.py -v`
 
-Expected: 5 PASS.
+Expected: 7 PASS.
 
 - [ ] **Step 5: Commit**
 
@@ -550,15 +582,18 @@ Co-Authored-By: Codex <noreply@openai.com>"
 **Files:**
 - Create: `src/hamutay/turboquant/artifacts.py`
 - Create: `src/hamutay/turboquant/qualify.py`
+- Create: `src/hamutay/turboquant/qualify_worker.py`
 - Create: `tests/turboquant/test_artifacts.py`
 - Create: `tests/turboquant/test_qualify_cli.py`
 - Modify: `pyproject.toml`
+- Modify: `uv.lock` (project-script metadata only; no dependency changes)
 
 **Interfaces:**
 - Console command: `turboquant-qualify = "hamutay.turboquant.qualify:main"`
 - `canonical_json_bytes(value: object) -> bytes`
 - `sha256_file(path: Path) -> str`
 - `create_run_directory(root: Path, run_id: str) -> Path`
+- `run_registered_workers(run_directory: Path, config_path: Path, resolved_inputs_path: Path) -> tuple[Path, Path, Path]`
 - CLI modes `--profile development|registered`, `--output-root`, and `--run-id`.
 
 - [ ] **Step 1: Write failing artifact tests**
@@ -609,6 +644,14 @@ def test_registered_profile_rejects_count_overrides():
         assert error.code != 0
     else:
         raise AssertionError("registered sample count override accepted")
+
+
+def test_registered_profile_uses_divisible_batch_size():
+    args = build_parser().parse_args(
+        ["--profile", "registered", "--output-root", "out", "--run-id", "r1"]
+    )
+    assert args.batch_size == 4000
+    assert args.sample_count % args.batch_size == 0
 ```
 
 - [ ] **Step 2: Run the focused tests and observe failure**
@@ -626,6 +669,9 @@ Each run directory contains:
 ```text
 manifest.json
 resolved_inputs.npz
+execution-0.json
+execution-1.json
+execution-2.json
 qualification.json
 run.log
 ```
@@ -634,15 +680,60 @@ run.log
 
 Create the directory before computation with a provisional manifest. On any exception, atomically write a terminal `qualification.json` with status `error`, then re-raise. Atomic creation means write a sibling temporary file, flush and `os.fsync`, then `os.replace`; replacement is allowed only for the provisional manifest within the same still-running directory. Once terminal status exists, every artifact is immutable.
 
-- [ ] **Step 4: Implement the CLI and three-run determinism gate**
+- [ ] **Step 4: Write the failing separate-process test**
+
+Append to `tests/turboquant/test_qualify_cli.py`:
+
+```python
+import subprocess
+import sys
+from pathlib import Path
+
+from hamutay.turboquant.qualify import run_registered_workers
+
+
+def test_registered_workers_are_three_fresh_processes(monkeypatch, tmp_path):
+    calls: list[list[str]] = []
+
+    def fake_run(command, *, check, env):
+        assert check is True
+        calls.append(command)
+        output = Path(command[command.index("--output") + 1])
+        output.write_text("{}\n", encoding="utf-8")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    outputs = run_registered_workers(
+        tmp_path,
+        tmp_path / "worker-config.json",
+        tmp_path / "resolved_inputs.npz",
+    )
+    assert len(calls) == 3
+    assert [
+        command[command.index("--execution-index") + 1]
+        for command in calls
+    ] == ["0", "1", "2"]
+    assert all(
+        command[:3] == [sys.executable, "-m", "hamutay.turboquant.qualify_worker"]
+        for command in calls
+    )
+    assert outputs == tuple(tmp_path / f"execution-{index}.json" for index in range(3))
+```
+
+Run: `uv run pytest tests/turboquant/test_qualify_cli.py::test_registered_workers_are_three_fresh_processes -v`
+
+Expected: FAIL because `run_registered_workers` and `qualify_worker.py` do not exist.
+
+- [ ] **Step 5: Implement the CLI and process-level determinism gate**
 
 Development mode permits explicit counts and writes only under a caller-selected development root. Registered mode freezes dimension 128, sample count 1,000,000, batch size 4,000 (evenly dividing both sample and block boundaries), 1,000 bootstrap blocks, 10,000 resamples, and bits 1..4. It requires a clean worktree except for declared `--allow-dirty-path` entries; the registered execution below uses none.
 
-In one invocation, construct resolved inputs once and run the same registered synthetic stream three times in fresh objects. Hash canonical serialized codes, signs, norms, reconstruction checkpoints, and terminal metric structures for each execution. The determinism gate passes only if all corresponding hashes match. Persist each execution hash, not three copies of the million-sample reductions.
+The parent CLI constructs and freezes `resolved_inputs.npz`, then launches `sys.executable -m hamutay.turboquant.qualify_worker` three times sequentially through `subprocess.run(command, check=True, env=worker_env)`. Each child receives the same canonical worker configuration and resolved-input file plus a distinct execution index, reads rather than regenerates the frozen arrays, and writes exactly one immutable `execution-N.json`. Do not use multiprocessing workers that inherit the parent's initialized NumPy, BLAS, Torch, or CUDA state.
+
+Each worker streams the registered inputs from newly constructed purpose-derived generators. Update SHA-256 incrementally with an explicit dtype string, shape encoded as unsigned 64-bit big-endian integers, and C-order bytes for every codes, signs, norms, and reconstruction-checkpoint batch. Hash terminal metric structures as canonical JSON. The determinism gate passes only if all corresponding stream and metric hashes match across the three process artifacts. Persist the three compact execution records, not million-row samples.
 
 Add `turboquant-qualify` to `[project.scripts]` and verify `uv sync` leaves the lockfile unchanged; if `uv.lock` changes only because the project script metadata is regenerated, include it in this task's exact staging list.
 
-- [ ] **Step 5: Run development verification**
+- [ ] **Step 6: Run development verification**
 
 ```bash
 uv run pytest tests/turboquant/test_artifacts.py tests/turboquant/test_qualify_cli.py -v
@@ -651,10 +742,10 @@ uv run turboquant-qualify --profile development --output-root experiments/turboq
 
 Expected: tests PASS; smoke command creates one complete non-overwritable run with finite metrics and status that is explicitly non-certifying.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add pyproject.toml src/hamutay/turboquant/artifacts.py src/hamutay/turboquant/qualify.py tests/turboquant/test_artifacts.py tests/turboquant/test_qualify_cli.py
+git add pyproject.toml uv.lock src/hamutay/turboquant/artifacts.py src/hamutay/turboquant/qualify.py src/hamutay/turboquant/qualify_worker.py tests/turboquant/test_artifacts.py tests/turboquant/test_qualify_cli.py
 git -c user.email=hamutay@wamason.com -c user.name="Tony Mason" -c user.signingkey=01193FA2631C8AE8E4DF266E216D3C9B920813A1 commit -S -m "add append-only TurboQuant qualification artifacts
 
 Co-Authored-By: Codex <noreply@openai.com>"
@@ -674,17 +765,34 @@ Co-Authored-By: Codex <noreply@openai.com>"
 - Repository: `https://github.com/amirzandieh/QJL`
 - Commit: `648b3641f96b6e95e091217220b94e4739fd4d82`
 - License SHA-256: `c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4`
-- `qjl_quant_kernel.cu` SHA-256: `d03b2fd86504554f48da48df2740d73a0cc2d1d8a28c22698da20c9ee801aefd`
-- `qjl_score_kernel.cu` SHA-256: `848398bb6b140433aa10f4ccea16eb680ec215cb148956f09e46bbbdabdc030c`
+- `qjl_kernel/csrc/qjl_quant_kernel.cu` SHA-256: `d03b2fd86504554f48da48df2740d73a0cc2d1d8a28c22698da20c9ee801aefd`
+- `qjl_kernel/csrc/qjl_score_kernel.cu` SHA-256: `848398bb6b140433aa10f4ccea16eb680ec215cb148956f09e46bbbdabdc030c`
 - `models/llama3_utils_qjl.py` SHA-256: `725b6777b752e30b583b6834e258a849c01679c4e3c007f3b4c62212393f34c2`
+
+**Compiler precondition:** This shell is WSL2 Ubuntu 22.04.5. PyTorch is built for CUDA 12.8 while the system toolkit is CUDA 13.2, so `torch.utils.cpp_extension.load` rejects the default compiler before invoking it. Install NVIDIA's WSL-Ubuntu repository metadata and only the versioned toolkit package; never install `cuda`, `cuda-12-8`, `cuda-runtime-12-8`, or `cuda-drivers` inside WSL.
+
+Authoritative installation references: NVIDIA's [CUDA 12.8 Linux guide](https://docs.nvidia.com/cuda/archive/12.8.2/cuda-installation-guide-linux/index.html) and [CUDA 12.8 WSL-Ubuntu archive](https://developer.nvidia.com/cuda-12-8-0-download-archive?Distribution=WSL-Ubuntu&target_arch=x86_64&target_os=Linux&target_type=deb_local&target_version=2.0).
+
+```bash
+wget -O /tmp/cuda-keyring_1.1-1_all.deb https://developer.download.nvidia.com/compute/cuda/repos/wsl-ubuntu/x86_64/cuda-keyring_1.1-1_all.deb
+sudo dpkg -i /tmp/cuda-keyring_1.1-1_all.deb
+sudo apt-get update
+sudo apt-get install -y cuda-toolkit-12-8
+/usr/local/cuda-12.8/bin/nvcc --version
+readlink -f /usr/local/cuda
+```
+
+Expected: `nvcc` reports release 12.8 and `/usr/local/cuda` still resolves to `/usr/local/cuda-13.2`. If the package changed the alternative, restore the CUDA 13.2 alternative before continuing and continue to select 12.8 only through per-command environment variables.
 
 - [ ] **Step 1: Write the CUDA differential test first**
 
-`tests/turboquant/test_author_qjl.py` must skip with a precise reason unless CUDA is available and `QJL_AUTHOR_CHECKOUT` names a checkout. Once those preconditions exist, skipping is forbidden: verify `git rev-parse HEAD`, clean upstream status, and every hash before compilation.
+`tests/turboquant/test_author_qjl.py` must skip with a precise reason unless CUDA is available, `QJL_AUTHOR_CHECKOUT` names a checkout, `/usr/local/cuda-12.8/bin/nvcc` exists, and the selected compiler and `torch.version.cuda` both report 12.8. Once those preconditions exist, skipping is forbidden: verify `git rev-parse HEAD`, clean upstream status, and every hash before compilation.
 
 The test uses 32 FP32 key residuals and one query of dimension 128. Set coordinate 127 of every key and the query exactly to zero. Supply an outlier-index tensor whose sole value is 127 and set `outlier_sketch_dim=8`. The mandatory author outlier channel then has zero norm and zero contribution while avoiding the kernel's division by zero; the inlier estimator is the paper-literal estimator on the active 127 coordinates.
 
-Use a study-derived iid FP32 projection `S` with shape `(128,128)`. Pass `S` to the author quant kernel and `S.T.contiguous()` to the author score kernel, matching their opposite quant/score layouts. Give the kernel key shape `(1, 1, 1, 32, 128)`, outlier-index shape `(1, 1, 1, 1)`, query shape `(1, 1, 1, 128)`, and full key norms. Compile only the exact quant and score `.cu` files with separately named `torch.utils.cpp_extension.load` calls; do not import the repository wrapper, whose FP32 score dispatch contains the known `tcuda_qjl_score` typo.
+Use a study-derived iid FP32 projection `S` with shape `(128,128)`. Pass `S` to the author quant kernel and `S.T.contiguous()` to the author score kernel, matching their opposite quant/score layouts. Compute the score kernel's required FP32 `query_sketch` argument as `query @ S.T`; the kernel also subtracts the dummy outlier contribution internally, which is exact zero because query coordinate 127 is zero. Give the kernel key shape `(1, 1, 1, 32, 128)`, outlier-index shape `(1, 1, 1, 1)`, query shape `(1, 1, 1, 128)`, and full key norms. Compile only the exact quant and score `.cu` files with separately named `torch.utils.cpp_extension.load` calls; do not import the repository wrapper, whose FP32 score dispatch contains the known `tcuda_qjl_score` typo.
+
+The transparent reference maps exact zero projections to positive signs; the author kernel uses `sketched > 0` and therefore maps exact zero to negative signs. Assert that the registered generic inlier sketches contain no exact FP32 zero before byte comparison, and record both conventions in the differential artifact. Add a separate constructed zero-projection test that expects the known one-bit convention difference rather than treating it as author disagreement.
 
 Assertions:
 
@@ -711,14 +819,14 @@ Extend the registered qualification CLI with required `--author-qjl-checkout`. M
 mkdir -p /tmp/hamutay-turboquant-author
 git clone https://github.com/amirzandieh/QJL /tmp/hamutay-turboquant-author/QJL
 git -C /tmp/hamutay-turboquant-author/QJL checkout 648b3641f96b6e95e091217220b94e4739fd4d82
-QJL_AUTHOR_CHECKOUT=/tmp/hamutay-turboquant-author/QJL uv run pytest tests/turboquant/test_author_qjl.py -v
+CUDA_HOME=/usr/local/cuda-12.8 PATH=/usr/local/cuda-12.8/bin:$PATH QJL_AUTHOR_CHECKOUT=/tmp/hamutay-turboquant-author/QJL uv run pytest tests/turboquant/test_author_qjl.py -v
 ```
 
-Expected: PASS on the local RTX 4090. If compilation or comparison fails, preserve the build/test output and repair the adapter or reference before proceeding; do not loosen the registered tolerance.
+Expected: PASS on the local RTX 4090. If compilation or comparison fails, preserve the build/test output and repair the adapter or reference before proceeding; do not loosen the registered tolerance. A failure just above the absolute tolerance may arise from the kernel's FP32 warp-reduction order, but that explanation is a hypothesis to test, not an automatic waiver. Any tolerance revision requires a reviewed specification amendment before another registered differential.
 
 - [ ] **Step 5: Run the whole development suite**
 
-Run: `QJL_AUTHOR_CHECKOUT=/tmp/hamutay-turboquant-author/QJL uv run pytest tests/turboquant -v`
+Run: `CUDA_HOME=/usr/local/cuda-12.8 PATH=/usr/local/cuda-12.8/bin:$PATH QJL_AUTHOR_CHECKOUT=/tmp/hamutay-turboquant-author/QJL uv run pytest tests/turboquant -v`
 
 Expected: all tests PASS with no author-differential skip.
 
@@ -733,16 +841,70 @@ Co-Authored-By: Codex <noreply@openai.com>"
 
 ---
 
-### Task 8: Execute, inspect, and timestamp the registered R1 gate
+### Task 8: Independent black-box adversarial validation
+
+**Files:**
+- Create: `tests/turboquant_independent/` (contents authored by the independent Claude instance, not by the implementer or this plan)
+- Create: `docs/superpowers/reports/2026-08-27-turboquant-independent-validation.md`
+
+**Independence protocol:** The principal investigator starts a fresh Claude session after Tasks 1-7 are committed. Before Claude reads any implementation file, provide only the approved specification, this plan's frozen public interfaces, the TurboQuant paper, the pinned author-QJL contract, and permission to create black-box tests beneath `tests/turboquant_independent/`. Claude freezes those tests in a separately signed commit. Only then may it inspect the implementation and explain failures. This task intentionally does not prescribe the test cases: doing so would make the implementer the independent-test author.
+
+- [ ] **Step 1: Freeze the implementation under review**
+
+Run:
+
+```bash
+git status --short
+git rev-parse HEAD
+CUDA_HOME=/usr/local/cuda-12.8 PATH=/usr/local/cuda-12.8/bin:$PATH QJL_AUTHOR_CHECKOUT=/tmp/hamutay-turboquant-author/QJL uv run pytest tests/turboquant -v
+```
+
+Expected: clean feature worktree, one recorded implementation commit, and every implementer-authored test passes with the author differential active.
+
+- [ ] **Step 2: Have the independent Claude instance author and commit black-box tests before implementation access**
+
+The test commit message records the implementation commit under review, the materials Claude received before test freeze, the fact that implementation access was withheld, and Claude's model identifier. Use the repository's Tony Mason signing identity and a Claude co-author trailer. Do not squash this commit into an implementation commit.
+
+- [ ] **Step 3: Run the frozen independent suite without editing it**
+
+Run:
+
+```bash
+CUDA_HOME=/usr/local/cuda-12.8 PATH=/usr/local/cuda-12.8/bin:$PATH QJL_AUTHOR_CHECKOUT=/tmp/hamutay-turboquant-author/QJL uv run pytest tests/turboquant_independent -v
+```
+
+Expected: all independently authored tests PASS. Preserve complete failing output before diagnosis if any test fails.
+
+- [ ] **Step 4: Resolve findings through evidence rather than reviewer authority**
+
+For each failed test or prose finding, the validation report records its identifier, whether it is accepted or rejected, the technical evidence, the resulting code/test/spec commit when accepted, and the principal investigator's disposition when rejected. Accepted implementation defects return to the relevant earlier task, receive a test-first repair commit, rerun both test suites, and invalidate the prior validation report. An invalid independent test is corrected by its author in a new signed commit; the original remains in history.
+
+- [ ] **Step 5: Commit the terminal validation report**
+
+The report includes the frozen implementation commit, independent-test commit, complete commands and outcomes, every disposition, and terminal status `passed` or `blocked`. Registered execution is permitted only for `passed`.
+
+```bash
+git add docs/superpowers/reports/2026-08-27-turboquant-independent-validation.md
+git -c user.email=hamutay@wamason.com -c user.name="Tony Mason" -c user.signingkey=01193FA2631C8AE8E4DF266E216D3C9B920813A1 commit -S -m "record independent TurboQuant validation
+
+Co-Authored-By: Codex <noreply@openai.com>"
+```
+
+---
+
+### Task 9: Execute, inspect, and timestamp the registered R1 gate
 
 **Files:**
 - Create: `experiments/turboquant/qualification/r1-initial/manifest.json`
 - Create: `experiments/turboquant/qualification/r1-initial/resolved_inputs.npz`
+- Create: `experiments/turboquant/qualification/r1-initial/execution-0.json`
+- Create: `experiments/turboquant/qualification/r1-initial/execution-1.json`
+- Create: `experiments/turboquant/qualification/r1-initial/execution-2.json`
 - Create: `experiments/turboquant/qualification/r1-initial/qualification.json`
 - Create: `experiments/turboquant/qualification/r1-initial/run.log`
 - Create: `docs/superpowers/reports/2026-08-27-turboquant-r1-qualification.md`
 
-**Precondition:** Tasks 1-7 are committed in the isolated feature worktree and all `tests/turboquant` tests pass with the pinned author checkout. That feature worktree is clean before beginning the registered run; unrelated changes in the user's original checkout remain untouched.
+**Precondition:** Tasks 1-8 are committed in the isolated feature worktree; the independent-validation report status is `passed`; and both test suites pass with the pinned author checkout. That feature worktree is clean before beginning the registered run; unrelated changes in the user's original checkout remain untouched.
 
 - [ ] **Step 1: Record the pre-run state**
 
@@ -752,7 +914,9 @@ Run:
 git status --short
 git rev-parse HEAD
 nvidia-smi --query-gpu=name,uuid,driver_version,memory.total --format=csv,noheader
+/usr/local/cuda-12.8/bin/nvcc --version
 uv run python -c "import numpy, scipy, torch; print(numpy.__version__, scipy.__version__, torch.__version__, torch.version.cuda, torch.cuda.get_device_name(0))"
+CUDA_HOME=/usr/local/cuda-12.8 PATH=/usr/local/cuda-12.8/bin:$PATH QJL_AUTHOR_CHECKOUT=/tmp/hamutay-turboquant-author/QJL uv run pytest tests/turboquant tests/turboquant_independent -v
 ```
 
 Expected: clean Git status; an RTX 4090 is visible; the environment details match what the manifest will capture. Stop on a dirty tree or hash mismatch.
@@ -762,7 +926,7 @@ Expected: clean Git status; an RTX 4090 is visible; the environment details matc
 Use the frozen first-run identifier `r1-initial`. The manifest's UTC start time and Git commit disambiguate the execution. If this run fails and code is repaired, revise this plan with the new explicit run identifier before executing the repair; append-only evidence forbids reusing `r1-initial`.
 
 ```bash
-uv run turboquant-qualify \
+CUDA_HOME=/usr/local/cuda-12.8 PATH=/usr/local/cuda-12.8/bin:$PATH uv run turboquant-qualify \
   --profile registered \
   --output-root experiments/turboquant/qualification \
   --run-id r1-initial \
@@ -779,19 +943,19 @@ Run:
 uv run python -m json.tool experiments/turboquant/qualification/r1-initial/manifest.json >/dev/null
 uv run python -m json.tool experiments/turboquant/qualification/r1-initial/qualification.json >/dev/null
 sha256sum experiments/turboquant/qualification/r1-initial/*
-uv run pytest tests/turboquant -v
+CUDA_HOME=/usr/local/cuda-12.8 PATH=/usr/local/cuda-12.8/bin:$PATH QJL_AUTHOR_CHECKOUT=/tmp/hamutay-turboquant-author/QJL uv run pytest tests/turboquant tests/turboquant_independent -v
 ```
 
 Expected: valid JSON, stable hashes, and full tests PASS with the author differential active. Compare reported scalar/product relative errors and bias conditions manually against the five frozen gate definitions; do not rely solely on the top-level status boolean.
 
 - [ ] **Step 4: Write the qualification report**
 
-The report gives the exact run ID and artifact hashes; a compact observed-versus-target table for all bits; bias mean/RMSE/intervals; determinism hashes; author differential maximum absolute/relative error; every gate status; runtime and hardware; declared deviations; and one conclusion from the approved outcome vocabulary. If any gate failed, title the conclusion `No qualified experiment` and state that the model harness remains blocked. If all pass, state only that R1 passed and the model-level implementation plan may now be written; do not claim any cache-path result.
+The report gives the exact run ID and artifact hashes; a compact empirical-versus-analytic-versus-paper table for all scalar bit widths; observed versus published QJL distortion; normalized bias mean, RMSE, ordinary 95% interval, and simultaneous 98.75% interval; three process-execution hashes; author differential maximum absolute/relative error; independent-validation commit; every gate status; runtime and hardware; declared deviations; and one conclusion from the approved outcome vocabulary. If any gate failed, title the conclusion `No qualified experiment` and state that the model harness remains blocked. If all pass, state only that R1 passed and the model-level implementation plan may now be written; do not claim any cache-path result.
 
 - [ ] **Step 5: Commit evidence and report exactly**
 
 ```bash
-git add experiments/turboquant/qualification/r1-initial/manifest.json experiments/turboquant/qualification/r1-initial/resolved_inputs.npz experiments/turboquant/qualification/r1-initial/qualification.json experiments/turboquant/qualification/r1-initial/run.log docs/superpowers/reports/2026-08-27-turboquant-r1-qualification.md
+git add experiments/turboquant/qualification/r1-initial/manifest.json experiments/turboquant/qualification/r1-initial/resolved_inputs.npz experiments/turboquant/qualification/r1-initial/execution-0.json experiments/turboquant/qualification/r1-initial/execution-1.json experiments/turboquant/qualification/r1-initial/execution-2.json experiments/turboquant/qualification/r1-initial/qualification.json experiments/turboquant/qualification/r1-initial/run.log docs/superpowers/reports/2026-08-27-turboquant-r1-qualification.md
 git -c user.email=hamutay@wamason.com -c user.name="Tony Mason" -c user.signingkey=01193FA2631C8AE8E4DF266E216D3C9B920813A1 commit -S -m "record TurboQuant R1 qualification
 
 Co-Authored-By: Codex <noreply@openai.com>"
@@ -812,4 +976,4 @@ Expected: the evidence commit has a good signature, the hook-created OTS commit 
 
 ## Completion and Next Gate
 
-This plan is complete only when Tasks 1-7 are implemented and Task 8 has left immutable, signed, timestamped R1 evidence, whether passing or failing. A passing R1 result authorizes writing—not silently executing—the second plan for model baseline qualification, the cache-path harness, fixed-length Q schedules, replay/eviction controls, and the registered numerical/behavioral assay. A failed R1 result blocks that plan until the implementation is repaired and the complete qualification is rerun under a new run ID.
+This plan is complete only when Tasks 1-8 are implemented and Task 9 has left immutable, signed, timestamped R1 evidence, whether passing or failing. A passing R1 result authorizes writing—not silently executing—the second plan for model baseline qualification, the cache-path harness, fixed-length Q schedules, replay/eviction controls, and the registered numerical/behavioral assay. A failed R1 result blocks that plan until the implementation is repaired and the complete qualification is rerun under a new run ID.

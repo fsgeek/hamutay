@@ -2,15 +2,22 @@
 
 Date: 2026-08-27
 
-Status: approved design direction, written specification awaiting collaborator
-review. No implementation planning or live experimental execution is authorized
-by this document.
+Status: approved and externally reviewed design. The R1 implementation plan is
+authorized; live registered execution remains gated on implementation,
+independent validation, and the qualification checks below.
 
 Revised: 2026-08-27 after the external review in
 `2026-08-27-turboquant-cache-path-compositionality-review.md`. The revision adds
 the missing quantize-once control, separates serving-lifecycle from
 compositional effects, holds sequence length and the final uncompressed window
 constant in the dose comparison, and replaces the undersized local corpus.
+
+Revised again on 2026-08-27 after external review of the R1 implementation
+plan. This amendment replaces rounding-sensitive table comparisons with a
+dual analytic/published-scale gate, turns the QJL bias criterion into a
+simultaneous equivalence test, requires process-level determinism and an
+independent adversarial-test checkpoint, and pins the author-kernel compiler
+environment.
 
 Research roles: Tony Mason is principal investigator. This design was developed
 with a Codex instance acting as researcher.
@@ -234,6 +241,10 @@ mathematically zero.
 
 - Device: the local NVIDIA RTX 4090, one process and one experimental sequence
   at a time.
+- Qualification userspace: WSL2 Ubuntu 22.04.5. The author QJL extensions are
+  compiled with the side-by-side CUDA 12.8 WSL-Ubuntu toolkit selected through
+  `CUDA_HOME=/usr/local/cuda-12.8`; CUDA 13.2 remains the system default and no
+  Linux NVIDIA driver is installed inside WSL.
 - Model: `meta-llama/Meta-Llama-3.1-8B-Instruct`.
 - Model and tokenizer revision:
   `0e9e39f249a16976918f6564b8830bc894c89659`.
@@ -288,31 +299,47 @@ immutable run inputs.
 
 The QJL qualification reports both the paper-literal iid Gaussian projection
 and the row-orthogonalized projection used by the public QJL implementation.
-Only the paper-literal form enters `tq_ref_kprod4_vmse4`. The second form is a
-declared sensitivity result.
+The latter is scaled by `sqrt(d)` after QR so its row norms match the expected
+Gaussian-row norm. Only the paper-literal form enters
+`tq_ref_kprod4_vmse4`. The second form is a declared sensitivity result.
 
 ## Algorithm Qualification Gate
 
 No model-level TurboQuant result is interpreted until all of these checks pass:
 
 1. **Round-trip determinism.** A frozen vector batch produces bit-identical
-   indices, signs, norms, and reconstructed FP32 values across three same-build
-   executions.
-2. **Published distortion scale.** On one million registered synthetic
-   length-128 vectors drawn iid from a standard Gaussian, the empirical MSE
-   normalized by squared input norm for `TurboQuant_mse` at one through four
-   bits is within 10% relative error of each paper-reported approximate value
-   (`0.36`, `0.117`, `0.03`, and `0.009`). Because the paper values are rounded,
-   matching more digits is not required.
-3. **QJL bias check.** Across one million registered independent query/key
-   pairs, each length 128 and drawn iid from a standard Gaussian, the 95%
-   bootstrap interval for mean signed inner-product error includes zero, and
-   absolute mean error is no more than 2% of error RMSE.
+   indices, signs, norms, and reconstructed FP32 values across three fresh
+   same-build process executions.
+2. **Analytic and published distortion scale.** For each frozen one- through
+   four-bit codebook, compute the exact normalized scalar distortion in FP64 by
+   integrating squared error over every Lloyd-Max cell under the registered
+   dimension-128 sphere-coordinate density. On one million registered
+   synthetic length-128 vectors drawn iid from a standard Gaussian, empirical
+   normalized MSE must be within 0.5% relative error of that analytic value and
+   within 15% relative error of the paper-reported approximate value (`0.36`,
+   `0.117`, `0.03`, or `0.009`). The analytic comparison certifies the
+   implementation; the wider published-scale comparison acknowledges the
+   table's precision without discarding it.
+   Before implementation, independent FP64 quadrature gave the registered
+   reference values `0.36088859`, `0.11600007`, `0.03396593`, and `0.00931479`.
+   These values are frozen regression expectations, not results from the
+   million-vector execution.
+3. **QJL bias equivalence.** Across one million registered independent
+   query/key pairs, each length 128 and drawn iid from a standard Gaussian, the
+   Bonferroni-adjusted 98.75% bootstrap interval for normalized mean signed
+   inner-product error at every bit width must lie wholly inside the
+   equivalence region from `-0.02 * error_RMSE` through
+   `+0.02 * error_RMSE`. Ordinary 95% intervals are also reported as
+   diagnostics but do not gate qualification.
 4. **QJL distortion scale.** At one through four total bits, empirical
    normalized mean squared inner-product error is within 15% relative error of
    the paper's approximate dimension-scaled values (`1.57/d`, `0.56/d`,
    `0.18/d`, and `0.047/d`). These and the scalar-distortion values above were
-   checked against the accessible arXiv text during the audit.
+   checked against the accessible arXiv text during the audit. The four-bit
+   target inherits sensitivity to the paper's rounded three-bit scalar value;
+   the analytic scalar residual and its `pi/2` scaling are reported as
+   non-gating diagnostics, and the registered 15% tolerance is not adjusted
+   after observation.
 5. **Author-code differential.** On identical residual vectors, queries,
    projection matrix, residual norms, and floating dtype, the reference QJL
    component agrees with the author implementation within a frozen FP32
@@ -323,6 +350,16 @@ No model-level TurboQuant result is interpreted until all of these checks pass:
 A failed check remains in the evidence record. Repair changes the implementation
 version and requires the complete qualification gate to run again. Failure to
 pass is a blocked experiment, not a negative TurboQuant result.
+
+Before the registered qualification run, an instance from a model family other
+than the implementer's authors a black-box adversarial test suite from this
+specification, the published artifacts, and the frozen public interfaces,
+without first reading the implementation. The tests live in a separate signed
+commit. The reviewer may inspect the implementation only after freezing that
+suite. Registered execution requires every valid independent test to pass and
+every rejected test or review finding to have a written technical disposition
+approved by the principal investigator. Reviewer approval by itself is neither
+necessary nor sufficient; reproducible evidence is the gate.
 
 ## Token Corpus and Boundary Schedules
 
@@ -623,6 +660,8 @@ unstated claim of practical harm.
 - A replay mismatch outside its envelope stops interpretation until explained.
 - A model, tokenizer, transform, codebook, prompt, or corpus hash mismatch stops
   the run before inference.
+- A missing independent adversarial-test commit, a failing valid independent
+  test, or an unresolved technical disposition stops registered qualification.
 - Missing diagnostic attention data does not invalidate primary logits if the
   reason and instrumentation comparison are recorded.
 - No case is removed because its output looks strange, ungrammatical, or
