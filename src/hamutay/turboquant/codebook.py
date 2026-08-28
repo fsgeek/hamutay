@@ -113,7 +113,10 @@ def nearest_code_indices(
         raise ValueError("codebook must be one-dimensional and strictly increasing")
     if resolved_codebook.size > np.iinfo(np.uint8).max + 1:
         raise ValueError("codebook may contain at most 256 centroids")
-    boundaries = (resolved_codebook[:-1] + resolved_codebook[1:]) / 2.0
+    boundaries = (
+        resolved_codebook[:-1].astype(np.float64)
+        + resolved_codebook[1:].astype(np.float64)
+    ) / 2.0
     return np.ascontiguousarray(
         np.searchsorted(boundaries, np.asarray(values), side="left"), dtype=np.uint8
     )
