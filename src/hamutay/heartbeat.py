@@ -6,8 +6,10 @@ The log is the life; the process is weather. Boot always runs recovery.
 from __future__ import annotations
 
 import json
+import math
+import os
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from hamutay.events import (
@@ -25,14 +27,19 @@ def append_heartbeat_status(
     status: str,
     reason: str,
     detail: dict | None = None,
+    created_at: str | None = None,
 ) -> dict:
-    """Record a daemon state transition. Not an event; carries no event_id."""
+    """Record a daemon state transition. Not an event; carries no event_id.
+
+    created_at defaults to the wall clock; the heartbeat passes its own
+    injected clock so status intervals and injected time agree.
+    """
     record: dict = {
         "record_type": "heartbeat_status",
         "heartbeat_record_id": str(uuid4()),
         "status": str(status),
         "reason": str(reason),
-        "created_at": utc_now_iso(),
+        "created_at": created_at or utc_now_iso(),
     }
     if detail is not None:
         record["detail"] = detail
@@ -138,6 +145,153 @@ def recover_lost_continuations(store: EventStore) -> list[dict]:
     return recovered
 
 
+# --- wake budget --------------------------------------------------------------
+# Spec: docs/superpowers/specs/2026-08-29-wake-budget-governor-design.md
+# A resident's UTC day is bounded in dollars and in wakes. The session log is
+# the ledger; nothing is written. Checked before every wake, never during one.
+
+
+def next_utc_midnight(now: datetime) -> datetime:
+    day_start = _as_utc(now).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    return day_start + timedelta(days=1)
+
+
+def _parse_iso(value) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _is_number(value) -> bool:
+    return isinstance(value, (int, float)) and not isinstance(value, bool)
+
+
+def _as_utc(now: datetime) -> datetime:
+    """A naive clock is read as UTC; an aware one is converted."""
+    if now.tzinfo is None:
+        return now.replace(tzinfo=timezone.utc)
+    return now.astimezone(timezone.utc)
+
+
+class DailyLedger:
+    """What a resident's day has cost, read from its own session log.
+
+    A wake is a cycle record; its day is the UTC day of the record's
+    timestamp (written when the wake completes). Only METERED records
+    (launch.provider other than anthropic) contribute cost; a metered record
+    with no numeric cost, or with unreported turns, is UNMEASURED — counted,
+    reported, never treated as free; a partial number is a lower bound.
+    Records with no launch block (pre-2026-08-26 logs) are not metered.
+    Re-parses only when the log has grown; a torn final line (no newline
+    yet) is neither parsed nor cached as seen.
+    """
+
+    def __init__(self, log_path: str):
+        self._log_path = log_path
+        self._size = -1
+        self._rows: list[tuple[datetime, float | None, bool, int]] = []
+
+    def _refresh(self) -> None:
+        try:
+            size = os.path.getsize(self._log_path)
+        except OSError:
+            self._size, self._rows = -1, []
+            return
+        if size == self._size:
+            return
+        with open(self._log_path, "rb") as f:
+            data = f.read()
+        complete = data.endswith(b"\n")
+        rows: list[tuple[datetime, float | None, bool, int]] = []
+        lines = data.split(b"\n")
+        if not complete:
+            lines = lines[:-1]  # the torn tail is not a record yet
+        for raw in lines:
+            if not raw.strip():
+                continue
+            try:
+                record = json.loads(raw.decode("utf-8"))
+            except ValueError:
+                continue
+            if not isinstance(record, dict):
+                continue
+            ts = _parse_iso(record.get("timestamp"))
+            if ts is None:
+                continue
+            launch = record.get("launch") or {}
+            metered = bool(launch) and launch.get("provider") != "anthropic"
+            usage = record.get("usage") or {}
+            if not isinstance(usage, dict):
+                usage = {}
+            cost = usage.get("cost_usd")
+            if not _is_number(cost):
+                cost = None
+            unreported = usage.get("cost_turns_unreported")
+            unreported = int(unreported) if _is_number(unreported) else 0
+            rows.append((ts, cost, metered, unreported))
+        # Cache by size only when the whole file was complete records; a torn
+        # tail forces a re-read next time so the finished record is counted.
+        self._size, self._rows = (size if complete else -1), rows
+
+    def day(self, now: datetime) -> dict:
+        self._refresh()
+        today = _as_utc(now).date()
+        wakes = 0
+        cost_total = 0.0
+        unmeasured = 0
+        unreported_turns = 0
+        for ts, cost, metered, unreported in self._rows:
+            if ts.date() != today:
+                continue
+            wakes += 1
+            if not metered:
+                continue
+            if cost is not None:
+                cost_total += float(cost)
+            if cost is None or unreported > 0:
+                unmeasured += 1
+            unreported_turns += unreported
+        return {
+            "day": today.isoformat(),
+            "wakes": wakes,
+            "cost_usd": cost_total,
+            "unmeasured_wakes": unmeasured,
+            "cost_turns_unreported": unreported_turns,
+        }
+
+
+class WakeBudget:
+    """Ceilings for one UTC day. Inclusive; cost is checked first."""
+
+    def __init__(self, daily_usd: float, daily_wakes: int):
+        if not _is_number(daily_usd) or math.isnan(daily_usd) or daily_usd < 0:
+            raise ValueError(f"daily_usd must be a non-negative number, got {daily_usd!r}")
+        if (
+            not isinstance(daily_wakes, int)
+            or isinstance(daily_wakes, bool)
+            or daily_wakes < 0
+        ):
+            raise ValueError(f"daily_wakes must be a non-negative int, got {daily_wakes!r}")
+        # Zero is deliberate: rest immediately — the steward's pause.
+        self.daily_usd = float(daily_usd)
+        self.daily_wakes = int(daily_wakes)
+
+    def exceeded(self, day: dict) -> str | None:
+        if float(day.get("cost_usd") or 0.0) >= self.daily_usd:
+            return "cost"
+        if int(day.get("wakes") or 0) >= self.daily_wakes:
+            return "wakes"
+        return None
+
+
 class HeartbeatLoop:
     """Wall-clock life for the event loop. Crash-only: boot always recovers."""
 
@@ -152,9 +306,14 @@ class HeartbeatLoop:
         now=None,
         run_pending=run_pending_events,
         summarize=summarize_event_log,
+        ledger: DailyLedger | None = None,
+        budget: WakeBudget | None = None,
     ):
         self._session = session
         self._store = store
+        self._ledger = ledger
+        self._budget = budget
+        self._resting_day: str | None = None
         self._poll_interval = float(poll_interval)
         self._batch_limit = int(batch_limit)
         self._sleep = sleep
@@ -169,12 +328,18 @@ class HeartbeatLoop:
         print(json.dumps(payload, default=str), flush=True)
 
     def _transition(
-        self, status: str, *, reason: str, detail: dict | None = None
+        self,
+        status: str,
+        *,
+        reason: str,
+        detail: dict | None = None,
+        now: datetime | None = None,
     ) -> None:
         if (status, reason) == self._last_transition:
             return
+        stamp = _as_utc(now).isoformat() if now is not None else None
         record = append_heartbeat_status(
-            self._store, status=status, reason=reason, detail=detail
+            self._store, status=status, reason=reason, detail=detail, created_at=stamp
         )
         self._last_transition = (status, reason)
         self._emit(
@@ -208,19 +373,71 @@ class HeartbeatLoop:
             "lost_continuations_recovered": len(lost),
         }
         self._emit({"heartbeat": "boot_report", **report})
-        self._transition("waking", reason="boot", detail=report)
+        self._transition("waking", reason="boot", detail=report, now=self._now())
         return report
+
+    def _rest_if_budget_exceeded(self, now) -> dict | None:
+        if self._budget is None or self._ledger is None:
+            return None
+        day = self._ledger.day(now)
+        exceeded = self._budget.exceeded(day)
+        if exceeded is None:
+            return None
+        resumes_at = next_utc_midnight(now)
+        already_resting_today = (
+            self._last_transition == ("resting", "daily_budget_reached")
+            and self._resting_day == day["day"]
+        )
+        if not already_resting_today:
+            # One episode per UTC day: a rest record for this day already in
+            # the store means a restart interrupted it; continue, don't start.
+            # A new day that is also exceeded is a new episode, so the
+            # (status, reason) de-dup must not swallow it.
+            self._last_transition = None
+            self._resting_day = day["day"]
+            resumed = any(
+                r.get("record_type") == "heartbeat_status"
+                and r.get("status") == "resting"
+                and (r.get("detail") or {}).get("day") == day["day"]
+                for r in self._store.read_records()
+            )
+            detail = {
+                **day,
+                "exceeded": exceeded,
+                "cost_is_lower_bound": bool(day.get("cost_turns_unreported")),
+                "daily_usd": self._budget.daily_usd,
+                "daily_wakes": self._budget.daily_wakes,
+                "resumes_at": resumes_at.isoformat(),
+            }
+            if resumed:
+                detail["resumed_after_restart"] = True
+            self._transition(
+                "resting", reason="daily_budget_reached", detail=detail, now=now
+            )
+        remaining = (resumes_at - _as_utc(now)).total_seconds()
+        return {
+            "state": "resting",
+            "sleep_seconds": min(max(remaining, 0.0), self._poll_interval),
+            "batch": None,
+        }
 
     def step(self) -> dict:
         now = self._now()
+        # The budget is checked before a wake, never during one: a resting
+        # heartbeat runs nothing, touches no event, keeps polling.
+        resting = self._rest_if_budget_exceeded(now)
+        if resting is not None:
+            return resting
         # Record 'active' BEFORE the batch: a wake that arrives and completes
         # inside one batch must still leave a transition trace in the log.
         if self._store.next_pending(now=now) is not None:
-            self._transition("active", reason="runnable_pending")
+            self._transition("active", reason="runnable_pending", now=now)
         batch = self._run_pending(
             self._session,
             self._store,
-            limit=self._batch_limit,
+            # Under a budget the check happens before EVERY wake, not every
+            # batch_limit of them.
+            limit=1 if self._budget is not None else self._batch_limit,
             stop_on_failure=False,
             now=now,
             auto_continuations=True,
@@ -231,7 +448,7 @@ class HeartbeatLoop:
         # so that such a wake cannot disappear between two identical quiet
         # transitions.
         if batch.get("ran", 0):
-            self._transition("active", reason="runnable_pending")
+            self._transition("active", reason="runnable_pending", now=now)
         # Say the resident's words aloud: the human watching this terminal is
         # a conversation participant, not just an operator.
         for result in batch.get("results", []) or []:
@@ -245,17 +462,17 @@ class HeartbeatLoop:
                 )
         summary = self._summarize(self._store.read_records(), now=now)
         if summary.get("pending_runnable_count", 0):
-            self._transition("active", reason="runnable_pending")
+            self._transition("active", reason="runnable_pending", now=now)
             return {"state": "active", "sleep_seconds": 0.0, "batch": batch}
         if summary.get("pending_waiting_count", 0):
-            self._transition("waiting", reason="scheduled_wake")
+            self._transition("waiting", reason="scheduled_wake", now=now)
             return {
                 "state": "waiting",
                 "sleep_seconds": self._seconds_until_wake(summary, now),
                 "batch": batch,
             }
         reason = derive_quiet_reason(self._store.read_records())
-        self._transition("quiet", reason=reason)
+        self._transition("quiet", reason=reason, now=now)
         return {
             "state": "quiet",
             "sleep_seconds": self._poll_interval,
@@ -281,8 +498,33 @@ CONSTITUTION = (
     "required to answer any event. One law of physics in this world: your "
     "wake ends when your reply does. Act before you speak, and hand any "
     "future intention to schedule_event or a continuation request — an "
-    "intention that lives only in prose will not survive the wake."
+    "intention that lives only in prose will not survive the wake. "
 )
+
+BUDGET_SENTENCE = (
+    "Your wakes are budgeted per UTC day — a cost ceiling{usd} and a count "
+    "ceiling{wakes} set by the steward; when either is reached the heartbeat "
+    "rests until midnight UTC, waiting events keep waiting, and a wake that "
+    "ran after a rest is told so in its envelope."
+)
+UNBUDGETED_SENTENCE = (
+    "Your wakes are not budgeted: the steward disabled the daily cost and "
+    "count ceilings for this resident."
+)
+
+# The generic budgeted text, for reading and for the constitution tests.
+CONSTITUTION = CONSTITUTION + BUDGET_SENTENCE.format(usd="", wakes="")
+_CONSTITUTION_BASE = CONSTITUTION[: -len(BUDGET_SENTENCE.format(usd="", wakes=""))]
+
+
+def build_constitution(budget: "WakeBudget | None") -> str:
+    """The operational prefix as configured: true under either setting."""
+    if budget is None:
+        return _CONSTITUTION_BASE + UNBUDGETED_SENTENCE
+    return _CONSTITUTION_BASE + BUDGET_SENTENCE.format(
+        usd=f" of {budget.daily_usd:.2f} USD",
+        wakes=f" of {budget.daily_wakes} wakes",
+    )
 
 
 DEFAULT_CAPABILITIES_FILE = "experiments/taste_open/capabilities.json"
@@ -411,7 +653,32 @@ def build_parser():
         "do not lower.",
     )
     parser.add_argument("--poll-interval", type=float, default=30.0)
-    parser.add_argument("--batch-limit", type=int, default=10)
+    # Budgeted by default (Tony's law: the desired behavior is the default).
+    parser.add_argument(
+        "--daily-budget-usd",
+        type=float,
+        default=5.0,
+        help="Cost ceiling per UTC day for this resident (default 5.00).",
+    )
+    parser.add_argument(
+        "--daily-wake-cap",
+        type=int,
+        default=48,
+        help="Wake-count ceiling per UTC day (default 48); unmeasured wakes count.",
+    )
+    parser.add_argument(
+        "--no-daily-budget",
+        action="store_true",
+        help="Disable both ceilings. Printed loudly at launch.",
+    )
+    parser.add_argument(
+        "--batch-limit",
+        type=int,
+        default=10,
+        help="Events per step. Ignored while a daily budget is active (then 1, "
+        "so the budget is checked before every wake); honoured under "
+        "--no-daily-budget.",
+    )
     parser.add_argument("--lock-path", default=None)
     parser.add_argument(
         "--capabilities-file",
@@ -438,6 +705,23 @@ def build_parser():
         help="Cache TTL for OpenRouter automatic prompt caching.",
     )
     return parser
+
+
+def resolve_budget(args) -> tuple[WakeBudget | None, str]:
+    """(budget or None, launch note). Disabling is loud; enabling is stated."""
+    if getattr(args, "no_daily_budget", False):
+        return None, (
+            "NO DAILY BUDGET: --no-daily-budget given; this resident's day is "
+            "unbounded in cost and wakes"
+        )
+    try:
+        budget = WakeBudget(args.daily_budget_usd, args.daily_wake_cap)
+    except ValueError as err:
+        raise SystemExit(f"daily budget: {err}") from err
+    return budget, (
+        f"daily budget: {budget.daily_usd:.2f} USD/day, "
+        f"{budget.daily_wakes} wakes/day; rests until UTC midnight when reached"
+    )
 
 
 def acquire_lock(lock_path: str):
@@ -481,6 +765,11 @@ def main() -> None:
     for note in launch_notes:
         loud = note.startswith(("SUBSTRATE CHANGE", "WAKE SHAPE CHANGE"))
         HeartbeatLoop._emit({"heartbeat": "launch", "note": ("!!! " if loud else "") + note})
+    budget, budget_note = resolve_budget(args)
+    HeartbeatLoop._emit({
+        "heartbeat": "launch",
+        "note": ("!!! " if budget is None else "") + budget_note,
+    })
     if wake_mode == "natural" and args.provider == "anthropic":
         raise SystemExit(
             "wake_mode=natural is not implemented on the Anthropic-direct "
@@ -536,7 +825,7 @@ def main() -> None:
         resume=Path(args.log_path).exists(),
         enable_tools=True,
         project_root=Path(args.project_root),
-        system_prompt_prefix=CONSTITUTION,
+        system_prompt_prefix=build_constitution(budget),
         wake_mode=wake_mode,
         launch_config={
             "model": args.model,
@@ -559,6 +848,8 @@ def main() -> None:
         store,
         poll_interval=args.poll_interval,
         batch_limit=args.batch_limit,
+        ledger=DailyLedger(args.log_path),
+        budget=budget,
     )
     try:
         loop.run_forever()

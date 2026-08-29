@@ -811,7 +811,122 @@ def resolve_requested_context(
     return results
 
 
-def build_event_envelope(event: dict, context_results: list[dict], run_id: str) -> str:
+def _format_wait(seconds: float) -> str:
+    total = max(int(seconds), 0)
+    return f"{total // 3600}h {(total % 3600) // 60}m"
+
+
+def _parse_iso_utc(value) -> datetime | None:
+    if not value:
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _rest_episodes(statuses: list[dict], now: datetime) -> list[dict]:
+    """Rest episodes from heartbeat_status records, in order.
+
+    A 'resting' record starts an episode. Later 'resting' records for the
+    same day (a restart's continuation), and the 'waking' boot record that
+    precedes such a continuation, belong to it. The episode ends at the
+    first status that is none of those; an episode with no such status is
+    open, and carries end=None.
+    """
+    episodes: list[dict] = []
+    i = 0
+    while i < len(statuses):
+        record = statuses[i]
+        if record.get("status") != "resting":
+            i += 1
+            continue
+        start = _parse_iso_utc(record.get("created_at"))
+        if start is None:
+            i += 1
+            continue
+        day = (record.get("detail") or {}).get("day")
+        j = i + 1
+        end = None
+        while j < len(statuses):
+            nxt = statuses[j]
+            same_day_rest = (
+                nxt.get("status") == "resting"
+                and (nxt.get("detail") or {}).get("day") == day
+            )
+            boot_before_rest = (
+                nxt.get("status") == "waking"
+                and j + 1 < len(statuses)
+                and statuses[j + 1].get("status") == "resting"
+                and (statuses[j + 1].get("detail") or {}).get("day") == day
+            )
+            if same_day_rest or boot_before_rest:
+                j += 1
+                continue
+            end = _parse_iso_utc(nxt.get("created_at"))
+            break
+        episodes.append({"start": start, "end": end, "detail": record.get("detail") or {},
+                         "reason": record.get("reason") or "rest"})
+        i = j if j > i else i + 1
+    return episodes
+
+
+def operational_notes_for_event(
+    records: list[dict], event: dict, *, now: datetime
+) -> list[str]:
+    """Facts about the world the resident is owed when a wake runs an event.
+
+    One note per rest episode whose interval intersects the event's pending
+    interval (created_at up to now, the moment this wake claims it). The
+    wait reported is the overlap, not total queue age. An episode still
+    open is reported as resting-since with no invented end.
+    """
+    created = _parse_iso_utc(event.get("created_at"))
+    if created is None:
+        return []
+    now = now.astimezone(timezone.utc) if now.tzinfo else now.replace(tzinfo=timezone.utc)
+    statuses = [r for r in records if r.get("record_type") == "heartbeat_status"]
+    notes: list[str] = []
+    for episode in _rest_episodes(statuses, now):
+        start, end, detail = episode["start"], episode["end"], episode["detail"]
+        effective_end = end if end is not None else now
+        if created >= effective_end or start >= now:
+            continue
+        why = []
+        cost, daily_usd = detail.get("cost_usd"), detail.get("daily_usd")
+        if isinstance(cost, (int, float)) and isinstance(daily_usd, (int, float)):
+            bound = " (lower bound)" if detail.get("cost_is_lower_bound") else ""
+            why.append(f"cost {cost:.2f}{bound} of {daily_usd:.2f} USD")
+        if detail.get("wakes") is not None:
+            why.append(f"{detail['wakes']} wakes")
+        if detail.get("unmeasured_wakes") is not None:
+            why.append(f"{detail['unmeasured_wakes']} unmeasured")
+        because = str(episode["reason"]).replace("_", " ")
+        if why:
+            because += ": " + ", ".join(why)
+        waited = _format_wait((effective_end - max(created, start)).total_seconds())
+        if end is None:
+            notes.append(
+                f"heartbeat has been resting since {start.isoformat()} ({because}); "
+                f"this event has waited {waited} of it."
+            )
+        else:
+            notes.append(
+                f"heartbeat rested from {start.isoformat()} to {end.isoformat()} "
+                f"({because}); this event waited {waited} of it."
+            )
+    return notes
+
+
+def build_event_envelope(
+    event: dict,
+    context_results: list[dict],
+    run_id: str,
+    operational_notes: list[str] | None = None,
+) -> str:
     """Build the explicit user-message envelope for a wake cycle."""
     if event.get("event_type") == EVENT_TYPE_INBOUND:
         event_instruction = (
@@ -857,6 +972,8 @@ def build_event_envelope(event: dict, context_results: list[dict], run_id: str) 
     if event.get("event_type") == EVENT_TYPE_INBOUND:
         envelope["origin"] = event.get("origin")
         envelope["sender"] = event.get("sender")
+    if operational_notes:
+        envelope["operational_notes"] = list(operational_notes)
     return json.dumps(envelope, indent=2, default=str)
 
 
@@ -1607,7 +1724,16 @@ def run_next_event(
                 prior_states=session._prior_states,
                 bridge=session._bridge,
             )
-        envelope = build_event_envelope(event, context_results, run_id)
+        envelope = build_event_envelope(
+            event,
+            context_results,
+            run_id,
+            operational_notes=operational_notes_for_event(
+                store.read_records(),
+                event,
+                now=now or datetime.now(timezone.utc),
+            ),
+        )
         before_state = _json_safe_state(getattr(session, "_state", None))
         response = session.exchange(
             envelope,
