@@ -21,7 +21,7 @@ import random
 import re
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Iterable, Protocol, cast
@@ -400,6 +400,11 @@ class ExchangeResult:
     output_tokens: int = 0
     cache_read_tokens: int = 0
     cache_creation_tokens: int = 0
+    # OpenRouter usage accounting (see OpenAITasteBackend._cost_kwargs):
+    # None means unmeasured, never free.
+    cost_usd: float | None = None
+    cost_turns_unreported: int = 0
+    generation_ids: list[str] = field(default_factory=list)
     tool_activity: list[dict] | None = None
     # Premature think_and_respond drafts held when the model bundled the
     # terminal tool with peripheral tool calls (case A in the exchange loop).
@@ -412,6 +417,26 @@ class ExchangeResult:
     # the final reply. Logged, never the response — declared, not dropped.
     interim_text: list[str] | None = None
 
+
+
+def _cost_usage_fields(result: "ExchangeResult") -> dict:
+    """Cost fields for a cycle record's usage block.
+
+    Present only when the backend reported anything (a cost, an unreported
+    turn, a generation id), so Anthropic-direct records — the elder's, every
+    experiment log's — stay byte-identical to what they were.
+    """
+    if (
+        result.cost_usd is None
+        and not result.cost_turns_unreported
+        and not result.generation_ids
+    ):
+        return {}
+    return {
+        "cost_usd": result.cost_usd,
+        "cost_turns_unreported": result.cost_turns_unreported,
+        "generation_ids": list(result.generation_ids),
+    }
 
 @dataclass
 class _ToolBlocks:
@@ -1240,8 +1265,10 @@ class OpenAITasteBackend:
         # model is asked again (up to _MAX_MALFORMED_PER_WAKE times) — the
         # reply's JSON breaking is not a reason to lose the wake.
         malformed = 0
+        responses: list[dict] = []
         while True:
             data = self._post_chat(payload)
+            responses.append(data)
 
             choice = data["choices"][0]
             raw_stop: str = choice.get("finish_reason") or "unknown"
@@ -1256,7 +1283,7 @@ class OpenAITasteBackend:
                 "tool_calls": "tool_use",
             }.get(raw_stop, raw_stop)
 
-            usage = data.get("usage", {})
+            usage = data.get("usage") or {}
             message = choice.get("message", {})
             tool_calls = message.get("tool_calls") or []
             retry_after_malformed = False
@@ -1316,6 +1343,7 @@ class OpenAITasteBackend:
                     output_tokens=usage.get("completion_tokens", 0),
                     cache_read_tokens=self._usage_cache(usage)[0],
                     cache_creation_tokens=self._usage_cache(usage)[1],
+                    **self._cost_kwargs(responses),
                 )
 
         # If there were tool calls but not our target function, fail explicitly.
@@ -1339,6 +1367,7 @@ class OpenAITasteBackend:
                     output_tokens=usage.get("completion_tokens", 0),
                     cache_read_tokens=self._usage_cache(usage)[0],
                     cache_creation_tokens=self._usage_cache(usage)[1],
+                    **self._cost_kwargs(responses),
                 )
 
         raise RuntimeError("OpenAI backend: no think_and_respond output in response")
@@ -1395,7 +1424,7 @@ class OpenAITasteBackend:
             "length": "max_tokens",
             "tool_calls": "tool_use",
         }.get(raw_stop, raw_stop)
-        usage = data.get("usage", {})
+        usage = data.get("usage") or {}
         message = choice.get("message", {})
         tool_calls = message.get("tool_calls") or []
         for tc in tool_calls:
@@ -1414,6 +1443,7 @@ class OpenAITasteBackend:
                 stop_reason=stop_reason,
                 input_tokens=usage.get("prompt_tokens", 0),
                 output_tokens=usage.get("completion_tokens", 0),
+                **self._cost_kwargs([data]),
             )
         if tool_calls:
             names = [tc.get("function", {}).get("name", "") for tc in tool_calls]
@@ -1440,6 +1470,7 @@ class OpenAITasteBackend:
                     stop_reason=stop_reason,
                     input_tokens=usage.get("prompt_tokens", 0),
                     output_tokens=usage.get("completion_tokens", 0),
+                    **self._cost_kwargs([data]),
                 )
 
         raise RuntimeError(
@@ -1469,6 +1500,7 @@ class OpenAITasteBackend:
         total_output = 0
         total_cache_read = 0
         total_cache_write = 0
+        responses: list[dict] = []
         malformed = 0
         max_turns = 20
 
@@ -1483,6 +1515,7 @@ class OpenAITasteBackend:
             self._apply_openai_payload_options(payload)
 
             data = self._post_chat(payload)
+            responses.append(data)
             choice = data["choices"][0]
             raw_stop: str = choice.get("finish_reason") or "unknown"
             if raw_stop == "length":
@@ -1496,7 +1529,7 @@ class OpenAITasteBackend:
                 "tool_calls": "tool_use",
             }.get(raw_stop, raw_stop)
 
-            usage = data.get("usage", {})
+            usage = data.get("usage") or {}
             total_input += usage.get("prompt_tokens", 0) or 0
             total_output += usage.get("completion_tokens", 0) or 0
             cache_read, cache_write = self._usage_cache(usage)
@@ -1592,6 +1625,7 @@ class OpenAITasteBackend:
                     ),
                     cache_read_tokens=total_cache_read,
                     cache_creation_tokens=total_cache_write,
+                    **self._cost_kwargs(responses),
                 )
 
             if tool_executor is None:
@@ -1652,6 +1686,7 @@ class OpenAITasteBackend:
         total_output = 0
         total_cache_read = 0
         total_cache_write = 0
+        responses: list[dict] = []
         malformed = 0
         interim_text: list[str] = []
         max_turns = 20
@@ -1668,6 +1703,7 @@ class OpenAITasteBackend:
             self._apply_openai_payload_options(payload)
 
             data = self._post_chat(payload)
+            responses.append(data)
             choice = data["choices"][0]
             raw_stop: str = choice.get("finish_reason") or "unknown"
             if raw_stop == "length":
@@ -1675,7 +1711,7 @@ class OpenAITasteBackend:
                     "OpenAI backend: finish_reason=length; the reply was "
                     "truncated and is not trusted"
                 )
-            usage = data.get("usage", {})
+            usage = data.get("usage") or {}
             total_input += usage.get("prompt_tokens", 0) or 0
             total_output += usage.get("completion_tokens", 0) or 0
             cache_read, cache_write = self._usage_cache(usage)
@@ -1713,6 +1749,7 @@ class OpenAITasteBackend:
                     interim_text=interim_text or None,
                     cache_read_tokens=total_cache_read,
                     cache_creation_tokens=total_cache_write,
+                    **self._cost_kwargs(responses),
                 )
 
             if tool_executor is None:
@@ -1814,6 +1851,9 @@ class OpenAITasteBackend:
         if self._provider_name != "openrouter":
             return
 
+        # usage accounting: cost in USD on every response, so the record
+        # knows what it spent without anyone reading a receipt.
+        payload["usage"] = {"include": True}
         provider_opts: dict[str, object] = {}
         if self._or_require_parameters:
             provider_opts["require_parameters"] = True
@@ -1867,6 +1907,34 @@ class OpenAITasteBackend:
             )
         }
 
+    @staticmethod
+    def _cost_kwargs(responses: list[dict]) -> dict:
+        """ExchangeResult cost fields from the raw responses of one wake.
+
+        OpenRouter returns usage.cost (USD) when the request carries
+        usage={"include": true}, and a generation id on every response — the
+        key /api/v1/generation needs for the authoritative billing record.
+        A turn that reports no cost is UNMEASURED, never free: cost_usd is
+        None when nothing reported, and the count of unreported turns rides
+        beside the sum otherwise.
+        """
+        total = 0.0
+        reported = 0
+        ids: list[str] = []
+        for data in responses:
+            usage = data.get("usage") if isinstance(data, dict) else None
+            cost = usage.get("cost") if isinstance(usage, dict) else None
+            if isinstance(cost, (int, float)) and not isinstance(cost, bool):
+                total += float(cost)
+                reported += 1
+            gen_id = data.get("id") if isinstance(data, dict) else None
+            if isinstance(gen_id, str) and gen_id:
+                ids.append(gen_id)
+        return {
+            "cost_usd": total if reported else None,
+            "cost_turns_unreported": len(responses) - reported,
+            "generation_ids": ids,
+        }
     @staticmethod
     def _usage_cache(usage: dict) -> tuple[int, int]:
         """(cache read tokens, cache write tokens) from an OpenAI-format usage.
@@ -2677,6 +2745,7 @@ class OpenTasteSession:
                     "cache_read_input_tokens": result.cache_read_tokens,
                     "cache_creation_input_tokens": result.cache_creation_tokens,
                     "stop_reason": result.stop_reason,
+                    **_cost_usage_fields(result),
                 },
                 scheduled_events=[],
                 failure_classification=failure_classification,
@@ -2757,6 +2826,7 @@ class OpenTasteSession:
             "cache_read_input_tokens": result.cache_read_tokens,
             "cache_creation_input_tokens": result.cache_creation_tokens,
             "stop_reason": result.stop_reason,
+            **_cost_usage_fields(result),
         }
         if repair_usage["input_tokens"] or repair_usage["output_tokens"]:
             usage["repair_input_tokens"] = repair_usage["input_tokens"]
@@ -2804,6 +2874,7 @@ class OpenTasteSession:
         self._last_usage = {
             "input_tokens": result.input_tokens + repair_usage["input_tokens"],
             "output_tokens": result.output_tokens + repair_usage["output_tokens"],
+            **_cost_usage_fields(result),
         }
         self._log_entry(
             user_message=user_message,
@@ -3046,6 +3117,7 @@ class OpenTasteSession:
                     "cache_read_input_tokens": repair_result.cache_read_tokens,
                     "cache_creation_input_tokens": repair_result.cache_creation_tokens,
                     "stop_reason": repair_result.stop_reason,
+                    **_cost_usage_fields(repair_result),
                 },
                 "validation": repair_validation,
             }
