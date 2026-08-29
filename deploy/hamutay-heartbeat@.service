@@ -1,0 +1,24 @@
+# systemd user template unit: one instance per community door.
+#   cp deploy/hamutay-heartbeat@.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now hamutay-heartbeat@heartbeat hamutay-heartbeat@fable
+#   loginctl enable-linger tony        # so it runs without a login session
+# Secrets go in ~/.config/hamutay/heartbeat.env (OPENROUTER_API_KEY=...).
+#
+# No substrate or wake-shape flags: a restart inherits what the log last ran.
+# Putting flags here would move a resident back to this file's opinion on
+# every restart, silently. The log knows what it ran.
+[Unit]
+Description=Hamutay heartbeat — community resident %i
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/tony/projects/hamutay
+EnvironmentFile=%h/.config/hamutay/heartbeat.env
+ExecStart=/home/tony/.local/bin/uv run python -m hamutay.heartbeat --log-path community/%i/session.jsonl --project-root .
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

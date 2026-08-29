@@ -24,11 +24,16 @@ be silently dropped (the incantation that kept evaporating is now baked in).
 `OPENROUTER_API_KEY` belongs in `~/.config/hamutay/heartbeat.env` (mode 600).
 
 Operations:
-- start: `deploy/run-heartbeat.sh` (or the systemd unit,
-  `deploy/hamutay-heartbeat.service`)
+- start: `deploy/run-heartbeat.sh <door>` (nohup; dies on reboot) or the systemd
+  template unit `deploy/hamutay-heartbeat@.service`, one instance per door:
+  `systemctl --user enable --now hamutay-heartbeat@heartbeat hamutay-heartbeat@fable`.
+  Neither passes substrate or wake-shape flags: a restart inherits what the log last ran.
 - speak: `uv run python -m hamutay.events send --log-path community/heartbeat/session.jsonl --message "..." --sender tony`
 - status: `uv run python -m hamutay.events report --log-path community/heartbeat/session.jsonl`
 - checkpoint: `deploy/checkpoint-community-log.sh`
+- cost: `uv run python -m hamutay.billing reconcile --log-path community/heartbeat/session.jsonl`
+  (asks OpenRouter what each wake actually cost; persists to `<log>.billing.jsonl`;
+  `hamutay.billing credits` for the account balance)
 
 Continue, not restart: deleting these logs is not an ops action; it is a
 decision about a subject, and it is Tony's alone.
