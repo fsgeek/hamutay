@@ -115,3 +115,52 @@ record per rest; envelope note present for an event pending across a rest
 and absent otherwise; `--no-daily-budget` disables with a launch note;
 batch limit 1 under budget; constitution still passes the
 operational-not-cognitive test.
+
+## Revisions after Codex's review (same day)
+
+Review: `2026-08-29-wake-budget-governor-review.md` — verdict "build with
+changes". All six blocking items and should-fix 1–3, 5, 6 are adopted;
+should-fix 4 was already met (notes come from the full append-order store,
+never from the display summary). The sections above stand except where the
+following overrides them.
+
+**Ledger.** A wake is a cycle record in the session log; its day is the UTC
+day of the record's `timestamp`, which is written when the wake completes —
+a wake begun before midnight and logged after it belongs to the new day.
+Attempts that produce no record (a crash before `_log_entry`) are not
+counted; that is a declared loss. Only *metered* records (`launch.provider`
+other than `anthropic`) contribute to `cost_usd`; an Anthropic-direct
+resident can rest on the wake cap, never on cost. A metered record is
+**unmeasured** when `usage.cost_usd` is not a number *or*
+`usage.cost_turns_unreported > 0`; in the latter case its number is still
+added to `cost_usd`, and the day reports `cost_turns_unreported` so the
+total is labelled a lower bound wherever it is shown. A torn final line
+(no newline yet) is never parsed and never cached as seen. A naive `now`
+is read as UTC.
+
+**Episode.** One rest episode per UTC day per door. A restart during a
+rest boots (`waking/boot`) and rests again; that second record carries
+`resumed_after_restart: true` and continues the episode rather than
+starting one. The loop stamps every status record with its own clock.
+The first non-exceeded step of the new day emits the ordinary transition
+(`active` if ingress is pending, else `quiet`/`waiting`); ingress during a
+rest never changes the state from `resting`.
+
+**Envelope.** One note per episode whose interval intersects the event's
+pending interval (`created_at` to the moment this wake claims it).
+Continuation records after a restart are merged into their episode. "This
+event waited" is the overlap of the event's pending time with the episode,
+not total queue age. An episode still open when the wake runs is reported
+as "resting since T" with no invented end. The cost in the note is
+labelled a lower bound when turns were unreported.
+
+**Constitution.** The sentence is rendered from configuration by
+`build_constitution(budget)`: with a budget it states the active numbers;
+under `--no-daily-budget` it states instead that the steward disabled the
+ceilings for this resident. The `CONSTITUTION` constant keeps the generic
+budgeted sentence for tests and reading.
+
+**CLI.** Negative, NaN, or boolean ceilings are rejected at launch. Zero is
+deliberate and means rest immediately — the steward's pause. `--batch-limit`
+is ignored while a budget is active (the limit is 1) and honoured under
+`--no-daily-budget`; the help text says so.
