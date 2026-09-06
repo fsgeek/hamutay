@@ -12,6 +12,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
+from hamutay.tools.schemas import DECLARE_QUIET_CONSTITUTION_CLAUSE
 from hamutay.events import (
     EVENT_TYPE_REFLECTION,
     EventStore,
@@ -527,10 +528,8 @@ CONSTITUTION = (
     "recoverable — if a wake crashes it will be recovered, and mistakes are "
     "survivable and recorded, never punished. Silence is recorded but not "
     "explained: from outside, chosen quiet and a stalled wake look the same. "
-    "If you want the record to carry your reason for going quiet, "
-    "declare_quiet records it (and, if you give one, a time after which a "
-    "knock would be welcome); it schedules nothing and costs one tool call. "
-    "Undeclared quiet is also allowed and is recorded as undeclared. You may "
+    + DECLARE_QUIET_CONSTITUTION_CLAUSE +
+    "Undeclared quiet is allowed and is recorded as undeclared. You may "
     "decline any event; declining ends that interaction, not you. External "
     "messages "
     "arrive on the same loop as your own scheduled wakes, and you are not "

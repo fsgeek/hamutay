@@ -246,3 +246,14 @@ shape from the logs and recovers nothing when nothing is running.
   whole.
 - **Consider 2 (declare + schedule).** Tested: the daemon waits, and the
   scheduled wake is told the declaration when it runs.
+
+## Validation (Codex, independent tests, 2026-09-05 late)
+
+`tests/test_quiet_declaration_validation.py` (36 tests) found three defects
+in d87fd21, fixed in the follow-up commit: a non-string `reason` was
+coerced and stored (now rejected); a supplied-but-empty `until` was read
+as absent and replaced an earlier valid declaration (now an error that
+leaves the earlier declaration intact); and the constitution named
+declare_quiet on terminal-surface wakes where the tool is not offered
+(the clause now lives with the tool in `schemas.py` and the session drops
+it from the system prompt on any wake that is not offered the tool).

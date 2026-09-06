@@ -2084,6 +2084,11 @@ def _build_messages(
     natural = wake_mode == "natural"
     system_parts = []
     if system_prefix:
+        if not declare_quiet:
+            # A wake that is not offered declare_quiet must not be told it
+            # has it (direct exchanges, terminal-surface wakes).
+            from hamutay.tools.schemas import DECLARE_QUIET_CONSTITUTION_CLAUSE
+            system_prefix = system_prefix.replace(DECLARE_QUIET_CONSTITUTION_CLAUSE, "")
         system_parts.append(system_prefix)
     system_parts.extend([_SYSTEM_PROMPT_NATURAL if natural else _SYSTEM_PROMPT, ""])
 

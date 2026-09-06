@@ -137,9 +137,9 @@ def build_quiet_declaration(
     which is the cycle record_id that becomes the completed status's
     result_record_id. An orphan (its wake never completed) is inert.
     """
-    text = str(reason if reason is not None else "").strip()
-    if not text:
-        raise ValueError("declare_quiet requires a non-empty reason")
+    if not isinstance(reason, str) or not reason.strip():
+        raise ValueError("declare_quiet requires a non-blank string reason")
+    text = reason.strip()
     record: dict = {
         "record_type": RECORD_TYPE_QUIET_DECLARATION,
         "declaration_id": str(uuid4()),
@@ -148,9 +148,13 @@ def build_quiet_declaration(
         "reason": text,
         "created_at": utc_now_iso(),
     }
-    if until:
+    if until is not None:
+        # Supplied means validated: an empty or malformed `until` is an
+        # error, not an absence (Codex validation, defect 2).
+        if not isinstance(until, str) or not until.strip():
+            raise ValueError(f"until must be an ISO-8601 instant, got {until!r}")
         try:
-            parsed = datetime.fromisoformat(str(until).replace("Z", "+00:00"))
+            parsed = datetime.fromisoformat(until.replace("Z", "+00:00"))
         except ValueError as e:
             raise ValueError(f"until must be an ISO-8601 instant, got {until!r}") from e
         if parsed.tzinfo is None:

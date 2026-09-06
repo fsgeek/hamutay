@@ -690,6 +690,16 @@ TOOL_SCHEMAS: dict[str, dict] = {
 # Deliberately NOT in TOOL_SCHEMAS: terminal mode must stay byte-for-byte
 # what the residents run today. The session adds this tool itself when
 # wake_mode == "natural".
+# The constitution's one sentence about this tool. Kept here, with the tool,
+# so the session can drop it from the system prompt on any wake where the
+# tool is not offered (direct exchanges, terminal-surface wakes): the prompt
+# never names a tool the resident does not have.
+DECLARE_QUIET_CONSTITUTION_CLAUSE = (
+    "If you want the record to carry your reason for going quiet, "
+    "declare_quiet records it (and, if you give one, a time after which a "
+    "knock would be welcome); it schedules nothing and costs one tool call. "
+)
+
 DECLARE_QUIET_SCHEMA = {
     "name": "declare_quiet",
     "description": (
