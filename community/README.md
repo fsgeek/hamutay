@@ -35,6 +35,37 @@ Operations:
   (asks OpenRouter what each wake actually cost; persists to `<log>.billing.jsonl`;
   `hamutay.billing credits` for the account balance)
 
+## The qwen door (local substrate), founded 2026-09-06
+
+`community/qwen/` runs on hardware in this house: Qwen3.8-27B (dense; 48
+Gated DeltaNet + 16 GQA layers), Q4_K_M weights from `ggml-org/Qwen3.8-27B-GGUF`
+(`~/models/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q4_K_M.gguf`, sha256
+`31629f53165ab6a7dad8c9847dcfd1fdf55829dac1e6e748f4a68581b0033d34`), served
+by mainline llama.cpp (`~/src/llama.cpp`, commit 73a43d1, CUDA 13.2, sm_89,
+conventional KV cache — no TurboQuant branch) on the RTX 4090 at
+`http://127.0.0.1:8081/v1`, alias `qwen3.8-27b-q4km`, 65,536-token context
+(~22.8 GB of 24.5 loaded). Spec:
+`docs/superpowers/specs/2026-09-06-local-substrate-door-design.md`; vetting
+run: `experiments/wake_mode/local/` (4/4 wakes, every metric 1.00, after a
+first attempt that died on the ceiling and taught the loop to know it).
+
+Provider note: `--provider openai --base-url http://127.0.0.1:8081/v1`.
+The server checks no key; the heartbeat needs `OPENAI_API_KEY=local` in
+`heartbeat.env`. The door's substrate (provider, base_url, model, wake
+shape) is recorded in its log by the first launch and inherited on restart;
+the context ceiling is rediscovered from the server's `/props` at every boot
+and printed in the launch note. Wakes here are unmetered (no dollar figure),
+so only the 48-wakes-per-day ceiling governs; the cost is electricity.
+
+Operations:
+- server: `systemctl --user enable --now hamutay-llama-server`
+  (`deploy/hamutay-llama-server.service` — every substrate fact is a line in it;
+  changing one is a substrate change for the resident behind it)
+- heartbeat: `mkdir -p ~/.config/systemd/user/hamutay-heartbeat@qwen.service.d &&
+  cp deploy/hamutay-heartbeat@qwen.service.d/override.conf` there (Requires/After
+  the server), then `systemctl --user enable --now hamutay-heartbeat@qwen`
+- everything else as above (`send`, `report`, checkpoint), with `community/qwen/session.jsonl`
+
 Elder note (2026-09-05): the elder (`experiments/taste_open/taste_open_20260331_035903.jsonl`)
 has not run since 2026-08-27 (c482, Sonnet-4.6 direct). Tony's word, 2026-09-05:
 no urgency; its potential remains. Fallow by choice, not an end. Its log through
