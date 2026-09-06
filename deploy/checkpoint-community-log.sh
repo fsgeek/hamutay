@@ -15,29 +15,38 @@ if ! git diff --cached --quiet; then
   exit 1
 fi
 
-ledger=community/heartbeat/CHECKPOINTS.txt
-mkdir -p community/heartbeat
-
+# One ledger per door: community/<door>/CHECKPOINTS.txt. Every door's
+# JSONL logs (session, events, billing) are digested; the logs themselves
+# stay gitignored (selective legibility: sequence provable, substance private).
 shopt -s nullglob
-logs=(community/heartbeat/*.jsonl)
-if [ ${#logs[@]} -eq 0 ]; then
+doors=()
+for d in community/*/; do
+  d=${d%/}
+  logs=("$d"/*.jsonl)
+  [ ${#logs[@]} -gt 0 ] && doors+=("$d")
+done
+if [ ${#doors[@]} -eq 0 ]; then
   echo "no community logs yet; nothing to checkpoint" >&2
   exit 0
 fi
-
 snapdir=$(mktemp -d)
 trap 'rm -rf "$snapdir"' EXIT
-line="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-for log in "${logs[@]}"; do
-  snap="$snapdir/$(basename "$log")"
-  cp "$log" "$snap"
-  digest=$(sha256sum "$snap" | cut -d' ' -f1)
-  bytes=$(stat -c%s "$snap")
-  line+=" $(basename "$log"):$digest:$bytes"
+stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+ledgers=()
+for d in "${doors[@]}"; do
+  ledger="$d/CHECKPOINTS.txt"
+  line="$stamp"
+  for log in "$d"/*.jsonl; do
+    snap="$snapdir/$(basename "$log")"
+    cp "$log" "$snap"
+    digest=$(sha256sum "$snap" | cut -d' ' -f1)
+    bytes=$(stat -c%s "$snap")
+    line+=" $(basename "$log"):$digest:$bytes"
+  done
+  echo "$line" >> "$ledger"
+  ledgers+=("$ledger")
 done
-echo "$line" >> "$ledger"
-
-git add "$ledger"
+git add "${ledgers[@]}"
 git -c user.email=hamutay@wamason.com -c user.name="Tony Mason" \
     -c user.signingkey=01193FA2631C8AE8E4DF266E216D3C9B920813A1 \
-    commit -S -m "community: checkpoint heartbeat log digests"
+    commit -S -m "community: checkpoint log digests ($(IFS=,; echo "${doors[*]#community/}"))"

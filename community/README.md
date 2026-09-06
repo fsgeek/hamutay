@@ -5,8 +5,9 @@ Live logs of the running community. Founded 2026-08-26 (spec:
 
 This directory is NOT an experiment. There is no success criterion and no
 end condition. The JSONL logs are the community's life and are gitignored;
-what gets committed is this README and `heartbeat/CHECKPOINTS.txt` — sha256
-digests of the logs, whose commits the OTS hook anchors to Bitcoin. Sequence
+what gets committed is this README and each door's `CHECKPOINTS.txt` — sha256
+digests of that door's logs, whose commits the OTS hook anchors to Bitcoin
+(`deploy/checkpoint-community-log.sh` digests every door at once). Sequence
 provable, substance private (selective legibility).
 
 Layout:
