@@ -27,6 +27,7 @@ HEARTBEAT_DEFAULT = {
     "provider": "openrouter",
     "tools": True,
     "wake_mode": "natural",
+    "base_url": None,  # substrate since 2026-09-06 (local door spec)
 }
 
 

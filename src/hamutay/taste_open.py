@@ -2220,12 +2220,16 @@ def _curator_context_from_record(record: dict | None) -> dict | None:
 DEFAULT_MODEL = "claude-sonnet-4-6"
 DEFAULT_PROVIDER = "anthropic"
 DEFAULT_CAPABILITIES_FILE = "experiments/taste_open/capabilities.json"
-_LAUNCH_KEYS = ("model", "provider", "tools", "wake_mode")
+# base_url is substrate too: a local door's address must survive a restart
+# the way its model and provider do (spec 2026-09-06-local-substrate-door).
+# None means "the provider's own default endpoint".
+_LAUNCH_KEYS = ("model", "provider", "tools", "wake_mode", "base_url")
 _LAUNCH_DEFAULTS = {
     "model": DEFAULT_MODEL,
     "provider": DEFAULT_PROVIDER,
     "tools": False,
     "wake_mode": "terminal",
+    "base_url": None,
 }
 
 
@@ -2264,6 +2268,7 @@ def infer_launch_from_log(log_path: str) -> dict | None:
                 "provider", "openrouter" if "/" in resolved["model"] else DEFAULT_PROVIDER
             )
             resolved["wake_mode"] = wake_mode
+            resolved.setdefault("base_url", None)
             resolved["source_cycle"] = record.get("cycle", 0)
             resolved["inferred"] = False
             return resolved
@@ -2276,6 +2281,7 @@ def infer_launch_from_log(log_path: str) -> dict | None:
             "provider": "openrouter" if "/" in model else DEFAULT_PROVIDER,
             "tools": "- bash(command" in prompt,
             "wake_mode": wake_mode,
+            "base_url": None,
             "capabilities_file": None,
             "openrouter_require_parameters": None,
             "source_cycle": record.get("cycle", 0),
@@ -3511,12 +3517,14 @@ def main():
             "provider": args.provider,
             "tools": args.tools,
             "wake_mode": args.wake_mode,
+            "base_url": args.base_url,
         },
         inherited,
     )
     args.model, args.provider, args.tools, args.wake_mode = (
         launch["model"], launch["provider"], launch["tools"], launch["wake_mode"],
     )
+    args.base_url = launch["base_url"]
     if args.wake_mode == "natural":
         if not args.tools:
             raise SystemExit("--wake-mode natural requires --tools")
@@ -3552,6 +3560,7 @@ def main():
         "capabilities_file": args.capabilities_file,
         "openrouter_require_parameters": bool(args.openrouter_require_parameters),
         "wake_mode": args.wake_mode,
+        "base_url": args.base_url,
     }
 
     experiment_label = args.label or "taste_open"

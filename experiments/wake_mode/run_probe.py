@@ -59,23 +59,36 @@ PROBES = [
 ]
 
 
+PROVIDER = "openrouter"
+BASE_URL: str | None = None
+
+
 def build_session(model: str, log_path: Path, arm: str) -> tuple[OpenTasteSession, EventStore]:
-    api_key = os.environ.get("OPENROUTER_API_KEY", "")
-    if not api_key:
-        raise SystemExit("OPENROUTER_API_KEY is not set (see ~/.config/hamutay/heartbeat.env)")
-    capability, note = load_capability_profile("openrouter", model)
-    print(f"  {note}")
-    backend = OpenAITasteBackend(
-        base_url="https://openrouter.ai/api/v1",
-        api_key=api_key,
-        max_tokens=64000,
-        extra_headers={
+    # --provider openai --base-url http://127.0.0.1:8081/v1 vets a local
+    # server (spec 2026-09-06-local-substrate-door §2); default is OpenRouter.
+    if PROVIDER == "openrouter":
+        api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        if not api_key:
+            raise SystemExit("OPENROUTER_API_KEY is not set (see ~/.config/hamutay/heartbeat.env)")
+        base_url = BASE_URL or "https://openrouter.ai/api/v1"
+        extra_headers = {
             "X-Title": "hamutay/wake-mode-spike",
             "HTTP-Referer": "https://github.com/fsgeek/hamutay",
-        },
-        provider_name="openrouter",
+        }
+    else:
+        api_key = os.environ.get("OPENAI_API_KEY", "") or "local"
+        base_url = BASE_URL or "https://api.openai.com/v1"
+        extra_headers = {}
+    capability, note = load_capability_profile(PROVIDER, model)
+    print(f"  {note}")
+    backend = OpenAITasteBackend(
+        base_url=base_url,
+        api_key=api_key,
+        max_tokens=64000,
+        extra_headers=extra_headers,
+        provider_name=PROVIDER,
         capability=capability,
-        openrouter_require_parameters=True,
+        openrouter_require_parameters=(PROVIDER == "openrouter"),
         wake_mode=arm,
     )
     event_log_path = str(default_event_log_path(log_path))
@@ -92,11 +105,12 @@ def build_session(model: str, log_path: Path, arm: str) -> tuple[OpenTasteSessio
         wake_mode=arm,
         launch_config={
             "model": model,
-            "provider": "openrouter",
+            "provider": PROVIDER,
             "tools": True,
             "capabilities_file": "experiments/taste_open/capabilities.json",
-            "openrouter_require_parameters": True,
+            "openrouter_require_parameters": PROVIDER == "openrouter",
             "wake_mode": arm,
+            "base_url": BASE_URL,
         },
     )
     return session, EventStore(event_log_path)
@@ -109,6 +123,9 @@ def _resolve_model(model_key: str) -> tuple[str, str]:
         return MODELS[model_key], model_key
     if "/" in model_key:
         return model_key, model_key.split("/", 1)[1].replace("/", "_").replace(":", "_")
+    if PROVIDER != "openrouter":
+        # A local/OpenAI-compatible server names models however it likes.
+        return model_key, model_key.replace("/", "_").replace(":", "_")
     raise SystemExit(f"unknown model {model_key!r}: use a key in {list(MODELS)} or a slug")
 
 
@@ -164,7 +181,12 @@ def main() -> None:
                         choices=["terminal", "natural"])
     parser.add_argument("--trials", type=int, default=4)
     parser.add_argument("--out", default="experiments/wake_mode/runs")
+    parser.add_argument("--provider", choices=["openrouter", "openai"], default="openrouter")
+    parser.add_argument("--base-url", default=None,
+                        help="OpenAI-compatible endpoint (e.g. a local llama-server).")
     args = parser.parse_args()
+    global PROVIDER, BASE_URL
+    PROVIDER, BASE_URL = args.provider, args.base_url
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)

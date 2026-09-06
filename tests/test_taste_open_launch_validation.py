@@ -67,6 +67,7 @@ def test_recorded_launch_defaults_missing_provider_and_tools(tmp_path: Path) -> 
         "tools": False,
         "source_cycle": 12,
         "wake_mode": "terminal",
+        "base_url": None,
         "inferred": False,
     }
 
@@ -93,6 +94,7 @@ def test_empty_recorded_launch_model_falls_back_to_legacy_inference(
         "openrouter_require_parameters": None,
         "source_cycle": 13,
         "wake_mode": "terminal",
+        "base_url": None,
         "inferred": True,
     }
 

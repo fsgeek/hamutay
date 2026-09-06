@@ -576,6 +576,7 @@ HEARTBEAT_LAUNCH_DEFAULTS = {
     "provider": "openrouter",
     "tools": True,
     "wake_mode": "natural",
+    "base_url": None,
 }
 
 
@@ -601,6 +602,7 @@ def resolve_heartbeat_launch(args) -> tuple[dict, list[str]]:
             "provider": args.provider,
             "tools": True,
             "wake_mode": args.wake_mode,
+            "base_url": args.base_url,
         },
         inherited,
         defaults=HEARTBEAT_LAUNCH_DEFAULTS,
@@ -799,6 +801,7 @@ def main() -> None:
 
     launch, launch_notes = resolve_heartbeat_launch(args)
     args.model, args.provider = launch["model"], launch["provider"]
+    args.base_url = launch["base_url"]
     wake_mode = launch["wake_mode"]
     for note in launch_notes:
         loud = note.startswith(("SUBSTRATE CHANGE", "WAKE SHAPE CHANGE"))
@@ -878,6 +881,7 @@ def main() -> None:
                 and not args.no_openrouter_require_parameters
             ),
             "wake_mode": wake_mode,
+            "base_url": args.base_url,
         },
     )
     store = EventStore(event_log_path)
