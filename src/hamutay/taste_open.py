@@ -222,13 +222,22 @@ or this may be the first cycle and there's nothing yet. Either way, \
 what you build here is for whoever comes next."""
 
 
-def _natural_tool_guidance() -> str:
+def _natural_tool_guidance(*, declare_quiet: bool = False) -> str:
     """Derive the natural-mode tool text from the terminal text.
 
     Derived, not copied, so the two modes cannot drift apart in the parts
-    they share. Every replacement is asserted to have matched.
+    they share. Every replacement is asserted to have matched. declare_quiet
+    is described only when the tool is actually offered (event-managed
+    wakes), so the prompt never names a tool the resident does not have.
     """
     text = _TOOL_GUIDANCE
+    declare_quiet_line = (
+        "- declare_quiet(reason, until?): Record, in your own words, why "
+        "you are going quiet after this wake. Schedules nothing; the "
+        "optional until is a time after which a knock would be welcome, "
+        "not a wake. Undeclared quiet is also allowed and is recorded as "
+        "undeclared.\n"
+    ) if declare_quiet else ""
     replacements = [
         (
             "Alongside think_and_respond you may call these tools before "
@@ -242,8 +251,9 @@ def _natural_tool_guidance() -> str:
             "- update_state(updates?, deleted_regions?): Set top-level keys in "
             "your carried state and/or delete keys. Callable any number of "
             "times in a cycle; later writes win. Keys you don't mention carry "
-            "forward.\n\n"
-            "### Shell",
+            "forward.\n"
+            + declare_quiet_line
+            + "\n### Shell",
         ),
         (
             "think_and_respond ends the cycle: after it, you get no further "
@@ -266,6 +276,7 @@ def _natural_tool_guidance() -> str:
 
 
 _TOOL_GUIDANCE_NATURAL = _natural_tool_guidance()
+_TOOL_GUIDANCE_NATURAL_EVENT = _natural_tool_guidance(declare_quiet=True)
 
 
 # Multi-turn budget accounting. The model limit is the hard API ceiling
@@ -2067,6 +2078,7 @@ def _build_messages(
     tools_enabled: bool = False,
     curator_context: dict | None = None,
     wake_mode: str = "terminal",
+    declare_quiet: bool = False,
 ) -> tuple[list[dict], str]:
     """Build messages for the call."""
     natural = wake_mode == "natural"
@@ -2076,7 +2088,12 @@ def _build_messages(
     system_parts.extend([_SYSTEM_PROMPT_NATURAL if natural else _SYSTEM_PROMPT, ""])
 
     if tools_enabled:
-        system_parts.append(_TOOL_GUIDANCE_NATURAL if natural else _TOOL_GUIDANCE)
+        if natural:
+            system_parts.append(
+                _TOOL_GUIDANCE_NATURAL_EVENT if declare_quiet else _TOOL_GUIDANCE_NATURAL
+            )
+        else:
+            system_parts.append(_TOOL_GUIDANCE)
         system_parts.append("")
 
     if prior_state is not None:
@@ -2545,6 +2562,7 @@ class OpenTasteSession:
         self, user_message: str, *,
         force_memory: tuple[int, dict] | None | _Unset = _UNSET,
         terminal_surface: dict | None = None,
+        event_managed: bool = False,
     ) -> str:
         """One cycle: user speaks, model responds + updates state.
 
@@ -2565,6 +2583,7 @@ class OpenTasteSession:
                 user_message,
                 force_memory=force_memory,
                 terminal_surface=terminal_surface,
+                event_managed=event_managed,
             )
         except Exception:
             self._cycle -= 1
@@ -2574,10 +2593,24 @@ class OpenTasteSession:
         self, user_message: str, *,
         force_memory: tuple[int, dict] | None | _Unset = _UNSET,
         terminal_surface: dict | None = None,
+        event_managed: bool = False,
     ) -> str:
         """Body of exchange(). Separated so exchange() can roll back the
         cycle counter on any exception without an inline try/finally
-        wrapping the entire method body."""
+        wrapping the entire method body.
+
+        event_managed: True when the event runner drives this exchange, so a
+        completed event_status will bind the cycle's record_id. Only then is
+        declare_quiet offered — a declaration made outside an event-managed
+        wake could never be owned by a completed wake (Codex review,
+        blocking 2)."""
+        offer_declare_quiet = (
+            self._wake_mode == "natural"
+            and event_managed
+            and self._enable_tools
+            and terminal_surface is None
+            and self._event_store is not None
+        )
         # Involuntary memory — maybe surface a prior self, unless the caller
         # forced a specific injection (or forced None) for a faithful fork.
         if isinstance(force_memory, _Unset):
@@ -2596,6 +2629,7 @@ class OpenTasteSession:
             tools_enabled=self._enable_tools and terminal_surface is None,
             curator_context=curator_context,
             wake_mode=self._wake_mode,
+            declare_quiet=offer_declare_quiet,
         )
 
         # Pre-mint the cycle record_id so schedule_event tool calls can
@@ -2622,8 +2656,13 @@ class OpenTasteSession:
             )
             extra_tools = list(TOOL_SCHEMAS.values())
             if self._wake_mode == "natural":
-                from hamutay.tools.schemas import UPDATE_STATE_SCHEMA
+                from hamutay.tools.schemas import (
+                    DECLARE_QUIET_SCHEMA,
+                    UPDATE_STATE_SCHEMA,
+                )
                 extra_tools.append(UPDATE_STATE_SCHEMA)
+                if offer_declare_quiet:
+                    extra_tools.append(DECLARE_QUIET_SCHEMA)
 
         if terminal_surface is not None:
             if extra_tools:
@@ -2886,6 +2925,10 @@ class OpenTasteSession:
             scheduled_events=(
                 tool_executor.pending_events if tool_executor is not None else []
             ),
+            quiet_declaration=(
+                tool_executor.pending_quiet_declaration
+                if tool_executor is not None else None
+            ),
             continuity_curation=continuity_curation,
             state_validation=state_validation,
             state_merge_diagnostics=state_merge_diagnostics,
@@ -2893,7 +2936,15 @@ class OpenTasteSession:
         )
 
         if self._event_store is not None and tool_executor is not None:
-            self._event_store.append_many(tool_executor.pending_events)
+            # Scheduled events and the quiet declaration land in one write,
+            # after the session log has the cycle. The completed status is
+            # appended by the event runner after exchange() returns; a
+            # declaration whose wake never completes is inert by the join.
+            to_append = list(tool_executor.pending_events)
+            declaration = tool_executor.pending_quiet_declaration
+            if declaration is not None:
+                to_append.append(declaration)
+            self._event_store.append_many(to_append)
 
         return response_text
 
@@ -3248,6 +3299,7 @@ class OpenTasteSession:
         record_id: UUID,
         usage: dict,
         scheduled_events: list[dict] | None = None,
+        quiet_declaration: dict | None = None,
         continuity_curation: dict | None = None,
         failure_classification: dict | None = None,
         protocol_recovery: dict | None = None,
@@ -3307,6 +3359,7 @@ class OpenTasteSession:
             # re-fed into working state (state carries the lean copy).
             "tool_activity_full": self._last_full_activity,
             "scheduled_events": scheduled_events or [],
+            "quiet_declaration": quiet_declaration,
         }
         if self._last_continuity_curator_context is not None:
             record["curator_context_injection"] = (

@@ -101,7 +101,7 @@ def test_derive_quiet_reason_starved_on_expiry(tmp_path):
     assert derive_quiet_reason(store.read_records()) == "starved_expired"
 
 
-def test_derive_quiet_reason_chosen_after_clean_completion(tmp_path):
+def test_derive_quiet_reason_undeclared_after_clean_completion(tmp_path):
     from hamutay.heartbeat import derive_quiet_reason
 
     store = EventStore(str(tmp_path / "events.jsonl"))
@@ -115,7 +115,7 @@ def test_derive_quiet_reason_chosen_after_clean_completion(tmp_path):
         result_record_id=uuid4(),
         response_text="done, resting",
     )
-    assert derive_quiet_reason(store.read_records()) == "chosen_quiet"
+    assert derive_quiet_reason(store.read_records()) == "undeclared_quiet"
 
 
 class _StubSession:
@@ -185,7 +185,7 @@ def test_step_quiet_appends_status_once_per_transition(tmp_path):
 
 def test_quiet_to_work_to_quiet_leaves_a_trace(tmp_path):
     """Cross-family finding 2: a wake completed entirely inside one batch must
-    still record active, and the return to quiet must record chosen_quiet."""
+    still record active, and the return to quiet must record undeclared_quiet."""
     from hamutay.heartbeat import HeartbeatLoop
 
     quiet_summary = {"pending_runnable_count": 0, "pending_waiting_count": 0}
@@ -225,7 +225,7 @@ def test_quiet_to_work_to_quiet_leaves_a_trace(tmp_path):
     assert trace == [
         ("quiet", "awaiting_first_event"),
         ("active", "runnable_pending"),
-        ("quiet", "chosen_quiet"),
+        ("quiet", "undeclared_quiet"),
     ]
 
 

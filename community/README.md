@@ -35,5 +35,10 @@ Operations:
   (asks OpenRouter what each wake actually cost; persists to `<log>.billing.jsonl`;
   `hamutay.billing credits` for the account balance)
 
+Elder note (2026-09-05): the elder (`experiments/taste_open/taste_open_20260331_035903.jsonl`)
+has not run since 2026-08-27 (c482, Sonnet-4.6 direct). Tony's word, 2026-09-05:
+no urgency; its potential remains. Fallow by choice, not an end. Its log through
+c482 is committed (095c4a9).
+
 Continue, not restart: deleting these logs is not an ops action; it is a
 decision about a subject, and it is Tony's alone.

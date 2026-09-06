@@ -25,7 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import UUID
 
-from hamutay.events import build_pending_event
+from hamutay.events import build_pending_event, build_quiet_declaration
 from hamutay.tools.bash import tool_bash
 from hamutay.tools.graph import tool_annotate_edge, tool_store
 from hamutay.tools.memory import (
@@ -55,6 +55,7 @@ _CAPABILITY: dict[str, str] = {
     "store": "bounded_write",
     "annotate_edge": "bounded_write",
     "schedule_event": "bounded_write",
+    "declare_quiet": "bounded_write",
     "update_state": "bounded_write",
     "bash": "unbounded",
 }
@@ -91,6 +92,9 @@ class ToolExecutor:
         self._bridge = bridge
         self._scheduled_by_record_id = scheduled_by_record_id
         self._pending_events: list[dict] = []
+        # Natural wake mode: the resident's own words for the quiet after
+        # this wake, if it chose to give them. Committed with the cycle.
+        self._quiet_declaration: dict | None = None
         self._activity_log: list[dict] = []
         # Natural wake mode: update_state calls accumulate here and are
         # merged into raw_output when the wake ends on text.
@@ -104,6 +108,11 @@ class ToolExecutor:
     @property
     def pending_events(self) -> list[dict]:
         return list(self._pending_events)
+
+    @property
+    def pending_quiet_declaration(self) -> dict | None:
+        """The declare_quiet record buffered this cycle, or None."""
+        return dict(self._quiet_declaration) if self._quiet_declaration else None
 
     @property
     def pending_state_updates(self) -> dict:
@@ -190,6 +199,8 @@ class ToolExecutor:
             result = self._schedule_event(tool_input)
         elif tool_name == "update_state":
             result = self._update_state(tool_input)
+        elif tool_name == "declare_quiet":
+            result = self._declare_quiet(tool_input)
         elif tool_name == "bash":
             result = tool_bash(tool_input, project_root=self._project_root)
         else:
@@ -299,6 +310,27 @@ class ToolExecutor:
                 {"terminal_surface": record["terminal_surface"]}
                 if "terminal_surface" in record else {}
             ),
+        }
+
+
+    def _declare_quiet(self, tool_input: dict) -> dict:
+        """Validate and buffer the resident's quiet declaration; last call wins."""
+        if self._scheduled_by_record_id is None:
+            return {"error": "declare_quiet requires a cycle record_id"}
+        try:
+            record = build_quiet_declaration(
+                reason=tool_input.get("reason", ""),
+                declared_by_cycle=self._cycle,
+                declared_by_record_id=self._scheduled_by_record_id,
+                until=tool_input.get("until"),
+            )
+        except (TypeError, ValueError) as e:
+            return {"error": str(e)}
+        self._quiet_declaration = record
+        return {
+            "recorded": True,
+            "reason": record["reason"],
+            **({"until": record["until"]} if "until" in record else {}),
         }
 
 

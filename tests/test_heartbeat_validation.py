@@ -347,9 +347,9 @@ def test_ingress_racing_with_the_queue_probe_still_leaves_a_wake_trace(tmp_path)
         for record in store.read_records()
         if record.get("record_type") == "heartbeat_status"
     ] == [
-        ("quiet", "chosen_quiet"),
+        ("quiet", "undeclared_quiet"),
         ("active", "runnable_pending"),
-        ("quiet", "chosen_quiet"),
+        ("quiet", "undeclared_quiet"),
     ]
     assert raced_event is not None
     assert store.latest_by_event_id()[raced_event["event_id"]]["status"] == "completed"

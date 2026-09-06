@@ -690,6 +690,35 @@ TOOL_SCHEMAS: dict[str, dict] = {
 # Deliberately NOT in TOOL_SCHEMAS: terminal mode must stay byte-for-byte
 # what the residents run today. The session adds this tool itself when
 # wake_mode == "natural".
+DECLARE_QUIET_SCHEMA = {
+    "name": "declare_quiet",
+    "description": (
+        "Record, in your own words, why you are going quiet after this wake. "
+        "It schedules nothing: a wake you want later is schedule_event's job. "
+        "Undeclared quiet is also allowed and is recorded as undeclared. One "
+        "declaration per wake; a later call replaces an earlier one. The next "
+        "wake is told what you declared and how long the quiet lasted."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "reason": {
+                "type": "string",
+                "description": "Why you are going quiet. Recorded durably.",
+            },
+            "until": {
+                "type": "string",
+                "description": (
+                    "Optional ISO-8601 instant after which a knock would be "
+                    "welcome. Informational only; it does not wake you."
+                ),
+            },
+        },
+        "required": ["reason"],
+    },
+}
+
+
 UPDATE_STATE_SCHEMA = {
     "name": "update_state",
     "description": (

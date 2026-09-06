@@ -120,6 +120,111 @@ def validate_requested_context(requests: object) -> list[dict]:
     return json.loads(json.dumps(validated, default=str))
 
 
+RECORD_TYPE_QUIET_DECLARATION = "quiet_declaration"
+
+
+def build_quiet_declaration(
+    *,
+    reason: str,
+    declared_by_cycle: int,
+    declared_by_record_id: UUID | str,
+    until: str | None = None,
+) -> dict:
+    """A resident's own words for why it is going quiet after a wake.
+
+    Not an event: no event_id, no status lifecycle, schedules nothing. The
+    record binds to the wake that made it through declared_by_record_id,
+    which is the cycle record_id that becomes the completed status's
+    result_record_id. An orphan (its wake never completed) is inert.
+    """
+    text = str(reason if reason is not None else "").strip()
+    if not text:
+        raise ValueError("declare_quiet requires a non-empty reason")
+    record: dict = {
+        "record_type": RECORD_TYPE_QUIET_DECLARATION,
+        "declaration_id": str(uuid4()),
+        "declared_by_cycle": int(declared_by_cycle),
+        "declared_by_record_id": str(declared_by_record_id),
+        "reason": text,
+        "created_at": utc_now_iso(),
+    }
+    if until:
+        try:
+            parsed = datetime.fromisoformat(str(until).replace("Z", "+00:00"))
+        except ValueError as e:
+            raise ValueError(f"until must be an ISO-8601 instant, got {until!r}") from e
+        if parsed.tzinfo is None:
+            raise ValueError(
+                f"until must carry a timezone (an instant, not a wall time), got {until!r}"
+            )
+        record["until"] = str(until)
+    return record
+
+
+def latest_wake_outcome(records: list[dict]) -> dict | None:
+    """The most recent wake outcome (completed or failed), by append order."""
+    outcomes = [
+        r for r in records
+        if r.get("record_type") == "event_status"
+        and r.get("status") in ("completed", "failed")
+    ]
+    return outcomes[-1] if outcomes else None
+
+
+def latest_completed_wake(records: list[dict]) -> dict | None:
+    """The most recent completed event_status, by append order."""
+    completed = [
+        r for r in records
+        if r.get("record_type") == "event_status" and r.get("status") == "completed"
+    ]
+    return completed[-1] if completed else None
+
+
+def quiet_declaration_for_latest_wake(records: list[dict]) -> dict | None:
+    """The declaration made by the most recent wake, if that wake completed
+    and declared.
+
+    Joined on result_record_id == declared_by_record_id, so append order
+    does not matter and a declaration from an earlier wake does not carry
+    over a later wake that said nothing. A later FAILED wake also ends the
+    declaration's authority: the quiet that follows a failure is not the
+    quiet the resident described (Codex review, blocking 3).
+    """
+    latest = latest_wake_outcome(records)
+    if latest is None or latest.get("status") != "completed":
+        return None
+    rid = str(latest.get("result_record_id"))
+    matches = [
+        r for r in records
+        if r.get("record_type") == RECORD_TYPE_QUIET_DECLARATION
+        and str(r.get("declared_by_record_id")) == rid
+    ]
+    return matches[-1] if matches else None
+
+
+def joined_quiet_declarations(records: list[dict]) -> tuple[list[dict], int]:
+    """(declarations whose wake completed, count of orphans).
+
+    An orphan is a declaration whose declared_by_record_id matches no
+    completed result_record_id: its wake crashed or was never event-managed.
+    It stays in the log (append-only) and binds nothing.
+    """
+    completed_ids = {
+        str(r.get("result_record_id"))
+        for r in records
+        if r.get("record_type") == "event_status" and r.get("status") == "completed"
+    }
+    joined, orphans = [], 0
+    for r in records:
+        if r.get("record_type") != RECORD_TYPE_QUIET_DECLARATION:
+            continue
+        if str(r.get("declared_by_record_id")) in completed_ids:
+            joined.append(r)
+        else:
+            orphans += 1
+    return joined, orphans
+
+
 def build_pending_event(
     *,
     purpose: str,
@@ -816,6 +921,14 @@ def _format_wait(seconds: float) -> str:
     return f"{total // 3600}h {(total % 3600) // 60}m"
 
 
+def _format_span(seconds: float) -> str:
+    """Like _format_wait, but days first once a span passes a day."""
+    total = max(int(seconds), 0)
+    if total < 86400:
+        return _format_wait(total)
+    return f"{total // 86400}d {(total % 86400) // 3600}h"
+
+
 def _parse_iso_utc(value) -> datetime | None:
     if not value:
         return None
@@ -918,6 +1031,32 @@ def operational_notes_for_event(
                 f"heartbeat rested from {start.isoformat()} to {end.isoformat()} "
                 f"({because}); this event waited {waited} of it."
             )
+    declaration = quiet_declaration_for_latest_wake(records)
+    if declaration is not None:
+        # The quiet began when the declaring wake completed, not when the
+        # tool was called, and ends when this event was claimed (its running
+        # record), not at the scheduler's batch timestamp.
+        declaring_wake = latest_wake_outcome(records)
+        quiet_from = _parse_iso_utc((declaring_wake or {}).get("completed_at"))
+        claimed = [
+            r for r in records
+            if r.get("record_type") == "event_status"
+            and r.get("event_id") == event.get("event_id")
+            and r.get("status") == "running"
+        ]
+        quiet_to = _parse_iso_utc(claimed[-1].get("started_at")) if claimed else now
+        note = (
+            f"Your cycle {declaration.get('declared_by_cycle')} declared quiet on "
+            f"{declaration.get('created_at')}: \"{declaration.get('reason')}\""
+        )
+        if declaration.get("until"):
+            note += f" (until {declaration['until']})"
+        if quiet_from is not None and quiet_to is not None and quiet_to >= quiet_from:
+            lasted = _format_span((quiet_to - quiet_from).total_seconds())
+            note += f". This wake ends that quiet after {lasted}."
+        else:
+            note += ". This wake ends that quiet."
+        notes.append(note)
     return notes
 
 
@@ -1414,7 +1553,19 @@ def summarize_event_log(
         reverse=True,
     )
 
+    quiet_declarations, orphan_quiet_declarations = joined_quiet_declarations(records)
+    heartbeat_statuses = [
+        record for record in records
+        if record.get("record_type") == "heartbeat_status"
+    ]
     return {
+        "latest_quiet_declaration": (
+            quiet_declarations[-1] if quiet_declarations else None
+        ),
+        "orphan_quiet_declaration_count": orphan_quiet_declarations,
+        "latest_heartbeat_status": (
+            heartbeat_statuses[-1] if heartbeat_statuses else None
+        ),
         "record_count": len(records),
         "event_count": len(events),
         "status_counts": dict(sorted(status_counts.items())),
@@ -1474,6 +1625,29 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
         f"{status}={count}" for status, count in status_counts.items()
     ) or "none"
     lines.append(f"Statuses: {status_text}")
+    heartbeat = report.get("latest_heartbeat_status")
+    if heartbeat:
+        lines.append(
+            f"Heartbeat: {heartbeat.get('status')} ({heartbeat.get('reason')}) "
+            f"since {heartbeat.get('created_at')}"
+        )
+    declaration = report.get("latest_quiet_declaration")
+    if declaration:
+        words = str(declaration.get("reason", ""))
+        if len(words) > 400:
+            words = words[:400] + "…"
+        line = (
+            f"Quiet declared by cycle {declaration.get('declared_by_cycle')}: "
+            f"\"{words}\""
+        )
+        if declaration.get("until"):
+            line += f" until {declaration['until']}"
+        lines.append(line)
+    if report.get("orphan_quiet_declaration_count"):
+        lines.append(
+            f"Orphan quiet declarations (wake never completed): "
+            f"{report['orphan_quiet_declaration_count']}"
+        )
     disposition_counts = report.get("policy_disposition_counts", {})
     if disposition_counts:
         disposition_text = ", ".join(
@@ -1739,6 +1913,7 @@ def run_next_event(
             envelope,
             force_memory=None,
             terminal_surface=event.get("terminal_surface"),
+            event_managed=True,
         )
         after_state = _json_safe_state(getattr(session, "_state", None))
         outcome_observation = build_outcome_observation(

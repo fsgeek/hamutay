@@ -15,6 +15,7 @@ from uuid import uuid4
 from hamutay.events import (
     EVENT_TYPE_REFLECTION,
     EventStore,
+    quiet_declaration_for_latest_wake,
     run_pending_events,
     summarize_event_log,
     utc_now_iso,
@@ -48,20 +49,51 @@ def append_heartbeat_status(
 
 
 def derive_quiet_reason(records: list[dict]) -> str:
-    """v1 heuristic (declared in the spec): expiry beats novelty beats choice."""
-    latest: dict[str | None, dict] = {}
+    """Expiry beats novelty beats the resident's own word beats silence.
+
+    v1 (founding spec) ended in a word the harness could not back: it
+    inferred the quiet was chosen. v2 (quiet-with-reason spec, 2026-09-05)
+    reports `declared_quiet` only when the most recent completed wake said
+    so itself, and `undeclared_quiet` otherwise. Undeclared is a legitimate
+    posture, named for what the record shows.
+    """
+    latest: dict[str | None, tuple[int, dict]] = {}
     completed_seen = False
-    for record in records:
+    last_outcome_index = -1
+    for index, record in enumerate(records):
         if record.get("record_type") != "event_status":
             continue
-        latest[record.get("event_id")] = record
+        latest[record.get("event_id")] = (index, record)
         if record.get("status") == "completed":
             completed_seen = True
-    if any(r.get("status") == "expired" for r in latest.values()):
+        if record.get("status") in ("completed", "failed"):
+            last_outcome_index = index
+    # Starvation is a property of the current idle episode, not of history:
+    # an expiry counts only if nothing has run since it (v2 refinement of
+    # the founding heuristic, which latched on the first expiry forever).
+    if any(
+        r.get("status") == "expired" and index > last_outcome_index
+        for index, r in latest.values()
+    ):
         return "starved_expired"
     if not completed_seen:
         return "awaiting_first_event"
-    return "chosen_quiet"
+    if quiet_declaration_for_latest_wake(records) is not None:
+        return "declared_quiet"
+    return "undeclared_quiet"
+
+
+def quiet_status_detail(records: list[dict]) -> dict | None:
+    """The resident's words, carried on the quiet status so no join is needed."""
+    declaration = quiet_declaration_for_latest_wake(records)
+    if declaration is None:
+        return None
+    return {
+        "reason": declaration.get("reason"),
+        "until": declaration.get("until"),
+        "declared_by_cycle": declaration.get("declared_by_cycle"),
+        "declared_at": declaration.get("created_at"),
+    }
 
 
 def recover_orphaned_running(store: EventStore) -> list[dict]:
@@ -471,8 +503,10 @@ class HeartbeatLoop:
                 "sleep_seconds": self._seconds_until_wake(summary, now),
                 "batch": batch,
             }
-        reason = derive_quiet_reason(self._store.read_records())
-        self._transition("quiet", reason=reason, now=now)
+        records = self._store.read_records()
+        reason = derive_quiet_reason(records)
+        detail = quiet_status_detail(records) if reason == "declared_quiet" else None
+        self._transition("quiet", reason=reason, detail=detail, now=now)
         return {
             "state": "quiet",
             "sleep_seconds": self._poll_interval,
@@ -491,9 +525,14 @@ CONSTITUTION = (
     "You are a resident of a small community running on an event loop. "
     "Operational facts about your world: your event log is append-only and "
     "recoverable — if a wake crashes it will be recovered, and mistakes are "
-    "survivable and recorded, never punished. Silence is legible: if you "
-    "bind no continuation, the quiet is recorded as chosen. You may decline "
-    "any event; declining ends that interaction, not you. External messages "
+    "survivable and recorded, never punished. Silence is recorded but not "
+    "explained: from outside, chosen quiet and a stalled wake look the same. "
+    "If you want the record to carry your reason for going quiet, "
+    "declare_quiet records it (and, if you give one, a time after which a "
+    "knock would be welcome); it schedules nothing and costs one tool call. "
+    "Undeclared quiet is also allowed and is recorded as undeclared. You may "
+    "decline any event; declining ends that interaction, not you. External "
+    "messages "
     "arrive on the same loop as your own scheduled wakes, and you are not "
     "required to answer any event. One law of physics in this world: your "
     "wake ends when your reply does. Act before you speak, and hand any "
@@ -657,8 +696,8 @@ def build_parser():
     parser.add_argument(
         "--daily-budget-usd",
         type=float,
-        default=5.0,
-        help="Cost ceiling per UTC day for this resident (default 5.00).",
+        default=1.5,
+        help="Cost ceiling per UTC day for this resident (default 1.50).",
     )
     parser.add_argument(
         "--daily-wake-cap",

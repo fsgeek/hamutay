@@ -605,7 +605,7 @@ def test_parser_budget_defaults_on():
     from hamutay.heartbeat import build_parser
 
     args = build_parser().parse_args(["--log-path", "x"])
-    assert args.daily_budget_usd == 5.0
+    assert args.daily_budget_usd == 1.5  # Tony, 2026-09-05: <100 USD/month for the community
     assert args.daily_wake_cap == 48
     assert args.no_daily_budget is False
 
