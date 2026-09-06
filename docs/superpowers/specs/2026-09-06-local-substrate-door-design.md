@@ -105,3 +105,44 @@ is the only governor. The launch note says so.
   justify that wander yet).
 - Vision (the mmproj is not downloaded).
 - Any change to the residents already living.
+
+## 5. The harness must know the ceiling (added after the first probe wake)
+
+The first probe wake on the local server died at 68,025 tokens against a
+65,536-token context, 28 minutes in, after eight tool calls whose results
+were re-fed on every turn. The Anthropic backend already handles this
+(soft threshold at 80% of a known limit forces the closing tool; an
+over-limit error truncates the largest tool results and retries). The
+OpenAI natural loop had no ceiling at all, because OpenRouter's substrates
+made one unnecessary. A local model makes the ceiling the object of study,
+so the loop learns it:
+
+- **Source.** `--context-limit N` (explicit) beats discovery beats the
+  provider default. Discovery: for `--provider openai` with a `--base-url`,
+  GET `<base_url without /v1>/props` and read
+  `default_generation_settings.n_ctx` (llama-server); any failure means no
+  discovered limit. The launch note prints the limit and its source; the
+  launch record carries both.
+- **Soft threshold (80%).** When the next request is estimated at or above
+  it, perception tools (read, search, bash, memory reads…) are withdrawn
+  for the rest of the wake; the state tools `update_state`,
+  `schedule_event`, `declare_quiet` remain. One system message tells the
+  resident what happened and the numbers. The executor logs
+  `budget_pressure / perception_tools_withdrawn`. If the resident is still
+  calling tools three turns later, all tools are withdrawn
+  (`tool_choice: none`, `all_tools_withdrawn`) and the reply ends the wake.
+- **Hitting the wall anyway.** A context-limit error from the server (the
+  llama-server message joins the recognised needles) truncates the largest
+  tool results in the OpenAI-format conversation to a small head, withdraws
+  perception tools, and retries up to three times; each attempt is logged
+  as `budget_recovery / truncate_and_retry_tools_withdrawn`. On the first
+  turn there is nothing to drop, so the error propagates as today.
+- **No single result eats the window.** The per-result in-context cap
+  becomes min(200,000 chars, 25% of the ceiling in chars at 4 chars per
+  token). The full result stays in `tool_activity_full` regardless.
+- **Without a ceiling** (OpenRouter today) the loop is byte-for-byte what
+  it was: no note, no withdrawal, the old 200,000-char cap.
+
+Each of these is a declared loss the resident can read in its own record:
+the note is in the conversation, the events are in the activity log, the
+stubs say what was elided.

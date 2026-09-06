@@ -1,0 +1,32 @@
+# systemd user unit: the local substrate for the community/qwen door.
+#   cp deploy/hamutay-llama-server.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now hamutay-llama-server
+#
+# Substrate, declared (spec: docs/superpowers/specs/2026-09-06-local-substrate-door-design.md):
+#   model   Qwen3.8-27B (dense; 48 Gated DeltaNet + 16 GQA layers), Q4_K_M
+#   weights ~/models/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q4_K_M.gguf
+#           sha256 31629f53165ab6a7dad8c9847dcfd1fdf55829dac1e6e748f4a68581b0033d34
+#           (ggml-org/Qwen3.8-27B-GGUF)
+#   server  mainline llama.cpp (ggml-org), CUDA 13.2, sm_89; conventional KV
+#           cache — no TurboQuant branch. Commit recorded in community/README.md.
+#   card    RTX 4090 24 GB; 64K context loads at ~22.8 GB used.
+#   api     OpenAI-compatible on 127.0.0.1:8081, alias qwen3.8-27b-q4km,
+#           jinja chat template (tool calls), no API key.
+# Changing any line above is a SUBSTRATE CHANGE for the resident behind it.
+[Unit]
+Description=Hamutay local substrate — llama-server (Qwen3.8-27B Q4_K_M on the 4090)
+After=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/home/tony/src/llama.cpp/build/bin/llama-server \
+  -m /home/tony/models/Qwen3.8-27B-GGUF/Qwen3.8-27B-Q4_K_M.gguf \
+  --alias qwen3.8-27b-q4km \
+  -ngl 99 -c 65536 -fa on --jinja --reasoning-format none \
+  --host 127.0.0.1 --port 8081
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=default.target

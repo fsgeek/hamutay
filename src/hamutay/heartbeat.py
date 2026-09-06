@@ -610,6 +610,24 @@ def resolve_heartbeat_launch(args) -> tuple[dict, list[str]]:
     return launch, notes
 
 
+def resolve_context_limit(args, discover=None) -> tuple[int | None, str]:
+    """(limit or None, source): explicit beats discovered beats provider default.
+
+    Spec 2026-09-06-local-substrate-door §5. Discovery asks a llama-server's
+    /props; anything else yields None and the loop manages no ceiling.
+    """
+    from hamutay.taste_open import discover_llama_server_context
+
+    explicit = getattr(args, "context_limit", None)
+    if explicit is not None:
+        return int(explicit), "explicit"
+    if getattr(args, "provider", None) == "openai" and getattr(args, "base_url", None):
+        found = (discover or discover_llama_server_context)(args.base_url)
+        if found:
+            return int(found), "discovered"
+    return None, "provider default"
+
+
 def load_capability_profile(provider: str, model: str, capabilities_file=None):
     """Resolve the tool-calling capability profile for a provider:model pair.
 
@@ -683,6 +701,14 @@ def build_parser():
         "running subject's shape prints WAKE SHAPE CHANGE.",
     )
     parser.add_argument("--base-url", default=None)
+    parser.add_argument(
+        "--context-limit",
+        type=int,
+        default=None,
+        help="The substrate's context ceiling in tokens. Default: discovered "
+        "from a llama-server's /props for --provider openai with --base-url, "
+        "else the provider's own default (no ceiling managed by the loop).",
+    )
     parser.add_argument("--api-key", default=None)
     parser.add_argument("--project-root", default=".")
     parser.add_argument(
@@ -817,6 +843,7 @@ def main() -> None:
             "backend yet; use --provider openrouter or --wake-mode terminal"
         )
 
+    context_limit, context_limit_source = None, "provider default"
     if args.provider == "anthropic":
         backend = AnthropicTasteBackend(max_tokens=args.max_tokens)
     else:
@@ -839,6 +866,15 @@ def main() -> None:
             args.provider, args.model, args.capabilities_file
         )
         HeartbeatLoop._emit({"heartbeat": "capabilities", "note": cap_note})
+        context_limit, context_limit_source = resolve_context_limit(args)
+        HeartbeatLoop._emit({
+            "heartbeat": "launch",
+            "note": (
+                f"context ceiling: {context_limit} tokens ({context_limit_source})"
+                if context_limit else
+                f"context ceiling: none managed by the loop ({context_limit_source})"
+            ),
+        })
         backend = OpenAITasteBackend(
             base_url=base_url,
             api_key=api_key,
@@ -853,6 +889,7 @@ def main() -> None:
             wake_mode=wake_mode,
             openrouter_cache=not args.no_openrouter_cache,
             openrouter_cache_ttl=args.openrouter_cache_ttl,
+            context_limit=context_limit,
         )
 
     session = OpenTasteSession(
@@ -882,6 +919,8 @@ def main() -> None:
             ),
             "wake_mode": wake_mode,
             "base_url": args.base_url,
+            "context_limit": context_limit,
+            "context_limit_source": context_limit_source,
         },
     )
     store = EventStore(event_log_path)

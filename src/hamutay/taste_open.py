@@ -297,6 +297,9 @@ _TOKEN_PER_CHAR_ESTIMATE = 4
 #   - recovery head: aggressive, used when shrinking an already-over-limit
 #     request — keep just enough head to stay oriented.
 _MAX_TOOL_RESULT_CHARS = 200_000
+# Tools that survive a context-budget withdrawal on the natural shape: they
+# write the resident's own state and intentions and return tiny results.
+_NATURAL_STATE_TOOLS = frozenset({"update_state", "schedule_event", "declare_quiet"})
 _RECOVERY_HEAD_CHARS = 8_000
 
 # Known output-token ceilings by model family (best-effort).
@@ -370,6 +373,10 @@ def _is_context_limit_error(exc: Exception) -> bool:
         # tokens — without this needle the recovery below never engages and
         # an oversized tool result crashes the whole cycle.
         "total message size",
+        # llama-server: "request (N tokens) exceeds the available context
+        # size (M tokens)" / type exceed_context_size_error.
+        "exceeds the available context size",
+        "exceed_context_size_error",
     )
     return any(n in msg for n in needles)
 
@@ -386,6 +393,12 @@ def _parse_requested_vs_limit(exc: Exception) -> tuple[int | None, int | None]:
     Returns (None, None) when neither format is present.
     """
     msg = str(exc)
+    llama = re.search(
+        r"request \((\d+) tokens\) exceeds the available context size \((\d+) tokens\)",
+        msg,
+    )
+    if llama:
+        return int(llama.group(1)), int(llama.group(2))
     match = re.search(r"limit:\s*(\d+)\s*\(requested:\s*(\d+)\)", msg)
     if match:
         limit = int(match.group(1))
@@ -542,13 +555,51 @@ def _declared_loss_stub(content: str, head_chars: int) -> str:
     )
 
 
-def _bound_tool_result_for_context(content: str) -> str:
+def _bound_tool_result_for_context(content: str, max_chars: int | None = None) -> str:
     """Cap a single in-context tool result. Results within budget pass through
     unchanged; only oversized ones are reduced to a head slice + declared loss.
-    The full result is preserved in the durable activity log regardless."""
-    if len(content) <= _MAX_TOOL_RESULT_CHARS:
+    The full result is preserved in the durable activity log regardless.
+
+    max_chars lets a substrate with a real ceiling shrink the cap (spec
+    2026-09-06-local-substrate-door §5: 25% of the window); None keeps the
+    historical cap."""
+    cap = _MAX_TOOL_RESULT_CHARS if max_chars is None else min(max_chars, _MAX_TOOL_RESULT_CHARS)
+    if len(content) <= cap:
         return content
-    return _declared_loss_stub(content, head_chars=_MAX_TOOL_RESULT_CHARS)
+    return _declared_loss_stub(content, head_chars=cap)
+
+
+def _result_cap_for_context_limit(context_limit: int | None) -> int | None:
+    """No single tool result may take more than a quarter of the window."""
+    if not context_limit:
+        return None
+    return max(int(context_limit * _TOKEN_PER_CHAR_ESTIMATE * 0.25), _RECOVERY_HEAD_CHARS)
+
+
+def discover_llama_server_context(base_url: str, fetch=None) -> int | None:
+    """Ask a llama-server for its context size via /props; None if it is not one.
+
+    base_url is the OpenAI-compatible root (".../v1"); /props lives beside
+    it. Any failure — not a llama-server, not reachable, no n_ctx — is None,
+    so the caller falls back to the provider default and says so.
+    """
+    root = base_url.rstrip("/")
+    if root.endswith("/v1"):
+        root = root[:-3]
+    url = f"{root}/props"
+    if fetch is None:
+        def fetch(u):  # pragma: no cover - network
+            return httpx.get(u, timeout=5.0).json()
+    try:
+        props = fetch(url)
+    except Exception:
+        return None
+    if not isinstance(props, dict):
+        return None
+    n_ctx = (props.get("default_generation_settings") or {}).get("n_ctx")
+    if isinstance(n_ctx, int) and n_ctx > 0:
+        return n_ctx
+    return None
 
 
 def _truncate_largest_tool_results(
@@ -568,6 +619,10 @@ def _truncate_largest_tool_results(
     candidates: list[tuple[int, dict]] = []
     for msg in conversation:
         content = msg.get("content")
+        # OpenAI-format tool results: {"role": "tool", "content": str}.
+        if msg.get("role") == "tool" and isinstance(content, str):
+            candidates.append((len(content), msg))
+            continue
         if not isinstance(content, list):
             continue
         for block in content:
@@ -1141,7 +1196,13 @@ class OpenAITasteBackend:
         wake_mode: str = "terminal",
         openrouter_cache: bool = True,
         openrouter_cache_ttl: str = "5m",
+        context_limit: int | None = None,
     ):
+        # The substrate's context ceiling in tokens, if known (a local
+        # llama-server's n_ctx). None means "no ceiling the loop should
+        # manage" — OpenRouter's substrates today. Spec
+        # 2026-09-06-local-substrate-door §5.
+        self._context_limit = context_limit
         # OpenRouter automatic prompt caching: a top-level cache_control puts
         # the breakpoint on the last cacheable block and advances it as the
         # conversation grows — which is exactly the intra-wake repetition a
@@ -1702,18 +1763,128 @@ class OpenAITasteBackend:
         interim_text: list[str] = []
         max_turns = 20
 
-        for _turn_index in range(max_turns):
-            payload: dict = {
-                "model": model,
-                "max_tokens": self._max_tokens,
-                "messages": conversation,
-                "tool_choice": "auto",
-            }
-            if tools:
-                payload["tools"] = tools
-            self._apply_openai_payload_options(payload)
+        # Context ceiling (spec 2026-09-06-local-substrate-door §5). With a
+        # known limit: at 80% the perception tools are withdrawn and the
+        # resident is told; three tool turns later all tools go; a single
+        # result may not exceed a quarter of the window; an over-limit error
+        # truncates the largest results and retries with tools withdrawn.
+        context_limit = self._context_limit
+        soft_threshold = int(context_limit * 0.8) if context_limit else None
+        result_cap = _result_cap_for_context_limit(context_limit)
+        estimated_next_input_tokens = 0
+        last_reported_prompt_tokens = 0
+        perception_withdrawn = False
+        withdrawn_tool_turns = 0
+        all_withdrawn = False
 
-            data = self._post_chat(payload)
+        def _state_tools() -> list[dict]:
+            return [
+                t for t in tools
+                if t.get("function", {}).get("name") in _NATURAL_STATE_TOOLS
+            ]
+
+        def _withdraw_perception(reason: str, **detail) -> None:
+            nonlocal perception_withdrawn
+            if perception_withdrawn:
+                return
+            perception_withdrawn = True
+            kept = sorted(
+                t.get("function", {}).get("name") for t in _state_tools()
+            )
+            conversation.append({
+                "role": "system",
+                "content": (
+                    "Operational note from the harness: this wake's context "
+                    f"is at its budget ({reason}: the last request measured "
+                    f"{last_reported_prompt_tokens} tokens against a ceiling "
+                    f"of {context_limit}; the threshold is {soft_threshold}). "
+                    "Reading, searching, shell, and memory tools are "
+                    "withdrawn for the rest of this wake; "
+                    + (", ".join(kept) if kept else "no tools")
+                    + " remain. Your reply ends the wake; anything you still "
+                    "want done later belongs in schedule_event."
+                ),
+            })
+            if tool_executor is not None:
+                tool_executor.log_event({
+                    "tool": "_framework",
+                    "event": "budget_pressure",
+                    "action": "perception_tools_withdrawn",
+                    "estimated_input_tokens": estimated_next_input_tokens,
+                    "last_reported_prompt_tokens": last_reported_prompt_tokens,
+                    "soft_threshold": soft_threshold,
+                    "context_limit": context_limit,
+                    "kept_tools": kept,
+                    **detail,
+                })
+
+        for turn_index in range(max_turns):
+            if (
+                soft_threshold is not None
+                and not perception_withdrawn
+                and estimated_next_input_tokens >= soft_threshold
+            ):
+                _withdraw_perception("soft threshold reached")
+            if perception_withdrawn and not all_withdrawn and withdrawn_tool_turns >= 3:
+                all_withdrawn = True
+                if tool_executor is not None:
+                    tool_executor.log_event({
+                        "tool": "_framework",
+                        "event": "budget_pressure",
+                        "action": "all_tools_withdrawn",
+                        "estimated_input_tokens": estimated_next_input_tokens,
+                        "context_limit": context_limit,
+                    })
+
+            def _build_payload() -> dict:
+                active = [] if all_withdrawn else (
+                    _state_tools() if perception_withdrawn else tools
+                )
+                built: dict = {
+                    "model": model,
+                    "max_tokens": self._max_tokens,
+                    "messages": conversation,
+                    "tool_choice": "none" if all_withdrawn else "auto",
+                }
+                if active:
+                    built["tools"] = active
+                self._apply_openai_payload_options(built)
+                return built
+
+            data = None
+            for recovery_attempt in range(3):
+                payload = _build_payload()
+                try:
+                    data = self._post_chat(payload)
+                    break
+                except RuntimeError as e:
+                    if not _is_context_limit_error(e) or turn_index == 0:
+                        raise
+                    requested, limit = _parse_requested_vs_limit(e)
+                    if requested is not None and limit is not None and requested > limit:
+                        target_drop = max(int((requested - limit) * 1.25), 30_000)
+                    elif context_limit:
+                        target_drop = max(int(context_limit * 0.3), 30_000)
+                    else:
+                        target_drop = 120_000
+                    dropped_tokens = _truncate_largest_tool_results(
+                        conversation, target_drop_tokens=target_drop
+                    )
+                    _withdraw_perception("the server rejected an over-limit request")
+                    if tool_executor is not None:
+                        tool_executor.log_event({
+                            "tool": "_framework",
+                            "event": "budget_recovery",
+                            "action": "truncate_and_retry_tools_withdrawn",
+                            "estimated_tokens_dropped": dropped_tokens,
+                            "target_drop_tokens": target_drop,
+                            "recovery_attempt": recovery_attempt + 1,
+                            "error": str(e)[:300],
+                        })
+                    if recovery_attempt == 2:
+                        raise
+            if data is None:
+                raise RuntimeError("No response after budget recovery attempts")
             responses.append(data)
             choice = data["choices"][0]
             raw_stop: str = choice.get("finish_reason") or "unknown"
@@ -1728,6 +1899,12 @@ class OpenAITasteBackend:
             cache_read, cache_write = self._usage_cache(usage)
             total_cache_read += cache_read
             total_cache_write += cache_write
+            # Ground truth for the next estimate: what the server counted,
+            # plus what it generated (which the next request re-sends).
+            last_reported_prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
+            estimated_next_input_tokens = (
+                last_reported_prompt_tokens + int(usage.get("completion_tokens", 0) or 0)
+            )
 
             message = choice.get("message", {})
             content = message.get("content")
@@ -1795,16 +1972,20 @@ class OpenAITasteBackend:
                     )
                 else:
                     result = tool_executor.execute(name, arguments)
+                bounded = _bound_tool_result_for_context(
+                    json.dumps(result, default=str), max_chars=result_cap
+                )
                 conversation.append(
                     {
                         "role": "tool",
                         "tool_call_id": tool_call_id,
                         "name": name,
-                        "content": _bound_tool_result_for_context(
-                            json.dumps(result, default=str)
-                        ),
+                        "content": bounded,
                     }
                 )
+                estimated_next_input_tokens += len(bounded) // _TOKEN_PER_CHAR_ESTIMATE
+            if perception_withdrawn:
+                withdrawn_tool_turns += 1
 
         raise RuntimeError(
             f"Natural wake did not end on a text reply within {max_turns} turns"

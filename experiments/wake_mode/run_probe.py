@@ -81,6 +81,11 @@ def build_session(model: str, log_path: Path, arm: str) -> tuple[OpenTasteSessio
         extra_headers = {}
     capability, note = load_capability_profile(PROVIDER, model)
     print(f"  {note}")
+    context_limit = None
+    if PROVIDER == "openai" and BASE_URL:
+        from hamutay.taste_open import discover_llama_server_context
+        context_limit = discover_llama_server_context(BASE_URL)
+        print(f"  context ceiling: {context_limit or 'none discovered'}")
     backend = OpenAITasteBackend(
         base_url=base_url,
         api_key=api_key,
@@ -90,6 +95,7 @@ def build_session(model: str, log_path: Path, arm: str) -> tuple[OpenTasteSessio
         capability=capability,
         openrouter_require_parameters=(PROVIDER == "openrouter"),
         wake_mode=arm,
+        context_limit=context_limit,
     )
     event_log_path = str(default_event_log_path(log_path))
     session = OpenTasteSession(
@@ -111,6 +117,7 @@ def build_session(model: str, log_path: Path, arm: str) -> tuple[OpenTasteSessio
             "openrouter_require_parameters": PROVIDER == "openrouter",
             "wake_mode": arm,
             "base_url": BASE_URL,
+            "context_limit": context_limit,
         },
     )
     return session, EventStore(event_log_path)
