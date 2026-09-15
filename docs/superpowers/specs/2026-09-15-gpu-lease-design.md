@@ -1,9 +1,12 @@
 # The GPU lease — lending the house's card without a human in the loop
 
 Date: 2026-09-15. Author: the Fable session that took custody of Hamut'ay
-this morning. Status: DRAFT, revision 6, after Codex's rounds one to five
-(`2026-09-15-gpu-lease-review.md`, `-review-2.md` … `-review-5.md`).
-Dispositions at the end. Sent to Codex for round six before any code.
+this morning. Status: REVIEWED, revision 7, after Codex's rounds one to six
+(`2026-09-15-gpu-lease-review.md`, `-review-2.md` … `-review-6.md`).
+Dispositions at the end. Round six found only consistency defects (no
+new mechanism needed); they are folded in here and the review loop is
+closed. Next: the implementation plan, then code under TDD with Codex's
+independent validation.
 
 ## The problem
 
@@ -52,6 +55,13 @@ own log, in the same shape it already uses for a budget rest.
   registration failure shuts down like every other path. The migration
   quiesce is one Python helper holding one lock descriptor; dependency
   symlinks are enumerated by `find -type l` and `readlink`.
+- r7 (this, consistency only): tombstone resolution is always a
+  standalone `workload_killed` action, never inline; `release_force`
+  records the originals present and completes only when originals and
+  escrows are both absent; `scope_unit` is mandatory and deterministic;
+  `force-stop` ledgers `force_stop` and `wait` accepts either
+  acknowledgment; the active `door.json` is a migration artifact, not a
+  committed file; the obsolete scheduler stop-reason assertion is removed.
 
 ## Invariants
 
@@ -112,8 +122,14 @@ Project-independent, outside every repo. Files:
  "mutation_id": "<uuid4 of the last mutating action>",
  "holder": "yupi", "purpose": "learner sub-project 2, first 1M-param run",
  "since": "…+00:00", "expires_at": "…+00:00", "expected_until": "…+00:00",
- "scope_unit": "ayllu-gpu-<lease_id>.scope" | absent}
+ "scope_unit": "ayllu-gpu-<lease_id>.scope"}
 ```
+
+  `scope_unit` is mandatory and deterministic (Codex r6 S1): every lease
+  names `ayllu-gpu-<lease_id>.scope` whether or not `run` ever starts it.
+  A scope that was never started observes as `LoadState=not-found`,
+  which is "dead", so a primitive-only holder's tombstone resolves
+  trivially. There is no no-scope lease form.
 
   `generation` increments on every mutation of the file; `mutation_id` is
   the `action_id` of the action that wrote it. Reconciliation of `lease`,
@@ -149,24 +165,32 @@ Project-independent, outside every repo. Files:
   predicate includes "scope observed dead" (`workload_killed`, `expire`,
   `release`, `release_force`). **"Free" means: no lease file, no
   quarantine file, and no tombstone.** Every action that needs FREE
-  (`lease`, `server_start`) and the claim gate resolve all tombstones
-  first (Codex r5 B2): for each, observe the scope; if alive, run
-  `workload_killed` (a flat action: stop, observe dead, remove the
-  tombstone); if death cannot be established, `quarantine_enter` with
+  (`lease`, `server_start`), the claim gate, and `release_force` resolve
+  all tombstones first (Codex r5 B2, r6 B1), and the resolution is
+  **always the standalone flat action `workload_killed`**, one per
+  tombstone, run to completion (its own intent and outcome) under the
+  already-held `4090.lock` before the enclosing decision continues.
+  Nothing kills a scope or removes a tombstone except a `workload_killed`
+  action, `release`, or `expire` (whose predicates name the tombstone).
+  If death cannot be established, `quarantine_enter` with
   `reason: scope_unkillable`. Scope observations always carry
   `load_state`, `active_state`, `sub_state`, `scope_unit`.
 
-- `release --force` is the action `release_force`. Order (Codex r5 B5):
-  resolve tombstones (scope death first); rename `4090.quarantine` →
-  `4090.quarantine.escrow-<action_id>` and `4090.lease` →
-  `4090.lease.escrow-<action_id>` if present (rename is atomic and needs
-  no parse, so unreadable files still get an exact identity); delete the
-  escrow files; outcome. Completion predicate: no escrow file for this
-  `action_id` exists and no recorded tombstone remains. A reconciler that
-  finds an escrow file deletes it; a new `4090.lease` or
-  `4090.quarantine` that appeared afterwards is not this action's
-  concern. Generation is compared only with generation, mutation ids only
-  with mutation ids.
+- `release --force` is the action `release_force`. Order (Codex r5 B5,
+  r6 B2): the intent records `originals_present: ["lease", "quarantine"]`
+  (whichever directory entries exist, by name, no parse) and the
+  tombstones present; resolve tombstones (each a `workload_killed`);
+  rename `4090.quarantine` → `4090.quarantine.escrow-<action_id>` and
+  `4090.lease` → `4090.lease.escrow-<action_id>` (atomic, no parse, so
+  unreadable files still get an exact identity); delete the escrow
+  files; outcome. Completion predicate: for each name in
+  `originals_present`, both the original and this action's escrow are
+  absent; and no recorded tombstone remains. Under the dangling-intent-
+  first protocol an original name found by the reconciler cannot be
+  legitimate successor state (nothing can grant while the intent is
+  dangling), so the reconciler renames it into this action's escrow and
+  deletes it before writing `ok`. Generation is compared only with
+  generation, mutation ids only with mutation ids.
 
 - `4090.ledger.jsonl` — append-only:
 
@@ -207,22 +231,23 @@ first, before anything else.
 
 | action | side effects, in order | completion predicate |
 |---|---|---|
-| lease | write lease file (`mutation_id = action_id`); write tombstone for `scope_unit` | lease present with that `mutation_id` **and** tombstone present |
+| lease | (precondition: FREE, after `workload_killed` for any tombstone) write lease file (`mutation_id = action_id`); write tombstone for `scope_unit` | lease present with that `mutation_id` **and** tombstone present |
 | renew | rewrite lease file (`mutation_id = action_id`, `generation + 1`) | lease present with that `mutation_id` |
-| release | observe scope; stop if alive; remove tombstone; remove lease file | scope dead (or none recorded); tombstone absent; lease absent or `generation` > `generation_before` |
+| release | observe scope; stop if alive; remove tombstone; remove lease file | scope dead; tombstone absent; lease absent or `generation` > `generation_before` |
 | expire | as release | as release |
 | release_force | as defined under `4090.lease`/quarantine above | as defined there |
 | quarantine_enter | rename in the quarantine file | quarantine present with `source_action_id == action_id` |
-| ensure_stopped / server_stop / force_stop | stop the server if not inactive/failed | server `ActiveState ∈ {inactive, failed}` |
-| server_start | resolve tombstones (each a `workload_killed` *performed inline as side effects of this action*, ledgered as `observed.tombstones`); start the server | no tombstone; server `ActiveState ∈ {active, activating}` |
-| workload_killed | stop the scope; remove its tombstone | scope `LoadState=not-found` or `ActiveState ∈ {inactive, failed}` **and** tombstone absent |
+| ensure_stopped / server_stop | stop the server if not inactive/failed | server `ActiveState ∈ {inactive, failed}` |
+| force_stop | (precondition: heartbeat lock held; rest record appended) stop the server if not inactive/failed | server `ActiveState ∈ {inactive, failed}` |
+| server_start | (precondition: FREE, after `workload_killed` for any tombstone) start the server | server `ActiveState ∈ {active, activating}` |
+| workload_killed | stop the scope; observe; remove its tombstone | scope `LoadState=not-found` or `ActiveState ∈ {inactive, failed}` **and** that tombstone absent |
 | any, when `systemctl show` or a state file cannot be read | — | `indeterminate` → `quarantine_enter` |
 
-"Resolve tombstones" inside `lease`, `server_start`, the claim gate, and
-`release_force` means: perform the stop-and-observe-and-remove steps as
-side effects of the enclosing action (no separate intent), and record
-each scope's observation in the enclosing action's outcome. A standalone
-`workload_killed` action exists only for the `run` wrapper's own kills.
+"Resolve tombstones" always means: for each tombstone, run one
+`workload_killed` action to completion under the held lock, then
+continue. The claim gate, which is not itself an action, does the same
+before it evaluates FREE; a gate that finds a tombstone runs
+`workload_killed` and only then decides.
 
 **Expiry** (Codex r4 B1): whoever finds an expired lease runs `expire`,
 which kills the scope before it removes the lease. A lease is never
@@ -250,8 +275,8 @@ ayllu-gpu lease   --holder NAME --purpose "..." [--ttl 6h] [--expected-until ISO
 ayllu-gpu renew   --lease-id ID [--ttl 6h]
 ayllu-gpu release --lease-id ID
 ayllu-gpu release --force --by NAME --reason "..."      # clears lease and quarantine; ledgered
-ayllu-gpu wait    --lease-id ID [--timeout 30m]         # success iff an ok ensure_stopped outcome for
-                                                        # this episode exists AND ActiveState ∈ {inactive, failed} now
+ayllu-gpu wait    --lease-id ID [--timeout 30m]         # success iff an ok ensure_stopped OR force_stop outcome
+                                                        # for this episode exists AND ActiveState ∈ {inactive, failed} now
 ayllu-gpu force-stop --lease-id ID --by NAME --reason "..."
 ayllu-gpu status
 ```
@@ -311,9 +336,11 @@ and refuses to start if it differs from this canonical path, so the two
 always name the same inode). Sequence: `4090.lock` → `flock -n` on the
 heartbeat lock (refuse with exit 4 if held) → append
 `resting/substrate_lent` to the store via `append_heartbeat_status` under
-the store lock (`source: "force_stop"`) → `ensure_stopped` intent →
-`systemctl stop` → observe → outcome → release locks. The record precedes
-the stop (invariant 3) whoever stops.
+the store lock (`source: "force_stop"`) → `force_stop` intent →
+`systemctl stop` → observe → outcome → release locks. The action identity
+is `force_stop` everywhere (ledger, table, `wait`, boot reconciliation,
+tests; Codex r6 S2). The record precedes the stop (invariant 3) whoever
+stops.
 
 Other rules unchanged from r3: TTL grammar and bounds; same-holder
 `lease` is a renew; `renew`/`release` need the `lease_id`; accountability,
@@ -325,7 +352,11 @@ not security.
   `static`. `Restart=always`, `RestartSec=10` kept.
 - `deploy/hamutay-heartbeat@qwen.service.d/override.conf`: no `Requires=`,
   `Wants=`, or `After=` on the server.
-- `community/qwen/door.json` (committed; component 4): `{"gpu_lease": "4090"}`.
+- `community/qwen/door.json` — the **active** participation file, written
+  only by the migration after quiescence and gitignored like the logs
+  (Codex r6 S3). Its content is committed as the template
+  `deploy/door.json.qwen` (`{"gpu_lease": "4090"}`); a checkout never
+  materializes the active file, so a timeout leaves it verifiably absent.
 
 `deploy/migrate-gpu-lease.sh`, in order:
 
@@ -361,7 +392,8 @@ not security.
    this lock; it cannot claim). If a wake is running: release, sleep 30 s,
    retry. On timeout the helper exits 1 **without** stopping anything,
    and the migration aborts before `door.json` is written.
-7. Write `door.json`; `systemctl --user start hamutay-heartbeat@qwen`. The
+7. Copy `deploy/door.json.qwen` to `community/qwen/door.json`;
+   `systemctl --user start hamutay-heartbeat@qwen`. The
    new heartbeat boots bound, observes FREE and the server active, probes
    ready, validates context, proceeds.
 
@@ -541,8 +573,10 @@ never precedes scope death, exit codes; single transition API cases
 restart inside each); `set_context_limit` changes the value the backend's
 next call uses; `substrate_observation` read by the next boot; no claim
 after a new invocation until discovery; `ensure_stopped` with
-`already_inactive`; `lease_blocked` excluded from `ran` and surfaced as
-the scheduler stop reason; migration assertions against a fake
+`already_inactive`; `lease_blocked` excluded from `ran` in
+`run_pending_events` (the scheduler is never gated; Codex r6 M1);
+`release_force` reconciliation from every crash point including before
+the first rename; `workload_killed` from the gate; migration assertions against a fake
 `systemctl` returning `static`, `enabled`, `enabled-runtime`, `linked`, and
 against a fixture unit directory with a stray `Wants=`.
 
@@ -644,3 +678,17 @@ extended.
 S1 (migration self-deadlock; symlink scan): adopted — one Python helper
 with one lock descriptor and an aborting timeout; `find -type l` +
 `readlink`.
+
+## Dispositions of Codex round six (loop closed)
+
+B1 (tombstone work without an action): adopted — always a standalone
+`workload_killed`, including from the gate. B2 (`release_force` predicate
+true before any rename): adopted — `originals_present` in the intent;
+originals and escrows both absent. S1 (`scope_unit` optional): adopted —
+mandatory, deterministic. S2 (`force_stop` vs `ensure_stopped`): adopted
+— `force_stop` everywhere; `wait` accepts either acknowledgment. S3
+(committed `door.json`): adopted — template in `deploy/`, active file a
+gitignored migration artifact. M1 (scheduler assertion): adopted —
+removed. No round seven: every round-six finding was a consistency
+defect resolvable in text, which is the stopping rule the custodian set
+before round six ran.
