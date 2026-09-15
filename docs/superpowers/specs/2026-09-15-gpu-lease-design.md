@@ -1,9 +1,10 @@
 # The GPU lease — lending the house's card without a human in the loop
 
 Date: 2026-09-15. Author: the Fable session that took custody of Hamut'ay
-this morning. Status: DRAFT, revision 4, after Codex's rounds one to three
-(`2026-09-15-gpu-lease-review.md`, `-review-2.md`, `-review-3.md`).
-Dispositions at the end. Sent to Codex for round four before any code.
+this morning. Status: DRAFT, revision 5, after Codex's rounds one to four
+(`2026-09-15-gpu-lease-review.md`, `-review-2.md`, `-review-3.md`,
+`-review-4.md`). Dispositions at the end. Sent to Codex for round five
+before any code.
 
 ## The problem
 
@@ -34,6 +35,14 @@ own log, in the same shape it already uses for a budget rest.
   the heartbeat can kill; one transition API with episode keys; a backend
   setter and a durable substrate observation; `ensure_stopped` as the
   acknowledgment; migration assertions matched to systemd 249.
+- r5 (this): scope tombstones, and "free" defined as no lease, no
+  quarantine, no tombstone; expiry kills the scope before it frees;
+  `run` supervises from acquisition, launches under the lock with margin,
+  minimum TTL 10 min; `quarantine_enter` as an action; `release_force`
+  as a two-file clear with exact reconciliation; context validation
+  tracked per invocation independently of readiness, with the setter on
+  the session; migration quiesces the old heartbeat under the store lock
+  before `door.json` exists and scans every user-unit search path.
 
 ## Invariants
 
@@ -102,23 +111,54 @@ Project-independent, outside every repo. Files:
   `renew`, `release` compares `mutation_id` (Codex r3 B3): a renew that
   never landed leaves the previous `mutation_id`, whatever the timestamps.
 
-- `4090.quarantine` — present iff quarantined (Codex r3 B3):
+- `4090.quarantine` — present iff quarantined (Codex r3 B3, r4 B3):
 
 ```
-{"quarantine_id": "<uuid4, new per occurrence>", "reason": "malformed_lease"|"indeterminate_action"|"unreadable",
- "source_action_id": ..., "observed_digest": "<sha256 of the offending bytes or ''>", "at": <iso>}
+{"quarantine_id": "<uuid4, new per occurrence>", "reason": "malformed_lease"|"indeterminate_action"|"unreadable"|"scope_unkillable",
+ "source_action_id": "<the quarantine_enter action's own id>",
+ "cause_action_id": "<the indeterminate action, if any>" | absent,
+ "observed_digest": "<sha256 of the offending bytes or ''>", "at": <iso>}
 ```
 
-  The lease file, if any, is left in place beside it. Entering quarantine
-  is a single atomic rename of this file; it is the *outcome* of the
-  action that failed (that action's outcome row carries
-  `outcome: indeterminate, quarantine_id`), not a new action. If the
-  process dies between the rename and the outcome row, the next lock
-  holder sees a quarantine file whose `source_action_id` has a dangling
-  intent and appends the outcome row idempotently. Re-introduced identical
-  bad bytes after a clear are a new occurrence with a new id. Cleared
-  only by `release --force`, which removes both files and ledgers the
-  override with the `quarantine_id`.
+  Entering quarantine is always an action, `quarantine_enter`, with its
+  own intent row, one atomic rename, and an outcome row; the lease file,
+  if any, is left in place beside it. Two triggers: (a) an unsolicited
+  observation (the gate or the heartbeat finds a malformed or unreadable
+  lease) runs `quarantine_enter` directly; (b) an action whose outcome is
+  `indeterminate` is followed by `quarantine_enter` with `cause_action_id`
+  set. Reconciliation of a dangling `quarantine_enter`: completed iff the
+  quarantine file exists with `source_action_id == action_id`. An
+  `indeterminate` outcome with no quarantine file and no later
+  `quarantine_enter` intent for it is itself a dangling condition: the
+  next lock holder runs `quarantine_enter` for it before anything else.
+  Re-introduced identical bad bytes after a clear are a new occurrence
+  with a new id.
+
+- `4090.tombstones/<scope_unit>` — one file per scope that has not been
+  observed dead (Codex r4 B1). Written (atomically) by `lease` when it
+  records a `scope_unit`, and removed only when an observation shows the
+  scope `LoadState=not-found` or `ActiveState ∈ {inactive, failed}`.
+  **"Free" means: no lease file, no quarantine file, and no tombstone.**
+  Every `lease`, `ensure_stopped`, `server_start`, and `release_force`
+  resolves all tombstones first: for each, `systemctl --user show -p
+  LoadState,ActiveState,SubState <scope>`; if alive, `workload_killed`
+  intent → `systemctl --user stop <scope>` → observe → outcome; if still
+  not dead after the stop returns (or `show` fails), `quarantine_enter`
+  with `reason: scope_unkillable`. Scope observations always include
+  `LoadState`.
+
+- `release --force` clears in a fixed order under one intent
+  (`release_force`, recording the expected `quarantine_id`, the lease
+  `mutation_id` if present, and the tombstones present): remove the
+  quarantine file, remove the lease file, resolve tombstones, outcome.
+  Reconciliation of a dangling `release_force`: completed iff the
+  quarantine file is absent (or has a different `quarantine_id`), the
+  lease file is absent (or its `mutation_id` differs from the recorded
+  one), and no recorded tombstone remains; a partial state is finished by
+  the reconciler (it repeats the removals it can prove are still owed,
+  then resolves tombstones) before the reconciled `ok` outcome is
+  written. Generation is compared only with generation, mutation ids only
+  with mutation ids.
 
 - `4090.ledger.jsonl` — append-only:
 
@@ -147,11 +187,19 @@ holder with a `reconciled: true` outcome on the original `action_id`:
 | dangling action | completed iff | else |
 |---|---|---|
 | lease / renew | lease file present with `mutation_id == action_id` | `not_performed` |
-| release / expire / release_force | lease file absent or `mutation_id` newer than the intent's `generation` | `not_performed` |
-| ensure_stopped / server_stop / force_stop | `ActiveState ∈ {inactive, failed}` | `not_performed` (rule table re-applies) |
-| server_start | `ActiveState ∈ {active, activating}` | `not_performed` |
-| workload_killed | scope unit `ActiveState ∈ {inactive, failed}` or not loaded | `not_performed` |
-| any, if `systemctl show` or the state files cannot be read | — | `indeterminate` → quarantine (`reason: indeterminate_action`) |
+| release / expire | lease file absent, or present with `generation` > the intent's recorded `generation_before` | `not_performed` |
+| release_force | as defined above (both files and tombstones) | finish the partial clear, then `ok` reconciled |
+| quarantine_enter | quarantine file present with `source_action_id == action_id` | `not_performed` |
+| ensure_stopped / server_stop / force_stop | server `ActiveState ∈ {inactive, failed}` | `not_performed` (rule table re-applies) |
+| server_start | server `ActiveState ∈ {active, activating}` | `not_performed` |
+| workload_killed | scope `LoadState=not-found` or `ActiveState ∈ {inactive, failed}` | `not_performed` |
+| any, if `systemctl show` or the state files cannot be read | — | `indeterminate`, then `quarantine_enter` (`cause_action_id` = this action) |
+
+**Expiry** (Codex r4 B1) is an action that does more than delete: intent
+(with `generation_before` and the lease's `scope_unit`) → kill the scope
+if alive (`workload_killed`, nested as its own action) → remove the lease
+file → resolve the tombstone → outcome. A lease is never "gone" while its
+scope may live; whoever expires it kills first.
 
 Observation is `systemctl --user show -p ActiveState,SubState,InvocationID
 <unit>`. `server_ready`/`server_unready` are `phase: observation` rows,
@@ -181,33 +229,45 @@ ayllu-gpu force-stop --lease-id ID --by NAME --reason "..."
 ayllu-gpu status
 ```
 
-**`run` is a supervisor (Codex r3 B4).**
+**`run` is a supervisor (Codex r3 B4, r4 B2).** Minimum TTL for `run` is
+10 minutes (the primitives keep 1 minute for tests); margins below are
+absolute, not fractions.
 
-1. `lease` (records `scope_unit` in the lease file), then `wait`; on
-   timeout: `release`, exit 3, nothing runs.
-2. Launch the command as a transient scope:
-   `systemd-run --user --scope --unit ayllu-gpu-<lease_id> --collect -- <command>`.
-   The scope is the workload's process group under systemd; it survives
-   the wrapper and is killable by name.
-3. Renew loop in the wrapper: every `ttl/3`, `renew`. A renew failure is
-   retried once a minute; if `now > expires_at - ttl/6` with no successful
-   renew, the wrapper **kills the scope** (`systemctl --user kill --signal
-   TERM`, 60 s grace, then `stop`), ledgers `workload_killed`, and
-   releases. The workload is never allowed to run into expiry by a live
-   wrapper.
-4. On the command's exit, or on SIGTERM/SIGINT/SIGHUP to the wrapper: stop
-   the scope if still active, wait until `systemctl show` says it is
-   inactive/failed or not loaded, then `release`. Release never precedes
-   workload death.
-5. Wrapper SIGKILL, host suspend past expiry, or any other path where the
-   wrapper is gone and the scope is not: the lease expires on the TTL, and
-   **the heartbeat, before starting the server, checks the expired lease's
-   `scope_unit`; if the scope is loaded and not inactive/failed it stops
-   it and ledgers `workload_killed` (`by: heartbeat:qwen`)**, then proceeds.
-   Two workloads never share the card; the cost of a lost wrapper is the
-   workload, ledgered.
-6. `run`'s exit status is the command's; 3 on wait timeout; 5 on
-   workload killed by the supervisor.
+1. `lease` (records `scope_unit`, writes the tombstone). **Supervision
+   starts here**: a background renew loop renews every `ttl/3`, retrying
+   every 30 s on failure, and it runs during `wait` too.
+2. `wait`, which succeeds only if all of: an ok `ensure_stopped` outcome
+   for this `lease_id` exists; the server is observed inactive/failed now;
+   and, under `4090.lock`, the lease file is present with this `lease_id`,
+   live, not quarantined, with at least 3 minutes remaining. Absent,
+   expired, replaced, or quarantined → exit 3, `release` if still ours,
+   nothing runs.
+3. Launch under the lock: holding `4090.lock`, re-check the same
+   conditions, then start `systemd-run --user --scope --unit
+   ayllu-gpu-<lease_id> --collect -- <command>` as a background child of
+   the wrapper (its PID recorded; `systemd-run --scope` is synchronous, it
+   returns when the command ends, so the wrapper reaps it later), poll
+   `systemctl --user show -p LoadState <scope>` until `loaded` (bounded
+   10 s; failure → kill the child, `release`, exit 6), then release
+   `4090.lock`. Expiry needs the lock, so the scope is registered before
+   any expiry can run, and the lease has ≥ 3 min at that instant.
+4. Kill rule: if `now > expires_at - 3 min` and the last renew did not
+   succeed, the wrapper stops the scope (`systemctl --user kill --signal
+   TERM`, 60 s grace, `systemctl --user stop`, which completes within
+   systemd's default stop allowance of 90 s), ledgers `workload_killed`,
+   resolves the tombstone, and releases. With a 10-minute minimum TTL and
+   a 3-minute threshold the scope is dead at least 30 s before expiry.
+5. On the command's exit, or SIGTERM/SIGINT/SIGHUP to the wrapper: stop
+   the scope if still active, wait for `LoadState=not-found` or
+   inactive/failed, resolve the tombstone, then `release`. Release never
+   precedes scope death.
+6. Wrapper SIGKILL or host suspend past expiry: the tombstone remains;
+   the next actor to act on the resource (expiry, a new `lease`, the
+   heartbeat's return sequence, `release --force`) kills the scope before
+   anything else (component 1). Two workloads never share the card; the
+   cost of a lost wrapper is the workload, ledgered.
+7. Exit status: the command's; 3 on `wait` failure; 5 killed by the
+   supervisor; 6 scope registration failed.
 
 **`force-stop` (Codex r3 B2).** Python. Resolves the door from `4090.door`;
 the heartbeat's lock path is `<door>/session.jsonl.events.jsonl.heartbeat.lock`
@@ -244,15 +304,24 @@ not security.
    `enabled-runtime`, `linked`); assert
    `show -p Requires,Wants,After hamutay-heartbeat@qwen` names no server
    unit; assert `show -p WantedBy,RequiredBy hamutay-llama-server` is
-   empty; grep every unit file and drop-in under `~/.config/systemd/user/`
-   for `hamutay-llama-server` in a `Requires=`/`Wants=`/`BindsTo=` line
-   and assert none.
+   empty; for every directory printed by `systemd-analyze --user
+   unit-paths`, grep every unit file, drop-in, and `*.wants`/`*.requires`
+   symlink for `hamutay-llama-server` and assert the only matches are the
+   unit itself and the qwen drop-in's comment (Codex r4 S2).
 4. Resolve the state dir from `AYLLU_STATE_DIR` with the same rule as the
-   commands; `mkdir -p`; write `4090.door`.
-5. Deploy the code; write `door.json`.
-6. Restart `hamutay-heartbeat@qwen` when the store shows no `running`
-   event (wait up to 30 min). The new heartbeat boots, reads `door.json`,
-   observes FREE and the server active, probes ready, proceeds.
+   commands; `mkdir -p` (including `4090.tombstones/`); write `4090.door`.
+5. Deploy the code (the old heartbeat process keeps running the old code;
+   `door.json` is **not** written yet).
+6. Quiesce the old heartbeat atomically with its store (Codex r4 S2):
+   holding the store's lock (`session.jsonl.events.jsonl.lock`, flock),
+   confirm no event's latest status is `running` (a Python one-liner
+   using `EventStore.latest_by_event_id`), and while still holding it
+   `systemctl --user stop hamutay-heartbeat@qwen` (the old process is
+   asleep in its poll or blocked on this very lock; it cannot claim). If
+   a wake is running, release the lock, wait 30 s, retry, up to 30 min.
+7. Write `door.json`; `systemctl --user start hamutay-heartbeat@qwen`. The
+   new heartbeat boots bound, observes FREE and the server active, probes
+   ready, validates context, proceeds.
 
 `deploy/check-gpu-lease.sh` re-runs the assertions of steps 1, 3, 4 and
 checks the launch note printed `gpu lease: 4090 (door.json)`.
@@ -310,19 +379,22 @@ appends the second budget segment.
 
 1. If the latest status is a substrate rest (or boot reconciliation found
    one): `_transition("waking", "substrate_returning", episode_key=…)`.
-2. [lock] Re-validate FREE. If the most recent expired or released lease
-   has a `scope_unit` that is loaded and not inactive/failed:
-   `workload_killed` intent → `systemctl stop <scope>` → observe →
-   outcome; do not start until the scope is gone. Then, if the server's
+2. [lock] Re-validate FREE, which includes resolving every tombstone
+   (component 1): a live scope is killed and observed dead, or the
+   resource is quarantined, before any start. Then, if the server's
    `ActiveState ∉ {active, activating}`: `server_start` intent → start →
    observe (`InvocationID`) → outcome.
 3. Probe `GET <base_url>/models` (2 s). Not ready → `{"state": "warming"}`,
    no transition, and if the ledger's latest readiness observation for
    this `InvocationID` is `ready`, append `server_unready`. Ready → if the
    latest observation for this invocation is not `ready`, append
-   `server_ready` and run **context discovery** (below); if discovery
-   fails and there is no explicit limit, stay `warming` (a new invocation
-   may carry a new `-c`; Codex r3 S2). Otherwise fall through to the
+   `server_ready`. Then, **independently of the readiness edge** (Codex
+   r4 S1): if the session log has no positive `substrate_observation` for
+   this `InvocationID` and there is no explicit `--context-limit`, run
+   context discovery; on success the session applies and appends it
+   (below); on failure stay `warming` and retry next step. Claims are
+   permitted only when an explicit limit exists or that observation is
+   durable for the current invocation. Otherwise fall through to the
    budget check and the claim.
 
 **Boot reconciliation** runs before `boot()` appends `waking/boot`: under
@@ -335,14 +407,18 @@ ledger's release/expire/release_force outcome, else boot time, with
 its record and its outcome); hydrate `_last_transition`; read the latest
 readiness observation for the current `InvocationID`.
 
-**Context ceiling (Codex r3 S2).** `OpenAITasteBackend.set_context_limit(limit,
-source)` is the one setter: it updates the backend's `_context_limit` (the
-value `_call_natural` snapshots) and the session's
-`_launch_config["context_limit"/"context_limit_source"]`. At
-`server_ready`, discovery from `/props` succeeds → setter → the session
-appends a `substrate_observation` record to the session log
-(`{"record_type": "substrate_observation", "context_limit", "source":
-"discovered", "invocation_id", "base_url", "model", "provider", "at"}`);
+**Context ceiling (Codex r3 S2, r4 S1).**
+`OpenTasteSession.apply_context_limit(limit, source, invocation_id)` is
+the one setter, on the session because the session owns both the backend
+reference and `_launch_config`: it sets the backend's `_context_limit`
+(the value `_call_natural` snapshots), updates
+`_launch_config["context_limit"/"context_limit_source"]`, and appends a
+`substrate_observation` record through a new
+`OpenTasteSession.append_substrate_observation()` (a dedicated stateless
+append, not `_log_entry`):
+`{"record_type": "substrate_observation", "context_limit", "source":
+"discovered", "invocation_id", "base_url", "model", "provider", "at"}`.
+The heartbeat calls it when discovery succeeds (return sequence step 3);
 `resolve_context_limit` reads the latest of (a) the `launch.context_limit`
 of the newest state-bearing record and (b) the newest
 `substrate_observation` record, for a matching `{model, provider,
@@ -476,3 +552,27 @@ install both units, accept `static`, symlink check, unit-file grep,
 
 M1 (readiness de-dup): adopted — observations per edge per invocation,
 read from the ledger at boot. M2 (`lease_blocked` semantics): adopted.
+
+## Dispositions of Codex round four
+
+B1 (expired scope not a barrier; only the latest lease checked;
+`LoadState` missing): adopted — tombstones per scope; "free" defined as
+no lease, no quarantine, no tombstone; expiry kills before it frees;
+every grant/stop/start/force-clear resolves all tombstones; `LoadState`
+in every scope observation; `scope_unkillable` quarantine. B2 (`run`
+launches after expiry; `systemd-run --scope` synchronous; short-TTL
+schedule): adopted — supervision from acquisition, `wait` validates the
+live lease under the lock, launch under the lock after scope
+registration, background `systemd-run` child reaped by the wrapper,
+absolute 3-minute margin, 10-minute minimum TTL for `run`. B3
+(quarantine entry without an action; `release_force` reconciliation):
+adopted — `quarantine_enter` is an action with `cause_action_id`;
+`release_force` is a two-file clear with exact reconciliation; generation
+compared with generation.
+
+S1 (discovery skipped after a readiness crash; setter ownership):
+adopted — context validation tracked per invocation independently of the
+readiness edge; `apply_context_limit` and `append_substrate_observation`
+on the session. S2 (migration can interrupt a wake; search paths):
+adopted — quiesce under the store lock before `door.json` exists; scan
+`systemd-analyze --user unit-paths`.
