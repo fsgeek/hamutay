@@ -1,5 +1,6 @@
 import inspect
 import json
+from datetime import datetime, timedelta
 
 from conftest import append_jsonl
 
@@ -28,6 +29,11 @@ def _render_notes(records, event):
         "event": event,
         "event_id": event["event_id"],
         "created_at": event["created_at"],
+        "now": max(
+            datetime.fromisoformat(r["created_at"])
+            for r in records
+            if r.get("created_at")
+        ) + timedelta(seconds=1),
     }
     args = []
     kwargs = {}
@@ -75,4 +81,3 @@ def test_first_post_loan_note_survives_failure_and_is_consumed_once_on_completio
     assert first_attempt.count("yupi") == 1
     assert retry.count("yupi") == 1
     assert "yupi" not in after_completion
-

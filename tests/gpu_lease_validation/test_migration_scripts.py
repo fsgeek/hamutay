@@ -85,12 +85,19 @@ def run_script(script, args, env):
 def test_migration_dry_run_uses_only_injected_systemctl(tmp_path):
     fakebin = fake_commands(tmp_path)
     env, unit_path = sandbox_env(tmp_path, fakebin)
+    unit_dir = tmp_path / "installed-units"
 
-    result = run_script(MIGRATE, ["--dry-run", "--root", ROOT, "--unit-paths", unit_path, "--no-commit"], env)
+    result = run_script(MIGRATE, [
+        "--dry-run", "--root", ROOT,
+        "--systemctl", fakebin / "systemctl", "--unit-dir", unit_dir,
+        "--unit-paths", unit_path, "--journalctl", fakebin / "journalctl",
+    ], env)
 
     assert result.returncode == 0, result.stdout
     log = Path(env["FAKE_SYSTEMCTL_LOG"])
-    assert not log.exists() or "systemctl" not in log.read_text().lower()
+    assert log.read_text().splitlines() == [
+        "--user show -p WorkingDirectory --value hamutay-heartbeat@qwen"
+    ]
 
 
 def test_migration_refuses_root_that_differs_from_unit_working_directory(tmp_path):
@@ -98,8 +105,13 @@ def test_migration_refuses_root_that_differs_from_unit_working_directory(tmp_pat
     other = tmp_path / "installed-root"
     other.mkdir()
     env, unit_path = sandbox_env(tmp_path, fakebin, working_directory=str(other))
+    unit_dir = tmp_path / "installed-units"
 
-    result = run_script(MIGRATE, ["--root", ROOT, "--unit-paths", unit_path, "--no-commit"], env)
+    result = run_script(MIGRATE, [
+        "--root", ROOT, "--systemctl", fakebin / "systemctl",
+        "--unit-dir", unit_dir, "--unit-paths", unit_path,
+        "--journalctl", fakebin / "journalctl",
+    ], env)
 
     assert result.returncode != 0
     assert "WorkingDirectory" in result.stdout or "working directory" in result.stdout.lower()
@@ -110,8 +122,13 @@ def test_step_six_timeout_aborts_before_door_json_exists(tmp_path):
     root = fixture_root(tmp_path)
     env, unit_path = sandbox_env(tmp_path, fakebin, working_directory=str(root))
     env["FAKE_UV_EXIT"] = "1"
+    unit_dir = tmp_path / "installed-units"
 
-    result = run_script(MIGRATE, ["--root", root, "--unit-paths", unit_path, "--no-commit"], env)
+    result = run_script(MIGRATE, [
+        "--root", root, "--systemctl", fakebin / "systemctl",
+        "--unit-dir", unit_dir, "--unit-paths", unit_path,
+        "--journalctl", fakebin / "journalctl", "--quiesce-timeout", "0s",
+    ], env)
 
     assert result.returncode != 0
     assert not (root / "community" / "qwen" / "door.json").exists()
@@ -134,7 +151,10 @@ def test_check_rejects_indented_wants_directive(tmp_path):
     (unit_path / "stray.service").write_text("[Unit]\n    Wants=hamutay-llama-server.service\n")
     env["FAKE_JOURNAL"] = "gpu lease: 4090 (door.json)"
 
-    result = run_script(CHECK, ["--root", root, "--unit-paths", unit_path, "--journalctl", "journalctl"], env)
+    result = run_script(CHECK, [
+        "--systemctl", Path(env["PATH"].split(os.pathsep)[0]) / "systemctl",
+        "--unit-paths", unit_path, "--journalctl", Path(env["PATH"].split(os.pathsep)[0]) / "journalctl",
+    ], env)
 
     assert result.returncode != 0
 
@@ -146,7 +166,10 @@ def test_check_rejects_stray_dependency_symlink(tmp_path):
     (wants / "hamutay-llama-server.service").symlink_to("../hamutay-llama-server.service")
     env["FAKE_JOURNAL"] = "gpu lease: 4090 (door.json)"
 
-    result = run_script(CHECK, ["--root", root, "--unit-paths", unit_path, "--journalctl", "journalctl"], env)
+    result = run_script(CHECK, [
+        "--systemctl", Path(env["PATH"].split(os.pathsep)[0]) / "systemctl",
+        "--unit-paths", unit_path, "--journalctl", Path(env["PATH"].split(os.pathsep)[0]) / "journalctl",
+    ], env)
 
     assert result.returncode != 0
 
@@ -155,7 +178,9 @@ def test_check_rejects_missing_launch_note(tmp_path):
     root, env, unit_path = _prepare_check(tmp_path)
     env["FAKE_JOURNAL"] = "heartbeat booted without participation note"
 
-    result = run_script(CHECK, ["--root", root, "--unit-paths", unit_path, "--journalctl", "journalctl"], env)
+    result = run_script(CHECK, [
+        "--systemctl", Path(env["PATH"].split(os.pathsep)[0]) / "systemctl",
+        "--unit-paths", unit_path, "--journalctl", Path(env["PATH"].split(os.pathsep)[0]) / "journalctl",
+    ], env)
 
     assert result.returncode != 0
-

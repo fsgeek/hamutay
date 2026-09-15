@@ -22,28 +22,28 @@ def _door(tmp_path, p, lease):
     door.mkdir()
     event_log = door / "session.jsonl.events.jsonl"
     write_json(door / "door.json", {"gpu_lease": "4090"})
-    p.door().parent.mkdir(parents=True, exist_ok=True)
-    p.door().write_text(str(door) + "\n")
-    write_json(p.lease(), lease)
+    p.door.parent.mkdir(parents=True, exist_ok=True)
+    p.door.write_text(str(door) + "\n")
+    write_json(p.lease, lease)
     return door, event_log, EventStore(event_log)
 
 
 def test_live_tombstone_prevents_lease_grant(p, ctx, sd, clock):
     scope = "ayllu-gpu-still-running.scope"
-    write_json(p.tombstones() / scope, {"scope_unit": scope})
+    write_json(p.tombstones / scope, {"scope_unit": scope})
     sd.units[scope] = sd.active()
 
     with locked(p):
         outcome = run(ctx, Lease("new-holder", "new-work", timedelta(hours=1), clock() + timedelta(hours=1)))
 
     assert outcome["outcome"] != "ok"
-    assert not p.lease().exists()
+    assert not p.lease.exists()
     assert not any(call == ("start", SERVER) for call in sd.calls)
 
 
 def test_server_start_never_occurs_while_tombstone_still_exists(p, ctx, sd):
     scope = "ayllu-gpu-orphan.scope"
-    tombstone = p.tombstones() / scope
+    tombstone = p.tombstones / scope
     write_json(tombstone, {"scope_unit": scope})
     sd.units[scope] = sd.active()
     sd.units[SERVER] = sd.inactive()
@@ -61,15 +61,15 @@ def test_server_start_never_occurs_while_tombstone_still_exists(p, ctx, sd):
 def test_expiry_kills_scope_before_removing_lease(p, ctx, sd, clock):
     lease = lease_object(clock, minutes=-1)
     scope = lease["scope_unit"]
-    tombstone = p.tombstones() / scope
-    write_json(p.lease(), lease)
+    tombstone = p.tombstones / scope
+    write_json(p.lease, lease)
     write_json(tombstone, {"scope_unit": scope})
     sd.units[scope] = sd.active()
     observed = []
 
     def before_stop(unit):
         if unit == scope:
-            observed.append((p.lease().exists(), tombstone.exists()))
+            observed.append((p.lease.exists(), tombstone.exists()))
 
     sd.before_stop = before_stop
     with locked(p):
@@ -77,14 +77,14 @@ def test_expiry_kills_scope_before_removing_lease(p, ctx, sd, clock):
 
     assert observed == [(True, True)]
     assert outcome["outcome"] == "ok"
-    assert not p.lease().exists()
+    assert not p.lease.exists()
     assert not tombstone.exists()
 
 
 def test_run_refuses_launch_with_less_than_six_minutes_remaining(p, ctx, sd, clock):
     lease = lease_object(clock, minutes=5)
-    write_json(p.lease(), lease)
-    write_json(p.tombstones() / lease["scope_unit"], {"scope_unit": lease["scope_unit"]})
+    write_json(p.lease, lease)
+    write_json(p.tombstones / lease["scope_unit"], {"scope_unit": lease["scope_unit"]})
     sd.units[SERVER] = sd.inactive()
     launched = []
     args = SimpleNamespace(
@@ -142,4 +142,3 @@ def test_force_stop_records_rest_before_ledger_outcome(p, sd, clock, tmp_path):
 
     assert code == 0
     assert rest["created_at"] <= outcome["at"]
-

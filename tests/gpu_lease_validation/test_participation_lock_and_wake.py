@@ -56,7 +56,7 @@ def test_bound_store_refuses_every_unguarded_claim_surface(tmp_path, clock):
     store = EventStore(log)
 
     with pytest.raises(LeaseGateRequired):
-        store.claim_next_pending(clock())
+        store.claim_next_pending(now=clock())
     for runner in (run_next_event, run_pending_events, step_pending_events):
         with pytest.raises(LeaseGateRequired):
             _invoke_runner(runner, store, clock)
@@ -71,7 +71,7 @@ def test_unbound_store_claim_behavior_is_unchanged(tmp_path, clock):
     append_jsonl(log, _pending("e1", clock()))
     store = EventStore(log)
 
-    claimed = store.claim_next_pending(clock())
+    claimed = store.claim_next_pending(now=clock())
 
     assert claimed is not None
 
@@ -84,11 +84,11 @@ def test_lease_gate_claim_blocks_on_4090_lock_from_other_process(p, ctx, tmp_pat
     door.mkdir()
     write_json(door / "door.json", {"gpu_lease": "4090"})
     store = EventStore(door / "session.jsonl.events.jsonl")
-    p.lock().parent.mkdir(parents=True, exist_ok=True)
+    p.lock.parent.mkdir(parents=True, exist_ok=True)
     holder = subprocess.Popen(
         [sys.executable, "-c",
          "import fcntl,sys; f=open(sys.argv[1],'a+'); fcntl.flock(f,fcntl.LOCK_EX); print('held',flush=True); sys.stdin.read(1)",
-         str(p.lock())],
+         str(p.lock)],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True,
     )
     assert holder.stdout.readline().strip() == "held"
@@ -121,7 +121,7 @@ def test_live_lease_does_not_stop_server_until_running_wake_completes(p, ctx, sd
         "created_at": clock().isoformat(), "event": {"type": "validation", "content": "wake"},
     })
     lease = lease_object(clock)
-    write_json(p.lease(), lease)
+    write_json(p.lease, lease)
     store = EventStore(log)
     gate = LeaseGate(store, ctx)
     calls = 0
@@ -136,15 +136,19 @@ def test_live_lease_does_not_stop_server_until_running_wake_completes(p, ctx, sd
             })
         return {"ran": 1, "status": "ok"}
 
-    parameters = inspect.signature(HeartbeatLoop).parameters
-    values = {"store": store, "run_pending": run_pending, "now": clock, "lease_gate": gate, "gate": gate,
-              "claim_gate": gate, "sleep": lambda _: None}
-    kwargs = {name: values[name] for name, parameter in parameters.items()
-              if name in values and parameter.kind != parameter.POSITIONAL_ONLY}
-    loop = HeartbeatLoop(**kwargs)
+    loop = HeartbeatLoop(
+        None,
+        store,
+        now=clock,
+        run_pending=run_pending,
+        summarize=lambda records, now: {
+            "pending_runnable_count": 0,
+            "pending_waiting_count": 0,
+        },
+        guard=gate,
+    )
 
     loop.step()
     assert not any(call[0] == "stop" for call in sd.calls)
     loop.step()
     assert any(call[0] == "stop" for call in sd.calls)
-

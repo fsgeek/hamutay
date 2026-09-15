@@ -50,7 +50,7 @@ def hand_write_intent(ctx, action, *, action_name=None):
         "at": ctx.now().isoformat(),
         **action.intent(ctx),
     }
-    append(ctx.p, row)
+    append(ctx.paths, row)
     return row
 
 
@@ -66,12 +66,12 @@ def lease_from_intent(intent, clock):
     return {
         "resource": "4090",
         "lease_id": intent["lease_id"],
-        "generation": intent.get("generation", 1),
+        "generation": intent.get("generation_before", 0) + 1,
         "mutation_id": intent["action_id"],
         "holder": intent["holder"],
         "purpose": intent["purpose"],
-        "since": intent.get("since", clock().isoformat()),
-        "expires_at": intent["expires_at"],
+        "since": clock().isoformat(),
+        "expires_at": (clock() + timedelta(seconds=int(intent["ttl_seconds"]))).isoformat(),
         "expected_until": intent["expected_until"],
         "scope_unit": intent["scope_unit"],
     }
@@ -83,26 +83,26 @@ def test_dangling_lease_is_evaluation_only_when_no_write_landed(p, ctx, clock):
         reconcile(ctx)
 
     assert outcome_for(p, intent)["outcome"] == "not_performed"
-    assert not p.lease().exists()
-    assert not (p.tombstones() / intent["scope_unit"]).exists()
+    assert not p.lease.exists()
+    assert not (p.tombstones / intent["scope_unit"]).exists()
 
 
 def test_dangling_lease_with_only_file_is_not_completed_or_repaired(p, ctx, clock):
     with locked(p):
         intent = hand_write_intent(ctx, Lease("holder", "purpose", timedelta(hours=1), clock() + timedelta(hours=1)))
-        write_json(p.lease(), lease_from_intent(intent, clock))
+        write_json(p.lease, lease_from_intent(intent, clock))
         reconcile(ctx)
 
     assert outcome_for(p, intent)["outcome"] == "not_performed"
-    assert p.lease().exists()
-    assert not (p.tombstones() / intent["scope_unit"]).exists()
+    assert p.lease.exists()
+    assert not (p.tombstones / intent["scope_unit"]).exists()
 
 
 def test_dangling_lease_with_both_writes_is_completed_by_evaluation(p, ctx, clock):
     with locked(p):
         intent = hand_write_intent(ctx, Lease("holder", "purpose", timedelta(hours=1), clock() + timedelta(hours=1)))
-        write_json(p.lease(), lease_from_intent(intent, clock))
-        write_json(p.tombstones() / intent["scope_unit"], {"scope_unit": intent["scope_unit"]})
+        write_json(p.lease, lease_from_intent(intent, clock))
+        write_json(p.tombstones / intent["scope_unit"], {"scope_unit": intent["scope_unit"]})
         reconcile(ctx)
 
     assert outcome_for(p, intent)["outcome"] == "ok"
@@ -111,8 +111,8 @@ def test_dangling_lease_with_both_writes_is_completed_by_evaluation(p, ctx, cloc
 @pytest.mark.parametrize("landed", [False, True])
 def test_dangling_renew_is_evaluation_only(p, ctx, clock, landed):
     original = lease_object(clock)
-    write_json(p.lease(), original)
-    before = p.lease().read_bytes()
+    write_json(p.lease, original)
+    before = p.lease.read_bytes()
     with locked(p):
         intent = hand_write_intent(ctx, Renew(original["lease_id"], timedelta(hours=2)))
         if landed:
@@ -120,14 +120,14 @@ def test_dangling_renew_is_evaluation_only(p, ctx, clock, landed):
             renewed.update(
                 mutation_id=intent["action_id"],
                 generation=original["generation"] + 1,
-                expires_at=intent["expires_at"],
+                expires_at=(clock() + timedelta(hours=2)).isoformat(),
             )
-            write_json(p.lease(), renewed)
+            write_json(p.lease, renewed)
         reconcile(ctx)
 
     assert outcome_for(p, intent)["outcome"] == ("ok" if landed else "not_performed")
     if not landed:
-        assert p.lease().read_bytes() == before
+        assert p.lease.read_bytes() == before
 
 
 @pytest.mark.parametrize("boundary", ["none", "dead", "tombstone_removed", "lease_removed"])
@@ -135,8 +135,8 @@ def test_dangling_renew_is_evaluation_only(p, ctx, clock, landed):
 def test_release_and_expire_reconcile_every_boundary(p, ctx, sd, clock, boundary, kind):
     lease = lease_object(clock, minutes=-1 if kind == "expire" else 60)
     scope = lease["scope_unit"]
-    tombstone = p.tombstones() / scope
-    write_json(p.lease(), lease)
+    tombstone = p.tombstones / scope
+    write_json(p.lease, lease)
     write_json(tombstone, {"scope_unit": scope})
     sd.units[scope] = sd.active()
     action = Release(lease["lease_id"]) if kind == "release" else Expire()
@@ -147,36 +147,36 @@ def test_release_and_expire_reconcile_every_boundary(p, ctx, sd, clock, boundary
         if boundary in {"tombstone_removed", "lease_removed"}:
             tombstone.unlink()
         if boundary == "lease_removed":
-            p.lease().unlink()
+            p.lease.unlink()
         reconcile(ctx)
 
     assert outcome_for(p, intent)["outcome"] == "ok"
-    assert not p.lease().exists()
+    assert not p.lease.exists()
     assert not tombstone.exists()
     assert sd.units[scope]["active_state"] in {"inactive", "failed"}
 
 
 @pytest.mark.parametrize("boundary", ["none", "quarantine_escrowed", "both_escrowed", "one_deleted"])
 def test_release_force_reconciles_every_file_boundary(p, ctx, clock, boundary):
-    write_json(p.lease(), lease_object(clock))
-    write_json(p.quarantine(), {
+    write_json(p.lease, lease_object(clock))
+    write_json(p.quarantine, {
         "quarantine_id": "q", "reason": "unreadable", "source_action_id": "s",
         "observed_digest": "", "at": clock().isoformat(),
     })
     with locked(p):
         intent = hand_write_intent(ctx, ReleaseForce("operator", "validation"))
-        q_escrow = p.quarantine().with_name(p.quarantine().name + ".escrow-" + intent["action_id"])
-        l_escrow = p.lease().with_name(p.lease().name + ".escrow-" + intent["action_id"])
+        q_escrow = p.quarantine.with_name(p.quarantine.name + ".escrow-" + intent["action_id"])
+        l_escrow = p.lease.with_name(p.lease.name + ".escrow-" + intent["action_id"])
         if boundary in {"quarantine_escrowed", "both_escrowed", "one_deleted"}:
-            p.quarantine().rename(q_escrow)
+            p.quarantine.rename(q_escrow)
         if boundary in {"both_escrowed", "one_deleted"}:
-            p.lease().rename(l_escrow)
+            p.lease.rename(l_escrow)
         if boundary == "one_deleted":
             q_escrow.unlink()
         reconcile(ctx)
 
     assert outcome_for(p, intent)["outcome"] == "ok"
-    assert not p.lease().exists() and not p.quarantine().exists()
+    assert not p.lease.exists() and not p.quarantine.exists()
     assert not l_escrow.exists() and not q_escrow.exists()
 
 
@@ -185,7 +185,7 @@ def test_quarantine_enter_reconciles_before_and_after_rename(p, ctx, clock, land
     with locked(p):
         intent = hand_write_intent(ctx, QuarantineEnter("malformed_lease", "digest"))
         if landed:
-            write_json(p.quarantine(), {
+            write_json(p.quarantine, {
                 "quarantine_id": "q", "reason": "malformed_lease",
                 "source_action_id": intent["action_id"], "observed_digest": "digest",
                 "at": clock().isoformat(),
@@ -193,7 +193,7 @@ def test_quarantine_enter_reconciles_before_and_after_rename(p, ctx, clock, land
         reconcile(ctx)
 
     assert outcome_for(p, intent)["outcome"] == "ok"
-    assert intent["action_id"] in p.quarantine().read_text()
+    assert intent["action_id"] in p.quarantine.read_text()
 
 
 @pytest.mark.parametrize(
@@ -229,7 +229,7 @@ def test_server_start_reconciles_before_and_after_start(p, ctx, sd, already_star
 @pytest.mark.parametrize("boundary", ["none", "dead", "tombstone_removed"])
 def test_workload_killed_reconciles_every_boundary(p, ctx, sd, boundary):
     scope = "ayllu-gpu-reconcile.scope"
-    tombstone = p.tombstones() / scope
+    tombstone = p.tombstones / scope
     write_json(tombstone, {"scope_unit": scope})
     sd.units[scope] = sd.active()
     with locked(p):
@@ -243,4 +243,3 @@ def test_workload_killed_reconciles_every_boundary(p, ctx, sd, boundary):
     assert outcome_for(p, intent)["outcome"] == "ok"
     assert not tombstone.exists()
     assert sd.units[scope]["active_state"] in {"inactive", "failed"}
-
