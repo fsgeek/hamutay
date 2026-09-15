@@ -361,6 +361,9 @@ class HeartbeatLoop:
         self._run_pending = run_pending
         self._summarize = summarize
         self._last_transition: tuple[str, str, str | None] | None = None
+        # Set by _guard_step when a lease went live while a wake was still
+        # running; the episode whose stop this step still owes.
+        self._deferred_stop: str | None = None
 
     @staticmethod
     def _emit(payload: dict) -> None:
@@ -493,6 +496,11 @@ class HeartbeatLoop:
             "batch": None,
         }
 
+    def _running_wake(self) -> bool:
+        """Is any event's latest status `running`?"""
+        return any(r.get("status") == "running"
+                   for r in self._store.latest_by_event_id().values())
+
     def _guard_step(self, now) -> dict | None:
         """The substrate guard: rest while the GPU is lent, warm while it comes
         back, None when the door may go on to the budget check and the claim."""
@@ -519,6 +527,14 @@ class HeartbeatLoop:
             # went away before it goes away. Under quarantine the server is left
             # in whatever state it is in — we do not know enough to act.
             if kind == "lease_live":
+                # Defensive: the loop is single-threaded, so a `running` status at
+                # step() time can only be an orphan, which boot() re-pends before
+                # any step -- but stopping the server out from under a wake that
+                # really is in flight would truncate it, so defer the stop and
+                # let the step finish that wake first.
+                if self._running_wake():
+                    self._deferred_stop = episode
+                    return None
                 self._guard.ensure_stopped(episode)
             return {"state": "resting", "sleep_seconds": self._poll_interval, "batch": None}
         if latest[0] == "resting" and latest[1] in SUBSTRATE_REST_REASONS:
@@ -538,6 +554,7 @@ class HeartbeatLoop:
         # The substrate guard runs before the budget: a door whose GPU is lent
         # has nothing to spend the budget on.
         if self._guard is not None:
+            self._deferred_stop = None
             guarded = self._guard_step(now)
             if guarded is not None:
                 return guarded
@@ -569,6 +586,12 @@ class HeartbeatLoop:
         # transitions.
         if batch.get("ran", 0):
             self._transition("active", reason="runnable_pending", now=now)
+        # The stop _guard_step deferred because a wake was in flight. That wake
+        # has now had its turn, so the substrate can go: the lease is live and
+        # the rest record is already written.
+        if self._deferred_stop is not None and not self._running_wake():
+            self._guard.ensure_stopped(self._deferred_stop)
+            self._deferred_stop = None
         # Say the resident's words aloud: the human watching this terminal is
         # a conversation participant, not just an operator.
         for result in batch.get("results", []) or []:
