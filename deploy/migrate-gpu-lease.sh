@@ -154,10 +154,34 @@ echo "step 7: write door.json and start the new heartbeat"
 run cp "$SELF_ROOT/deploy/door.json.qwen" "$ROOT/community/qwen/door.json"
 run "$SYSTEMCTL" --user start hamutay-heartbeat@qwen
 
+# The new heartbeat has to start, resolve its launch, and print its notes
+# before check-gpu-lease.sh can see the launch note. Wait for it rather than
+# racing it into a spurious failure. Skipped under --dry-run (nothing started).
+if [ "$DRY_RUN" -eq 0 ]; then
+  echo "waiting up to 120s for the 'gpu lease: 4090' launch note"
+  waited=0
+  while [ "$waited" -lt 120 ]; do
+    if "$JOURNALCTL" --user -u hamutay-heartbeat@qwen -n 500 --no-pager 2>/dev/null \
+         | grep -q 'gpu lease: 4090'; then
+      echo "launch note seen after ${waited}s"
+      break
+    fi
+    sleep 5
+    waited=$((waited + 5))
+  done
+  [ "$waited" -lt 120 ] || echo "migrate-gpu-lease: no launch note after ${waited}s; checking anyway" >&2
+else
+  echo "+ (dry-run) skip the 120s wait for the launch note"
+fi
+
 echo "migrate-gpu-lease: done; verifying with check-gpu-lease.sh"
 check_cmd=("$SELF_ROOT/deploy/check-gpu-lease.sh" --systemctl "$SYSTEMCTL" --unit-paths "$UNIT_PATHS" --journalctl "$JOURNALCTL")
 if [ "$DRY_RUN" -eq 0 ]; then
-  "${check_cmd[@]}"
+  if ! "${check_cmd[@]}"; then
+    echo "migrate-gpu-lease: the check failed. Re-running this migration is safe:" >&2
+    echo "  every step is idempotent, and step 6 re-quiesces under the store lock." >&2
+    exit 1
+  fi
 else
   echo "+ ${check_cmd[*]}"
 fi
