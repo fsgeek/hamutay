@@ -74,7 +74,12 @@ def test_bound_store_refuses_cli_runners(tmp_path, clock, command):
     write_json(door / "door.json", {"gpu_lease": "4090"})
     log = door / "session.jsonl.events.jsonl"
     session_log = door / "session.jsonl"
-    session_log.write_text("")
+    append_jsonl(session_log, {
+        "record_type": "open_taste_cycle",
+        "cycle": 0,
+        "state": {},
+        "timestamp": clock().isoformat(),
+    })
     append_jsonl(log, _pending("e1", clock()))
     result = subprocess.run(
         [
