@@ -979,17 +979,41 @@ def resolve_budget(args) -> tuple[WakeBudget | None, str]:
     )
 
 
-def assert_canonical_lock_path(lock_path: str, event_log_path: str) -> None:
+def assert_canonical_lock_path(lock_path: str, event_log_path: str, door: str | None = None) -> None:
     """One heartbeat per bound door, and the only lock that proves it is the
     canonical one beside the event log. A custom --lock-path would let a second
-    heartbeat claim the same door behind the same gate."""
+    heartbeat claim the same door behind the same gate.
+
+    Pinning the *relation* (lock == events + suffix) is not enough: a custom
+    --event-log-path would satisfy it while moving both files away from the
+    door that `ayllu-gpu force-stop` reaches for. So when the door is known,
+    pin the canonical NAMES too — the same rule `heartbeat_lock_path` applies
+    in gpu_lease/cli.py, which is where force-stop computes the lock it takes.
+    """
     from pathlib import Path
+
+    from hamutay.gpu_lease.cli import heartbeat_lock_path
 
     expected = str(Path(event_log_path).resolve()) + ".heartbeat.lock"
     if str(Path(lock_path).resolve()) != expected:
         raise SystemExit(
             "gpu lease door: --lock-path must be the canonical "
             "<events>.heartbeat.lock"
+        )
+    if door is None:
+        return
+    door_path = Path(door)
+    want_events = door_path / "session.jsonl.events.jsonl"
+    want_lock = heartbeat_lock_path(door_path)
+    if Path(event_log_path).resolve() != want_events.resolve():
+        raise SystemExit(
+            f"gpu lease door: the event log must be the canonical {want_events} "
+            f"(got {event_log_path}); force-stop reaches for the canonical name"
+        )
+    if Path(lock_path).resolve() != want_lock.resolve():
+        raise SystemExit(
+            f"gpu lease door: the lock must be the canonical {want_lock} "
+            f"(got {lock_path})"
         )
 
 
@@ -1041,7 +1065,11 @@ def main() -> None:
     # constitution sentence and whether this door runs behind a lease gate.
     store = EventStore(event_log_path)
     if store.lease_binding:
-        assert_canonical_lock_path(lock_path, event_log_path)
+        # The door is the log's directory — the same directory 4090.door names
+        # and the one gpu_lease/cli.py computes the heartbeat lock inside.
+        assert_canonical_lock_path(
+            lock_path, event_log_path, door=str(Path(args.log_path).parent)
+        )
     lock_handle = acquire_lock(lock_path)  # held for process lifetime
 
     launch, launch_notes = resolve_heartbeat_launch(args)

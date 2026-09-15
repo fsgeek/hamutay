@@ -375,6 +375,25 @@ def test_canonical_lock_path_assertion_both_ways(tmp_path):
     assert "canonical" in str(caught.value)
 
 
+def test_canonical_lock_path_pins_the_names_not_just_the_relation(tmp_path):
+    """The relation (lock == events + suffix) alone lets a custom
+    --event-log-path move both files away from the door force-stop reaches
+    for. With the door known, the NAMES are pinned to cli.heartbeat_lock_path."""
+    from hamutay.gpu_lease.cli import heartbeat_lock_path
+    door = tmp_path / "community" / "qwen"; door.mkdir(parents=True)
+    events = str(door / "session.jsonl.events.jsonl")
+    lock = str(heartbeat_lock_path(door))
+    assert_canonical_lock_path(lock, events, door=str(door))          # must not raise
+    # the relation holds, but both files moved off the canonical names
+    other = str(door / "other.events.jsonl")
+    with pytest.raises(SystemExit) as caught:
+        assert_canonical_lock_path(other + ".heartbeat.lock", other, door=str(door))
+    assert "session.jsonl.events.jsonl" in str(caught.value)
+    # events canonical, lock elsewhere: caught by the relation check first
+    with pytest.raises(SystemExit):
+        assert_canonical_lock_path(str(door / "x.lock"), events, door=str(door))
+
+
 def test_lease_door_requires_a_base_url():
     assert_lease_door_has_base_url(None, None)                       # unbound: no opinion
     assert_lease_door_has_base_url("4090", "http://127.0.0.1:8081/v1")
