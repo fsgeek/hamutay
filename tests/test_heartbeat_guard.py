@@ -4,7 +4,7 @@ import pytest
 from hamutay.events import EventStore, LeaseGateRequired, build_inbound_event, run_next_event, run_pending_events
 from hamutay.gpu_lease.actions import Ctx, REGISTRY, Lease, Release, run as run_action
 from hamutay.gpu_lease.gate import LeaseGate
-from hamutay.gpu_lease.state import paths, locked
+from hamutay.gpu_lease.state import paths, locked, read_lease, list_tombstones
 from hamutay.gpu_lease import ledger
 from datetime import timedelta
 from hamutay.heartbeat import (GPU_LEASE_SENTENCE, DailyLedger, HeartbeatLoop, WakeBudget,
@@ -250,6 +250,42 @@ def test_return_sequence_starts_server_warms_then_claims(bound):
     assert [o["action"] for o in obs] == ["server_ready"]
     loop.step()
     assert len([x for x in ledger.rows(p) if x.get("phase") == "observation"]) == 1   # no churn
+
+
+def test_wrapper_sigkill_leaves_a_live_scope_that_is_killed_before_the_server_starts(bound):
+    """Recommendation 5. A SIGKILLed ayllu-gpu wrapper can leave the lease file
+    gone (it released) while its scope is still ALIVE and the tombstone still
+    on disk. The door must not start llama-server onto a GPU a foreign workload
+    still holds: the tombstone is the fence, and workload_killed clears it
+    first."""
+    store, p, sd = bound
+    sd.units["hamutay-llama-server.service"] = {"active_state": "inactive", "sub_state": "dead",
+                                                "load_state": "loaded", "invocation_id": ""}
+    loop, gate, ctx = _guarded_loop(store, p, sd, NOW, ready=False)
+    with locked(p):
+        act = Lease("yupi", "t", timedelta(hours=1), None); run_action(ctx, act, REGISTRY)
+    scope = read_lease(p, NOW).data["scope_unit"]
+    loop.step()                                   # resting, server stopped
+    # the wrapper is SIGKILLed: lease gone by hand, tombstone left, scope alive
+    sd.units[scope] = {"active_state": "active", "sub_state": "running",
+                       "load_state": "loaded", "invocation_id": "s"}
+    p.lease.unlink()
+    assert list_tombstones(p) == [scope]
+
+    before = len(sd.calls)
+    r = loop.step()
+    after = sd.calls[before:]
+    kill_rows = [x for x in ledger.rows(p)
+                 if x.get("action") == "workload_killed" and x.get("phase") == "outcome"]
+    assert kill_rows and kill_rows[-1]["outcome"] == "ok"
+    assert ("stop", scope) in after
+    # the scope died and its tombstone is gone before the server was ever started
+    assert list_tombstones(p) == [] and sd.units[scope]["active_state"] == "inactive"
+    starts = [i for i, c in enumerate(after) if c == ("start", "hamutay-llama-server.service")]
+    stops = [i for i, c in enumerate(after) if c == ("stop", scope)]
+    assert starts and stops and stops[0] < starts[0]
+    assert r["state"] == "warming"
+    assert not p.quarantine.exists()
 
 
 def test_two_leases_back_to_back_are_two_episodes(bound):
