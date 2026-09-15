@@ -79,12 +79,15 @@ def fake_systemctl_py(tmp_path, state):
         if cmd == "is-enabled":
             print(st["enabled"])
         elif cmd == "show":
-            # show -p Prop1,Prop2 UNIT
+            # show -p Prop1,Prop2 [--value] UNIT
             props = args[2].split(",")
-            unit = args[3]
+            rest = [a for a in args[3:] if a != "--value"]
+            value_only = "--value" in args
+            unit = rest[0]
             d = st.get("show", {{}}).get(unit, {{}})
             for k in props:
-                print(f"{{k}}={{d.get(k, '')}}")
+                v = d.get(k, "")
+                print(v if value_only else f"{{k}}={{v}}")
         elif cmd == "stop":
             unit = args[1]
             with open({str(tmp_path / "stops")!r}, "a") as f:
@@ -129,6 +132,52 @@ def test_migrate_script_dry_run_prints_seven_steps_and_never_calls_real_systemct
     assert not (tmp_path / "stops").exists()
     assert not (tmp_path / "starts").exists()
     assert not (tmp_path / "disables").exists()
+
+
+def test_migrate_script_refuses_a_root_that_is_not_the_units_working_directory(tmp_path, monkeypatch):
+    """The door file the migration writes points the live heartbeat at a tree.
+    If --root is not the tree systemd launches the unit from (a worktree, say),
+    refuse before step 1 touches anything."""
+    state = {"enabled": "static",
+             "show": {"hamutay-heartbeat@qwen": {"Requires": "", "Wants": "", "After": "",
+                                                 "WorkingDirectory": "/home/tony/projects/hamutay"},
+                      "hamutay-llama-server": {"WantedBy": "", "RequiredBy": ""}}}
+    sc = fake_systemctl_py(tmp_path, state)
+    unit_dir = tmp_path / "units"; unit_dir.mkdir()
+    env = dict(os.environ)
+    env["AYLLU_STATE_DIR"] = str(tmp_path / "state")
+    r = subprocess.run(
+        ["bash", str(ROOT / "deploy/migrate-gpu-lease.sh"),
+         "--systemctl", str(sc), "--unit-dir", str(unit_dir), "--unit-paths", str(unit_dir),
+         "--root", str(tmp_path / "a-worktree")],
+        capture_output=True, text=True, env=env, cwd=str(ROOT),
+    )
+    assert r.returncode == 1, r.stdout + r.stderr
+    assert "a-worktree" in r.stderr and "/home/tony/projects/hamutay" in r.stderr
+    assert "after merging to main" in r.stderr
+    # refused before step 1: nothing was disabled
+    assert "step 1" not in r.stdout
+    assert not (tmp_path / "disables").exists()
+
+
+def test_migrate_script_accepts_a_root_that_matches_the_working_directory(tmp_path, monkeypatch):
+    fake_root = tmp_path / "root"
+    state = {"enabled": "static",
+             "show": {"hamutay-heartbeat@qwen": {"Requires": "", "Wants": "", "After": "",
+                                                 "WorkingDirectory": str(fake_root)},
+                      "hamutay-llama-server": {"WantedBy": "", "RequiredBy": ""}}}
+    sc = fake_systemctl_py(tmp_path, state)
+    unit_dir = tmp_path / "units"; unit_dir.mkdir()
+    env = dict(os.environ)
+    env["AYLLU_STATE_DIR"] = str(tmp_path / "state")
+    r = subprocess.run(
+        ["bash", str(ROOT / "deploy/migrate-gpu-lease.sh"), "--dry-run",
+         "--systemctl", str(sc), "--unit-dir", str(unit_dir), "--unit-paths", str(unit_dir),
+         "--root", str(fake_root)],
+        capture_output=True, text=True, env=env, cwd=str(ROOT),
+    )
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert "root check:" in r.stdout and "step 1" in r.stdout
 
 
 def test_migrate_script_aborts_before_door_json_when_quiesce_fails(tmp_path, monkeypatch):

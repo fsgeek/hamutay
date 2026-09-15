@@ -6,6 +6,10 @@
 # user instance. Step 6 quiesces the old heartbeat under its store lock and
 # ABORTS (nothing more done, door.json not written) if it cannot confirm no
 # wake is running before the timeout.
+#
+# Run from /home/tony/projects/hamutay after merging to main: the script
+# refuses to run from a tree that is not hamutay-heartbeat@qwen's own
+# WorkingDirectory (see the root check below).
 set -euo pipefail
 
 # SELF_ROOT is where this script (and the deploy/ templates it copies from)
@@ -47,6 +51,26 @@ run() {
     "$@"
   fi
 }
+
+# Guard: the migration must run from the tree the heartbeat unit actually
+# runs out of. ROOT feeds step 4's door path and step 7's door.json; if it
+# names a worktree (or any other checkout) the door file would point the
+# live heartbeat at a tree systemd never launches from. Read the unit's own
+# WorkingDirectory and refuse a mismatch. An empty answer means we are
+# talking to a fake systemctl (tests / --dry-run) or a unit systemd does not
+# know: note it and carry on rather than block the rehearsal.
+unit_wd="$("$SYSTEMCTL" --user show -p WorkingDirectory --value hamutay-heartbeat@qwen 2>/dev/null || true)"
+if [ -z "$unit_wd" ]; then
+  echo "migrate-gpu-lease: note — hamutay-heartbeat@qwen reports no WorkingDirectory; skipping the root check"
+elif [ "$unit_wd" != "$ROOT" ]; then
+  echo "migrate-gpu-lease: refusing to migrate from the wrong tree." >&2
+  echo "  --root (or this checkout): $ROOT" >&2
+  echo "  hamutay-heartbeat@qwen WorkingDirectory: $unit_wd" >&2
+  echo "  Run from /home/tony/projects/hamutay after merging to main." >&2
+  exit 1
+else
+  echo "root check: $ROOT matches hamutay-heartbeat@qwen WorkingDirectory"
+fi
 
 echo "step 1: disable hamutay-llama-server (unit still carries [Install])"
 run "$SYSTEMCTL" --user disable hamutay-llama-server
