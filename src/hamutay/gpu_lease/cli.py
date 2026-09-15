@@ -42,8 +42,25 @@ def cmd_release(a, ctx):
         if a.force:
             out = run(_ctx(ctx.paths, ctx.systemd, ctx.now, by=a.by), ReleaseForce(a.by, a.reason), REGISTRY)
             if out["outcome"] != "ok":
-                print(f"release --force refused: {out['detail'].get('error', out['outcome'])}",
-                      file=sys.stderr)
+                first_line = out["detail"].get("error", out["outcome"]).split("\n", 1)[0]
+                if first_line == "NotFree: scope unkillable; originals left in place":
+                    try:
+                        lease = read_lease(ctx.paths, ctx.now())
+                        scope_unit = (lease.data or {}).get("scope_unit", "unknown")
+                    except OSError:
+                        scope_unit = "unknown"
+                    try:
+                        q = read_quarantine(ctx.paths)
+                        quarantine_id = (q or {}).get("quarantine_id", "unknown")
+                    except MalformedState:
+                        quarantine_id = "unknown"
+                    print(f"release --force refused: scope {scope_unit} could not be confirmed dead; "
+                          "lease and quarantine left in place", file=sys.stderr)
+                    print(f"next: inspect/kill the scope (systemctl --user status {scope_unit}), "
+                          f"then re-run release --force; a scope_unkillable quarantine "
+                          f"({quarantine_id}) was written", file=sys.stderr)
+                else:
+                    print(f"release --force refused: {first_line}", file=sys.stderr)
         else:
             view = read_lease(ctx.paths, ctx.now())
             if view.data is None or view.data["lease_id"] != a.lease_id:

@@ -72,3 +72,27 @@ def test_release_force_exits_2_and_says_why_when_the_scope_will_not_die(p, sd, c
     assert rc == 2
     assert "refused" in capsys.readouterr().err
     assert p.lease.exists() and read_quarantine(p)["reason"] == "scope_unkillable"
+
+
+def test_release_force_refusal_prints_two_lines_no_traceback(p, sd, capsys):
+    """Follow-up 2: on scope_unkillable, cmd_release must print exactly the two
+    ruled lines (naming scope_unit and quarantine_id from state, not the error
+    string) and must never leak the stored traceback."""
+    from hamutay.gpu_lease.actions import Lease, REGISTRY, run as run_action, Ctx
+    from hamutay.gpu_lease.state import locked, read_lease, read_quarantine
+    from conftest import StubbornSystemd
+    from datetime import datetime, timezone, timedelta
+    NOW = datetime(2026, 9, 20, 15, 0, tzinfo=timezone.utc)
+    with locked(p):
+        run_action(Ctx(p, sd, now=lambda: NOW, by="t"), Lease("yupi", "t", timedelta(hours=1), None), REGISTRY)
+    scope = read_lease(p, NOW).data["scope_unit"]
+    rc = cli.main(["release", "--force", "--by", "tony", "--reason", "stuck"],
+                  systemd=StubbornSystemd(scope), now=lambda: NOW)
+    assert rc == 2
+    err = capsys.readouterr().err
+    qid = read_quarantine(p)["quarantine_id"]
+    assert (f"release --force refused: scope {scope} could not be confirmed dead; "
+            "lease and quarantine left in place") in err
+    assert (f"next: inspect/kill the scope (systemctl --user status {scope}), "
+            f"then re-run release --force; a scope_unkillable quarantine ({qid}) was written") in err
+    assert "Traceback" not in err
