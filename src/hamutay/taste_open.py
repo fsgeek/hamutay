@@ -3571,6 +3571,53 @@ class OpenTasteSession:
         with open(self._log_path, "a") as f:
             f.write(json.dumps(record, default=str) + "\n")
 
+    # --- the substrate's context ceiling ------------------------------------
+
+    def apply_context_limit(self, limit: int, source: str, invocation_id: str) -> None:
+        """The one setter for the ceiling a live session runs under.
+
+        The session owns both the backend reference (whose `_context_limit`
+        `_call_natural` snapshots) and `_launch_config` (what a resume reads),
+        so a ceiling learned mid-life must land in all three places at once —
+        backend, launch config, and the log — or the next boot inherits a lie.
+        """
+        if hasattr(self._backend, "_context_limit"):
+            self._backend._context_limit = limit
+        if self._launch_config is None:
+            self._launch_config = {}
+        self._launch_config["context_limit"] = limit
+        self._launch_config["context_limit_source"] = source
+        self.append_substrate_observation(
+            context_limit=limit, source=source, invocation_id=invocation_id
+        )
+
+    def append_substrate_observation(
+        self, *, context_limit, source, invocation_id
+    ) -> dict:
+        """Append one stateless `substrate_observation` record to the log.
+
+        Deliberately not `_log_entry`: this is an observation about the
+        substrate, not a wake. It carries no cycle, no state, no usage — and
+        `infer_launch_from_log` skips stateless records, so it can never be
+        mistaken for the launch itself.
+        """
+        launch = self._launch_config or {}
+        record = {
+            "record_type": "substrate_observation",
+            "context_limit": context_limit,
+            "source": source,
+            "invocation_id": invocation_id,
+            "base_url": launch.get("base_url"),
+            "model": launch.get("model"),
+            "provider": launch.get("provider"),
+            "at": datetime.now(timezone.utc).isoformat(),
+        }
+        if not self._log_path:
+            return record
+        with open(self._log_path, "a") as f:
+            f.write(json.dumps(record, default=str) + "\n")
+        return record
+
 
 def main():
     import argparse

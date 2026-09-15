@@ -23,6 +23,12 @@ from hamutay.events import (
 )
 
 
+# The two reasons a heartbeat rests because the substrate was taken away.
+# gate.py imports this lazily, inside reconcile_on_boot: a module-level import
+# would close the cycle (main() imports gate, gate imports back into here).
+SUBSTRATE_REST_REASONS = ("substrate_lent", "substrate_lease_unreadable")
+
+
 def append_heartbeat_status(
     store: EventStore,
     *,
@@ -341,19 +347,20 @@ class HeartbeatLoop:
         summarize=summarize_event_log,
         ledger: DailyLedger | None = None,
         budget: WakeBudget | None = None,
+        guard=None,
     ):
         self._session = session
+        self._guard = guard
         self._store = store
         self._ledger = ledger
         self._budget = budget
-        self._resting_day: str | None = None
         self._poll_interval = float(poll_interval)
         self._batch_limit = int(batch_limit)
         self._sleep = sleep
         self._now = now or (lambda: datetime.now(timezone.utc))
         self._run_pending = run_pending
         self._summarize = summarize
-        self._last_transition: tuple[str, str] | None = None
+        self._last_transition: tuple[str, str, str | None] | None = None
 
     @staticmethod
     def _emit(payload: dict) -> None:
@@ -367,14 +374,16 @@ class HeartbeatLoop:
         reason: str,
         detail: dict | None = None,
         now: datetime | None = None,
+        episode_key: str | None = None,
     ) -> None:
-        if (status, reason) == self._last_transition:
+        key = (status, reason, episode_key)
+        if key == self._last_transition:
             return
         stamp = _as_utc(now).isoformat() if now is not None else None
         record = append_heartbeat_status(
             self._store, status=status, reason=reason, detail=detail, created_at=stamp
         )
-        self._last_transition = (status, reason)
+        self._last_transition = key
         self._emit(
             {
                 "heartbeat": status,
@@ -382,6 +391,28 @@ class HeartbeatLoop:
                 "detail": detail,
                 "at": record["created_at"],
             }
+        )
+
+    def _hydrate_last_transition(self) -> None:
+        """Recover `_last_transition` from the store's latest status record.
+
+        Called first in boot(), before the `waking/boot` transition, so a
+        restart doesn't re-derive de-dup state from nothing (and thus
+        risk swallowing a transition that should append). Task 8 will
+        insert a guard reconciliation step before this hydration.
+        """
+        latest = None
+        for r in self._store.read_records():
+            if r.get("record_type") == "heartbeat_status":
+                latest = r
+        if latest is None:
+            self._last_transition = None
+            return
+        d = latest.get("detail") or {}
+        self._last_transition = (
+            latest.get("status"),
+            latest.get("reason"),
+            d.get("episode_id") or d.get("day"),
         )
 
     def _seconds_until_wake(self, summary: dict, now) -> float:
@@ -399,6 +430,12 @@ class HeartbeatLoop:
         return min(max(delta, 0.0), self._poll_interval)
 
     def boot(self) -> dict:
+        # The guard reconciles first: it appends the status records that close
+        # substrate episodes which ended while we were down, and hydration must
+        # read those, not the pre-reconciliation tail.
+        if self._guard is not None:
+            self._guard.reconcile_on_boot(self._now())
+        self._hydrate_last_transition()
         orphans = recover_orphaned_running(self._store)
         lost = recover_lost_continuations(self._store)
         report = {
@@ -406,6 +443,11 @@ class HeartbeatLoop:
             "lost_continuations_recovered": len(lost),
         }
         self._emit({"heartbeat": "boot_report", **report})
+        # Hydration above may have left `_last_transition` at ("waking", "boot",
+        # None) — the record written by the *previous* process. The boot record
+        # is not a de-dup candidate: every start of this process is a distinct
+        # waking, so clear the de-dup state rather than let it swallow this one.
+        self._last_transition = None
         self._transition("waking", reason="boot", detail=report, now=self._now())
         return report
 
@@ -417,36 +459,33 @@ class HeartbeatLoop:
         if exceeded is None:
             return None
         resumes_at = next_utc_midnight(now)
-        already_resting_today = (
-            self._last_transition == ("resting", "daily_budget_reached")
-            and self._resting_day == day["day"]
+        # One episode per UTC day: a rest record for this day already in the
+        # store means a restart interrupted it; continue, don't start. A new
+        # day that is also exceeded is a new episode, keyed by day, so the
+        # (status, reason, episode_key) de-dup must not swallow it.
+        resumed = any(
+            r.get("record_type") == "heartbeat_status"
+            and r.get("status") == "resting"
+            and (r.get("detail") or {}).get("day") == day["day"]
+            for r in self._store.read_records()
         )
-        if not already_resting_today:
-            # One episode per UTC day: a rest record for this day already in
-            # the store means a restart interrupted it; continue, don't start.
-            # A new day that is also exceeded is a new episode, so the
-            # (status, reason) de-dup must not swallow it.
-            self._last_transition = None
-            self._resting_day = day["day"]
-            resumed = any(
-                r.get("record_type") == "heartbeat_status"
-                and r.get("status") == "resting"
-                and (r.get("detail") or {}).get("day") == day["day"]
-                for r in self._store.read_records()
-            )
-            detail = {
-                **day,
-                "exceeded": exceeded,
-                "cost_is_lower_bound": bool(day.get("cost_turns_unreported")),
-                "daily_usd": self._budget.daily_usd,
-                "daily_wakes": self._budget.daily_wakes,
-                "resumes_at": resumes_at.isoformat(),
-            }
-            if resumed:
-                detail["resumed_after_restart"] = True
-            self._transition(
-                "resting", reason="daily_budget_reached", detail=detail, now=now
-            )
+        detail = {
+            **day,
+            "exceeded": exceeded,
+            "cost_is_lower_bound": bool(day.get("cost_turns_unreported")),
+            "daily_usd": self._budget.daily_usd,
+            "daily_wakes": self._budget.daily_wakes,
+            "resumes_at": resumes_at.isoformat(),
+        }
+        if resumed:
+            detail["resumed_after_restart"] = True
+        self._transition(
+            "resting",
+            reason="daily_budget_reached",
+            detail=detail,
+            now=now,
+            episode_key=day["day"],
+        )
         remaining = (resumes_at - _as_utc(now)).total_seconds()
         return {
             "state": "resting",
@@ -454,8 +493,54 @@ class HeartbeatLoop:
             "batch": None,
         }
 
+    def _guard_step(self, now) -> dict | None:
+        """The substrate guard: rest while the GPU is lent, warm while it comes
+        back, None when the door may go on to the budget check and the claim."""
+        kind, info = self._guard.observe(now)
+        latest = self._last_transition or (None, None, None)
+        if kind in ("lease_live", "quarantined"):
+            episode = info["episode_id"]
+            # A rest record for this episode already in the store means a
+            # restart interrupted the episode: we continue it, we don't begin it.
+            continuation = any(
+                r.get("record_type") == "heartbeat_status"
+                and r.get("status") == "resting"
+                and (r.get("detail") or {}).get("episode_id") == episode
+                for r in self._store.read_records()
+            )
+            self._transition(
+                "resting",
+                reason="substrate_lent" if kind == "lease_live" else "substrate_lease_unreadable",
+                detail={**info, "source": "observed", "continuation": continuation},
+                now=now,
+                episode_key=episode,
+            )
+            # The rest record precedes the stop: the log says why the substrate
+            # went away before it goes away. Under quarantine the server is left
+            # in whatever state it is in — we do not know enough to act.
+            if kind == "lease_live":
+                self._guard.ensure_stopped(episode)
+            return {"state": "resting", "sleep_seconds": self._poll_interval, "batch": None}
+        if latest[0] == "resting" and latest[1] in SUBSTRATE_REST_REASONS:
+            self._transition(
+                "waking",
+                reason="substrate_returning",
+                detail={"episode_id": latest[2], "closed_at_source": "observed"},
+                now=now,
+                episode_key=latest[2],
+            )
+        if kind == "free_not_ready":
+            return {"state": "warming", "sleep_seconds": self._poll_interval, "batch": None}
+        return None
+
     def step(self) -> dict:
         now = self._now()
+        # The substrate guard runs before the budget: a door whose GPU is lent
+        # has nothing to spend the budget on.
+        if self._guard is not None:
+            guarded = self._guard_step(now)
+            if guarded is not None:
+                return guarded
         # The budget is checked before a wake, never during one: a resting
         # heartbeat runs nothing, touches no event, keeps polling.
         resting = self._rest_if_budget_exceeded(now)
@@ -469,12 +554,14 @@ class HeartbeatLoop:
             self._session,
             self._store,
             # Under a budget the check happens before EVERY wake, not every
-            # batch_limit of them.
-            limit=1 if self._budget is not None else self._batch_limit,
+            # batch_limit of them; under a substrate guard the lease is
+            # re-observed before every wake for the same reason.
+            limit=1 if (self._budget is not None or self._guard is not None) else self._batch_limit,
             stop_on_failure=False,
             now=now,
             auto_continuations=True,
             policy_dispositions=True,
+            **({"claim_gate": self._guard} if self._guard is not None else {}),
         )
         # Ingress can land after next_pending() above and still be claimed by
         # the batch.  Use the batch result as the authoritative second signal
@@ -555,14 +642,23 @@ CONSTITUTION = CONSTITUTION + BUDGET_SENTENCE.format(usd="", wakes="")
 _CONSTITUTION_BASE = CONSTITUTION[: -len(BUDGET_SENTENCE.format(usd="", wakes=""))]
 
 
-def build_constitution(budget: "WakeBudget | None") -> str:
+GPU_LEASE_SENTENCE = (
+    " The heartbeat may pause while the local GPU is allocated to another "
+    "workload; its lease record carries a declared holder and purpose, pending "
+    "events remain pending, and affected wakes receive an operational note."
+)
+
+
+def build_constitution(budget: "WakeBudget | None", gpu_lease: bool = False) -> str:
     """The operational prefix as configured: true under either setting."""
     if budget is None:
-        return _CONSTITUTION_BASE + UNBUDGETED_SENTENCE
-    return _CONSTITUTION_BASE + BUDGET_SENTENCE.format(
-        usd=f" of {budget.daily_usd:.2f} USD",
-        wakes=f" of {budget.daily_wakes} wakes",
-    )
+        text = _CONSTITUTION_BASE + UNBUDGETED_SENTENCE
+    else:
+        text = _CONSTITUTION_BASE + BUDGET_SENTENCE.format(
+            usd=f" of {budget.daily_usd:.2f} USD",
+            wakes=f" of {budget.daily_wakes} wakes",
+        )
+    return (text + GPU_LEASE_SENTENCE) if gpu_lease else text
 
 
 DEFAULT_CAPABILITIES_FILE = "experiments/taste_open/capabilities.json"
@@ -610,11 +706,72 @@ def resolve_heartbeat_launch(args) -> tuple[dict, list[str]]:
     return launch, notes
 
 
-def resolve_context_limit(args, discover=None) -> tuple[int | None, str]:
-    """(limit or None, source): explicit beats discovered beats provider default.
+def _positive_context_limit(value) -> int | None:
+    """The record's `context_limit` if it is a usable ceiling, else None.
 
-    Spec 2026-09-06-local-substrate-door §5. Discovery asks a llama-server's
-    /props; anything else yields None and the loop manages no ceiling.
+    A bool is an int in Python and `True` is not a context window."""
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return value
+
+
+def latest_context_observation(
+    log_path, *, model, provider, base_url
+) -> tuple[int | None, str | None]:
+    """(limit, invocation_id) — what the log last knew about this substrate.
+
+    Two kinds of record carry a ceiling: a state-bearing wake, whose `launch`
+    says what the process was constructed with, and a `substrate_observation`,
+    which says what discovery found for a named InvocationID. Only records
+    matching this exact {model, provider, base_url} count — a ceiling learned
+    about one substrate is worthless about another. Whichever appears later in
+    the file wins, since the file is the order things happened; the launch
+    record returns invocation_id None, because a launch is not evidence about
+    any particular server invocation.
+
+    Spec 2026-09-15-gpu-lease-design §4 "Context ceiling".
+    """
+    limit = invocation_id = None
+    try:
+        with open(log_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                if not isinstance(rec, dict):
+                    continue
+                if rec.get("record_type") == "substrate_observation":
+                    found = _positive_context_limit(rec.get("context_limit"))
+                    if found and (rec.get("model"), rec.get("provider"),
+                                  rec.get("base_url")) == (model, provider, base_url):
+                        limit, invocation_id = found, rec.get("invocation_id")
+                    continue
+                if rec.get("state") is None:
+                    continue
+                launch = rec.get("launch")
+                if not isinstance(launch, dict):
+                    continue
+                found = _positive_context_limit(launch.get("context_limit"))
+                if found and (launch.get("model"), launch.get("provider"),
+                              launch.get("base_url")) == (model, provider, base_url):
+                    limit, invocation_id = found, None
+    except (OSError, UnicodeDecodeError):
+        return None, None
+    return limit, invocation_id
+
+
+def resolve_context_limit(args, discover=None, log_path=None) -> tuple[int | None, str]:
+    """(limit or None, source): explicit > discovered > inherited > default.
+
+    Spec 2026-09-06-local-substrate-door §5, extended by 2026-09-15-gpu-lease
+    §4. Discovery asks a llama-server's /props; on a dark boot (the GPU lent
+    out, the server down) the log's own memory of the ceiling is what lets the
+    process be constructed at all — printed loudly, because it is a belief
+    about a substrate nobody has just asked.
     """
     from hamutay.taste_open import discover_llama_server_context
 
@@ -625,6 +782,15 @@ def resolve_context_limit(args, discover=None) -> tuple[int | None, str]:
         found = (discover or discover_llama_server_context)(args.base_url)
         if found:
             return int(found), "discovered"
+    if log_path:
+        inherited, _ = latest_context_observation(
+            log_path,
+            model=getattr(args, "model", None),
+            provider=getattr(args, "provider", None),
+            base_url=getattr(args, "base_url", None),
+        )
+        if inherited:
+            return int(inherited), "inherited"
     return None, "provider default"
 
 
@@ -662,6 +828,26 @@ def load_capability_profile(provider: str, model: str, capabilities_file=None):
         profile,
         f"capabilities loaded for {key}: tool_choice={profile.tool_choice_mode}",
     )
+
+
+def _positive_int(value):
+    """An argparse type: a ceiling of zero or less is not a ceiling.
+
+    Caught at the parser rather than downstream, where `--context-limit 0`
+    would read as falsy and silently mean "no ceiling managed by the loop" —
+    the opposite of what someone typing a number is asking for.
+    """
+    import argparse
+
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError(f"{value!r} is not an integer")
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(
+            f"must be a positive number of tokens, got {parsed}"
+        )
+    return parsed
 
 
 def build_parser():
@@ -703,11 +889,14 @@ def build_parser():
     parser.add_argument("--base-url", default=None)
     parser.add_argument(
         "--context-limit",
-        type=int,
+        type=_positive_int,
         default=None,
-        help="The substrate's context ceiling in tokens. Default: discovered "
-        "from a llama-server's /props for --provider openai with --base-url, "
-        "else the provider's own default (no ceiling managed by the loop).",
+        help="The substrate's context ceiling in tokens (must be positive). "
+        "Default: discovered from a llama-server's /props for --provider "
+        "openai with --base-url, else inherited from the log's last "
+        "observation of this substrate, else the provider's own default (no "
+        "ceiling managed by the loop). Given explicitly, it is never "
+        "overwritten by discovery.",
     )
     parser.add_argument("--api-key", default=None)
     parser.add_argument("--project-root", default=".")
@@ -790,6 +979,55 @@ def resolve_budget(args) -> tuple[WakeBudget | None, str]:
     )
 
 
+def assert_canonical_lock_path(lock_path: str, event_log_path: str, door: str | None = None) -> None:
+    """One heartbeat per bound door, and the only lock that proves it is the
+    canonical one beside the event log. A custom --lock-path would let a second
+    heartbeat claim the same door behind the same gate.
+
+    Pinning the *relation* (lock == events + suffix) is not enough: a custom
+    --event-log-path would satisfy it while moving both files away from the
+    door that `ayllu-gpu force-stop` reaches for. So when the door is known,
+    pin the canonical NAMES too — the same rule `heartbeat_lock_path` applies
+    in gpu_lease/cli.py, which is where force-stop computes the lock it takes.
+    """
+    from pathlib import Path
+
+    from hamutay.gpu_lease.cli import heartbeat_lock_path
+
+    expected = str(Path(event_log_path).resolve()) + ".heartbeat.lock"
+    if str(Path(lock_path).resolve()) != expected:
+        raise SystemExit(
+            "gpu lease door: --lock-path must be the canonical "
+            "<events>.heartbeat.lock"
+        )
+    if door is None:
+        return
+    door_path = Path(door)
+    want_events = door_path / "session.jsonl.events.jsonl"
+    want_lock = heartbeat_lock_path(door_path)
+    if Path(event_log_path).resolve() != want_events.resolve():
+        raise SystemExit(
+            f"gpu lease door: the event log must be the canonical {want_events} "
+            f"(got {event_log_path}); force-stop reaches for the canonical name"
+        )
+    if Path(lock_path).resolve() != want_lock.resolve():
+        raise SystemExit(
+            f"gpu lease door: the lock must be the canonical {want_lock} "
+            f"(got {lock_path})"
+        )
+
+
+def assert_lease_door_has_base_url(binding, base_url) -> None:
+    """A bound door probes readiness at <base_url>/models. Without a base_url
+    there is nothing to probe, so the door would warm forever in silence:
+    refuse at launch instead."""
+    if binding and not base_url:
+        raise SystemExit(
+            "gpu lease door needs an OpenAI-compatible base_url (provider "
+            "openai or openrouter); the anthropic-direct backend cannot participate"
+        )
+
+
 def acquire_lock(lock_path: str):
     import fcntl
 
@@ -823,6 +1061,15 @@ def main() -> None:
     Path(args.log_path).parent.mkdir(parents=True, exist_ok=True)
     Path(event_log_path).parent.mkdir(parents=True, exist_ok=True)
     lock_path = args.lock_path or (event_log_path + ".heartbeat.lock")
+    # The store must exist before the session: its door binding decides the
+    # constitution sentence and whether this door runs behind a lease gate.
+    store = EventStore(event_log_path)
+    if store.lease_binding:
+        # The door is the log's directory — the same directory 4090.door names
+        # and the one gpu_lease/cli.py computes the heartbeat lock inside.
+        assert_canonical_lock_path(
+            lock_path, event_log_path, door=str(Path(args.log_path).parent)
+        )
     lock_handle = acquire_lock(lock_path)  # held for process lifetime
 
     launch, launch_notes = resolve_heartbeat_launch(args)
@@ -844,7 +1091,12 @@ def main() -> None:
         )
 
     context_limit, context_limit_source = None, "provider default"
+    base_url = None
     if args.provider == "anthropic":
+        # A bound door needs an OpenAI-compatible base_url to probe readiness;
+        # the anthropic-direct backend resolves none, so refuse here rather than
+        # warm forever in silence.
+        assert_lease_door_has_base_url(store.lease_binding, base_url)
         backend = AnthropicTasteBackend(max_tokens=args.max_tokens)
     else:
         if args.provider == "openrouter":
@@ -866,10 +1118,15 @@ def main() -> None:
             args.provider, args.model, args.capabilities_file
         )
         HeartbeatLoop._emit({"heartbeat": "capabilities", "note": cap_note})
-        context_limit, context_limit_source = resolve_context_limit(args)
+        context_limit, context_limit_source = resolve_context_limit(
+            args, log_path=args.log_path
+        )
         HeartbeatLoop._emit({
             "heartbeat": "launch",
-            "note": (
+            # `inherited` is loud: the process is being built on a remembered
+            # belief about a substrate nobody just asked (a dark boot, the GPU
+            # lent out). The door will not claim until discovery confirms it.
+            "note": ("!!! " if context_limit_source == "inherited" else "") + (
                 f"context ceiling: {context_limit} tokens ({context_limit_source})"
                 if context_limit else
                 f"context ceiling: none managed by the loop ({context_limit_source})"
@@ -903,7 +1160,7 @@ def main() -> None:
         resume=Path(args.log_path).exists(),
         enable_tools=True,
         project_root=Path(args.project_root),
-        system_prompt_prefix=build_constitution(budget),
+        system_prompt_prefix=build_constitution(budget, gpu_lease=bool(store.lease_binding)),
         wake_mode=wake_mode,
         launch_config={
             "model": args.model,
@@ -923,7 +1180,32 @@ def main() -> None:
             "context_limit_source": context_limit_source,
         },
     )
-    store = EventStore(event_log_path)
+    guard = None
+    if store.lease_binding:
+        # Belt and braces: whichever provider branch ran, a bound door without a
+        # base_url has nothing to probe and must not reach the loop.
+        assert_lease_door_has_base_url(store.lease_binding, base_url)
+        # Imported here, not at module scope: gate.py reaches back into this
+        # module for append_heartbeat_status.
+        from hamutay.gpu_lease.actions import Ctx
+        from hamutay.gpu_lease.gate import LeaseGate
+        from hamutay.gpu_lease.state import paths as lease_paths
+        from hamutay.gpu_lease.systemd import Systemd
+
+        ctx = Ctx(
+            lease_paths(),
+            Systemd(),
+            now=lambda: datetime.now(timezone.utc),
+            by=f"heartbeat:{Path(args.log_path).parent.name}",
+        )
+        guard = LeaseGate(
+            store, ctx, base_url=base_url, session=session,
+            discover=None, explicit_limit=args.context_limit,
+        )
+        HeartbeatLoop._emit({
+            "heartbeat": "launch",
+            "note": f"gpu lease: {store.lease_binding} (door.json)",
+        })
     loop = HeartbeatLoop(
         session,
         store,
@@ -931,6 +1213,7 @@ def main() -> None:
         batch_limit=args.batch_limit,
         ledger=DailyLedger(args.log_path),
         budget=budget,
+        guard=guard,
     )
     try:
         loop.run_forever()

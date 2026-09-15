@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Shim: the holder's command for the house's 4090. One Python implementation
+# (src/hamutay/gpu_lease); this resolves the hamutay root and execs uv.
+set -euo pipefail
+state="${AYLLU_STATE_DIR:-$HOME/.local/state/ayllu}/gpu"
+root="${HAMUTAY_ROOT:-}"
+if [ -z "$root" ] && [ -f "$state/4090.door" ]; then
+  root="$(cd "$(cat "$state/4090.door")/../.." && pwd)"   # <root>/community/<door>
+fi
+[ -n "$root" ] || { echo "ayllu-gpu: set HAMUTAY_ROOT or run the migration (no $state/4090.door)" >&2; exit 1; }
+exec uv run --project "$root" python -m hamutay.gpu_lease "$@"

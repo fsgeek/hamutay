@@ -87,3 +87,36 @@ door, with `community/elder/session.jsonl`; unit `hamutay-heartbeat@elder`.
 
 Continue, not restart: deleting these logs is not an ops action; it is a
 decision about a subject, and it is Tony's alone.
+
+## The GPU lease
+
+The RTX 4090 that runs the qwen door is a shared house resource: sometimes
+a human needs it for a training run or an experiment. The GPU lease is the
+coordination mechanism — a holder acquires the card for a bounded time, the
+qwen heartbeat rests the resident and stops the server for the duration,
+and on release the heartbeat brings the server back up and resumes waking
+the resident. There is no human in the loop for the handoff itself.
+Spec: `docs/superpowers/specs/2026-09-15-gpu-lease-design.md`.
+
+Commands (`deploy/ayllu-gpu`, a thin shim over `python -m hamutay.gpu_lease`):
+- `deploy/ayllu-gpu run --holder NAME --purpose "…" --ttl 6h -- <command>` —
+  acquire the card, wait for the resident to rest, run `<command>` under a
+  systemd scope the heartbeat can kill, and release on exit.
+- `deploy/ayllu-gpu status` — the current lease, if any, and the server's
+  systemd state.
+- `deploy/ayllu-gpu release --force --by NAME --reason "…"` — clear a lease
+  without waiting for its holder (an emergency escape hatch, not the normal
+  path — `run` releases on its own when the command exits).
+
+Migration to this mechanism, once, on the host: `deploy/migrate-gpu-lease.sh`
+then `deploy/check-gpu-lease.sh` to confirm the deployed state matches the
+design. (Step 5, "deploy the code," is a no-op here — this is a
+checkout-based deployment, so the code is already in place by the time the
+script runs.)
+
+What the resident sees: before the server stops, its log gets a resting
+record naming the holder and the purpose ("substrate_lent"); after the
+loan, a returning record marks the server coming back up. Any wake whose
+envelope spans the gap carries an operational note that the substrate was
+unavailable for part of it — the resident is told, not left to guess why a
+gap exists.
