@@ -612,6 +612,12 @@ REGISTRY: dict[str, Callable[[dict], Action]] = {
     "release_force": _release_force_builder,
     "quarantine_enter": _quarantine_enter,
     "ensure_stopped": _ensure_stopped_builder,
+    # The spec's action table names this row `ensure_stopped / server_stop`.
+    # No code writes `server_stop` today, but a dangling intent under that name
+    # -- from an operator, an older build, another implementation of the spec --
+    # must reconcile, not land in the "no reconciler for this action" branch
+    # that leaves the stop unperformed and the outcome indeterminate.
+    "server_stop": _ensure_stopped_builder,
     "force_stop": _force_stop_builder,
     "server_start": _server_start_builder,
     "workload_killed": _workload_killed,
