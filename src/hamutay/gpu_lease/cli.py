@@ -1,5 +1,5 @@
 from __future__ import annotations
-import argparse, fcntl, json, sys, time
+import argparse, fcntl, json, signal, sys, time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from . import ledger
@@ -147,6 +147,15 @@ def cmd_force_stop(a, ctx):
     return 0 if out["outcome"] == "ok" else 1
 
 
+def cmd_run(a, ctx):
+    from . import run as run_mod
+    launcher = getattr(a, "launcher", None)
+    sleep = getattr(a, "sleep", None) or time.sleep
+    signal.signal(signal.SIGTERM, lambda *_: sys.exit(143))
+    signal.signal(signal.SIGHUP, lambda *_: sys.exit(129))
+    return run_mod.supervise(a, ctx, launcher=launcher, sleep=sleep)
+
+
 def build_parser():
     ap = argparse.ArgumentParser(prog="ayllu-gpu")
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -160,11 +169,18 @@ def build_parser():
     s = sub.add_parser("status"); s.set_defaults(fn=cmd_status)
     s = sub.add_parser("force-stop"); s.add_argument("--lease-id", required=True); s.add_argument("--by", required=True)
     s.add_argument("--reason", required=True); s.set_defaults(fn=cmd_force_stop)
+    s = sub.add_parser("run"); s.add_argument("--holder", required=True); s.add_argument("--purpose", required=True)
+    s.add_argument("--ttl", default="15m"); s.add_argument("--expected-until")
+    s.add_argument("--wait-timeout", default="30m")
+    s.add_argument("command", nargs=argparse.REMAINDER)
+    s.set_defaults(fn=cmd_run)
     return ap
 
 
-def main(argv=None, *, systemd=None, now=None, **overrides) -> int:
+def main(argv=None, *, systemd=None, now=None, launcher=None, sleep=None, **overrides) -> int:
     a = build_parser().parse_args(argv)
+    a.launcher = launcher
+    a.sleep = sleep
     for k, v in overrides.items():
         setattr(a, k, v)
     if a.cmd == "release" and not a.force and not a.lease_id:
