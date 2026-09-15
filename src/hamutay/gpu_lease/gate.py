@@ -24,7 +24,8 @@ def _ok_outcomes(rows, *actions):
 
 
 class LeaseGate:
-    def __init__(self, store, ctx: Ctx, *, base_url=None, fetch=None):
+    def __init__(self, store, ctx: Ctx, *, base_url=None, fetch=None,
+                 session=None, discover=None, explicit_limit=None):
         self.store, self.ctx = store, ctx
         self._token = _GateToken()
         # ctx.now() is used for the actions claim() runs (resolve_dangling, Expire,
@@ -34,12 +35,41 @@ class LeaseGate:
         self._base_url = base_url
         self._fetch = fetch or _default_fetch
         self._ready_invocation = self._latest_ready_invocation()
+        # The context ceiling is a property of the *server invocation*, not of
+        # the door: a loan restarts llama-server, possibly with a different -c.
+        # The session is where a newly discovered ceiling lands; explicit_limit,
+        # when the human gave one, is never overwritten.
+        self._session = session
+        self._discover = discover
+        self._explicit_limit = explicit_limit
+        self._current_invocation = None
 
     def _context_validated(self) -> bool:
-        """Task 9 fills this in (context discovery must have landed for this
-        invocation before the door may claim). Until then every invocation is
-        considered validated."""
-        return True
+        """Has a ceiling been established for the invocation now running?
+
+        True when the human pinned one with --context-limit (nothing may
+        overwrite it), or when there is no session to teach. Otherwise the log
+        must already carry a substrate_observation naming *this* InvocationID:
+        a ceiling learned about the previous invocation says nothing about the
+        server that came back from the loan.
+        """
+        if self._explicit_limit is not None or self._session is None:
+            return True
+        log_path = getattr(self._session, "_log_path", None)
+        if not log_path:
+            return False
+        # Imported here, not at module scope: heartbeat.main() imports this
+        # module, so a module-level import back into it would close the cycle.
+        from hamutay.heartbeat import latest_context_observation
+
+        launch = getattr(self._session, "_launch_config", None) or {}
+        _, seen = latest_context_observation(
+            log_path,
+            model=launch.get("model"),
+            provider=launch.get("provider"),
+            base_url=launch.get("base_url"),
+        )
+        return seen == self._current_invocation
 
     def _free_info(self, now):
         free, why = is_free(self.ctx)
@@ -169,10 +199,24 @@ class LeaseGate:
                 quarantine_if_indeterminate(self.ctx, out)
                 server = self.ctx.systemd.show(self.ctx.server_unit)
         invocation_id = server.get("invocation_id", "")
+        self._current_invocation = invocation_id
         ready = bool(self._base_url) and self.probe()
         self.note_ready(invocation_id, ready)
-        if ready and self._context_validated():
-            return "free_ready", {"invocation_id": invocation_id}
+        if ready:
+            if not self._context_validated():
+                # The server answers, but nobody has asked *this* invocation
+                # what it will hold. Ask now; a server that will not say stays
+                # unready rather than letting a wake run against a guess.
+                from hamutay.taste_open import discover_llama_server_context
+
+                found = (self._discover or discover_llama_server_context)(self._base_url)
+                if not found or int(found) <= 0:
+                    return "free_not_ready", {"invocation_id": invocation_id,
+                                              "ready": True, "context": "undiscovered"}
+                self._session.apply_context_limit(
+                    int(found), "discovered", invocation_id)
+            if self._context_validated():
+                return "free_ready", {"invocation_id": invocation_id}
         return "free_not_ready", {"invocation_id": invocation_id, "ready": ready}
 
     def probe(self) -> bool:

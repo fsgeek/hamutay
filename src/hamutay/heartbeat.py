@@ -701,11 +701,72 @@ def resolve_heartbeat_launch(args) -> tuple[dict, list[str]]:
     return launch, notes
 
 
-def resolve_context_limit(args, discover=None) -> tuple[int | None, str]:
-    """(limit or None, source): explicit beats discovered beats provider default.
+def _positive_context_limit(value) -> int | None:
+    """The record's `context_limit` if it is a usable ceiling, else None.
 
-    Spec 2026-09-06-local-substrate-door §5. Discovery asks a llama-server's
-    /props; anything else yields None and the loop manages no ceiling.
+    A bool is an int in Python and `True` is not a context window."""
+    if isinstance(value, bool) or not isinstance(value, int) or value <= 0:
+        return None
+    return value
+
+
+def latest_context_observation(
+    log_path, *, model, provider, base_url
+) -> tuple[int | None, str | None]:
+    """(limit, invocation_id) — what the log last knew about this substrate.
+
+    Two kinds of record carry a ceiling: a state-bearing wake, whose `launch`
+    says what the process was constructed with, and a `substrate_observation`,
+    which says what discovery found for a named InvocationID. Only records
+    matching this exact {model, provider, base_url} count — a ceiling learned
+    about one substrate is worthless about another. Whichever appears later in
+    the file wins, since the file is the order things happened; the launch
+    record returns invocation_id None, because a launch is not evidence about
+    any particular server invocation.
+
+    Spec 2026-09-15-gpu-lease-design §4 "Context ceiling".
+    """
+    limit = invocation_id = None
+    try:
+        with open(log_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                if not isinstance(rec, dict):
+                    continue
+                if rec.get("record_type") == "substrate_observation":
+                    found = _positive_context_limit(rec.get("context_limit"))
+                    if found and (rec.get("model"), rec.get("provider"),
+                                  rec.get("base_url")) == (model, provider, base_url):
+                        limit, invocation_id = found, rec.get("invocation_id")
+                    continue
+                if rec.get("state") is None:
+                    continue
+                launch = rec.get("launch")
+                if not isinstance(launch, dict):
+                    continue
+                found = _positive_context_limit(launch.get("context_limit"))
+                if found and (launch.get("model"), launch.get("provider"),
+                              launch.get("base_url")) == (model, provider, base_url):
+                    limit, invocation_id = found, None
+    except (OSError, UnicodeDecodeError):
+        return None, None
+    return limit, invocation_id
+
+
+def resolve_context_limit(args, discover=None, log_path=None) -> tuple[int | None, str]:
+    """(limit or None, source): explicit > discovered > inherited > default.
+
+    Spec 2026-09-06-local-substrate-door §5, extended by 2026-09-15-gpu-lease
+    §4. Discovery asks a llama-server's /props; on a dark boot (the GPU lent
+    out, the server down) the log's own memory of the ceiling is what lets the
+    process be constructed at all — printed loudly, because it is a belief
+    about a substrate nobody has just asked.
     """
     from hamutay.taste_open import discover_llama_server_context
 
@@ -716,6 +777,15 @@ def resolve_context_limit(args, discover=None) -> tuple[int | None, str]:
         found = (discover or discover_llama_server_context)(args.base_url)
         if found:
             return int(found), "discovered"
+    if log_path:
+        inherited, _ = latest_context_observation(
+            log_path,
+            model=getattr(args, "model", None),
+            provider=getattr(args, "provider", None),
+            base_url=getattr(args, "base_url", None),
+        )
+        if inherited:
+            return int(inherited), "inherited"
     return None, "provider default"
 
 
@@ -753,6 +823,26 @@ def load_capability_profile(provider: str, model: str, capabilities_file=None):
         profile,
         f"capabilities loaded for {key}: tool_choice={profile.tool_choice_mode}",
     )
+
+
+def _positive_int(value):
+    """An argparse type: a ceiling of zero or less is not a ceiling.
+
+    Caught at the parser rather than downstream, where `--context-limit 0`
+    would read as falsy and silently mean "no ceiling managed by the loop" —
+    the opposite of what someone typing a number is asking for.
+    """
+    import argparse
+
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        raise argparse.ArgumentTypeError(f"{value!r} is not an integer")
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError(
+            f"must be a positive number of tokens, got {parsed}"
+        )
+    return parsed
 
 
 def build_parser():
@@ -794,11 +884,14 @@ def build_parser():
     parser.add_argument("--base-url", default=None)
     parser.add_argument(
         "--context-limit",
-        type=int,
+        type=_positive_int,
         default=None,
-        help="The substrate's context ceiling in tokens. Default: discovered "
-        "from a llama-server's /props for --provider openai with --base-url, "
-        "else the provider's own default (no ceiling managed by the loop).",
+        help="The substrate's context ceiling in tokens (must be positive). "
+        "Default: discovered from a llama-server's /props for --provider "
+        "openai with --base-url, else inherited from the log's last "
+        "observation of this substrate, else the provider's own default (no "
+        "ceiling managed by the loop). Given explicitly, it is never "
+        "overwritten by discovery.",
     )
     parser.add_argument("--api-key", default=None)
     parser.add_argument("--project-root", default=".")
@@ -992,10 +1085,15 @@ def main() -> None:
             args.provider, args.model, args.capabilities_file
         )
         HeartbeatLoop._emit({"heartbeat": "capabilities", "note": cap_note})
-        context_limit, context_limit_source = resolve_context_limit(args)
+        context_limit, context_limit_source = resolve_context_limit(
+            args, log_path=args.log_path
+        )
         HeartbeatLoop._emit({
             "heartbeat": "launch",
-            "note": (
+            # `inherited` is loud: the process is being built on a remembered
+            # belief about a substrate nobody just asked (a dark boot, the GPU
+            # lent out). The door will not claim until discovery confirms it.
+            "note": ("!!! " if context_limit_source == "inherited" else "") + (
                 f"context ceiling: {context_limit} tokens ({context_limit_source})"
                 if context_limit else
                 f"context ceiling: none managed by the loop ({context_limit_source})"
@@ -1067,7 +1165,10 @@ def main() -> None:
             now=lambda: datetime.now(timezone.utc),
             by=f"heartbeat:{Path(args.log_path).parent.name}",
         )
-        guard = LeaseGate(store, ctx, base_url=base_url)
+        guard = LeaseGate(
+            store, ctx, base_url=base_url, session=session,
+            discover=None, explicit_limit=args.context_limit,
+        )
         HeartbeatLoop._emit({
             "heartbeat": "launch",
             "note": f"gpu lease: {store.lease_binding} (door.json)",
