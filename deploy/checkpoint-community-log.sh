@@ -25,10 +25,7 @@ for d in community/*/; do
   logs=("$d"/*.jsonl)
   [ ${#logs[@]} -gt 0 ] && doors+=("$d")
 done
-if [ ${#doors[@]} -eq 0 ]; then
-  echo "no community logs yet; nothing to checkpoint" >&2
-  exit 0
-fi
+
 snapdir=$(mktemp -d)
 trap 'rm -rf "$snapdir"' EXIT
 stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -46,7 +43,34 @@ for d in "${doors[@]}"; do
   echo "$line" >> "$ledger"
   ledgers+=("$ledger")
 done
+
+# The GPU lease's ledger lives outside community/<door>/ (it is a shared
+# house resource, not one door's log): community/gpu/CHECKPOINTS.txt. The
+# ledger itself is never copied into git, only its digest.
+gpu_state="${AYLLU_STATE_DIR:-$HOME/.local/state/ayllu}/gpu"
+gpu_ledger="$gpu_state/4090.ledger.jsonl"
+gpu_lock="$gpu_state/4090.lock"
+if [ ! -f "$gpu_ledger" ]; then
+  echo "no $gpu_ledger yet; skipping the GPU lease checkpoint" >&2
+else
+  gpu_snap="$snapdir/4090.ledger.jsonl"
+  flock "$gpu_lock" cp "$gpu_ledger" "$gpu_snap"
+  gpu_digest=$(sha256sum "$gpu_snap" | cut -d' ' -f1)
+  gpu_bytes=$(stat -c%s "$gpu_snap")
+  mkdir -p community/gpu
+  gpu_checkpoints="community/gpu/CHECKPOINTS.txt"
+  echo "$stamp 4090.ledger.jsonl:$gpu_digest:$gpu_bytes" >> "$gpu_checkpoints"
+  ledgers+=("$gpu_checkpoints")
+fi
+
+if [ ${#ledgers[@]} -eq 0 ]; then
+  echo "no community logs yet; nothing to checkpoint" >&2
+  exit 0
+fi
+
+names=("${doors[@]#community/}")
+[ -f "$gpu_ledger" ] && names+=("gpu")
 git add "${ledgers[@]}"
 git -c user.email=hamutay@wamason.com -c user.name="Tony Mason" \
     -c user.signingkey=01193FA2631C8AE8E4DF266E216D3C9B920813A1 \
-    commit -S -m "community: checkpoint log digests ($(IFS=,; echo "${doors[*]#community/}"))"
+    commit -S -m "community: checkpoint log digests ($(IFS=,; echo "${names[*]}"))"

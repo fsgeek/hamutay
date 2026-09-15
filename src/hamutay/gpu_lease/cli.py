@@ -1,5 +1,5 @@
 from __future__ import annotations
-import argparse, fcntl, json, signal, sys, time
+import argparse, fcntl, json, signal, subprocess, sys, time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from . import ledger
@@ -147,6 +147,32 @@ def cmd_force_stop(a, ctx):
     return 0 if out["outcome"] == "ok" else 1
 
 
+def cmd_migrate_quiesce(a, ctx):
+    """Stop the old heartbeat under its own store lock, once no wake is running.
+
+    Migration precondition: the door has no door.json yet, so EventStore's
+    lease_binding is unset and this only reads the store — no gate involved.
+    """
+    from hamutay.events import EventStore
+    door = Path(a.door)
+    store = EventStore(door / "session.jsonl.events.jsonl")
+    deadline = time.monotonic() + parse_seconds(a.timeout)
+    while True:
+        with store._lock_path.open("a") as lock:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+            try:
+                latest = store._latest_by_event_id_from_records(store._read_records_unlocked())
+                if not any(r.get("status") == "running" for r in latest.values()):
+                    subprocess.run([a.systemctl, "--user", "stop", a.unit], check=True)
+                    return 0
+            finally:
+                fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+        if time.monotonic() >= deadline:
+            print("migrate-quiesce: a wake is still running; nothing stopped", file=sys.stderr)
+            return 1
+        time.sleep(30)
+
+
 def cmd_run(a, ctx):
     from . import run as run_mod
     launcher = getattr(a, "launcher", None)
@@ -174,6 +200,10 @@ def build_parser():
     s.add_argument("--wait-timeout", default="30m")
     s.add_argument("command", nargs=argparse.REMAINDER)
     s.set_defaults(fn=cmd_run)
+    s = sub.add_parser("migrate-quiesce")
+    s.add_argument("--door", required=True); s.add_argument("--unit", required=True)
+    s.add_argument("--timeout", default="30m"); s.add_argument("--systemctl", default="systemctl")
+    s.set_defaults(fn=cmd_migrate_quiesce)
     return ap
 
 
