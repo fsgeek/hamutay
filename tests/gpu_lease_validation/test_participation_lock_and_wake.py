@@ -45,7 +45,8 @@ def _invoke_runner(runner, store, clock):
     return runner(*args, **kwargs)
 
 
-def test_bound_store_refuses_every_unguarded_claim_surface(tmp_path, clock):
+@pytest.mark.parametrize("runner_name", ["run_next_event", "run_pending_events", "step_pending_events"])
+def test_bound_store_refuses_every_unguarded_claim_surface(tmp_path, clock, runner_name):
     from hamutay.events import EventStore, LeaseGateRequired, run_next_event, run_pending_events, step_pending_events
 
     door = tmp_path / "bound"
@@ -57,9 +58,35 @@ def test_bound_store_refuses_every_unguarded_claim_surface(tmp_path, clock):
 
     with pytest.raises(LeaseGateRequired):
         store.claim_next_pending(now=clock())
-    for runner in (run_next_event, run_pending_events, step_pending_events):
-        with pytest.raises(LeaseGateRequired):
-            _invoke_runner(runner, store, clock)
+    runner = {
+        "run_next_event": run_next_event,
+        "run_pending_events": run_pending_events,
+        "step_pending_events": step_pending_events,
+    }[runner_name]
+    with pytest.raises(LeaseGateRequired):
+        _invoke_runner(runner, store, clock)
+
+
+@pytest.mark.parametrize("command", ["run-next", "run-all"])
+def test_bound_store_refuses_cli_runners(tmp_path, clock, command):
+    door = tmp_path / "bound-cli"
+    door.mkdir()
+    write_json(door / "door.json", {"gpu_lease": "4090"})
+    log = door / "session.jsonl.events.jsonl"
+    append_jsonl(log, _pending("e1", clock()))
+    result = subprocess.run(
+        [
+            sys.executable, "-m", "hamutay.events", command,
+            "--log-path", str(door / "session.jsonl"),
+            "--event-log-path", str(log),
+            "--provider", "openai", "--api-key", "validation",
+            "--project-root", str(tmp_path),
+        ],
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, timeout=10,
+    )
+
+    assert result.returncode != 0
+    assert "LeaseGateRequired" in result.stdout or "claim through the heartbeat gate" in result.stdout
 
 
 def test_unbound_store_claim_behavior_is_unchanged(tmp_path, clock):
@@ -101,9 +128,7 @@ def test_lease_gate_claim_blocks_on_4090_lock_from_other_process(p, ctx, tmp_pat
     thread = threading.Thread(target=claim, daemon=True)
     thread.start()
     assert not finished.wait(0.25), "claim proceeded while another process held 4090.lock"
-    holder.stdin.write("x")
-    holder.stdin.flush()
-    holder.wait(timeout=5)
+    holder.communicate("x", timeout=5)
     thread.join(timeout=5)
     assert finished.is_set(), "claim did not resume after 4090.lock was released"
 
@@ -122,11 +147,12 @@ def test_live_lease_does_not_stop_server_until_running_wake_completes(p, ctx, sd
     })
     lease = lease_object(clock)
     write_json(p.lease, lease)
+    sd.units["hamutay-llama-server.service"] = sd.active()
     store = EventStore(log)
     gate = LeaseGate(store, ctx)
     calls = 0
 
-    def run_pending():
+    def run_pending(*args, **kwargs):
         nonlocal calls
         calls += 1
         if calls == 2:

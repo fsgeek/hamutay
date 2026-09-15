@@ -5,7 +5,15 @@ from uuid import uuid4
 
 import pytest
 
-from hamutay.gpu_lease.actions import EnsureStopped, Expire, Lease, ServerStart, run
+from hamutay.gpu_lease.actions import (
+    REGISTRY,
+    EnsureStopped,
+    Expire,
+    Lease,
+    ServerStart,
+    resolve_tombstones,
+    run,
+)
 from hamutay.gpu_lease.cli import main
 from hamutay.gpu_lease.gate import LeaseGate
 from hamutay.gpu_lease.ledger import rows
@@ -50,8 +58,12 @@ def test_server_start_never_occurs_while_tombstone_still_exists(p, ctx, sd):
 
     sd.before_start = lambda unit: pytest.fail("server started before tombstone resolution") if tombstone.exists() else None
     with locked(p):
-        outcome = run(ctx, ServerStart())
+        blocked = run(ctx, ServerStart(), REGISTRY)
+        resolved = resolve_tombstones(ctx)
+        outcome = run(ctx, ServerStart(), REGISTRY)
 
+    assert blocked["outcome"] != "ok"
+    assert resolved[-1]["outcome"] == "ok"
     assert outcome["outcome"] == "ok"
     assert not tombstone.exists()
     assert ("stop", scope) in sd.calls
@@ -81,16 +93,34 @@ def test_expiry_kills_scope_before_removing_lease(p, ctx, sd, clock):
     assert not tombstone.exists()
 
 
-def test_run_refuses_launch_with_less_than_six_minutes_remaining(p, ctx, sd, clock):
-    lease = lease_object(clock, minutes=5)
-    write_json(p.lease, lease)
-    write_json(p.tombstones / lease["scope_unit"], {"scope_unit": lease["scope_unit"]})
+def test_run_refuses_launch_with_less_than_six_minutes_remaining(p, ctx, sd, clock, monkeypatch):
+    from hamutay.gpu_lease import ledger
+    from hamutay.gpu_lease import run as run_module
+
     sd.units[SERVER] = sd.inactive()
     launched = []
     args = SimpleNamespace(
-        holder=lease["holder"], purpose=lease["purpose"], ttl=timedelta(minutes=15),
-        expected_until=None, wait_timeout=0, command=["validation-workload"],
+        holder="yupi", purpose="training", ttl="15m",
+        expected_until=None, wait_timeout="30m", command=["validation-workload"],
     )
+    real_wait_ready = run_module.wait_ready
+    first_check = True
+
+    def wait_ready(ctx_arg, lease_id, min_remaining, *, already_locked=False):
+        nonlocal first_check
+        if first_check:
+            first_check = False
+            ledger.append(p, {
+                "record_type": "gpu_lease", "action_id": str(uuid4()),
+                "phase": "outcome", "action": "ensure_stopped", "outcome": "ok",
+                "episode_id": lease_id, "by": "heartbeat:qwen", "at": clock().isoformat(),
+            })
+            ok = real_wait_ready(ctx_arg, lease_id, min_remaining, already_locked=already_locked)
+            clock.advance(minutes=10)
+            return ok
+        return real_wait_ready(ctx_arg, lease_id, min_remaining, already_locked=already_locked)
+
+    monkeypatch.setattr(run_module, "wait_ready", wait_ready)
 
     code = supervise(args, ctx, launcher=lambda *a: launched.append(a), sleep=lambda _: None)
 
@@ -99,6 +129,8 @@ def test_run_refuses_launch_with_less_than_six_minutes_remaining(p, ctx, sd, clo
 
 
 def test_heartbeat_records_rest_before_ensure_stopped(p, sd, clock, tmp_path):
+    from hamutay.heartbeat import HeartbeatLoop
+
     lease = lease_object(clock)
     door, event_log, store = _door(tmp_path, p, lease)
     sd.units[SERVER] = sd.active()
@@ -113,7 +145,15 @@ def test_heartbeat_records_rest_before_ensure_stopped(p, sd, clock, tmp_path):
 
     sd.before_stop = before_stop
     gate = LeaseGate(store, __import__("hamutay.gpu_lease.actions", fromlist=["Ctx"]).Ctx(p, sd, clock, "heartbeat:qwen"))
-    result = gate.observe(clock())
+    loop = HeartbeatLoop(
+        None, store, now=clock,
+        run_pending=lambda *args, **kwargs: {"ran": 0, "results": []},
+        summarize=lambda records, now: {
+            "pending_runnable_count": 0, "pending_waiting_count": 0,
+        },
+        guard=gate,
+    )
+    result = loop.step()
     outcome = [r for r in rows(p) if r.get("phase") == "outcome" and r.get("action") == "ensure_stopped"][-1]
 
     assert result["state"] == "resting"

@@ -39,7 +39,8 @@ def test_malformed_lease_is_quarantined_and_blocks_claim_and_start(p, ctx, sd, c
 
     assert gate.claim(clock())[0] == "blocked"
     assert p.quarantine.exists()
-    assert gate.observe(clock())["state"] == "resting"
+    kind, _ = gate.observe(clock())
+    assert kind == "quarantined"
     assert not any(call[0] == "start" for call in sd.calls)
     assert not _outcomes(p, "lease")
 

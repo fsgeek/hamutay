@@ -23,19 +23,7 @@ from hamutay.gpu_lease.state import locked, write_atomic
 from conftest import SERVER, lease_object, write_json
 
 
-REGISTRY = {
-    "lease": actions._lease_builder,
-    "renew": actions._renew_builder,
-    "release": actions._release_builder,
-    "expire": actions._expire_builder,
-    "release_force": actions._release_force_builder,
-    "quarantine_enter": actions._quarantine_enter,
-    "ensure_stopped": actions._ensure_stopped_builder,
-    "server_stop": actions._ensure_stopped_builder,
-    "force_stop": actions._force_stop_builder,
-    "server_start": actions._server_start_builder,
-    "workload_killed": actions._workload_killed,
-}
+REGISTRY = dict(actions.REGISTRY)
 
 
 def hand_write_intent(ctx, action, *, action_name=None):
