@@ -413,3 +413,29 @@ def test_release_force_quarantines_an_unkillable_scope_and_keeps_the_originals(p
     q = read_quarantine(p)
     assert q is not None and q["reason"] == "scope_unkillable"
     assert is_free(ctx(p, stubborn))[0] is False
+
+
+# --- Follow-up 1: the unfenced-indeterminate scan runs BEFORE the dangling-intent pass ---
+
+def test_unfenced_indeterminate_is_fenced_before_a_dangling_server_start_reconciles(p, sd):
+    """A dangling server_start must never start the server one sweep before an
+    unfenced indeterminate gets its quarantine. resolve_dangling must fence
+    first, then reconcile: the reconciled server_start's perform() then raises
+    NotFree under the fresh quarantine, and the outcome must not be ok."""
+    indeterminate_action_id = "66666666-6666-4666-8666-666666666666"
+    ledger.append(p, {"action_id": indeterminate_action_id, "phase": "intent", "action": "server_start",
+                      "by": "crashed", "at": NOW.isoformat()})
+    ledger.append(p, {"action_id": indeterminate_action_id, "phase": "outcome", "action": "server_start",
+                      "by": "crashed", "at": NOW.isoformat(), "outcome": "indeterminate",
+                      "observed": {}, "detail": {"error": "SystemdUnavailable: fake"}})
+    server_start_action_id = "77777777-7777-4777-8777-777777777777"
+    ledger.append(p, {"action_id": server_start_action_id, "phase": "intent", "action": "server_start",
+                      "by": "crashed", "at": NOW.isoformat()})
+    sd.units["hamutay-llama-server.service"] = {"active_state": "inactive", "sub_state": "dead",
+                                                 "load_state": "loaded", "invocation_id": ""}
+    with locked(p):
+        done = resolve_dangling(ctx(p, sd), REGISTRY)
+    assert read_quarantine(p) is not None
+    assert ("start", "hamutay-llama-server.service") not in sd.calls
+    reconciled = [d for d in done if d["action_id"] == server_start_action_id]
+    assert reconciled and reconciled[0]["outcome"] != "ok"

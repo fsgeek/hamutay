@@ -118,9 +118,16 @@ def run(ctx: Ctx, action: Action, registry: dict | None = None) -> dict:
 
 def resolve_dangling(ctx: Ctx, registry: dict[str, Callable[[dict], Action]]) -> list[dict]:
     """For each dangling intent: rebuild the action from its intent row, perform any owed
-    side effects (perform is idempotent by contract), evaluate, write the reconciled outcome."""
+    side effects (perform is idempotent by contract), evaluate, write the reconciled outcome.
+
+    An unfenced `indeterminate` outcome is a dangling *condition*, resolved first,
+    before anything else: otherwise a dangling intent (e.g. server_start) could
+    reconcile -- performing its side effect -- one sweep before the fence lands.
+    The scan runs again at the end so indeterminates produced by the
+    reconciliation pass itself are fenced in the same call.
+    """
     _assert_locked(ctx)
-    done = []
+    done = list(_quarantine_unfenced_indeterminates(ctx))
     for intent in ledger.dangling_intents(ledger.rows(ctx.paths)):
         build = registry.get(intent.get("action"))
         if build is None:
