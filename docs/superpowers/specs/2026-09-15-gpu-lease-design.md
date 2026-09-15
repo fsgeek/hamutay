@@ -1,9 +1,9 @@
 # The GPU lease — lending the house's card without a human in the loop
 
 Date: 2026-09-15. Author: the Fable session that took custody of Hamut'ay
-this morning. Status: DRAFT, revision 2, after Codex's round-one review
-(`2026-09-15-gpu-lease-review.md`). Dispositions at the end. Sent back to
-Codex for round two before any code.
+this morning. Status: DRAFT, revision 3, after Codex's rounds one and two
+(`2026-09-15-gpu-lease-review.md`, `2026-09-15-gpu-lease-review-2.md`).
+Dispositions at the end. Sent to Codex for round three before any code.
 
 ## The problem
 
@@ -21,24 +21,22 @@ The qwen resident is the first member whose ground is in the house. When
 its ground is allocated elsewhere, the record must say so, in the resident's
 own log, in the same shape it already uses for a budget rest.
 
-## What changed in revision 2
+## Revision history
 
-Revision 1 had three actors on independent 30-second polls: the holder
-wrote a lease, a steward timer stopped and started the server, and the
-heartbeat noticed and recorded. Codex showed that no ordering of independent
-polls can keep "a live lease always wins" and "every loan is in the
-resident's record" both true, that the forced drain manufactured a terminal
-`failed` event, and that `Wants=` plus `WantedBy=default.target` let systemd
-start the server behind the steward's back.
-
-Revision 2 has two actors. The holder writes the lease. The door's heartbeat
-is the single owner of the server unit: it already is the only process that
-claims this door's wakes, so a lease check inside the claim path is a real
-barrier, the acknowledgment record and the stop are one ordered sequence in
-one thread, and there is no forced drain because a single-threaded loop
-finishes its wake before it looks at the lease again. The server unit is no
-longer enabled under `default.target` and nothing `Wants=` it; the heartbeat
-starts it when the card is free and stops it when it is not.
+- r1: holder + steward timer + heartbeat on independent polls. Codex r1:
+  races, forced drain fails events, systemd starts the server behind the
+  steward.
+- r2: steward removed; the door's heartbeat owns the server unit. Codex r2:
+  the claim barrier was a callback not a lock; `force-stop` reintroduced
+  the killed wake; ledger intent/outcome had no reconciliation; removing
+  `[Install]` does not disable an enabled unit; restart broke episode
+  continuation; rule (b) was not exactly-once; context inheritance had no
+  substrate binding; quarantine had no identity; `wait` was a convention.
+- r3 (this): a lock-owning claim gate; `force-stop` requires the
+  heartbeat's process lock; an action state machine with reconciliation
+  by observation; a deployment migration; episode continuation across
+  restart; at-least-once post-loan notice; substrate-bound context
+  inheritance; `episode_id` for leases and quarantines; `ayllu-gpu run`.
 
 ## Invariants
 
@@ -46,23 +44,30 @@ starts it when the card is free and stops it when it is not.
    lease always wins; the resident yields. There is no resident veto.
 2. **Nothing new happens to the resident's events.** A loan is a rest. Waiting
    events keep waiting, exactly as under `daily_budget_reached`; nothing is
-   failed, expired, or re-pended because of a loan. No wake is interrupted.
-3. **Legible before and after.** The loan is a `heartbeat_status` record in
-   the door's own store (`resting`, `reason: substrate_lent`) written *before*
-   the server is stopped, and the holder cannot proceed until that record
-   exists. The first wake after the loan, and every wake whose event waited
-   during it, gets an operational note.
-4. **No human required.** A holder leases and releases with one command from
-   any project. Expiry is automatic: a holder that dies without releasing
-   does not leave the door dark forever.
-5. **One actor owns the server unit: the door's heartbeat.** The holder only
-   writes the lease file, except for one ledgered override (`--force-stop`)
-   for the case where the heartbeat is not running.
-6. **Fail closed.** When lease state cannot be read, nothing claims a wake,
-   nothing starts the server, nothing grants a lease. Uncertainty is
-   recorded and cleared only by a ledgered override.
-7. **Every transition of the card is a record**, as intent and outcome, in
-   a ledger beside the lease; the checkpoint script digests it.
+   failed, expired, or re-pended because of a loan. No wake is interrupted
+   by any actor in this design.
+3. **Legible.** The loan is a `heartbeat_status` record in the door's own
+   store (`resting`, `reason: substrate_lent`) written before the server is
+   stopped. Every wake whose event waited during the loan is told; if none
+   waited, the first wake completed after the loan is told (at-least-once
+   across retries, never zero).
+4. **No human required.** A cooperating holder acquires the card with one
+   command (`ayllu-gpu run`) that leases, waits for the acknowledged stop,
+   runs its workload, and releases. The two primitives (`lease`, `wait`)
+   exist for launchers that need them separately; a caller that leases
+   and does not wait is an acknowledged operational hazard among mutually
+   trusted local processes, not a defended case. Expiry is automatic.
+5. **One actor owns the server unit: the door's heartbeat.** The only
+   exception is `force-stop`, which can run only while holding the
+   heartbeat's process-lifetime lock, which proves the heartbeat is not
+   running.
+6. **Fail closed.** When lease state cannot be read, or an action's outcome
+   cannot be determined by observation, the resource is quarantined:
+   nothing claims a wake, nothing starts the server, nothing grants a
+   lease. Cleared only by a ledgered override.
+7. **Every mutation is an intent row before it happens and an outcome row
+   after**, and the next lock holder resolves any dangling intent by
+   observation before doing anything else.
 
 ## Components
 
@@ -70,12 +75,13 @@ starts it when the card is free and stops it when it is not.
 
 Project-independent, outside every repo.
 
-`4090.lock` — flock; every read-modify-write of the lease and every ledger
-append by any actor holds it. Lock order for the heartbeat: lease lock,
-then the event-store lock (it never takes them in the other order).
+`4090.lock` — flock. Every actor holds it for: any read-modify-write of the
+lease file, any ledger append, the claim gate, and the start decision.
+**Lock order:** `4090.lock` first, then the door's event-store lock, then
+nothing else. No actor takes the event-store lock and then `4090.lock`.
 
-`4090.lease` — present iff a lease is held. One JSON object, written by
-temp-file-and-rename under the lock:
+`4090.lease` — present iff a lease is held or quarantined. One JSON object,
+written by temp-file-and-rename under the lock:
 
 ```
 {"resource": "4090", "lease_id": "<uuid4>", "holder": "yupi",
@@ -84,342 +90,403 @@ temp-file-and-rename under the lock:
  "expected_until": "2026-09-20T18:00:00+00:00"}
 ```
 
-Validation rules (shared conformance fixtures under `tests/fixtures/gpu_lease/`,
-used by both the bash and Python readers):
+Validation (shared fixtures `tests/fixtures/gpu_lease/*.json` with expected
+verdicts, used by the bash and Python readers):
 
-- Instants are ISO-8601 with an explicit UTC offset; fractional seconds
-  allowed; anything else is malformed.
-- The lease is live iff `now < expires_at`; at `now >= expires_at` it is
-  expired. Expired is not malformed: it means free, and the next actor to
-  hold the lock removes the file and ledgers `expire`.
-- `lease_id` must be a uuid4 string; `holder` and `purpose` non-empty
-  strings; `resource == "4090"`. Any other shape, unparseable JSON, or an
-  unreadable file is **malformed**, and malformed means **quarantined**
-  (invariant 6): the file is left in place, a `quarantine` row is ledgered
-  once, and only `ayllu-gpu release --force --by <name> --reason "..."`
-  clears it.
-- `expected_until` is the holder's estimate and is labelled so wherever it
-  is rendered. `expires_at` is the enforceable deadline. Neither is a
-  promised resume time.
+- Instants: ISO-8601 with explicit UTC offset; fractional seconds allowed.
+- Live iff `now < expires_at`. Expired means free; the next lock holder
+  ledgers `expire` and removes the file.
+- `lease_id` uuid4; `holder`, `purpose` non-empty; `resource == "4090"`.
+  Anything else, unparseable JSON, or an unreadable file is **malformed →
+  quarantined**: file left in place; `quarantine_id = sha256(bytes)[:16]`
+  (an unreadable file uses `sha256("")`); one `quarantine` row per
+  `quarantine_id`; the same `quarantine_id` on later observations is the
+  same quarantine, a different digest is a new one. Cleared only by
+  `release --force`.
+- `expected_until` is the holder's estimate, labelled so wherever
+  rendered; `expires_at` is the enforceable deadline.
 
-`4090.ledger.jsonl` — append-only, one row per transition, intent and
-outcome as separate rows sharing an `action_id`:
+**`episode_id`**: `lease_id` for a lease, `quarantine_id` for a quarantine.
+Every heartbeat record and ledger row that refers to a rest carries it.
+
+`4090.ledger.jsonl` — append-only. Every row:
 
 ```
 {"record_type": "gpu_lease", "action_id": "<uuid4>", "phase": "intent"|"outcome",
  "action": "lease"|"renew"|"release"|"expire"|"quarantine"|"force_stop"
-          |"server_stop"|"server_start"|"server_ready"|"reconcile",
- "lease_id": ..., "holder": ..., "purpose": ..., "expires_at": ...,
- "by": "ayllu-gpu"|"heartbeat:qwen", "at": <iso>,
- "outcome": "ok"|"error", "observed": {"server": "<systemctl is-active output>"}, "detail": ...}
+          |"server_stop"|"server_start"|"server_ready"|"server_unready",
+ "episode_id": ..., "holder": ..., "purpose": ..., "expires_at": ...,
+ "by": "ayllu-gpu"|"heartbeat:qwen"|"<force --by name>", "at": <iso>,
+ "outcome": "ok"|"not_performed"|"error"|"indeterminate",
+ "reconciled": true|absent,
+ "observed": {"active_state": ..., "sub_state": ..., "invocation_id": ...,
+              "lease_present": bool, "lease_episode_id": ...},
+ "detail": ...}
 ```
 
-`server_start` means "start requested and `systemctl` returned"; readiness
-is a separate `server_ready` row written when the probe succeeds. The
-ledger contents stay outside git; only digests are committed (component 6).
+**Action state machine (invariant 7).** For every mutating action: (1) take
+`4090.lock`; (2) resolve dangling intents (below); (3) append the intent
+row; (4) perform the mutation; (5) observe; (6) append the outcome row;
+(7) release the lock. A dangling intent is an `action_id` with an intent
+row and no outcome row. The next lock holder, whoever it is, resolves each
+by observation and appends an outcome row for the *original* `action_id`
+with `reconciled: true`:
+
+| dangling action | completed iff (observed) | else |
+|---|---|---|
+| lease / renew | lease file present, same `lease_id`, `expires_at` ≥ the intent's | `not_performed` |
+| release | lease file absent, or present with a different `lease_id` | `not_performed` |
+| expire | as release | `not_performed` |
+| quarantine | file present and malformed with the same `quarantine_id` | `not_performed` |
+| server_stop / force_stop | `ActiveState ∈ {inactive, failed}` | `active`/`activating`/`deactivating`/`reloading` → `not_performed` (the rule table re-applies) |
+| server_start | `ActiveState ∈ {active, activating}` | `not_performed` |
+| any, if `systemctl show` or the lease file cannot be read | — | `indeterminate` → quarantine with `quarantine_id = sha256(action_id)[:16]` |
+
+Observation is `systemctl --user show -p ActiveState,SubState,InvocationID
+hamutay-llama-server`, never `is-active`. `server_start` means "start
+requested and the command returned"; readiness is `server_ready`, a
+separate row bound to the `InvocationID` observed at that start
+(component 4).
 
 ### 2. `deploy/ayllu-gpu` — the holder's command (bash + jq + flock, no uv)
 
 ```
+ayllu-gpu run   --holder NAME --purpose "..." [--ttl 6h] [--expected-until ISO]
+                [--wait-timeout 30m] -- <command...>
+                # lease; wait for the acknowledged stop; run the command; release on EXIT
+                # (trap). The command's exit status is ayllu-gpu's. This is the
+                # registered way to use the card.
 ayllu-gpu lease   --holder NAME --purpose "..." [--ttl 6h] [--expected-until ISO]
-                  # prints the lease_id on stdout; exit 2 if another holder's lease is live
+                  # prints lease_id; exit 2 if another holder's live lease or a quarantine
 ayllu-gpu renew   --lease-id ID [--ttl 6h]
 ayllu-gpu release --lease-id ID
-ayllu-gpu release --force --by NAME --reason "..."      # ledgered override; clears quarantine too
-ayllu-gpu wait    --lease-id ID [--timeout 15m]         # blocks until the ledger shows an
-                  # ok server_stop outcome for this lease_id; exit 3 on timeout
+ayllu-gpu release --force --by NAME --reason "..."   # ledgered override; clears quarantine
+ayllu-gpu wait    --lease-id ID [--timeout 30m]      # success iff an ok server_stop outcome
+                  # for this episode_id exists AND observed ActiveState ∈ {inactive, failed}
+                  # now; exit 3 on timeout, with the door's last heartbeat_status printed
 ayllu-gpu force-stop --lease-id ID --by NAME --reason "..."
-                  # only after wait timed out: stops the unit directly, ledgers force_stop
-ayllu-gpu status                                         # lease or free, quarantine, server state
+ayllu-gpu status
 ```
 
-- `--ttl` grammar `^[0-9]+[mhd]$`, bounds 1m–72h inclusive; outside is an
-  error. Default 6h.
-- Same holder calling `lease` while its own lease is live is a renew:
-  `lease_id`, `since`, `purpose` are preserved, `expires_at` becomes
-  `now + ttl`, `expected_until` is replaced only if given.
-- `renew` and `release` require the `lease_id` (unpredictable, printed at
-  lease time). All local callers share one Unix account, so this is
-  accountability, not security; the design says so and does not claim
-  ownership enforcement.
-- `force-stop` and `release --force` are the two human-or-agent overrides.
-  Both ledger `by`, `reason`, and the observed state. `force-stop` is
-  what a holder does when the door's heartbeat is down (`wait` timed out).
-  The heartbeat reconstructs the missed episode from the ledger on boot
-  (component 4, "reconstruction").
-- The steward of revision 1 is gone. `ayllu-gpu` never calls `systemctl`
-  except in `force-stop`.
+- `--ttl` grammar `^[0-9]+[mhd]$`, bounds 1m–72h inclusive. Default 6h.
+- Same holder calling `lease` on its own live lease is a renew:
+  `lease_id`, `since`, `purpose` preserved; `expires_at = now + ttl`;
+  `expected_until` replaced only if given.
+- `renew`/`release` require the `lease_id`. Accountability, not security:
+  all local callers share one Unix account; the ledger says who.
+- **`force-stop`** (Codex r2 B2): takes `4090.lock`, then tries the door's
+  heartbeat lock `community/qwen/session.jsonl.events.jsonl.heartbeat.lock`
+  with `flock -n`. If the heartbeat holds it, `force-stop` refuses (exit
+  4: "heartbeat is running; it will act within its poll interval, or is
+  inside a wake that must finish"). If acquired, it holds both locks while
+  it stops the server, observes, and ledgers, then releases. A `wait`
+  timeout alone never authorizes a stop. If the dead heartbeat left a
+  `running` event, boot recovery re-pends it, as today.
+- `ayllu-gpu` never calls `systemctl` except in `force-stop` and `status`
+  (read-only `show`).
 
-### 3. Units
+### 3. Units and the deployment migration
 
-- `deploy/hamutay-llama-server.service`: `[Install]` section removed; the
-  unit is not enabled. `Restart=always`, `RestartSec=10` stay for crashes.
-  The heartbeat is the only thing that starts or stops it.
-- `deploy/hamutay-heartbeat@qwen.service.d/override.conf`: `Requires=` and
-  `After=` on the server both removed. Nothing pulls the server in. The
-  heartbeat starts it when the card is free.
-- Host boot: `hamutay-heartbeat@qwen` starts (enabled, as today), sees no
-  live lease, starts the server, waits for readiness, proceeds.
-- A pending automatic restart after a server crash is a systemd job;
-  `systemctl --user stop` cancels it. The heartbeat verifies with
-  `systemctl --user is-active` after every stop and re-issues the stop on
-  the next step if the unit is anything but `inactive` or `failed` while a
-  lease is live. States handled: `active`, `activating`, `deactivating`,
-  `auto-restart`, `failed`, `inactive`; the rule is "lease live → must be
-  inactive/failed; card free → must be active and ready".
+Unit files after this change:
+
+- `deploy/hamutay-llama-server.service`: `[Install]` removed; `Restart=always`,
+  `RestartSec=10` kept for crashes. Comment: "started and stopped by
+  `hamutay-heartbeat@qwen` only; do not enable".
+- `deploy/hamutay-heartbeat@qwen.service.d/override.conf`: no `Requires=`,
+  `Wants=`, or `After=` on the server; instead
+  `Environment=HAMUTAY_GPU_LEASE=4090` (component 4).
+
+**Migration (Codex r2 B4), ordered, run by `deploy/migrate-gpu-lease.sh`
+and verified by `deploy/check-gpu-lease.sh`:**
+
+1. `systemctl --user disable hamutay-llama-server` (the running process is
+   untouched); assert `is-enabled` prints `disabled`.
+2. Install the new drop-in; `systemctl --user daemon-reload`; assert
+   `systemctl --user show -p Requires,Wants hamutay-heartbeat@qwen` lists no
+   server unit.
+3. `mkdir -p ~/.local/state/ayllu/gpu`.
+4. Deploy the code (git pull on main).
+5. Restart `hamutay-heartbeat@qwen` when the door has no `running` event
+   (the script reads the store's latest statuses and waits up to 30 min;
+   there is no lease yet, by construction, since `ayllu-gpu` is not yet
+   in anyone's launcher). The new heartbeat boots, observes FREE and the
+   server `active`, probes ready, proceeds.
+6. `check-gpu-lease.sh` asserts: server `is-enabled` = `disabled`; no
+   `Requires`/`Wants` on the server from any unit
+   (`systemctl --user show -p WantedBy,RequiredBy hamutay-llama-server` empty);
+   the state directory exists; the heartbeat's launch note printed
+   `gpu lease: 4090`.
+
+Host boot after migration: `hamutay-heartbeat@qwen` (enabled) starts, sees
+FREE, starts the server, warms, proceeds.
 
 ### 4. The heartbeat: substrate guard
 
-`hamutay.heartbeat` gains `--gpu-lease {auto,off,PATH}` (default `auto`).
-`auto` resolves to the standard lease path when the resolved launch has
-`provider == "openai"` and `base_url` host ∈ {`127.0.0.1`, `localhost`,
-`::1`}; else to `off`. The resolved value is printed in the launch note and
-recorded in `launch_config` as `gpu_lease` (house policy, like the budget;
-not a substrate key, not inherited). Hosted doors resolve to `off` and
-build no guard; their code path is unchanged and tested unchanged.
+**Configuration.** `--gpu-lease {off,4090,PATH}`, default from
+`$HAMUTAY_GPU_LEASE`, else `off`. `4090` resolves to the standard lease
+path. No loopback inference (Codex r2 M1): participation is configured on
+the unit, not guessed from the base URL. The resolved value is printed in
+the launch note and recorded in `launch_config.gpu_lease`. Hosted doors
+resolve to `off` and build no guard; their code path is unchanged and
+tested unchanged.
 
-With a guard, the loop runs `claim_limit=1` always (not only under a
-budget), and `step()` begins:
+**Claim gate (Codex r2 B1).** A `LeaseGate` object with one method used by
+the claim path:
 
 ```
-guard.observe(now)  ->  one of
-  LEASE_LIVE(lease)        : rest (below); return {"state": "resting"}
-  QUARANTINED(detail)      : rest with reason substrate_lease_unreadable; return
-  FREE, server not ready   : ensure started (below); return {"state": "warming"}
-  FREE, server ready       : fall through to the existing budget check and claim
+gate.claim(store, now) -> ("blocked", lease | quarantine) | ("claimed", (event, running)) | ("none", None)
 ```
 
-**Rest sequence (LEASE_LIVE), one thread, in order, under the lease lock:**
+It takes `4090.lock`, resolves dangling intents, validates the lease; if
+live or quarantined it returns `blocked` without touching the store; else,
+*still holding `4090.lock`*, it calls `store.claim_next_pending(now)`
+(which takes the event-store lock inside, in the declared order), then
+releases. `run_next_event` gains `claim_gate=None`; with a gate it uses
+`gate.claim` in place of the direct call and returns
+`{"status": "lease_blocked", ...}` on `blocked`; `run_pending_events`
+threads the gate through and stops the batch on `lease_blocked`.
+`step_pending_events`, `run-one`, and `run-all` in the events CLI read the
+log's latest `launch_config.gpu_lease`; if it is not `off` they construct
+the same gate. They never start or stop the server; a manual run while the
+server is down fails as today (an operator's manual run, not a loan).
 
-1. If the store has no `resting/substrate_lent` for this `lease_id`:
-   append it, `detail = {lease_id, holder, purpose, since, expires_at,
-   expected_until, source: "observed"}`. (De-dup key for this reason is
-   `lease_id`, mirroring the budget rest's `_resting_day`; a new lease is a
-   new episode even with no intervening status.)
-2. Ledger `server_stop` intent; `systemctl --user stop hamutay-llama-server`;
-   ledger outcome with observed `is-active`.
-3. Sleep `poll_interval`. Renewals change nothing in the store (episode key
-   is `lease_id`; the first record's detail is what the envelope renders;
-   `expires_at` there is therefore "as first observed", labelled so).
+**Start gate.** Every `systemctl start` decision is made under `4090.lock`
+after re-validating FREE; the intent row, the command, the observation,
+and the outcome row all happen before the lock is released.
 
-`ayllu-gpu wait` returns success only on an ok `server_stop` outcome for the
-lease_id, which by this order comes after the resting record exists
-(invariant 3).
+**Rest sequence (LEASE_LIVE or QUARANTINED), one thread, under `4090.lock`:**
 
-**Return sequence (FREE after a lease, or boot with the card free):**
+1. Let `latest` be the store's latest `heartbeat_status`. If `latest` is
+   not (`resting`, this reason, this `episode_id`): append
+   `resting/substrate_lent` (or `resting/substrate_lease_unreadable`) with
+   `detail = {episode_id, holder, purpose, since, expires_at,
+   expected_until, source: "observed", continuation: <true iff an earlier
+   record for this episode_id exists>}`. De-duplication is against the
+   *latest* status only (Codex r2 S1), so after a restart the
+   `waking/boot` record is followed by a continuation rest.
+2. If observed `ActiveState ∉ {inactive, failed}`: `server_stop` intent →
+   `systemctl --user stop` → observe → outcome (`ok` iff inactive/failed;
+   else `not_performed`, retried next step).
+3. Return `{"state": "resting", "sleep_seconds": poll_interval}`.
 
-1. If the last status is `resting/substrate_lent` or
-   `resting/substrate_lease_unreadable`: append `waking`, reason
-   `substrate_returning`, detail `{lease_id}`. This closes the rest episode
-   at the moment the card came back, so warming time is not counted as
-   lent.
-2. If `is-active` is not `active`: ledger `server_start` intent,
-   `systemctl --user start`, ledger outcome.
-3. Probe `GET <base_url>/models` with a 2 s timeout; 200 is ready. Not
-   ready: return `{"state": "warming", "sleep_seconds": poll_interval}`
-   without a transition (the last status is `waking/substrate_returning`,
-   which is not a rest). Ready: ledger `server_ready`, re-run context
-   discovery (`/props`) and apply it (below), fall through.
+**Return sequence (FREE):**
 
-**Overlap with the budget rest.** Reasons are strictly prioritized states
-in one stream: lease (or quarantine) first, then budget. A budget rest
-interrupted by a loan appears as two budget segments around one lease
-episode, each with its own note; `_rest_episodes` is not taught to merge
-across a lease. Ordered cases specified for the tests: budget-before-lease,
-lease-before-budget, midnight during a lease (the budget day rolls over
-while resting on the lease; on return the new day is evaluated fresh),
-restart during either.
+1. If `latest` is a rest for a substrate `episode_id`, or the guard's boot
+   reconciliation found one (below): append `waking/substrate_returning`
+   with `{episode_id, closed_at_source: "observed"|"ledger"}`.
+2. Under `4090.lock`, re-validate FREE; if `ActiveState ∉ {active, activating}`:
+   `server_start` intent → start → observe (record `InvocationID`) →
+   outcome.
+3. Probe `GET <base_url>/models`, 2 s timeout, 200 = ready. Not ready →
+   return `{"state": "warming", "sleep_seconds": poll_interval}` with no
+   transition. Ready → if the guard's remembered ready `InvocationID`
+   differs from the observed one, append `server_ready` (once per
+   not-ready→ready transition; Codex r2 M3) and run **context
+   rediscovery**; then fall through to the budget check and the claim.
+   A later probe failure after ready appends `server_unready` once and
+   forgets the ready invocation.
 
-**Reconstruction.** On boot, and on every `observe`, the guard reads the
-ledger tail since the last row it has seen (position kept in memory; on
-boot it scans the whole ledger, which is small). For any `force_stop` ok
-outcome whose `lease_id` has no `resting/substrate_lent` in the store,
-append one with `created_at` = the ledger row's `at` and
-`source: "reconstructed_from_ledger"`. A lease that came and went without
-the heartbeat acting and without a `force_stop` never moved the card
-(the server kept the GPU; the holder's `wait` timed out), so it is not an
-episode in the resident's store; it is in the ledger only.
+**Boot reconciliation** runs *before* `HeartbeatLoop.boot()` appends
+`waking/boot` (Codex r2 S1): under `4090.lock`, resolve dangling intents;
+then for every substrate rest episode in the store with no closing status
+whose `episode_id` is no longer live/quarantined, append
+`waking/substrate_returning` with `created_at` = the ledger's `release`,
+`expire`, or `release --force` outcome `at` for that `episode_id` (else boot
+time, `closed_at_source: "boot"`). Then, for every ok `force_stop`
+outcome (reconciled or not) whose `episode_id` has no rest record in the
+store, append `resting/substrate_lent` with `created_at` = that row's `at`,
+`source: "reconstructed_from_ledger"`, and, if the lease is already gone,
+the matching returning record. Then `boot()` proceeds.
 
-**Context ceiling across a loan (Codex S6).** `resolve_context_limit` at
-`main` can fail when the heartbeat boots during a lease or before the
-server is ready. Rule: discovery failure at boot inherits the last
-`context_limit` recorded in the log's launch records (the value is now
-written into `launch_config` as `context_limit` with
-`context_limit_source`), printed loudly as inherited; the guard re-runs
-discovery at every `server_ready` and applies the fresh value to the
-backend. The plan verifies whether `OpenAITasteBackend`'s limit is settable
-after construction; if it is not, the backend is constructed lazily at
-first readiness.
+**Overlap with the budget rest.** Strict priority in one stream: lease or
+quarantine first, then budget. A budget rest split by a loan is two budget
+segments around one substrate episode, each with its own note;
+`_rest_episodes` does not merge across a substrate episode. Named cases:
+budget-before-lease, lease-before-budget, midnight during a lease (new day
+evaluated fresh on return), restart during either.
 
-**Ingress between `next_pending()` and the claim.** The guard is consulted
-inside the claim path: `run_pending_events` receives a `may_claim` callback
-that re-reads the lease under the lease lock immediately before
-`claim_next_pending`. A lease that lands after `observe` and before the
-claim wins; the step returns to the rest sequence on its next iteration
-without claiming. Between two steps a lease is seen because
-`claim_limit=1`.
+**Context ceiling across a loan (Codex r2 S3).** `resolve_context_limit`
+gains an inheritance step: when discovery fails, take the latest record in
+the log whose `launch.context_limit` is a positive int and whose
+`launch.{model, provider, base_url}` equal the resolved launch; source
+`"inherited"`, printed loudly. Explicit `--context-limit` beats everything
+and is never overwritten by rediscovery. On `server_ready`, rediscover from
+`/props`; if it succeeds and there is no explicit limit, set
+`session._context_limit` and `session._launch_config["context_limit"]`/
+`["context_limit_source"] = "discovered"` (the session writes `launch`
+into every record, so the change persists and the next boot inherits it).
+A participating door with no explicit limit, no matching inherited limit,
+and failed rediscovery stays `warming` and does not claim. The parser
+rejects `--context-limit <= 0`.
 
 ### 5. Envelope notes
 
-`events.py::_rest_episodes` groups `substrate_lent` and
-`substrate_lease_unreadable` episodes by `detail.lease_id` (a `waking/boot`
-followed by a `resting` with the same `lease_id` is a restart continuation,
-like the budget's same-day rule). `operational_notes_for_event` renders:
+`events.py::_rest_episodes` groups substrate episodes by
+`detail.episode_id`; `resting(episode X) → waking/boot → resting(episode X,
+continuation)` is one episode. `operational_notes_for_event` renders:
 
 > heartbeat rested from … to … (GPU allocated to another workload; lease
 > record: holder "yupi", purpose "learner sub-project 2, first 1M-param
 > run"); this event waited 5h 12m of it.
 
-Open episode: "resting since … (…; the lease expires at …; the holder's
-estimate of return is …)".
+Quarantine: "(GPU lease state unreadable; quarantine <id>)". Open episode:
+"resting since … (…; the lease expires at …; the holder's estimate of
+return is …)".
 
-**Who is told (Codex S3).** Two rules, both derivable from the store:
-(a) every event whose pending interval intersects the episode, as today;
-(b) the first event claimed after the episode closed (no `running` record
-between the episode's closing status and this claim), even if it was
-created afterward. Rule (b) is a second note source with its own sentence:
-"Before this event existed, the heartbeat rested from … to … (…)." The
-existing test that an event created after a budget rest gets no note is
-unchanged for budget rests; the (b) rule is specific to substrate
-episodes. Exactly one later wake carries the (b) note, by construction.
+**Who is told (Codex r2 S2).** Rule (a): every event whose pending
+interval intersects the episode, as today. Rule (b), only when rule (a)
+produced no note for this episode in this envelope: the episode is closed,
+and no event has a `completed` status record appended after the episode's
+closing status. Sentence: "Before this event existed, the heartbeat rested
+from … to … (…)." Consumption is a *completed* wake, so a claim that
+fails or crashes before completion leaves the note for the retry:
+at-least-once, never zero, and at most one note per episode per envelope.
+The existing budget-rest test (no note for an event created after the
+rest) is unchanged; rule (b) is specific to substrate episodes.
 
-### 6. Constitution, deployment, checkpoint
+### 6. Constitution, deployment, checkpoint, yupi
 
-Constitution, one operational sentence, added when the resolved
-`--gpu-lease` is not `off` (configured participation, not file existence),
-wording per Codex S8: "The heartbeat may pause while the local GPU is
-allocated to another workload; its lease record carries a declared holder
-and purpose, pending events remain pending, and affected wakes receive an
-operational note." No "member", "house", "lent", "borrowed", no consent
-language.
+Constitution, one operational sentence when the resolved `--gpu-lease` is
+not `off`: "The heartbeat may pause while the local GPU is allocated to
+another workload; its lease record carries a declared holder and purpose,
+pending events remain pending, and affected wakes receive an operational
+note."
 
-Deployment: `deploy/ayllu-gpu`; edited server unit; edited qwen drop-in;
-install and operations lines in `community/README.md`; the
-`~/.local/state/ayllu/gpu/` directory created by the first `ayllu-gpu` or
-heartbeat run.
+Deployment: `deploy/ayllu-gpu`, `deploy/migrate-gpu-lease.sh`,
+`deploy/check-gpu-lease.sh`, edited server unit, edited drop-in;
+operations lines in `community/README.md`.
 
-Checkpoint: `deploy/checkpoint-community-log.sh` gains one explicit step:
-resolve `${AYLLU_STATE_DIR:-$HOME/.local/state/ayllu}/gpu/4090.ledger.jsonl`;
-if absent, print a note and skip; else take a byte snapshot under
-`4090.lock`, and append `filename, sha256, byte count, timestamp` to
-`community/gpu/CHECKPOINTS.txt` (directory created if missing), which joins
-the same signed checkpoint commit as the doors'. The ledger itself is never
-copied into the repository.
+Checkpoint: `deploy/checkpoint-community-log.sh` resolves
+`${AYLLU_STATE_DIR:-$HOME/.local/state/ayllu}/gpu/4090.ledger.jsonl`; absent
+→ note and skip; else byte snapshot under `4090.lock`, and
+`filename, sha256, byte count, timestamp` appended to
+`community/gpu/CHECKPOINTS.txt` in the same signed checkpoint commit. The
+ledger is never copied into the repository.
 
 Yupi: one paragraph in its corpus-generator design §11 replacing "the PI
-suspends…" with the two commands. Separate commit in yupi's repo.
+suspends…" with `ayllu-gpu run`. Separate commit in yupi's repo.
 
 ## Data flow, one loan
 
-1. Yupi's launcher: `id=$(ayllu-gpu lease --holder yupi --purpose … --ttl 8h)`;
-   `trap 'ayllu-gpu release --lease-id $id' EXIT`; `ayllu-gpu wait --lease-id $id`.
-2. Heartbeat step: LEASE_LIVE → resting record → stop intent → stop → outcome.
-3. `wait` sees the ok outcome and returns; yupi trains; renews if long.
-4. Launcher exits; trap releases. If the trap never runs, the TTL expires.
-5. Heartbeat step: FREE → `waking/substrate_returning` → start → warming
-   steps → ready → `server_ready` → context rediscovery → budget check → claim.
-6. The claimed wake's envelope carries the note (rule a or b).
+1. Yupi: `ayllu-gpu run --holder yupi --purpose "…" --ttl 8h -- uv run python -m yupi.train …`
+2. `run` leases (intent, write, outcome), then `wait`s.
+3. Heartbeat step: `gate` sees LEASE_LIVE → rest sequence: resting record →
+   stop intent → stop → observe inactive → outcome ok.
+4. `wait` sees the ok outcome and inactive state → the trainer runs. `run`
+   renews every `ttl/2` in the background while the command runs.
+5. Command exits → trap: `release` (intent, remove, outcome).
+6. Heartbeat step: FREE → `waking/substrate_returning` → start under lock →
+   warming steps → ready → `server_ready` → rediscovery → budget → claim.
+7. The claimed wake's envelope carries the note (rule a, else b).
 
-If the heartbeat is down at step 2: `wait` times out (exit 3); the launcher
-may `force-stop` with its name and reason; the heartbeat reconstructs the
-episode when it next boots.
+If the heartbeat is not running at step 3: `wait` times out (exit 3);
+`run` exits 3 without running the command and releases. A launcher that
+knows the heartbeat is decommissioned may `force-stop`, which succeeds only
+if it can take the heartbeat lock.
 
 ## Error handling
 
-- Malformed lease: quarantine (invariant 6), heartbeat rests with reason
-  `substrate_lease_unreadable`, server left in its current state, no
-  claims, no starts. Cleared only by `release --force`.
-- `systemctl` error: ledger `outcome: error` with stderr; the rule table
-  re-applies next step. A server that will not come back keeps the door in
-  `warming` with a `server_start` intent/outcome pair per attempt in the
-  ledger (the heartbeat's attempts, not systemd's internal retries, which
-  are not enumerated).
-- Heartbeat crash between resting record and stop: on boot, the guard sees
-  LEASE_LIVE, finds the resting record, and issues the stop (idempotent).
-  Between stop intent and outcome: boot reconciles by observing
-  `is-active` and ledgering a `reconcile` row with the observed state.
+- Malformed lease: quarantine (invariant 6); the door rests with reason
+  `substrate_lease_unreadable`; server left as is; no claims, no starts,
+  no grants. Cleared by `release --force`.
+- `systemctl` command error: outcome `error` with stderr; the rule table
+  re-applies next step. A server that will not come back keeps the door
+  `warming` with one `server_start` intent/outcome pair per heartbeat
+  attempt (systemd's own retries are not enumerated).
+- Heartbeat crash at any point of the rest or return sequence: the next
+  lock holder resolves the dangling intent by the table; the latest-status
+  de-duplication makes the rest record continuation-safe; boot
+  reconciliation closes episodes that ended while down.
 - Clock: one host; no skew handling.
 
 ## Testing
 
-- `tests/test_gpu_lease.py`: the Python reader/writer against the shared
-  fixtures (live, expired, malformed cases; TTL grammar and bounds; atomic
-  write; foreign-holder refusal; same-holder re-lease preserves fields).
-- `tests/gpu_lease/test_ayllu_gpu.sh` (pytest-driven via subprocess): the
-  bash CLI against the same fixtures, a fake `systemctl` on `PATH`, a
-  temporary `AYLLU_STATE_DIR`; `wait` success only after an ok
-  `server_stop` outcome; `force-stop` ledgering.
-- `tests/test_heartbeat_guard.py`: `HeartbeatLoop` with an injected guard,
-  store, clock, fake `systemctl`, fake probe: rest sequence ordering (record
-  before stop); one record per `lease_id`; new lease = new episode; return
-  sequence with warming steps not transitioning; overlap cases (four,
-  above); boot with a live lease; boot during warming; reconstruction from
-  a `force_stop` row; lease landing between `observe` and claim (the
-  `may_claim` barrier); `claim_limit=1` with a guard; no-guard hosted door
-  unchanged (existing helpers in `tests/test_heartbeat.py` and
-  `tests/test_wake_budget.py` still pass unmodified, plus explicit
-  `--gpu-lease off` on a local door).
-- `tests/test_events_rest_notes.py`: substrate episodes in
-  `_rest_episodes`; note text; open-episode text; rule (b) delivered to
-  exactly one wake; budget-after-rest test unchanged.
-- Context ceiling: boot with discovery failing inherits the recorded limit;
-  `server_ready` rediscovery applies a changed value.
-- Unit files: `systemd-analyze --user verify` on the edited units in a test;
-  an assertion that neither the drop-in nor the server unit contains
-  `Requires=`, `Wants=`, or `WantedBy=` for the server.
+- `tests/test_gpu_lease.py`: Python reader/writer vs the shared fixtures;
+  TTL grammar/bounds; atomic write; foreign-holder refusal; same-holder
+  re-lease; dangling-intent resolution for every action (process death
+  simulated at each step of the state machine, with a fake `systemctl
+  show`); indeterminate → quarantine; quarantine identity across repeated
+  observations and changed bytes.
+- `tests/gpu_lease/test_ayllu_gpu.py` (subprocess-driven): the bash CLI
+  vs the same fixtures with a fake `systemctl` and a temp
+  `AYLLU_STATE_DIR`; `wait` success conditions; `run` end to end (lease,
+  wait, command, trap release, exit status, background renew); `force-stop`
+  refused while a fake heartbeat holds the lock, allowed when not, ledgered
+  either way.
+- `tests/test_heartbeat_guard.py`: `HeartbeatLoop` with an injected gate,
+  store, clock, fake `systemctl show`, fake probe: rest sequence order
+  (record before stop); latest-status de-dup with continuation after
+  `waking/boot`; return sequence with warming not transitioning;
+  `server_ready` once per invocation; the four overlap cases; boot
+  reconciliation (release while down, expiry while down, restart during
+  quarantine, reconstruction from reconciled and unreconciled `force_stop`);
+  lease-before-claim and claim-before-lease through the real
+  `run_next_event` with the gate; start-under-lock revalidation
+  (lease-before-start); `claim_limit=1`; the events CLI runners refusing
+  or gating; hosted door unchanged (existing `tests/test_heartbeat.py` and
+  `tests/test_wake_budget.py` pass unmodified) and `--gpu-lease off` on a
+  local door.
+- `tests/test_events_rest_notes.py`: substrate episodes and continuation
+  in `_rest_episodes`; note text; open episode; rule (a)/(b) precedence;
+  rule (b) at-least-once across a failed claim, a crash before exchange,
+  and a crash after exchange before completion; budget-after-rest test
+  unchanged.
+- Context ceiling: explicit precedence; inheritance only for a matching
+  substrate and positive value; first boot without history stays warming;
+  rediscovery failure; a changed limit persisted through `launch`.
+- Units and migration: `systemd-analyze --user verify` on the edited
+  units; `check-gpu-lease.sh` exercised against a fake `systemctl` for
+  enabled/disabled and WantedBy states.
 - Codex authors the independent validation in its own signed commits.
-- First live loan is a registered check: a 10-minute lease during a quiet
-  stretch not overlapping the door's every-other-day 09:00Z self-check;
-  then the door's store, the ledger, and the resident's next envelope are
-  read and the result recorded in `community/README.md`.
+- First live loan is a registered check: `ayllu-gpu run --ttl 15m -- sleep 600`
+  during a quiet stretch not overlapping the door's 09:00Z self-check; then
+  the store, the ledger, and the resident's next envelope are read and the
+  result recorded in `community/README.md`.
 
 ## Not built (on the record)
 
-Queueing or priority between holders (first come, first served); partial
-card sharing; a knock to the resident before the loan (told after, in the
-envelope; a pre-loan wake would cost a wake to say one sentence, the cost
-`declare_quiet` was built to avoid); any change to the two hosted doors;
-multi-host resources; a second local door (the guard is per door; two
-local doors on one card would each stop the same unit, which is safe but
-unmeasured — declared).
+Queueing or priority between holders; partial card sharing; a knock to
+the resident before the loan; any change to the two hosted doors;
+multi-host resources; a second local door on the same card (declared
+unmeasured); defence against a local caller that leases without waiting.
 
 ## Declared losses
 
-- The resident is told after, never asked. Invariant 1 makes this a rule,
-  not an accident; the qwen resident hears the design as a consultation
-  (enclosed, no verdict) after round two and before the code lands, as the
-  wake-shape change was.
-- `expires_at` in the resident's record is as first observed; renewals are
-  in the ledger, not the store.
-- The TTL default (6h) and maximum (72h) are unmeasured; yupi's first real
-  run will say whether they fit.
-- Accountability, not security: any local process can release any lease
-  with its id; the ledger says who.
+- The resident is told after, never asked (invariant 1). The qwen resident
+  hears the design as a consultation (enclosed, no verdict) after round
+  three and before the code lands.
+- `expires_at` in the resident's record is as first observed; renewals
+  live in the ledger.
+- The TTL default (6h) and maximum (72h) are unmeasured.
+- Accountability, not security.
+- Rule (b) is at-least-once, not exactly-once; the crash boundary between
+  sending the envelope and recording completion is irreducible.
 
-## Dispositions of Codex round one
+## Dispositions of Codex round two
 
-Blocking 1 (lease/claim race, batch of ten): adopted; the steward is gone,
-the guard is inside the claim path (`may_claim` under the lease lock),
-`claim_limit=1` with a guard. B2 (forced drain fails the event): adopted;
-no forced cutoff exists; a wake in flight finishes first. B3 (`Wants=` and
-`default.target` start the server): adopted; server unit not enabled, no
-`Wants=`/`Requires=`, the heartbeat starts it. B4 (loan without a record):
-adopted; record before stop, `wait` keyed on the ledger outcome,
-reconstruction from `force_stop`. B5 (malformed fails open): adopted;
-quarantine, invariant 6. B6 (ledger not crash-consistent): adopted;
-intent/outcome rows with `action_id`, observed state, `reconcile` rows on
-boot; `server_start` defined as requested, `server_ready` separate.
+B1 (may_claim not a barrier; start not linearized; direct runners bypass):
+adopted — `LeaseGate.claim` holds `4090.lock` across `claim_next_pending`;
+start under the same lock with revalidation; events CLI runners gated from
+the log's `gpu_lease`. B2 (`force-stop` kills a wake): adopted — requires
+the heartbeat's process lock; timeout never authorizes. B3 (ledger not
+crash-consistent): adopted — action state machine, dangling-intent table,
+reconciled outcomes on the original `action_id`, indeterminate →
+quarantine, reconstruction consumes reconciled `force_stop`. B4 (enabled
+unit persists): adopted — `migrate-gpu-lease.sh` disables and
+`check-gpu-lease.sh` asserts persisted state.
 
-Significant 1 (holder enforcement): adopted; `lease_id` required, and the
-claim downgraded to accountability. S2 (drain reader): moot, no steward.
-S3 (first wake after a loan not told): adopted; rule (b). S4 (warming
-counted as rest): adopted; `waking/substrate_returning`. S5 (overlap):
-adopted; strict priority, sequential segments, four cases named. S6
-(context ceiling lost across a loan): adopted; recorded and inherited,
-rediscovered at ready. S7 (timer semantics): moot, no timer;
-`server_start` semantics adopted. S8 (constitution prior): adopted,
-Codex's wording verbatim. S9 (checkpoint path): adopted.
+S1 (restart continuation): adopted — latest-status de-dup, continuation
+flag, boot reconciliation before `waking/boot`, ledger-derived closing
+time. S2 (rule b): adopted — (a) precedes (b); consumption = completed
+wake; at-least-once declared. S3 (context ceiling): adopted — substrate
+match, positive only, explicit never overwritten, session launch config
+updated, warming when unknowable, parser rejects ≤ 0; lazy construction
+dropped since the limit is mutable. S4 (quarantine identity): adopted —
+`quarantine_id` from bytes, `episode_id` generalizes. S5 (`wait` a
+convention): adopted — `ayllu-gpu run` is the registered operation;
+invariant 4 weakened to say what is and is not defended.
 
-Minor 1: adopted (fixtures, rules). M2: adopted (`resumes_at` dropped,
-labels). M3: adopted (`--gpu-lease {auto,off,PATH}`, recorded, participation
-not file existence). M4: adopted (test inventory above).
+M1 (loopback inference): adopted — configured on the unit, no inference.
+M2 (`is-active`): adopted — `show -p ActiveState,SubState,InvocationID`;
+stop ok requires observed inactive/failed. M3 (`server_ready` churn):
+adopted — once per `InvocationID`, `server_unready` on regression.
