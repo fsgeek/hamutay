@@ -107,7 +107,8 @@ def test_nothing_claims_or_starts_under_quarantine(p, ctx, sd, clock, tmp_path):
     gate = LeaseGate(EventStore(door / "session.jsonl.events.jsonl"), ctx)
 
     assert gate.claim(clock())[0] == "blocked"
-    assert gate.observe(clock())["state"] == "resting"
+    kind, _ = gate.observe(clock())
+    assert kind == "quarantined"
     assert not any(call[0] == "start" for call in sd.calls)
 
 

@@ -73,11 +73,13 @@ def test_bound_store_refuses_cli_runners(tmp_path, clock, command):
     door.mkdir()
     write_json(door / "door.json", {"gpu_lease": "4090"})
     log = door / "session.jsonl.events.jsonl"
+    session_log = door / "session.jsonl"
+    session_log.write_text("")
     append_jsonl(log, _pending("e1", clock()))
     result = subprocess.run(
         [
             sys.executable, "-m", "hamutay.events", command,
-            "--log-path", str(door / "session.jsonl"),
+            "--log-path", str(session_log),
             "--event-log-path", str(log),
             "--provider", "openai", "--api-key", "validation",
             "--project-root", str(tmp_path),
