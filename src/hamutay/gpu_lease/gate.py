@@ -72,11 +72,26 @@ class LeaseGate:
         )
         return seen == self._current_invocation
 
+    def _quarantine_malformed_lease(self, view):
+        """A lease file that will not parse is exactly the state nobody can act on.
+
+        The spec fences it rather than merely reporting it blocked: a blocked
+        caller retries forever against bytes that will never become a lease,
+        and meanwhile nothing tells the operator the resource needs a hand.
+        The digest is an occurrence identity for the unreadable bytes."""
+        return self._enter_quarantine(
+            "malformed_lease", hashlib.sha256(view.raw or b"").hexdigest()[:16])
+
     def _free_info(self, now):
         free, why = is_free(self.ctx)
         if free:
             return None
         view = read_lease(self.ctx.paths, now)
+        if why == "lease_malformed":
+            # Fence first, then report the fence -- not the malformation -- as
+            # the reason the caller is blocked, so claim() and observe() agree.
+            info = self._quarantine_malformed_lease(view)
+            return {"kind": "quarantine", "lease": None, "raw": "", **info}
         # `lease` is None for reasons that aren't about the lease file itself
         # (quarantine, quarantine_unreadable, tombstone).
         return {"kind": why, "lease": view.data, "raw": (view.raw or b"")[:200].decode("utf-8", "replace")}
@@ -167,8 +182,7 @@ class LeaseGate:
                 return "quarantined", info
             view = read_lease(self.ctx.paths, now)
             if view.kind == "malformed":
-                return "quarantined", self._enter_quarantine(
-                    "malformed_lease", hashlib.sha256(view.raw or b"").hexdigest()[:16])
+                return "quarantined", self._quarantine_malformed_lease(view)
             if view.kind == "expired":
                 # resolve_dangling above already reconciled any dangling intent,
                 # so this pass needs no registry; the lease may have stopped

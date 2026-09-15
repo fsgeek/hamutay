@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import fcntl
 import json
+import sys
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -2145,6 +2146,13 @@ def run_pending_events(
                 policy_dispositions=policy_dispositions,
                 claim_gate=claim_gate,
             )
+        except LeaseGateRequired:
+            # A door bound to the GPU lease may only be claimed through the
+            # heartbeat's gate. That is a wiring error, not a run that failed:
+            # recording it as a `failed` result would let the batch summary --
+            # and `run-all`'s exit status -- report success while every event
+            # went unclaimed. Let it out.
+            raise
         except Exception as e:
             failure = {
                 "status": "failed",
@@ -2459,15 +2467,22 @@ def main() -> None:
         project_root=Path(args.project_root),
     )
     store = EventStore(event_log_path)
-    if args.command == "run-all":
-        result = run_pending_events(
-            session,
-            store,
-            limit=args.limit,
-            stop_on_failure=not args.continue_on_failure,
-        )
-    else:
-        result = run_next_event(session, store)
+    try:
+        if args.command == "run-all":
+            result = run_pending_events(
+                session,
+                store,
+                limit=args.limit,
+                stop_on_failure=not args.continue_on_failure,
+            )
+        else:
+            result = run_next_event(session, store)
+    except LeaseGateRequired as e:
+        # This door participates in the GPU lease; these runners claim without
+        # the gate. Exit non-zero and say so, rather than printing a summary
+        # that looks like a clean run of nothing.
+        print(f"LeaseGateRequired: {e}", file=sys.stderr)
+        raise SystemExit(2) from None
     print(json.dumps(result, indent=2, default=str))
 
 

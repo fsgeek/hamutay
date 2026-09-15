@@ -3,7 +3,7 @@ import pytest
 from hamutay.gpu_lease import ledger
 from hamutay.gpu_lease.actions import Action, Ctx, run, resolve_dangling
 from hamutay.gpu_lease.state import locked
-from conftest import StubbornSystemd
+from .conftest import StubbornSystemd
 
 NOW = datetime(2026, 9, 20, 15, 0, tzinfo=timezone.utc)
 
@@ -347,13 +347,17 @@ def test_dangling_workload_killed_reconciles_to_indeterminate_when_show_fails(p,
 
 def test_resolve_dangling_quarantines_an_unfenced_indeterminate(p, sd):
     """A crash between the indeterminate outcome and its quarantine_enter leaves
-    the resource unfenced. resolve_dangling finds the row and fences it."""
-    sd.fail_show = True
-    with locked(p):
-        out = run(ctx(p, sd), ServerStart(), REGISTRY)
-    assert out["outcome"] == "indeterminate"
+    the resource unfenced. resolve_dangling finds the row and fences it.
+
+    run() now fences its own indeterminates (D2), so the only way to reach an
+    unfenced one is the crash this scan exists for: hand-write the outcome row
+    the way older code, or a process that died mid-fence, would have left it.
+    """
+    out = ledger.append(p, {"action_id": "33333333-3333-4333-8333-333333333333",
+                            "phase": "outcome", "action": "server_start", "by": "crashed",
+                            "at": NOW.isoformat(), "outcome": "indeterminate",
+                            "observed": {}, "detail": {"error": "SystemdUnavailable: fake"}})
     assert read_quarantine(p) is None          # nobody quarantined it
-    sd.fail_show = False
     with locked(p):
         done = resolve_dangling(ctx(p, sd), REGISTRY)
     q = read_quarantine(p)
@@ -389,12 +393,17 @@ def test_a_second_indeterminate_does_not_stack_a_second_quarantine(p, sd):
         first = run(ctx(p, sd), ServerStart(), REGISTRY)
         second = run(ctx(p, sd), EnsureStopped("ep"))
     assert first["outcome"] == second["outcome"] == "indeterminate"
+    # run() fenced the first one (D2); the second found the fence already there.
+    assert read_quarantine(p)["cause_action_id"] == first["action_id"]
+    def fences():
+        return [r for r in ledger.rows(p)
+                if r.get("phase") == "outcome" and r.get("action") == "quarantine_enter"]
+
+    assert len(fences()) == 1
     sd.fail_show = False
     with locked(p):
-        done = resolve_dangling(ctx(p, sd), REGISTRY)
-    assert len(done) == 1 and read_quarantine(p)["cause_action_id"] == first["action_id"]
-    with locked(p):
         assert resolve_dangling(ctx(p, sd), REGISTRY) == []
+    assert len(fences()) == 1
 
 
 # --- I8: release --force must not publish FREE over a scope that will not die ---
