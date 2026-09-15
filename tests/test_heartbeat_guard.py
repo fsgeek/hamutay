@@ -7,6 +7,7 @@ from hamutay.gpu_lease.gate import LeaseGate
 from hamutay.gpu_lease.state import paths, locked
 from hamutay.gpu_lease import ledger
 from datetime import timedelta
+from hamutay.heartbeat import HeartbeatLoop, WakeBudget, DailyLedger
 
 NOW = datetime(2026, 9, 20, 15, 0, tzinfo=timezone.utc)
 
@@ -116,3 +117,70 @@ def test_empty_gpu_lease_is_unbound(tmp_path, monkeypatch):
     (door / "door.json").write_text(json.dumps({"gpu_lease": ""}))
     store = EventStore(door / "session.jsonl.events.jsonl")
     assert store.lease_binding is None
+
+
+# --- Task 7: one transition API with episode keys, hydrated from the store --
+
+def _loop(store, now, **kw):
+    return HeartbeatLoop(None, store, now=lambda: now, sleep=lambda s: None,
+                         run_pending=lambda *a, **k: {"ran": 0, "results": []},
+                         summarize=lambda records, now: {"pending_runnable_count": 0, "pending_waiting_count": 0}, **kw)
+
+
+def test_transition_dedups_on_episode_key(tmp_path):
+    store = EventStore(tmp_path / "s.jsonl.events.jsonl")
+    loop = _loop(store, NOW)
+    loop._transition("resting", reason="substrate_lent", episode_key="L1", detail={"episode_id": "L1"}, now=NOW)
+    loop._transition("resting", reason="substrate_lent", episode_key="L1", detail={"episode_id": "L1"}, now=NOW)
+    loop._transition("resting", reason="substrate_lent", episode_key="L2", detail={"episode_id": "L2"}, now=NOW)
+    statuses = [r for r in store.read_records() if r.get("record_type") == "heartbeat_status"]
+    assert [r["detail"]["episode_id"] for r in statuses] == ["L1", "L2"]
+
+
+def test_hydration_from_store_prevents_swallowing_after_restart(tmp_path):
+    store = EventStore(tmp_path / "s.jsonl.events.jsonl")
+    first = _loop(store, NOW)
+    first._transition("quiet", reason="undeclared_quiet", now=NOW)
+    second = _loop(store, NOW)
+    second._hydrate_last_transition()
+    assert second._last_transition == ("quiet", "undeclared_quiet", None)
+    second._transition("resting", reason="substrate_lent", episode_key="L1", detail={"episode_id": "L1"}, now=NOW)
+    second._transition("quiet", reason="undeclared_quiet", now=NOW)   # must append: last was the rest
+    statuses = [r["status"] for r in store.read_records() if r.get("record_type") == "heartbeat_status"]
+    assert statuses == ["quiet", "resting", "quiet"]
+
+
+def test_hydration_from_empty_store_is_none(tmp_path):
+    store = EventStore(tmp_path / "s.jsonl.events.jsonl")
+    loop = _loop(store, NOW)
+    loop._hydrate_last_transition()
+    assert loop._last_transition is None
+
+
+def test_hydration_reads_day_key_when_no_episode_id(tmp_path):
+    store = EventStore(tmp_path / "s.jsonl.events.jsonl")
+    first = _loop(store, NOW)
+    first._transition("resting", reason="daily_budget_reached", detail={"day": "2026-09-15"}, now=NOW, episode_key="2026-09-15")
+    second = _loop(store, NOW)
+    second._hydrate_last_transition()
+    assert second._last_transition == ("resting", "daily_budget_reached", "2026-09-15")
+
+
+def test_transition_no_episode_key_dedups_as_before(tmp_path):
+    store = EventStore(tmp_path / "s.jsonl.events.jsonl")
+    loop = _loop(store, NOW)
+    loop._transition("quiet", reason="undeclared_quiet", now=NOW)
+    loop._transition("quiet", reason="undeclared_quiet", now=NOW)
+    statuses = [r for r in store.read_records() if r.get("record_type") == "heartbeat_status"]
+    assert len(statuses) == 1
+
+
+def test_boot_hydrates_before_appending_waking_boot(tmp_path):
+    store = EventStore(tmp_path / "s.jsonl.events.jsonl")
+    first = _loop(store, NOW)
+    first._transition("resting", reason="substrate_lent", episode_key="L1", detail={"episode_id": "L1"}, now=NOW)
+    second = _loop(store, NOW)
+    second.boot()
+    assert second._last_transition == ("waking", "boot", None)
+    statuses = [(r["status"], r["reason"]) for r in store.read_records() if r.get("record_type") == "heartbeat_status"]
+    assert statuses == [("resting", "substrate_lent"), ("waking", "boot")]

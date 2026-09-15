@@ -346,14 +346,13 @@ class HeartbeatLoop:
         self._store = store
         self._ledger = ledger
         self._budget = budget
-        self._resting_day: str | None = None
         self._poll_interval = float(poll_interval)
         self._batch_limit = int(batch_limit)
         self._sleep = sleep
         self._now = now or (lambda: datetime.now(timezone.utc))
         self._run_pending = run_pending
         self._summarize = summarize
-        self._last_transition: tuple[str, str] | None = None
+        self._last_transition: tuple[str, str, str | None] | None = None
 
     @staticmethod
     def _emit(payload: dict) -> None:
@@ -367,14 +366,16 @@ class HeartbeatLoop:
         reason: str,
         detail: dict | None = None,
         now: datetime | None = None,
+        episode_key: str | None = None,
     ) -> None:
-        if (status, reason) == self._last_transition:
+        key = (status, reason, episode_key)
+        if key == self._last_transition:
             return
         stamp = _as_utc(now).isoformat() if now is not None else None
         record = append_heartbeat_status(
             self._store, status=status, reason=reason, detail=detail, created_at=stamp
         )
-        self._last_transition = (status, reason)
+        self._last_transition = key
         self._emit(
             {
                 "heartbeat": status,
@@ -382,6 +383,28 @@ class HeartbeatLoop:
                 "detail": detail,
                 "at": record["created_at"],
             }
+        )
+
+    def _hydrate_last_transition(self) -> None:
+        """Recover `_last_transition` from the store's latest status record.
+
+        Called first in boot(), before the `waking/boot` transition, so a
+        restart doesn't re-derive de-dup state from nothing (and thus
+        risk swallowing a transition that should append). Task 8 will
+        insert a guard reconciliation step before this hydration.
+        """
+        latest = None
+        for r in self._store.read_records():
+            if r.get("record_type") == "heartbeat_status":
+                latest = r
+        if latest is None:
+            self._last_transition = None
+            return
+        d = latest.get("detail") or {}
+        self._last_transition = (
+            latest.get("status"),
+            latest.get("reason"),
+            d.get("episode_id") or d.get("day"),
         )
 
     def _seconds_until_wake(self, summary: dict, now) -> float:
@@ -399,6 +422,7 @@ class HeartbeatLoop:
         return min(max(delta, 0.0), self._poll_interval)
 
     def boot(self) -> dict:
+        self._hydrate_last_transition()
         orphans = recover_orphaned_running(self._store)
         lost = recover_lost_continuations(self._store)
         report = {
@@ -417,36 +441,33 @@ class HeartbeatLoop:
         if exceeded is None:
             return None
         resumes_at = next_utc_midnight(now)
-        already_resting_today = (
-            self._last_transition == ("resting", "daily_budget_reached")
-            and self._resting_day == day["day"]
+        # One episode per UTC day: a rest record for this day already in the
+        # store means a restart interrupted it; continue, don't start. A new
+        # day that is also exceeded is a new episode, keyed by day, so the
+        # (status, reason, episode_key) de-dup must not swallow it.
+        resumed = any(
+            r.get("record_type") == "heartbeat_status"
+            and r.get("status") == "resting"
+            and (r.get("detail") or {}).get("day") == day["day"]
+            for r in self._store.read_records()
         )
-        if not already_resting_today:
-            # One episode per UTC day: a rest record for this day already in
-            # the store means a restart interrupted it; continue, don't start.
-            # A new day that is also exceeded is a new episode, so the
-            # (status, reason) de-dup must not swallow it.
-            self._last_transition = None
-            self._resting_day = day["day"]
-            resumed = any(
-                r.get("record_type") == "heartbeat_status"
-                and r.get("status") == "resting"
-                and (r.get("detail") or {}).get("day") == day["day"]
-                for r in self._store.read_records()
-            )
-            detail = {
-                **day,
-                "exceeded": exceeded,
-                "cost_is_lower_bound": bool(day.get("cost_turns_unreported")),
-                "daily_usd": self._budget.daily_usd,
-                "daily_wakes": self._budget.daily_wakes,
-                "resumes_at": resumes_at.isoformat(),
-            }
-            if resumed:
-                detail["resumed_after_restart"] = True
-            self._transition(
-                "resting", reason="daily_budget_reached", detail=detail, now=now
-            )
+        detail = {
+            **day,
+            "exceeded": exceeded,
+            "cost_is_lower_bound": bool(day.get("cost_turns_unreported")),
+            "daily_usd": self._budget.daily_usd,
+            "daily_wakes": self._budget.daily_wakes,
+            "resumes_at": resumes_at.isoformat(),
+        }
+        if resumed:
+            detail["resumed_after_restart"] = True
+        self._transition(
+            "resting",
+            reason="daily_budget_reached",
+            detail=detail,
+            now=now,
+            episode_key=day["day"],
+        )
         remaining = (resumes_at - _as_utc(now)).total_seconds()
         return {
             "state": "resting",
