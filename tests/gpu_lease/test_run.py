@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from hamutay.gpu_lease import cli, ledger, run as runmod
-from hamutay.gpu_lease.state import read_lease, read_quarantine, list_tombstones
+from hamutay.gpu_lease.actions import Ctx, REGISTRY, Lease, run as run_action
+from hamutay.gpu_lease.state import locked, read_lease, read_quarantine, list_tombstones, scope_unit_for
 
 START = datetime(2026, 9, 20, 15, 0, tzinfo=timezone.utc)
 
@@ -76,31 +77,109 @@ def test_run_registration_failure_shuts_down_like_any_path(p, sd):
                   systemd=sd, now=clock.now, launcher=lambda scope, cmd: Unregistered(sd, scope), sleep=sleep)
     assert rc == 6 and read_lease(p, clock.now()).kind == "absent" and list_tombstones(p) == []
 
-def test_run_lease_replaced_between_unlocked_wait_and_locked_recheck_no_hang(p, sd):
-    # CRITICAL 1 regression: wait_ready succeeds unlocked, then the lease disappears
-    # (or is no longer ours) before the locked re-check inside the launch block. The
-    # launcher must never be reached, and the wrapper must exit 3 promptly rather than
-    # hang self-deadlocked on 4090.lock (the old bug: _release called from inside a
+def test_run_lease_replaced_between_unlocked_wait_and_locked_recheck_no_hang(p, sd, monkeypatch, capsys):
+    # CRITICAL 1 regression: wait_ready succeeds UNLOCKED, then (before the LOCKED
+    # re-check inside the launch block runs) the lease is invalidated. The launcher
+    # must never be reached, and the wrapper must exit 3 promptly rather than hang
+    # self-deadlocked on 4090.lock (the old bug: _release called from inside a
     # `with locked(...)` block already held by supervise itself).
+    #
+    # This has to land the invalidation strictly between the unlocked wait_ready's
+    # success and the locked re-check's read, which the sleep hook can't target
+    # directly (the two wait_ready calls happen back-to-back with no sleep() in
+    # between on the success path). So we wrap run.wait_ready itself: the first
+    # call made *without* already_locked (the unlocked one, in the wait loop) acks
+    # the stop, lets wait_ready report ok, and then — after it has already decided
+    # ok=True but before returning to supervise — unlinks the lease file. The next
+    # call (already_locked=True, inside the launch block) then sees no lease and
+    # must refuse.
     clock = Clock()
     launcher_calls = []
     def launcher(scope, cmd):
         launcher_calls.append((scope, cmd))
         return FakeProc(sd, scope, rc=0, lifetime=3)
-    acked = {"v": False}
+
+    def sleep(s):
+        clock.sleep(s)
+
+    real_wait_ready = runmod.wait_ready
+    state = {"acked": False, "pulled": False}
+
+    def wrapped_wait_ready(ctx, lease_id, min_remaining, *, already_locked=False):
+        if not state["acked"]:
+            v = read_lease(p, clock.now())
+            if v.kind == "live":
+                _ack(p, sd, v.data["lease_id"])
+                state["acked"] = True
+        ok, why = real_wait_ready(ctx, lease_id, min_remaining, already_locked=already_locked)
+        if ok and not already_locked and not state["pulled"]:
+            # the unlocked wait_ready in the wait loop just decided ok=True;
+            # invalidate the lease before returning it, so the locked re-check
+            # in the launch block (the code CRITICAL 1 fixed) sees it gone
+            state["pulled"] = True
+            p.lease.unlink(missing_ok=True)
+        return ok, why
+
+    monkeypatch.setattr(runmod, "wait_ready", wrapped_wait_ready)
+
+    start = clock.now()
+    rc = cli.main(["run", "--holder", "yupi", "--purpose", "t", "--ttl", "15m", "--", "true"],
+                  systemd=sd, now=clock.now, launcher=launcher, sleep=sleep)
+    # bounded-clock proof of no hang: the fake clock only advances inside sleep(),
+    # which a real deadlock on flock would never return from, so reaching this
+    # assertion at all (under pytest's default run, no external timeout needed)
+    # together with a small clock delta is the "didn't hang" evidence.
+    assert clock.now() - start < timedelta(minutes=1)
+    assert rc == 3
+    assert launcher_calls == []
+    assert "launch refused" in capsys.readouterr().err
+
+def test_run_wait_loop_does_not_release_lease_replaced_by_another_holder(p, sd, capsys):
+    # IMPORTANT 5: a wait-loop failure must not release unconditionally. Simulate
+    # another holder taking the resource out from under us mid-wait (our lease
+    # expires or is force-cleared and someone else leases it) by directly unlinking
+    # our lease and writing a fresh one for "intruder" via the real Lease action,
+    # all before our own wait_ready ever succeeds. supervise must give up (exit 3)
+    # without touching the intruder's lease: no release row naming our lease_id,
+    # the intruder's lease still present and live, and a "no longer ours" message.
+    clock = Clock()
+    our_lease_id = {"v": None}
+    intruder_lease_id = {"v": None}
+
+    def launcher(scope, cmd):
+        raise AssertionError("must not launch: the lease was replaced mid-wait")
+
     def sleep(s):
         clock.sleep(s)
         v = read_lease(p, clock.now())
-        if v.kind == "live" and not acked["v"]:
-            _ack(p, sd, v.data["lease_id"])
-            acked["v"] = True
-            # right after the unlocked wait_ready would first succeed, pull the lease
-            # out from under the locked re-check
+        if v.kind == "live" and our_lease_id["v"] is None:
+            our_lease_id["v"] = v.data["lease_id"]
+            # never ack ensure_stopped for us: wait_ready keeps failing, so the
+            # wait loop keeps polling via tick() until we intervene below.
+            # Simulate a clean hand-off (force-clear, then a fresh lease): drop
+            # both our lease file and our tombstone so the resource is FREE.
             p.lease.unlink(missing_ok=True)
-    rc = cli.main(["run", "--holder", "yupi", "--purpose", "t", "--ttl", "15m", "--", "true"],
-                  systemd=sd, now=clock.now, launcher=launcher, sleep=sleep)
+            tomb = p.tombstones / scope_unit_for(our_lease_id["v"])
+            tomb.unlink(missing_ok=True)
+            ctx = Ctx(p, sd, now=clock.now, by="intruder")
+            with locked(p):
+                act = Lease("intruder", "other work", timedelta(minutes=15), None)
+                out = run_action(ctx, act, REGISTRY)
+            assert out["outcome"] == "ok"
+            intruder_lease_id["v"] = act.lease_id
+
+    rc = cli.main(["run", "--holder", "yupi", "--purpose", "t", "--ttl", "15m", "--wait-timeout", "1m",
+                  "--", "true"], systemd=sd, now=clock.now, launcher=launcher, sleep=sleep)
+
     assert rc == 3
-    assert launcher_calls == []
+    assert our_lease_id["v"] is not None and intruder_lease_id["v"] is not None
+    # no release row for our lease_id
+    assert not any(r.get("action") == "release" and r.get("lease_id") == our_lease_id["v"]
+                  for r in ledger.rows(p))
+    # the intruder's lease is untouched
+    view = read_lease(p, clock.now())
+    assert view.kind == "live" and view.data["lease_id"] == intruder_lease_id["v"]
+    assert "no longer ours" in capsys.readouterr().err
 
 def test_run_unkillable_scope_quarantines_and_leaves_lease(p, sd):
     # CRITICAL 2: a scope that never dies after `stop` must not be silently abandoned —

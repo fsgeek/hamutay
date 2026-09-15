@@ -2,6 +2,7 @@ from __future__ import annotations
 import subprocess, sys, time
 from datetime import timedelta
 from .actions import REGISTRY, Lease, Renew, Release, WorkloadKilled, run, scope_dead, quarantine_if_indeterminate
+from .cli import wait_ready, parse_seconds
 from .state import locked, read_lease, parse_ttl, parse_instant, scope_unit_for
 
 MIN_TTL = timedelta(minutes=15)
@@ -67,8 +68,6 @@ def _shutdown(ctx, scope, lease_id, sleep, *, exit_code):
 
 
 def supervise(a, ctx, *, launcher=None, sleep=time.sleep) -> int:
-    from .cli import wait_ready, parse_seconds  # deferred: cli imports run.supervise at module load
-
     launcher = launcher or default_launcher
     ttl = parse_ttl(a.ttl)
     if ttl < MIN_TTL:
@@ -127,6 +126,8 @@ def supervise(a, ctx, *, launcher=None, sleep=time.sleep) -> int:
 
         # launch under the lock, after re-checking, and confirm registration before releasing the lock
         launch_refused = False
+        proc = None
+        registered = False
         with locked(ctx.paths):
             ok, why = wait_ready(ctx, lease_id, LAUNCH_MIN_REMAINING, already_locked=True)
             if not ok:
