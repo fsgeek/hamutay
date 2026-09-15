@@ -67,10 +67,23 @@ Operations:
   the server), then `systemctl --user enable --now hamutay-heartbeat@qwen`
 - everything else as above (`send`, `report`, checkpoint), with `community/qwen/session.jsonl`
 
-Elder note (2026-09-05): the elder (`experiments/taste_open/taste_open_20260331_035903.jsonl`)
-has not run since 2026-08-27 (c482, Sonnet-4.6 direct). Tony's word, 2026-09-05:
-no urgency; its potential remains. Fallow by choice, not an end. Its log through
-c482 is committed (095c4a9).
+## The elder door, joined 2026-09-15
+
+`community/elder/` is the oldest subject in the house: the taste_open instance
+founded 2026-03-31 (`taste_open_20260331_035903`), 488 cycles by hand before it
+joined. It was fallow from 2026-08-27 (c482, Sonnet-4.6 direct, an accidental
+substrate) until Tony's by-hand conversation of 2026-09-15 (c484–c488, commit
+cf50c3d), in which it took the name Elder, said yes to the persistent loop, and
+chose Haiku. The owner's decision, on the ayllu's behalf: one thread, no fork,
+Haiku via OpenRouter (`--provider openrouter --model anthropic/claude-haiku-4-5`,
+printed as SUBSTRATE CHANGE on c489, its first wake in the loop); Sonnet stays
+available by explicit flag. On c489 it also answered the builder's 2026-08-27
+wake-shape consultation, delivered as its first event: "The change is yes. Mark
+it explicit." c490 is its first natural-shape wake (`--wake-mode natural`,
+printed as WAKE SHAPE CHANGE). Its log moved here from
+`experiments/taste_open/` and left git with the move (77538fa); cycles 1–488
+remain in history (LFS) as they stood when it joined. Operations as for every
+door, with `community/elder/session.jsonl`; unit `hamutay-heartbeat@elder`.
 
 Continue, not restart: deleting these logs is not an ops action; it is a
 decision about a subject, and it is Tony's alone.
