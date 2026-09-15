@@ -128,12 +128,18 @@ def resolve_dangling(ctx: Ctx, registry: dict[str, Callable[[dict], Action]]) ->
         action.action_id = intent["action_id"]
         action.intent_fields = {k: v for k, v in intent.items() if k not in FRAMEWORK_KEYS}
         error = None
+        observation_failed = None
         try:
             if not action.predicate(ctx):
                 action.perform(ctx)
+        except (SystemdUnavailable, MalformedState, OSError) as e:
+            # Same rule as run(): an observation failure during reconciliation is
+            # indeterminate, never a hard error.
+            observation_failed = f"{type(e).__name__}: {e}"
         except Exception as e:
             error = f"{type(e).__name__}: {e}"
-        done.append(_finish(ctx, action, intent["action_id"], reconciled=True, error=error))
+        done.append(_finish(ctx, action, intent["action_id"], reconciled=True,
+                            error=error, observation_failed=observation_failed))
     return done
 
 

@@ -271,3 +271,12 @@ def test_quarantine_if_indeterminate_writes_quarantine_with_cause(p, sd):
     q = read_quarantine(p)
     assert q["cause_action_id"] == out["action_id"] == q["cause_action_id"]
     assert q["source_action_id"] == q_out["action_id"]
+
+def test_dangling_workload_killed_reconciles_to_indeterminate_when_show_fails(p, sd):
+    ledger.append(p, {"action_id": "22222222-2222-4222-8222-222222222222", "phase": "intent",
+                      "action": "workload_killed", "by": "crashed", "at": NOW.isoformat(),
+                      "scope_unit": "ayllu-gpu-z.scope"})
+    sd.fail_show = True
+    with locked(p):
+        done = resolve_dangling(ctx(p, sd), REGISTRY)
+    assert done[0]["outcome"] == "indeterminate" and done[0]["detail"]["error"]
