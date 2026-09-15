@@ -479,6 +479,14 @@ def build_bound_continuation_event(
     return event
 
 
+class LeaseGateRequired(RuntimeError):
+    """This door participates in the GPU lease; only the heartbeat's gate may claim."""
+
+
+class _GateToken:  # created only by hamutay.gpu_lease.gate while holding 4090.lock
+    __slots__ = ()
+
+
 @dataclass
 class EventStore:
     """Append-only JSONL event store."""
@@ -489,6 +497,13 @@ class EventStore:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._lock_path = self.path.with_suffix(self.path.suffix + ".lock")
+        door_file = self.path.parent / "door.json"
+        self.lease_binding = None
+        if door_file.exists():
+            try:
+                self.lease_binding = json.loads(door_file.read_text()).get("gpu_lease") or None
+            except (OSError, json.JSONDecodeError) as e:
+                raise LeaseGateRequired(f"unreadable {door_file}: {e}")
 
     @contextmanager
     def _locked(self):
@@ -579,8 +594,13 @@ class EventStore:
         *,
         now: datetime | None = None,
         run_id: UUID | None = None,
+        lease_token: object | None = None,
     ) -> tuple[dict, dict] | None:
         """Atomically mark the oldest runnable pending event as running."""
+        if self.lease_binding and not isinstance(lease_token, _GateToken):
+            raise LeaseGateRequired(
+                f"store bound to gpu lease {self.lease_binding}; claim through the heartbeat gate"
+            )
         with self._locked():
             latest = self._latest_by_event_id_from_records(
                 self._read_records_unlocked()
@@ -1878,9 +1898,16 @@ def run_next_event(
     now: datetime | None = None,
     auto_continuations: bool = False,
     policy_dispositions: bool = False,
+    claim_gate=None,
 ) -> dict:
     """Run the oldest pending event once using an OpenTasteSession."""
-    claim = store.claim_next_pending(now=now)
+    if claim_gate is not None:
+        status, payload = claim_gate.claim(now)
+        if status == "blocked":
+            return {"status": "lease_blocked", "reason": payload}
+        claim = payload if status == "claimed" else None
+    else:
+        claim = store.claim_next_pending(now=now)
     if claim is None:
         return {"status": "none", "message": "no runnable pending events"}
     event, running = claim
@@ -1993,6 +2020,7 @@ def run_pending_events(
     auto_continuations: bool = False,
     policy_dispositions: bool = False,
     max_auto_continuations: int | None = None,
+    claim_gate=None,
 ) -> dict:
     """Run up to limit pending events and return a batch summary."""
     if (
@@ -2015,6 +2043,7 @@ def run_pending_events(
                 now=now,
                 auto_continuations=auto_continuations,
                 policy_dispositions=policy_dispositions,
+                claim_gate=claim_gate,
             )
         except Exception as e:
             failure = {
@@ -2031,6 +2060,8 @@ def run_pending_events(
             auto_continuation_count += 1
         if result.get("status") == "none":
             break
+        if result.get("status") == "lease_blocked":
+            break
         if result.get("status") == "failed" and stop_on_failure:
             break
         if (
@@ -2042,7 +2073,7 @@ def run_pending_events(
     return {
         "status": "completed",
         "limit": limit,
-        "ran": len([r for r in results if r.get("status") != "none"]),
+        "ran": len([r for r in results if r.get("status") not in ("none", "lease_blocked")]),
         "auto_continuation_count": auto_continuation_count,
         "max_auto_continuations": max_auto_continuations,
         "auto_continuation_limit_reached": auto_continuation_limit_reached,
