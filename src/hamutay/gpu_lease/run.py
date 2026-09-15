@@ -2,7 +2,7 @@ from __future__ import annotations
 import subprocess, sys, time
 from datetime import timedelta
 from .actions import REGISTRY, Lease, Renew, Release, WorkloadKilled, run, scope_dead, quarantine_if_indeterminate
-from .cli import wait_ready, parse_seconds
+from .cli import wait_ready, parse_seconds, _expire_if_needed
 from .state import locked, read_lease, parse_ttl, parse_instant, scope_unit_for
 
 MIN_TTL = timedelta(minutes=15)
@@ -80,6 +80,11 @@ def supervise(a, ctx, *, launcher=None, sleep=time.sleep) -> int:
     exp = parse_instant(a.expected_until) if a.expected_until else None
     act = Lease(a.holder, a.purpose, ttl, exp)
     with locked(ctx.paths):
+        # An expired lease is not FREE until an `expire` action kills its scope
+        # and removes it. `ayllu-gpu lease` does this; `run` did not, so a lease
+        # left expired by a dead holder refused every subsequent run with exit 2
+        # until someone ran `lease` or `release` by hand.
+        _expire_if_needed(ctx)
         out = run(ctx, act, REGISTRY)
     if out["outcome"] != "ok":
         print(f"run: lease refused: {out['detail'].get('error', out['outcome'])}", file=sys.stderr)

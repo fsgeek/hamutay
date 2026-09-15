@@ -267,3 +267,33 @@ def test_run_stops_scope_before_release_when_command_exits_but_scope_stays_activ
                        if r.get("action") == "release" and r.get("phase") == "outcome" and r.get("outcome") == "ok")
     assert stop_idx < release_idx
     assert any(c[0] == "stop" and c[1].startswith("ayllu-gpu-") for c in sd.calls)
+
+
+def test_run_expires_a_stale_lease_instead_of_refusing(p, sd):
+    """A holder that died leaves an expired lease. It is not FREE until an
+    `expire` action kills its scope and removes it — `lease` does that, but
+    `run` did not, so every subsequent run refused with exit 2 until a human
+    intervened."""
+    clock = Clock()
+    # a lease from a dead holder, already past its expiry by the time run starts
+    with locked(p):
+        dead = Lease("ghost", "died", timedelta(minutes=20), None)
+        run_action(Ctx(p, sd, now=lambda: START, by="t"), dead, REGISTRY)
+    clock.t = START + timedelta(hours=2)
+    assert read_lease(p, clock.now()).kind == "expired"
+
+    procs = []
+    def launcher(scope, cmd):
+        pr = FakeProc(sd, scope, rc=0, lifetime=3); procs.append(pr); return pr
+    def sleep(s):
+        clock.sleep(s)
+        v = read_lease(p, clock.now())
+        if v.kind == "live" and v.data["holder"] == "yupi" and not any(
+                r.get("action") == "ensure_stopped" and r.get("episode_id") == v.data["lease_id"]
+                for r in ledger.rows(p)):
+            _ack(p, sd, v.data["lease_id"])
+    rc = cli.main(["run", "--holder", "yupi", "--purpose", "t", "--ttl", "15m", "--", "true"],
+                  systemd=sd, now=clock.now, launcher=launcher, sleep=sleep)
+    assert rc == 0 and procs
+    assert any(r.get("action") == "expire" and r.get("outcome") == "ok" for r in ledger.rows(p))
+    assert read_lease(p, clock.now()).kind == "absent" and list_tombstones(p) == []
