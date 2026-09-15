@@ -280,6 +280,19 @@ def test_boot_reconciliation_closes_episode_ended_while_down(bound):
     assert returning["created_at"].startswith(later.isoformat()[:16]) and returning["detail"]["closed_at_source"] == "ledger"
 
 
+def test_two_boots_write_two_waking_boot_records(bound):
+    """A restart is always a distinct waking. boot() hydrates the de-dup key
+    from the store's tail, which on a hosted door is the previous process's
+    waking/boot — without clearing it the second boot would be swallowed."""
+    store, p, sd = bound
+    loop1, _, _ = _guarded_loop(store, p, sd, NOW)
+    loop1.boot()
+    loop2, _, _ = _guarded_loop(store, p, sd, NOW + timedelta(minutes=1))
+    loop2.boot()
+    boots = [s for s in _statuses(store) if s[:2] == ("waking", "boot")]
+    assert len(boots) == 2
+
+
 def test_restart_during_lease_appends_continuation(bound):
     store, p, sd = bound
     loop, gate, ctx = _guarded_loop(store, p, sd, NOW)

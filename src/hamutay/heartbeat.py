@@ -443,6 +443,11 @@ class HeartbeatLoop:
             "lost_continuations_recovered": len(lost),
         }
         self._emit({"heartbeat": "boot_report", **report})
+        # Hydration above may have left `_last_transition` at ("waking", "boot",
+        # None) — the record written by the *previous* process. The boot record
+        # is not a de-dup candidate: every start of this process is a distinct
+        # waking, so clear the de-dup state rather than let it swallow this one.
+        self._last_transition = None
         self._transition("waking", reason="boot", detail=report, now=self._now())
         return report
 
