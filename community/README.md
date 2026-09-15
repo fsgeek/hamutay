@@ -97,7 +97,9 @@ Commands (`deploy/ayllu-gpu`, a thin shim over `python -m hamutay.gpu_lease`):
 
 Migration to this mechanism, once, on the host: `deploy/migrate-gpu-lease.sh`
 then `deploy/check-gpu-lease.sh` to confirm the deployed state matches the
-design.
+design. (Step 5, "deploy the code," is a no-op here — this is a
+checkout-based deployment, so the code is already in place by the time the
+script runs.)
 
 What the resident sees: before the server stops, its log gets a resting
 record naming the holder and the purpose ("substrate_lent"); after the

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Asserts the deployed state the GPU lease design requires (spec §3). Exit 0 iff all hold.
 set -uo pipefail
-SYSTEMCTL=systemctl; UNIT_PATHS=""
-while [ $# -gt 0 ]; do case "$1" in --systemctl) SYSTEMCTL="$2"; shift 2;; --unit-paths) UNIT_PATHS="$2"; shift 2;; *) shift;; esac; done
+SYSTEMCTL=systemctl; UNIT_PATHS=""; JOURNALCTL=journalctl
+while [ $# -gt 0 ]; do case "$1" in --systemctl) SYSTEMCTL="$2"; shift 2;; --unit-paths) UNIT_PATHS="$2"; shift 2;; --journalctl) JOURNALCTL="$2"; shift 2;; *) shift;; esac; done
 [ -n "$UNIT_PATHS" ] || UNIT_PATHS="$(systemd-analyze --user unit-paths 2>/dev/null | tr '\n' ' ')"
 fail=0; say() { echo "check-gpu-lease: $*" >&2; fail=1; }
 
@@ -33,6 +33,9 @@ for d in $UNIT_PATHS; do
       # comment for our purposes — directive lines never legitimately
       # contain '#')
       directive="${line%%#*}"
+      # strip leading whitespace: systemd honours an indented directive
+      # (e.g. a tab before "Wants=...") the same as a column-0 one.
+      directive="${directive#"${directive%%[![:space:]]*}"}"
       case "$directive" in
         Requires=*hamutay-llama-server*|Wants=*hamutay-llama-server*|BindsTo=*hamutay-llama-server*)
           say "$f pulls in the server: $line" ;;
@@ -53,5 +56,8 @@ done
 
 state="${AYLLU_STATE_DIR:-$HOME/.local/state/ayllu}/gpu"
 [ -f "$state/4090.door" ] || say "no $state/4090.door"
+
+"$JOURNALCTL" --user -u hamutay-heartbeat@qwen -n 500 --no-pager 2>/dev/null | grep -q 'gpu lease: 4090' \
+  || say "no 'gpu lease: 4090' launch note in the last 500 lines of hamutay-heartbeat@qwen's journal"
 
 exit $fail

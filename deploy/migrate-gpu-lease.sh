@@ -15,8 +15,9 @@ set -euo pipefail
 # come from the real repo while community/qwen is disposable.
 SELF_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SYSTEMCTL=systemctl
+JOURNALCTL=journalctl
 UNIT_DIR="$HOME/.config/systemd/user"
-UNIT_DIR_EXPLICIT=0
+UNIT_PATHS=""
 ROOT="$SELF_ROOT"
 DRY_RUN=0
 QUIESCE_TIMEOUT=30m
@@ -24,13 +25,20 @@ QUIESCE_TIMEOUT=30m
 while [ $# -gt 0 ]; do
   case "$1" in
     --systemctl) SYSTEMCTL="$2"; shift 2 ;;
-    --unit-dir) UNIT_DIR="$2"; UNIT_DIR_EXPLICIT=1; shift 2 ;;
+    --journalctl) JOURNALCTL="$2"; shift 2 ;;
+    --unit-dir) UNIT_DIR="$2"; shift 2 ;;
+    --unit-paths) UNIT_PATHS="$2"; shift 2 ;;
     --root) ROOT="$2"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --quiesce-timeout) QUIESCE_TIMEOUT="$2"; shift 2 ;;
     *) echo "migrate-gpu-lease: unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+# Same idiom as check-gpu-lease.sh: read-only discovery of every directory
+# systemd resolves user units from (generators, transient units, drop-ins,
+# ~/.config, /etc, /usr/lib, ...) is not a mutation, so it runs even outside
+# --dry-run; tests always pass --unit-paths to stay off the real host.
+[ -n "$UNIT_PATHS" ] || UNIT_PATHS="$(systemd-analyze --user unit-paths 2>/dev/null | tr '\n' ' ')"
 
 run() {
   # Print the command; execute it unless --dry-run.
@@ -74,15 +82,14 @@ if [ "$DRY_RUN" -eq 0 ]; then
     echo "migrate-gpu-lease: something wants/requires the server" >&2
     exit 1
   fi
-  # Scan only the unit directory this migration itself writes to. The full
-  # host unit-path sweep (systemd-analyze --user unit-paths, every generator
-  # and transient dir) is check-gpu-lease.sh's job, run separately after the
-  # migration — this step must not reach outside $UNIT_DIR.
-  for d in "$UNIT_DIR"; do
+  # The spec requires scanning every directory systemd-analyze --user
+  # unit-paths reports, not just where this migration writes (reading is
+  # not a mutation). Tests always pass --unit-paths to stay off the host.
+  for d in $UNIT_PATHS; do
     [ -d "$d" ] || continue
     while IFS= read -r f; do
       [ "$(basename "$f")" = "hamutay-llama-server.service" ] && continue
-      grep -vE '^\s*#' "$f" | grep -qE '^(Requires|Wants|BindsTo)=.*hamutay-llama-server' \
+      grep -vE '^\s*#' "$f" | grep -qE '^[[:space:]]*(Requires|Wants|BindsTo)=.*hamutay-llama-server' \
         && { echo "migrate-gpu-lease: $f pulls in the server" >&2; exit 1; }
     done < <(find "$d" -type f \( -name '*.service' -o -name '*.conf' \) 2>/dev/null)
     while IFS= read -r l; do
@@ -124,13 +131,7 @@ run cp "$SELF_ROOT/deploy/door.json.qwen" "$ROOT/community/qwen/door.json"
 run "$SYSTEMCTL" --user start hamutay-heartbeat@qwen
 
 echo "migrate-gpu-lease: done; verifying with check-gpu-lease.sh"
-check_cmd=("$SELF_ROOT/deploy/check-gpu-lease.sh" --systemctl "$SYSTEMCTL")
-if [ "$UNIT_DIR_EXPLICIT" -eq 1 ]; then
-  # A caller that pointed us at a non-default unit dir (tests, a fixture
-  # tree) gets a scan scoped to that dir too, so the check never reaches
-  # into the real host's systemd user config.
-  check_cmd+=(--unit-paths "$UNIT_DIR")
-fi
+check_cmd=("$SELF_ROOT/deploy/check-gpu-lease.sh" --systemctl "$SYSTEMCTL" --unit-paths "$UNIT_PATHS" --journalctl "$JOURNALCTL")
 if [ "$DRY_RUN" -eq 0 ]; then
   "${check_cmd[@]}"
 else

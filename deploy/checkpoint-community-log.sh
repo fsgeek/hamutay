@@ -8,7 +8,17 @@
 # keeps appending. We snapshot with cp first so each hashed file is
 # internally coherent, and record its byte length beside the digest.
 set -euo pipefail
-cd "$(dirname "$0")/.."
+
+NO_COMMIT=0
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --no-commit) NO_COMMIT=1; shift ;;
+    --root) ROOT="$2"; shift 2 ;;
+    *) shift ;;
+  esac
+done
+cd "$ROOT"
 
 if ! git diff --cached --quiet; then
   echo "refusing to checkpoint: index has staged changes (shared worktree)" >&2
@@ -70,6 +80,12 @@ fi
 
 names=("${doors[@]#community/}")
 [ -f "$gpu_ledger" ] && names+=("gpu")
+
+if [ "$NO_COMMIT" -eq 1 ]; then
+  echo "checkpoint prepared, --no-commit: not staging or committing" >&2
+  exit 0
+fi
+
 git add "${ledgers[@]}"
 git -c user.email=hamutay@wamason.com -c user.name="Tony Mason" \
     -c user.signingkey=01193FA2631C8AE8E4DF266E216D3C9B920813A1 \
