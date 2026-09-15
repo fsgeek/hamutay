@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timezone
 import pytest
 from hamutay.events import EventStore, LeaseGateRequired, build_inbound_event, run_next_event, run_pending_events
-from hamutay.gpu_lease.actions import Ctx, REGISTRY, Lease, run as run_action
+from hamutay.gpu_lease.actions import Ctx, REGISTRY, Lease, Release, run as run_action
 from hamutay.gpu_lease.gate import LeaseGate
 from hamutay.gpu_lease.state import paths, locked
 from hamutay.gpu_lease import ledger
@@ -184,3 +184,118 @@ def test_boot_hydrates_before_appending_waking_boot(tmp_path):
     assert second._last_transition == ("waking", "boot", None)
     statuses = [(r["status"], r["reason"]) for r in store.read_records() if r.get("record_type") == "heartbeat_status"]
     assert statuses == [("resting", "substrate_lent"), ("waking", "boot")]
+
+
+# --- Task 8: the substrate guard in the heartbeat loop ----------------------
+
+def _guarded_loop(store, p, sd, now, ready=True):
+    ctx = Ctx(p, sd, now=lambda: now, by="heartbeat:qwen")
+    gate = LeaseGate(store, ctx, base_url="http://127.0.0.1:8081/v1",
+                     fetch=lambda url, timeout: 200 if ready else None)
+    loop = HeartbeatLoop(None, store, now=lambda: now, sleep=lambda s: None,
+                         run_pending=lambda *a, **k: {"ran": 0, "results": []},
+                         summarize=lambda records, now: {"pending_runnable_count": 0,
+                                                         "pending_waiting_count": 0},
+                         guard=gate)
+    return loop, gate, ctx
+
+
+def _statuses(store):
+    return [(r["status"], r["reason"], (r.get("detail") or {}).get("episode_id"))
+            for r in store.read_records() if r.get("record_type") == "heartbeat_status"]
+
+
+def test_rest_record_precedes_stop_and_wait_ack_exists(bound):
+    store, p, sd = bound
+    sd.units["hamutay-llama-server.service"] = {"active_state": "active", "sub_state": "running",
+                                                "load_state": "loaded", "invocation_id": "i1"}
+    loop, gate, ctx = _guarded_loop(store, p, sd, NOW)
+    with locked(p):
+        act = Lease("yupi", "t", timedelta(hours=1), None); run_action(ctx, act, REGISTRY)
+    result = loop.step()
+    assert result["state"] == "resting"
+    assert _statuses(store)[-1] == ("resting", "substrate_lent", act.lease_id)
+    rest_at = [r for r in store.read_records() if r.get("status") == "resting"][0]["created_at"]
+    stop_rows = [r for r in ledger.rows(p) if r["action"] == "ensure_stopped" and r["phase"] == "outcome"]
+    assert stop_rows and stop_rows[0]["outcome"] == "ok" and stop_rows[0]["at"] >= rest_at
+    assert ("stop", "hamutay-llama-server.service") in sd.calls
+    # a second step appends nothing new and does not stop again
+    n = len(sd.calls); loop.step()
+    assert len([c for c in sd.calls[n:] if c[0] == "stop"]) == 0 and _statuses(store)[-1][0] == "resting"
+
+
+def test_return_sequence_starts_server_warms_then_claims(bound):
+    store, p, sd = bound
+    sd.units["hamutay-llama-server.service"] = {"active_state": "inactive", "sub_state": "dead",
+                                                "load_state": "loaded", "invocation_id": ""}
+    loop, gate, ctx = _guarded_loop(store, p, sd, NOW, ready=False)
+    with locked(p):
+        act = Lease("yupi", "t", timedelta(hours=1), None); run_action(ctx, act, REGISTRY)
+    loop.step()                                  # resting
+    with locked(p):
+        run_action(ctx, Release(act.lease_id), REGISTRY)
+    r = loop.step()
+    assert r["state"] == "warming" and ("start", "hamutay-llama-server.service") in sd.calls
+    assert _statuses(store)[-1] == ("waking", "substrate_returning", act.lease_id)
+    gate._fetch = lambda url, timeout: 200
+    gate._context_validated = lambda: True     # Task 9 supplies the real check
+    r = loop.step()
+    assert r["state"] in ("quiet", "active", "waiting")
+    obs = [x for x in ledger.rows(p) if x.get("phase") == "observation"]
+    assert [o["action"] for o in obs] == ["server_ready"]
+    loop.step()
+    assert len([x for x in ledger.rows(p) if x.get("phase") == "observation"]) == 1   # no churn
+
+
+def test_two_leases_back_to_back_are_two_episodes(bound):
+    store, p, sd = bound
+    loop, gate, ctx = _guarded_loop(store, p, sd, NOW)
+    with locked(p):
+        a = Lease("yupi", "t", timedelta(hours=1), None); run_action(ctx, a, REGISTRY)
+    loop.step()
+    with locked(p):
+        run_action(ctx, Release(a.lease_id), REGISTRY)
+        b = Lease("tq", "t", timedelta(hours=1), None); run_action(ctx, b, REGISTRY)
+    loop.step()
+    eps = [s[2] for s in _statuses(store) if s[0] == "resting"]
+    assert eps == [a.lease_id, b.lease_id]
+
+
+def test_boot_reconciliation_closes_episode_ended_while_down(bound):
+    store, p, sd = bound
+    loop, gate, ctx = _guarded_loop(store, p, sd, NOW)
+    with locked(p):
+        a = Lease("yupi", "t", timedelta(hours=1), None); run_action(ctx, a, REGISTRY)
+    loop.step()
+    later = NOW + timedelta(minutes=30)
+    with locked(p):
+        run_action(Ctx(p, sd, now=lambda: later, by="ayllu-gpu"), Release(a.lease_id), REGISTRY)
+    loop2, gate2, _ = _guarded_loop(store, p, sd, later + timedelta(minutes=5))
+    loop2.boot()
+    st = _statuses(store)
+    assert st[-2] == ("waking", "substrate_returning", a.lease_id) and st[-1] == ("waking", "boot", None)
+    returning = [r for r in store.read_records() if r.get("reason") == "substrate_returning"][0]
+    assert returning["created_at"].startswith(later.isoformat()[:16]) and returning["detail"]["closed_at_source"] == "ledger"
+
+
+def test_restart_during_lease_appends_continuation(bound):
+    store, p, sd = bound
+    loop, gate, ctx = _guarded_loop(store, p, sd, NOW)
+    with locked(p):
+        a = Lease("yupi", "t", timedelta(hours=1), None); run_action(ctx, a, REGISTRY)
+    loop.step()
+    loop2, _, _ = _guarded_loop(store, p, sd, NOW + timedelta(minutes=1))
+    loop2.boot(); loop2.step()
+    st = _statuses(store)
+    assert st[-2] == ("waking", "boot", None) and st[-1] == ("resting", "substrate_lent", a.lease_id)
+    assert [r for r in store.read_records() if r.get("status") == "resting"][-1]["detail"]["continuation"] is True
+
+
+def test_quarantine_rests_with_its_own_reason_and_no_start(bound):
+    store, p, sd = bound
+    p.dir.mkdir(parents=True, exist_ok=True); p.lease.write_bytes(b"{garbage")
+    loop, gate, ctx = _guarded_loop(store, p, sd, NOW)
+    r = loop.step()
+    assert r["state"] == "resting" and _statuses(store)[-1][:2] == ("resting", "substrate_lease_unreadable")
+    assert not any(c[0] == "start" for c in sd.calls)
+    assert p.quarantine.exists()
