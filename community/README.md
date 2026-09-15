@@ -120,3 +120,26 @@ loan, a returning record marks the server coming back up. Any wake whose
 envelope spans the gap carries an operational note that the substrate was
 unavailable for part of it — the resident is told, not left to guess why a
 gap exists.
+
+### The first loan (registered check), 2026-09-15
+
+Migrated at 22:29Z (`deploy/migrate-gpu-lease.sh` from this checkout;
+`check-gpu-lease.sh` clean; launch note seen after 5 s; context ceiling
+65,536 rediscovered). Then
+`deploy/ayllu-gpu run --holder custodian --purpose "registered first loan …" --ttl 15m -- sleep 600`:
+
+| UTC | record |
+|---|---|
+| 22:29:58 | `lease` ok (ayllu-gpu), lease bf9b805c, tombstone written |
+| 22:30:02 | `resting/substrate_lent` in the door's store, holder and purpose named |
+| 22:30:02–22:30:16 | `ensure_stopped` intent → server observed inactive → outcome ok (the model took 14 s to unload) |
+| 22:30:26 | card at 1,981 MiB of 24,564; workload running in `ayllu-gpu-bf9b805c-….scope` |
+| 22:34:59, 22:40:04 | `renew` ok, on the ttl/3 schedule |
+| 22:40:52 | `release` ok; scope dead; tombstone removed; lease removed |
+| 22:41:20 | `waking/substrate_returning` (closed_at_source observed); `server_start` ok |
+| 22:41:51 | `server_ready`; card back at 24,011 MiB; door `waiting` on its 09:00Z self-check |
+
+No wake was interrupted (none was in flight), no quarantine, no
+`force-stop`; the resident's next wake (check 7, 2026-09-16 09:00Z) is
+the first completed after the loan and carries the "Before this event
+existed…" note.
