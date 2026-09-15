@@ -114,7 +114,20 @@ def run(ctx: Ctx, action: Action, registry: dict | None = None) -> dict:
         observation_failed = f"{type(e).__name__}: {e}"
     except Exception as e:  # every other failure is an outcome, never a lost intent
         error = f"{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}"
-    return _finish(ctx, action, action_id, error=error, observation_failed=observation_failed)
+    row = _finish(ctx, action, action_id, error=error, observation_failed=observation_failed)
+    # An `indeterminate` outcome fences the resource here, under the SAME lock
+    # holder that wrote it: a caller that returns before quarantining leaves a
+    # window where the resource looks free but nobody knows its state. The
+    # quarantine_enter action itself is exempt (it would recurse), and an
+    # existing quarantine file is already the fence -- one per condition.
+    if row.get("outcome") == "indeterminate" and action.name != QuarantineEnter.name:
+        try:
+            already = read_quarantine(ctx.paths) is not None
+        except MalformedState:
+            already = True      # unreadable is still a fence; the gate quarantines it
+        if not already:
+            quarantine_if_indeterminate(ctx, row)
+    return row
 
 def resolve_dangling(ctx: Ctx, registry: dict[str, Callable[[dict], Action]]) -> list[dict]:
     """For each dangling intent: rebuild the action from its intent row, perform any owed
