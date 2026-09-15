@@ -21,6 +21,9 @@ class Ctx:
 
 class Action:
     name: str = ""
+    action_id: str = ""
+    intent_fields: dict
+
     def intent(self, ctx: Ctx) -> dict: return {}
     def perform(self, ctx: Ctx) -> None: ...
     def predicate(self, ctx: Ctx) -> bool: raise NotImplementedError
@@ -57,15 +60,16 @@ def _assert_locked(ctx: Ctx) -> None:
         fcntl.flock(probe.fileno(), fcntl.LOCK_UN)
     raise RuntimeError("run() called without holding 4090.lock")
 
-def _row(ctx, action, action_id, phase, **fields):
-    return ledger.append(ctx.paths, {"action_id": action_id, "phase": phase, "action": action.name,
-                                     "by": ctx.by, "at": ctx.now().isoformat(), **fields})
+def _row(ctx, action, action_id, phase, fields=None):
+    return ledger.append(ctx.paths, {**(fields or {}), "record_type": "gpu_lease", "action_id": action_id,
+                                     "phase": phase, "action": action.name, "by": ctx.by,
+                                     "at": ctx.now().isoformat()})
 
 def _finish(ctx, action, action_id, *, reconciled=False, error=None):
     try:
         obs = action.observe(ctx)
         held = action.predicate(ctx)
-    except (SystemdUnavailable, MalformedState, OSError) as e:
+    except Exception as e:
         obs, held = {"error": str(e)}, None
     if error is not None:
         outcome = "error"
@@ -75,9 +79,8 @@ def _finish(ctx, action, action_id, *, reconciled=False, error=None):
         outcome = "ok" if held else "not_performed"
     detail = {"error": error} if error else {}
     # Outcome rows carry the intent's fields; the outcome row's own keys win on collision.
-    intent_fields = getattr(action, "intent_fields", {}) or {}
-    row = _row(ctx, action, action_id, "outcome", **{
-        **intent_fields,
+    row = _row(ctx, action, action_id, "outcome", {
+        **action.intent_fields,
         "outcome": outcome, "observed": obs, "detail": detail,
         **({"reconciled": True} if reconciled else {}),
     })
@@ -90,7 +93,7 @@ def run(ctx: Ctx, action: Action, registry: dict | None = None) -> dict:
     action_id = str(uuid.uuid4())
     action.action_id = action_id
     action.intent_fields = action.intent(ctx)
-    _row(ctx, action, action_id, "intent", **action.intent_fields)
+    _row(ctx, action, action_id, "intent", action.intent_fields)
     error = None
     try:
         action.perform(ctx)
@@ -107,8 +110,8 @@ def resolve_dangling(ctx: Ctx, registry: dict[str, Callable[[dict], Action]]) ->
         build = registry.get(intent.get("action"))
         if build is None:
             done.append(_row(ctx, type("Unknown", (Action,), {"name": intent.get("action", "?")})(),
-                             intent["action_id"], "outcome", outcome="indeterminate", reconciled=True,
-                             observed={}, detail={"error": "no reconciler for this action"}))
+                             intent["action_id"], "outcome", {"outcome": "indeterminate", "reconciled": True,
+                             "observed": {}, "detail": {"error": "no reconciler for this action"}}))
             continue
         action = build(intent)
         action.action_id = intent["action_id"]
