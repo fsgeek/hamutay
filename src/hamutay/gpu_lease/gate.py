@@ -5,6 +5,7 @@ from . import ledger
 from .actions import (Ctx, REGISTRY, EnsureStopped, Expire, NotFree, QuarantineEnter, ServerStart,
                       is_free, quarantine_if_indeterminate, resolve_dangling, resolve_tombstones, run)
 from .state import MalformedState, list_tombstones, locked, read_lease, read_quarantine
+from .systemd import SystemdUnavailable
 
 CLOSING_ACTIONS = ("release", "expire", "release_force")
 PROBE_TIMEOUT = 2.0
@@ -193,11 +194,19 @@ class LeaseGate:
                     info = None
                 if info is not None:
                     return "quarantined", info
-            server = self.ctx.systemd.show(self.ctx.server_unit)
-            if server.get("active_state") not in ("active", "activating"):
-                out = run(self.ctx, ServerStart(), REGISTRY)
-                quarantine_if_indeterminate(self.ctx, out)
+            # These two show() calls sit outside any action, so a systemd that
+            # is momentarily unavailable would raise straight out of the poll
+            # loop and take the heartbeat down — a restart storm against a
+            # substrate that is merely busy. Report not-ready instead: the door
+            # warms, transitions nothing, and retries on the next poll.
+            try:
                 server = self.ctx.systemd.show(self.ctx.server_unit)
+                if server.get("active_state") not in ("active", "activating"):
+                    out = run(self.ctx, ServerStart(), REGISTRY)
+                    quarantine_if_indeterminate(self.ctx, out)
+                    server = self.ctx.systemd.show(self.ctx.server_unit)
+            except SystemdUnavailable as e:
+                return "free_not_ready", {"error": str(e), "context": "systemd_unavailable"}
         invocation_id = server.get("invocation_id", "")
         self._current_invocation = invocation_id
         ready = bool(self._base_url) and self.probe()

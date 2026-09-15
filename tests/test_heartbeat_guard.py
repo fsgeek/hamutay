@@ -16,6 +16,9 @@ NOW = datetime(2026, 9, 20, 15, 0, tzinfo=timezone.utc)
 class FakeSystemd:  # minimal copy of tests/gpu_lease/conftest.py's
     def __init__(self): self.units = {}; self.calls = []; self.fail_show = False
     def show(self, unit):
+        if self.fail_show:
+            from hamutay.gpu_lease.systemd import SystemdUnavailable
+            raise SystemdUnavailable("fake")
         return dict(self.units.get(unit, {"active_state": "inactive", "sub_state": "dead", "load_state": "not-found", "invocation_id": ""}))
     def start(self, unit): self.calls.append(("start", unit)); self.units[unit] = {"active_state": "active", "sub_state": "running", "load_state": "loaded", "invocation_id": "i1"}; return 0, ""
     def stop(self, unit): self.calls.append(("stop", unit)); self.units.setdefault(unit, {}).update(active_state="inactive", sub_state="dead", load_state="loaded"); return 0, ""
@@ -548,6 +551,23 @@ def test_gate_does_not_claim_until_discovery_succeeds_for_new_invocation(bound, 
     assert session.applied == [(65536, "discovered", "inv-new")]
     # already validated for this invocation: no third discovery attempt
     assert gate.observe(NOW)[0] == "free_ready" and len(attempts) == 2
+
+
+def test_gate_survives_a_systemd_outage_on_a_free_door(bound):
+    """observe()'s bare show() calls sit outside any action. A systemd that is
+    momentarily unavailable must not raise out of the poll loop (restart storm):
+    the door reports not-ready, transitions nothing, and retries next poll."""
+    store, p, sd = bound
+    ctx = Ctx(p, sd, now=lambda: NOW, by="heartbeat:qwen")
+    gate = LeaseGate(store, ctx, base_url="http://127.0.0.1:8081/v1", fetch=lambda u, t: 200)
+    sd.fail_show = True
+    status, info = gate.observe(NOW)
+    assert status == "free_not_ready"
+    assert info["context"] == "systemd_unavailable" and info["error"]
+    assert not p.quarantine.exists()
+    # the outage passes; the next poll proceeds normally
+    sd.fail_show = False
+    assert gate.observe(NOW)[0] in ("free_ready", "free_not_ready")
 
 
 def test_gate_with_an_explicit_limit_never_discovers(bound):
