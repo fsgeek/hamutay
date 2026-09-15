@@ -24,7 +24,7 @@ class Action:
     name: str = ""
     action_id: str = ""
     intent_fields: dict
-    extra_detail: dict = {}
+    extra_detail: dict | None = None
 
     def intent(self, ctx: Ctx) -> dict: return {}
     def perform(self, ctx: Ctx) -> None: ...
@@ -67,19 +67,22 @@ def _row(ctx, action, action_id, phase, fields=None):
                                      "phase": phase, "action": action.name, "by": ctx.by,
                                      "at": ctx.now().isoformat()})
 
-def _finish(ctx, action, action_id, *, reconciled=False, error=None):
+def _finish(ctx, action, action_id, *, reconciled=False, error=None, observation_failed=None):
     try:
         obs = action.observe(ctx)
         held = action.predicate(ctx)
     except Exception as e:
         obs, held = {"error": str(e)}, None
-    if error is not None:
+    if observation_failed is not None:
+        outcome = "indeterminate"
+    elif error is not None:
         outcome = "error"
     elif held is None:
         outcome = "indeterminate"
     else:
         outcome = "ok" if held else "not_performed"
-    detail = {**getattr(action, "extra_detail", {}), **({"error": error} if error else {})}
+    err = observation_failed if observation_failed is not None else error
+    detail = {**dict(action.extra_detail or {}), **({"error": err} if err else {})}
     # Outcome rows carry the intent's fields; the outcome row's own keys win on collision.
     row = _row(ctx, action, action_id, "outcome", {
         **action.intent_fields,
@@ -97,11 +100,17 @@ def run(ctx: Ctx, action: Action, registry: dict | None = None) -> dict:
     action.intent_fields = action.intent(ctx)
     _row(ctx, action, action_id, "intent", action.intent_fields)
     error = None
+    observation_failed = None
     try:
         action.perform(ctx)
-    except Exception as e:  # every failure is an outcome, never a lost intent
+    except (SystemdUnavailable, MalformedState, OSError) as e:
+        # The spec's blanket rule: any action whose perform() cannot read
+        # systemctl show or a state file goes indeterminate -> quarantine_enter,
+        # never a hard error.
+        observation_failed = f"{type(e).__name__}: {e}"
+    except Exception as e:  # every other failure is an outcome, never a lost intent
         error = f"{type(e).__name__}: {e}\n{traceback.format_exc(limit=3)}"
-    return _finish(ctx, action, action_id, error=error)
+    return _finish(ctx, action, action_id, error=error, observation_failed=observation_failed)
 
 def resolve_dangling(ctx: Ctx, registry: dict[str, Callable[[dict], Action]]) -> list[dict]:
     """For each dangling intent: rebuild the action from its intent row, perform any owed
@@ -170,21 +179,19 @@ class WorkloadKilled(Action):
         return {"scope_unit": self.scope_unit}
 
     def perform(self, ctx):
-        # A systemd failure here must not become a hard "error" outcome (spec: any
-        # unreadable systemctl show/state file -> indeterminate -> quarantine_enter).
-        # Swallow it and let the unguarded predicate() raise, which _finish treats
-        # as indeterminate.
-        try:
-            obs = ctx.systemd.show(self.scope_unit)
-            if not scope_dead(obs):
-                ctx.systemd.stop(self.scope_unit)
-            if scope_dead(ctx.systemd.show(self.scope_unit)):
-                try:
-                    _tombstone(ctx, self.scope_unit).unlink()
-                except FileNotFoundError:
-                    pass
-        except SystemdUnavailable:
-            pass
+        # A SystemdUnavailable here propagates to run()'s framework guard, which
+        # reports indeterminate (spec: any unreadable systemctl show/state file ->
+        # indeterminate -> quarantine_enter). The tombstone is only unlinked once
+        # the stop is actually observed dead, so a failure after a successful stop
+        # doesn't silently skip removing it.
+        obs = ctx.systemd.show(self.scope_unit)
+        if not scope_dead(obs):
+            ctx.systemd.stop(self.scope_unit)
+        if scope_dead(ctx.systemd.show(self.scope_unit)):
+            try:
+                _tombstone(ctx, self.scope_unit).unlink()
+            except FileNotFoundError:
+                pass
 
     def predicate(self, ctx):
         return scope_dead(ctx.systemd.show(self.scope_unit)) and not _tombstone(ctx, self.scope_unit).exists()

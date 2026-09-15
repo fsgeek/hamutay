@@ -114,7 +114,7 @@ from hamutay.gpu_lease.actions import (
     REGISTRY, Lease, Renew, Release, Expire, QuarantineEnter, WorkloadKilled, EnsureStopped,
     ServerStart, ReleaseForce, NotFree, is_free, resolve_tombstones,
 )
-from hamutay.gpu_lease.state import read_lease, read_quarantine, list_tombstones, write_atomic
+from hamutay.gpu_lease.state import read_lease, read_quarantine, list_tombstones
 
 
 def _lease(p, sd, holder="yupi", ttl=timedelta(hours=6)):
@@ -229,3 +229,45 @@ def test_release_force_reconciles_before_any_rename(p, sd):
     with locked(p):
         done = resolve_dangling(ctx(p, sd), REGISTRY)
     assert done[0]["outcome"] == "ok" and not p.lease.exists()
+
+
+# --- Round 1 review fixes: observation failures go indeterminate, framework-wide ---
+
+from hamutay.gpu_lease.actions import quarantine_if_indeterminate
+
+
+def test_release_is_indeterminate_when_show_fails(p, sd):
+    act, _ = _lease(p, sd)
+    sd.fail_show = True
+    with locked(p):
+        out = run(ctx(p, sd), Release(act.lease_id), REGISTRY)
+    assert out["outcome"] == "indeterminate"
+
+def test_ensure_stopped_is_indeterminate_when_show_fails(p, sd):
+    sd.fail_show = True
+    with locked(p):
+        out = run(ctx(p, sd), EnsureStopped("ep"), REGISTRY)
+    assert out["outcome"] == "indeterminate"
+
+def test_server_start_is_indeterminate_when_show_fails(p, sd):
+    sd.fail_show = True
+    with locked(p):
+        out = run(ctx(p, sd), ServerStart(), REGISTRY)
+    assert out["outcome"] == "indeterminate"
+
+def test_workload_killed_is_indeterminate_when_show_fails_framework(p, sd):
+    p.tombstones.mkdir(parents=True); (p.tombstones / "ayllu-gpu-z.scope").write_text("")
+    sd.fail_show = True
+    with locked(p):
+        out = run(ctx(p, sd), WorkloadKilled("ayllu-gpu-z.scope"), REGISTRY)
+    assert out["outcome"] == "indeterminate"
+
+def test_quarantine_if_indeterminate_writes_quarantine_with_cause(p, sd):
+    sd.fail_show = True
+    with locked(p):
+        out = run(ctx(p, sd), ServerStart(), REGISTRY)
+        assert out["outcome"] == "indeterminate"
+        q_out = quarantine_if_indeterminate(ctx(p, sd), out)
+    q = read_quarantine(p)
+    assert q["cause_action_id"] == out["action_id"] == q["cause_action_id"]
+    assert q["source_action_id"] == q_out["action_id"]
