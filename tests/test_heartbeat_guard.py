@@ -7,7 +7,9 @@ from hamutay.gpu_lease.gate import LeaseGate
 from hamutay.gpu_lease.state import paths, locked
 from hamutay.gpu_lease import ledger
 from datetime import timedelta
-from hamutay.heartbeat import HeartbeatLoop, WakeBudget, DailyLedger
+from hamutay.heartbeat import (GPU_LEASE_SENTENCE, DailyLedger, HeartbeatLoop, WakeBudget,
+                               assert_canonical_lock_path, assert_lease_door_has_base_url,
+                               build_constitution)
 
 NOW = datetime(2026, 9, 20, 15, 0, tzinfo=timezone.utc)
 
@@ -299,3 +301,76 @@ def test_quarantine_rests_with_its_own_reason_and_no_start(bound):
     assert r["state"] == "resting" and _statuses(store)[-1][:2] == ("resting", "substrate_lease_unreadable")
     assert not any(c[0] == "start" for c in sd.calls)
     assert p.quarantine.exists()
+
+
+# --- Task 8 review round 1: reconstruction arm, launch assertions -----------
+
+def _force_stop_row(p, episode_id, at):
+    """An ok force_stop outcome as cmd_force_stop would leave it."""
+    return ledger.append(p, {"action_id": "fs-" + episode_id, "phase": "outcome",
+                             "action": "force_stop", "outcome": "ok", "episode_id": episode_id,
+                             "by": "ayllu-gpu", "at": at, "observed": {}, "detail": {}})
+
+
+def test_boot_reconstructs_rest_for_force_stop_the_store_never_saw(bound):
+    """A crash between force-stop's own record and its outcome leaves an ok
+    force_stop in the ledger with no resting record. Boot rebuilds both ends."""
+    store, p, sd = bound
+    at = (NOW - timedelta(minutes=20)).isoformat()
+    _force_stop_row(p, "ep-forced", at)
+    loop, gate, _ = _guarded_loop(store, p, sd, NOW)
+    gate.reconcile_on_boot(NOW)
+    rebuilt = [r for r in store.read_records()
+               if r.get("record_type") == "heartbeat_status"
+               and (r.get("detail") or {}).get("episode_id") == "ep-forced"]
+    assert [(r["status"], r["reason"]) for r in rebuilt] == [
+        ("resting", "substrate_lent"), ("waking", "substrate_returning")]
+    assert rebuilt[0]["detail"]["source"] == "reconstructed_from_ledger"
+    assert rebuilt[0]["created_at"] == at and rebuilt[1]["created_at"] == at
+    # idempotent: the episode now has a resting record, so a second pass is quiet
+    before = len(store.read_records())
+    gate.reconcile_on_boot(NOW)
+    assert len(store.read_records()) == before
+
+
+def test_boot_reconstructs_rest_only_while_the_forced_lease_is_still_live(bound):
+    """A force_stop whose lease is still live is an open episode: rebuild the
+    rest, but do not close what has not ended."""
+    store, p, sd = bound
+    ctx = Ctx(p, sd, now=lambda: NOW, by="heartbeat:qwen")
+    with locked(p):
+        act = Lease("yupi", "t", timedelta(hours=1), None); run_action(ctx, act, REGISTRY)
+    at = NOW.isoformat()
+    _force_stop_row(p, act.lease_id, at)
+    loop, gate, _ = _guarded_loop(store, p, sd, NOW)
+    gate.reconcile_on_boot(NOW)
+    rebuilt = [r for r in store.read_records()
+               if r.get("record_type") == "heartbeat_status"
+               and (r.get("detail") or {}).get("episode_id") == act.lease_id]
+    assert [(r["status"], r["reason"]) for r in rebuilt] == [("resting", "substrate_lent")]
+    assert rebuilt[0]["detail"]["source"] == "reconstructed_from_ledger"
+
+
+def test_canonical_lock_path_assertion_both_ways(tmp_path):
+    events = str(tmp_path / "s.jsonl.events.jsonl")
+    assert_canonical_lock_path(events + ".heartbeat.lock", events)   # must not raise
+    with pytest.raises(SystemExit) as caught:
+        assert_canonical_lock_path(str(tmp_path / "elsewhere.lock"), events)
+    assert "canonical" in str(caught.value)
+
+
+def test_lease_door_requires_a_base_url():
+    assert_lease_door_has_base_url(None, None)                       # unbound: no opinion
+    assert_lease_door_has_base_url("4090", "http://127.0.0.1:8081/v1")
+    with pytest.raises(SystemExit) as caught:
+        assert_lease_door_has_base_url("4090", None)
+    assert "anthropic-direct backend cannot participate" in str(caught.value)
+
+
+def test_constitution_gains_the_gpu_lease_sentence_only_when_bound():
+    budget = WakeBudget(1.5, 48)
+    assert build_constitution(budget).endswith(".")
+    assert GPU_LEASE_SENTENCE not in build_constitution(budget)
+    assert GPU_LEASE_SENTENCE not in build_constitution(None)
+    assert build_constitution(budget, gpu_lease=True).endswith(GPU_LEASE_SENTENCE)
+    assert build_constitution(None, gpu_lease=True).endswith(GPU_LEASE_SENTENCE)

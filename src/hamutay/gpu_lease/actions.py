@@ -488,14 +488,20 @@ class ReleaseForce(Action):
     def __init__(self, by, reason):
         self.who, self.reason = by, reason
         self.originals = []
+        self.episode_id = None
 
     def _escrow(self, ctx, name):
         return ctx.paths.dir / f"{RESOURCE}.{name}.escrow-{self.action_id}"
 
     def intent(self, ctx):
         self.originals = [n for n in ("lease", "quarantine") if getattr(ctx.paths, n).exists()]
+        # A forced release still closes a substrate episode, so the outcome row
+        # must name it: boot reconciliation dates the closing record from this
+        # episode_id. An unreadable lease has no id to give — None, honestly.
+        view = read_lease(ctx.paths, ctx.now())
+        self.episode_id = view.data["lease_id"] if view.data else None
         return {"reason": self.reason, "forced_by": self.who, "originals_present": self.originals,
-                "tombstones": list_tombstones(ctx.paths)}
+                "tombstones": list_tombstones(ctx.paths), "episode_id": self.episode_id}
 
     def perform(self, ctx):
         for scope in list_tombstones(ctx.paths):
@@ -516,6 +522,8 @@ class ReleaseForce(Action):
 def _release_force_builder(row):
     action = ReleaseForce(row.get("forced_by"), row.get("reason"))
     action.originals = row["originals_present"]
+    # resolve_dangling never calls intent(): restore what intent() would have set.
+    action.episode_id = row.get("episode_id")
     return action
 
 

@@ -24,8 +24,8 @@ from hamutay.events import (
 
 
 # The two reasons a heartbeat rests because the substrate was taken away.
-# gate.py keeps its own copy: importing it here at module scope would close the
-# cycle (main() imports gate, gate imports append_heartbeat_status from here).
+# gate.py imports this lazily, inside reconcile_on_boot: a module-level import
+# would close the cycle (main() imports gate, gate imports back into here).
 SUBSTRATE_REST_REASONS = ("substrate_lent", "substrate_lease_unreadable")
 
 
@@ -881,6 +881,31 @@ def resolve_budget(args) -> tuple[WakeBudget | None, str]:
     )
 
 
+def assert_canonical_lock_path(lock_path: str, event_log_path: str) -> None:
+    """One heartbeat per bound door, and the only lock that proves it is the
+    canonical one beside the event log. A custom --lock-path would let a second
+    heartbeat claim the same door behind the same gate."""
+    from pathlib import Path
+
+    expected = str(Path(event_log_path).resolve()) + ".heartbeat.lock"
+    if str(Path(lock_path).resolve()) != expected:
+        raise SystemExit(
+            "gpu lease door: --lock-path must be the canonical "
+            "<events>.heartbeat.lock"
+        )
+
+
+def assert_lease_door_has_base_url(binding, base_url) -> None:
+    """A bound door probes readiness at <base_url>/models. Without a base_url
+    there is nothing to probe, so the door would warm forever in silence:
+    refuse at launch instead."""
+    if binding and not base_url:
+        raise SystemExit(
+            "gpu lease door needs an OpenAI-compatible base_url (provider "
+            "openai or openrouter); the anthropic-direct backend cannot participate"
+        )
+
+
 def acquire_lock(lock_path: str):
     import fcntl
 
@@ -918,15 +943,7 @@ def main() -> None:
     # constitution sentence and whether this door runs behind a lease gate.
     store = EventStore(event_log_path)
     if store.lease_binding:
-        # One heartbeat per bound door, and the only lock that proves it is the
-        # canonical one beside the event log. A custom --lock-path would let a
-        # second heartbeat claim the same door behind the same gate.
-        expected = str(Path(event_log_path).resolve()) + ".heartbeat.lock"
-        if str(Path(lock_path).resolve()) != expected:
-            raise SystemExit(
-                "gpu lease door: --lock-path must be the canonical "
-                "<events>.heartbeat.lock"
-            )
+        assert_canonical_lock_path(lock_path, event_log_path)
     lock_handle = acquire_lock(lock_path)  # held for process lifetime
 
     launch, launch_notes = resolve_heartbeat_launch(args)
@@ -950,6 +967,10 @@ def main() -> None:
     context_limit, context_limit_source = None, "provider default"
     base_url = None
     if args.provider == "anthropic":
+        # A bound door needs an OpenAI-compatible base_url to probe readiness;
+        # the anthropic-direct backend resolves none, so refuse here rather than
+        # warm forever in silence.
+        assert_lease_door_has_base_url(store.lease_binding, base_url)
         backend = AnthropicTasteBackend(max_tokens=args.max_tokens)
     else:
         if args.provider == "openrouter":
@@ -1030,6 +1051,9 @@ def main() -> None:
     )
     guard = None
     if store.lease_binding:
+        # Belt and braces: whichever provider branch ran, a bound door without a
+        # base_url has nothing to probe and must not reach the loop.
+        assert_lease_door_has_base_url(store.lease_binding, base_url)
         # Imported here, not at module scope: gate.py reaches back into this
         # module for append_heartbeat_status.
         from hamutay.gpu_lease.actions import Ctx

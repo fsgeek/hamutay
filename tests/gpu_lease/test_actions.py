@@ -217,8 +217,24 @@ def test_release_force_clears_unreadable_files_via_escrow(p, sd):
         out = run(ctx(p, sd), ReleaseForce("tony", "test"), REGISTRY)
     assert out["outcome"] == "ok" and not p.lease.exists() and not p.quarantine.exists()
     assert not list(p.dir.glob("*.escrow-*"))
-    intent = [r for r in ledger.rows(p) if r["phase"] == "intent"][-1]
+    intent = [r for r in ledger.rows(p)
+              if r["phase"] == "intent" and r["action"] == "release_force"][-1]
     assert sorted(intent["originals_present"]) == ["lease", "quarantine"]
+    # An unreadable lease has no id to name: episode_id is present but None.
+    assert intent["episode_id"] is None and out["episode_id"] is None
+
+def test_release_force_names_the_episode_when_the_lease_is_readable(p, sd):
+    """Boot reconciliation dates a forced release's closing record from the
+    ledger's episode_id, so the forced release must carry one."""
+    act, _ = _lease(p, sd)
+    with locked(p):
+        out = run(ctx(p, sd), ReleaseForce("tony", "test"), REGISTRY)
+    assert out["outcome"] == "ok"
+    # perform() runs nested workload_killed actions that append their own
+    # intents, so select this action's row rather than the last one.
+    intent = [r for r in ledger.rows(p)
+              if r["phase"] == "intent" and r["action"] == "release_force"][-1]
+    assert intent["episode_id"] == act.lease_id and out["episode_id"] == act.lease_id
 
 def test_release_force_reconciles_before_any_rename(p, sd):
     p.dir.mkdir(parents=True, exist_ok=True)

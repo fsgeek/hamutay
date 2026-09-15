@@ -103,6 +103,12 @@ class LeaseGate:
 
     # --- the four observations ---------------------------------------------
 
+    def _quarantine_bytes(self):
+        try:
+            return self.ctx.paths.quarantine.read_bytes()
+        except OSError:
+            return b""
+
     def _quarantine_info(self):
         q = read_quarantine(self.ctx.paths)
         return None if q is None else {"episode_id": q["quarantine_id"], "reason": q.get("reason")}
@@ -121,8 +127,11 @@ class LeaseGate:
             resolve_dangling(self.ctx, REGISTRY)
             try:
                 info = self._quarantine_info()
-            except MalformedState as e:
-                info = self._enter_quarantine("unreadable", hashlib.sha256(str(e).encode()).hexdigest()[:16])
+            except MalformedState:
+                # The digest names what was actually on disk, not how reading it
+                # failed: an occurrence identity for the unreadable bytes.
+                info = self._enter_quarantine(
+                    "unreadable", hashlib.sha256(self._quarantine_bytes()).hexdigest()[:16])
             if info is not None:
                 return "quarantined", info
             view = read_lease(self.ctx.paths, now)
@@ -224,6 +233,9 @@ class LeaseGate:
             # crash between force-stop's own record and its outcome).
             rested = {(r.get("detail") or {}).get("episode_id")
                       for r in statuses if r.get("status") == "resting"}
+            # force_stop only, never ensure_stopped: cmd_force_stop runs the
+            # ForceStop action, which ledgers action: "force_stop", so an
+            # ensure_stopped row from a force-stop cannot exist.
             for r in _ok_outcomes(rows, "force_stop"):
                 episode_id = r.get("episode_id")
                 if episode_id in rested:
