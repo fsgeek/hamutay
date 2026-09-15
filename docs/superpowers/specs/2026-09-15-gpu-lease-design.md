@@ -262,11 +262,16 @@ from the ledger and emits nothing unless the edge changes.
 
 ### 2. `deploy/ayllu-gpu` — the holder's command
 
-Bash + jq + flock for everything except `force-stop`, which delegates to
-`uv run --project <hamutay root> python -m hamutay.gpu_lease force-stop`
-(the root is the parent of the `community/` directory named in
-`4090.door`) because it must append a heartbeat record in the store's
-exact format.
+One implementation, in Python (`src/hamutay/gpu_lease/`), so the action
+state machine, the lease validation, and the ledger format exist exactly
+once (planning decision 9-15, replacing r1–r7's "bash + jq": two readers
+of one state machine was the consistency risk round one named).
+`deploy/ayllu-gpu` is a shim: it resolves the hamutay root from
+`$HAMUTAY_ROOT`, else from `4090.door` (the parent of the `community/`
+directory), and execs `uv run --project <root> python -m hamutay.gpu_lease
+"$@"`. Yupi already runs under uv; the first cold `uv run` can take
+minutes (memory: cold start, not latency), which is why `run` leases
+only after the interpreter is up.
 
 ```
 ayllu-gpu run   --holder NAME --purpose "..." [--ttl 6h] [--expected-until ISO]
