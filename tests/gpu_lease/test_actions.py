@@ -3,6 +3,7 @@ import pytest
 from hamutay.gpu_lease import ledger
 from hamutay.gpu_lease.actions import Action, Ctx, run, resolve_dangling
 from hamutay.gpu_lease.state import locked
+from conftest import StubbornSystemd
 
 NOW = datetime(2026, 9, 20, 15, 0, tzinfo=timezone.utc)
 
@@ -394,3 +395,21 @@ def test_a_second_indeterminate_does_not_stack_a_second_quarantine(p, sd):
     assert len(done) == 1 and read_quarantine(p)["cause_action_id"] == first["action_id"]
     with locked(p):
         assert resolve_dangling(ctx(p, sd), REGISTRY) == []
+
+
+# --- I8: release --force must not publish FREE over a scope that will not die ---
+
+def test_release_force_quarantines_an_unkillable_scope_and_keeps_the_originals(p, sd):
+    act, _ = _lease(p, sd)
+    scope = read_lease(p, NOW).data["scope_unit"]
+    stubborn = StubbornSystemd(scope)
+    with locked(p):
+        out = run(ctx(p, stubborn), ReleaseForce("tony", "stuck"), REGISTRY)
+    assert out["outcome"] != "ok"
+    assert "unkillable" in out["detail"]["error"]
+    # the originals stay exactly where they were: nothing is published as FREE
+    assert p.lease.exists() and read_lease(p, NOW).data["lease_id"] == act.lease_id
+    assert list_tombstones(p) == [scope]
+    q = read_quarantine(p)
+    assert q is not None and q["reason"] == "scope_unkillable"
+    assert is_free(ctx(p, stubborn))[0] is False

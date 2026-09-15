@@ -55,3 +55,20 @@ def test_force_stop_refuses_while_heartbeat_holds_lock(p, sd, tmp_path, capsys):
     order = [c[0] for c in sd.calls if c[0] == "stop"]
     assert order == ["stop"]
     assert any(r["action"] == "force_stop" and r.get("outcome") == "ok" for r in ledger.rows(p))
+
+
+def test_release_force_exits_2_and_says_why_when_the_scope_will_not_die(p, sd, capsys):
+    from hamutay.gpu_lease.actions import Lease, REGISTRY, run as run_action, Ctx
+    from hamutay.gpu_lease.state import locked, read_lease, read_quarantine
+    from conftest import StubbornSystemd
+    from datetime import datetime, timezone
+    NOW = datetime(2026, 9, 20, 15, 0, tzinfo=timezone.utc)
+    from datetime import timedelta
+    with locked(p):
+        run_action(Ctx(p, sd, now=lambda: NOW, by="t"), Lease("yupi", "t", timedelta(hours=1), None), REGISTRY)
+    scope = read_lease(p, NOW).data["scope_unit"]
+    rc = cli.main(["release", "--force", "--by", "tony", "--reason", "stuck"],
+                  systemd=StubbornSystemd(scope), now=lambda: NOW)
+    assert rc == 2
+    assert "refused" in capsys.readouterr().err
+    assert p.lease.exists() and read_quarantine(p)["reason"] == "scope_unkillable"

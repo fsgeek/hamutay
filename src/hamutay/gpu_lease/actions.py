@@ -554,7 +554,15 @@ class ReleaseForce(Action):
 
     def perform(self, ctx):
         for scope in list_tombstones(ctx.paths):
-            run(ctx, WorkloadKilled(scope))
+            out = run(ctx, WorkloadKilled(scope))
+            if out["outcome"] != "ok":
+                # A scope that will not die still owns the GPU. Clearing the
+                # lease and quarantine now would publish the resource as FREE
+                # while a foreign workload holds it. Fence it instead and leave
+                # the originals exactly where they are; the operator gets a
+                # non-zero exit and a quarantine naming the scope.
+                quarantine_if_indeterminate(ctx, out, reason="scope_unkillable")
+                raise NotFree("scope unkillable; originals left in place")
         for name in self.originals:
             orig = getattr(ctx.paths, name)
             if orig.exists():

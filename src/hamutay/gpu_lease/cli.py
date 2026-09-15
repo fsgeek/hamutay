@@ -41,6 +41,9 @@ def cmd_release(a, ctx):
     with locked(ctx.paths):
         if a.force:
             out = run(_ctx(ctx.paths, ctx.systemd, ctx.now, by=a.by), ReleaseForce(a.by, a.reason), REGISTRY)
+            if out["outcome"] != "ok":
+                print(f"release --force refused: {out['detail'].get('error', out['outcome'])}",
+                      file=sys.stderr)
         else:
             view = read_lease(ctx.paths, ctx.now())
             if view.data is None or view.data["lease_id"] != a.lease_id:
