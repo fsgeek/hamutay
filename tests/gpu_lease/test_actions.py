@@ -296,3 +296,57 @@ def test_dangling_workload_killed_reconciles_to_indeterminate_when_show_fails(p,
     with locked(p):
         done = resolve_dangling(ctx(p, sd), REGISTRY)
     assert done[0]["outcome"] == "indeterminate" and done[0]["detail"]["error"]
+
+
+# --- I5: an indeterminate outcome is a dangling condition, fenced by resolve_dangling ---
+
+def test_resolve_dangling_quarantines_an_unfenced_indeterminate(p, sd):
+    """A crash between the indeterminate outcome and its quarantine_enter leaves
+    the resource unfenced. resolve_dangling finds the row and fences it."""
+    sd.fail_show = True
+    with locked(p):
+        out = run(ctx(p, sd), ServerStart(), REGISTRY)
+    assert out["outcome"] == "indeterminate"
+    assert read_quarantine(p) is None          # nobody quarantined it
+    sd.fail_show = False
+    with locked(p):
+        done = resolve_dangling(ctx(p, sd), REGISTRY)
+    q = read_quarantine(p)
+    assert q is not None and q["cause_action_id"] == out["action_id"]
+    assert [d["action"] for d in done] == ["quarantine_enter"]
+    # a second pass appends nothing: the resource is already fenced
+    rows_before = len(ledger.rows(p))
+    with locked(p):
+        again = resolve_dangling(ctx(p, sd), REGISTRY)
+    assert again == [] and len(ledger.rows(p)) == rows_before
+    assert read_quarantine(p)["quarantine_id"] == q["quarantine_id"]
+
+
+def test_an_indeterminate_already_named_by_a_quarantine_is_not_refenced(p, sd):
+    sd.fail_show = True
+    with locked(p):
+        out = run(ctx(p, sd), ServerStart(), REGISTRY)
+        quarantine_if_indeterminate(ctx(p, sd), out)
+    sd.fail_show = False
+    q_before = read_quarantine(p)
+    rows_before = len(ledger.rows(p))
+    with locked(p):
+        done = resolve_dangling(ctx(p, sd), REGISTRY)
+    assert done == [] and len(ledger.rows(p)) == rows_before
+    assert read_quarantine(p) == q_before
+
+
+def test_a_second_indeterminate_does_not_stack_a_second_quarantine(p, sd):
+    """Only one quarantine file can exist; the first fence is the one that
+    counts. A later unfenced indeterminate is skipped, not stacked."""
+    sd.fail_show = True
+    with locked(p):
+        first = run(ctx(p, sd), ServerStart(), REGISTRY)
+        second = run(ctx(p, sd), EnsureStopped("ep"))
+    assert first["outcome"] == second["outcome"] == "indeterminate"
+    sd.fail_show = False
+    with locked(p):
+        done = resolve_dangling(ctx(p, sd), REGISTRY)
+    assert len(done) == 1 and read_quarantine(p)["cause_action_id"] == first["action_id"]
+    with locked(p):
+        assert resolve_dangling(ctx(p, sd), REGISTRY) == []

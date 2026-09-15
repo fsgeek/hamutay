@@ -140,7 +140,46 @@ def resolve_dangling(ctx: Ctx, registry: dict[str, Callable[[dict], Action]]) ->
             error = f"{type(e).__name__}: {e}"
         done.append(_finish(ctx, action, intent["action_id"], reconciled=True,
                             error=error, observation_failed=observation_failed))
+    done.extend(_quarantine_unfenced_indeterminates(ctx))
     return done
+
+
+def _quarantine_unfenced_indeterminates(ctx: Ctx) -> list[dict]:
+    """An `indeterminate` outcome is a dangling *condition*, not a dangling intent.
+
+    The action finished writing its rows, but nobody knows what it did to the
+    resource. The spec's rule: such a row is resolved only once a
+    `quarantine_enter` names it as `cause_action_id`. A crash between the
+    indeterminate outcome and that quarantine leaves the resource unfenced, so
+    scan for them here and fence each one.
+
+    Only one quarantine file can exist. If one is already present, the resource
+    is already fenced and nothing more is appended: stacking a second
+    quarantine would only give the operator a second thing to clear by hand
+    (the first `release --force` frees the resource either way). So an
+    indeterminate row whose cause is not the quarantine on disk is skipped, not
+    quarantined again — the fence is what matters, not whose name is on it.
+    """
+    rows = ledger.rows(ctx.paths)
+    fenced = {r.get("cause_action_id") for r in rows
+              if r.get("phase") == "intent" and r.get("action") == "quarantine_enter"}
+    try:
+        already = read_quarantine(ctx.paths) is not None
+    except MalformedState:
+        already = True          # unreadable is still a fence; the gate quarantines it
+    out = []
+    for row in rows:
+        if row.get("phase") != "outcome" or row.get("outcome") != "indeterminate":
+            continue
+        if row.get("action_id") in fenced:
+            continue
+        if already:
+            continue
+        res = quarantine_if_indeterminate(ctx, row)
+        if res is not None:
+            out.append(res)
+            already = True      # the file now exists; later rows are fenced by it
+    return out
 
 
 # --- Concrete actions --------------------------------------------------
