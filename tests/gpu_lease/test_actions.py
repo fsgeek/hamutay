@@ -145,9 +145,50 @@ def test_same_holder_lease_renews(p, sd):
     assert v["purpose"] == "test" and v["mutation_id"] == out["action_id"]
 
 def test_renew_reconciles_by_mutation_id(p, sd):
-    # action_id must be uuid4-shaped: mutation_id round-trips through validate_lease,
-    # which requires it (state.py's _is_uuid), same as every real action_id from run().
+    """A renew whose write LANDED before the crash reconciles to ok: the
+    predicate (mutation_id == this action_id) already holds, so the reconciler
+    only has to read it. This is the evaluation-only path succeeding."""
     renew_action_id = "11111111-1111-4111-8111-111111111111"
+    act, _ = _lease(p, sd)
+    before = read_lease(p, NOW).data
+    ledger.append(p, {"action_id": renew_action_id, "phase": "intent", "action": "renew", "by": "crashed",
+                      "at": NOW.isoformat(), "lease_id": act.lease_id, "ttl": "1h",
+                      "generation_before": before["generation"]})
+    # the write landed: the lease already carries this mutation_id
+    with locked(p):
+        run(ctx(p, sd), Renew(act.lease_id, timedelta(hours=1)))
+    landed = dict(read_lease(p, NOW).data)
+    landed["mutation_id"] = renew_action_id
+    from hamutay.gpu_lease.state import write_atomic
+    write_atomic(p.lease, landed)
+    with locked(p):
+        done = resolve_dangling(ctx(p, sd), REGISTRY)
+    after = read_lease(p, NOW).data
+    assert done[0]["outcome"] == "ok" and after["mutation_id"] == renew_action_id
+
+
+# --- I6: lease and renew reconcile by evaluation only ---
+
+def test_dangling_lease_reconciles_to_not_performed_and_writes_no_lease(p, sd):
+    """A grant to a dead caller is never owed: the reconciler evaluates the
+    predicate and records not_performed rather than handing the GPU to a
+    process that is no longer there to use or release it."""
+    lease_action_id = "33333333-3333-4333-8333-333333333333"
+    lease_id = "44444444-4444-4444-8444-444444444444"
+    ledger.append(p, {"action_id": lease_action_id, "phase": "intent", "action": "lease", "by": "crashed",
+                      "at": NOW.isoformat(), "holder": "yupi", "purpose": "t", "ttl_seconds": 3600,
+                      "lease_id": lease_id, "scope_unit": f"ayllu-gpu-{lease_id}.scope",
+                      "generation_before": 0, "episode_id": lease_id, "expected_until": None})
+    with locked(p):
+        done = resolve_dangling(ctx(p, sd), REGISTRY)
+    assert done[0]["outcome"] == "not_performed" and done[0]["reconciled"] is True
+    assert read_lease(p, NOW).kind == "absent"
+    assert list_tombstones(p) == []
+    assert is_free(ctx(p, sd))[0] is True
+
+
+def test_dangling_renew_whose_write_never_landed_reconciles_to_not_performed(p, sd):
+    renew_action_id = "55555555-5555-4555-8555-555555555555"
     act, _ = _lease(p, sd)
     before = read_lease(p, NOW).data
     ledger.append(p, {"action_id": renew_action_id, "phase": "intent", "action": "renew", "by": "crashed",
@@ -156,7 +197,10 @@ def test_renew_reconciles_by_mutation_id(p, sd):
     with locked(p):
         done = resolve_dangling(ctx(p, sd), REGISTRY)
     after = read_lease(p, NOW).data
-    assert done[0]["outcome"] == "ok" and after["mutation_id"] == renew_action_id and after["generation"] == 2
+    assert done[0]["outcome"] == "not_performed"
+    # the old mutation_id and generation survive untouched
+    assert after["mutation_id"] == before["mutation_id"] and after["generation"] == before["generation"]
+    assert after["expires_at"] == before["expires_at"]
 
 def test_release_kills_scope_and_removes_tombstone_and_lease(p, sd):
     act, _ = _lease(p, sd)

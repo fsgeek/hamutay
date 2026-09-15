@@ -223,7 +223,14 @@ The reconciler for a dangling intent evaluates the predicate; if it is
 not met, it performs the side effects it can prove are still owed (in
 the same order), re-observes, and then writes the outcome
 (`reconciled: true`) on the original `action_id`: `ok` if the predicate
-now holds, else `indeterminate`. An `indeterminate` outcome is followed,
+now holds, else `not_performed` or `indeterminate`. Two actions are the
+exception: `lease` and `renew` reconcile by **evaluation only** (amended
+2026-09-15). Their side effect is a grant to the caller, not an
+obligation to the resource, and the caller that wrote the intent is
+dead — so the reconciler evaluates the predicate and records `ok` (the
+write landed before the crash) or `not_performed` (it did not), and
+never performs. Performing would hand the GPU to a process that is no
+longer there to use it or release it. An `indeterminate` outcome is followed,
 by the same lock holder, by `quarantine_enter` with `cause_action_id`; a
 crash between the two leaves an `indeterminate` outcome with no
 `quarantine_enter` intent naming it, which the next lock holder resolves
@@ -231,8 +238,8 @@ first, before anything else.
 
 | action | side effects, in order | completion predicate |
 |---|---|---|
-| lease | (precondition: FREE, after `workload_killed` for any tombstone) write lease file (`mutation_id = action_id`); write tombstone for `scope_unit` | lease present with that `mutation_id` **and** tombstone present |
-| renew | rewrite lease file (`mutation_id = action_id`, `generation + 1`) | lease present with that `mutation_id` |
+| lease | (precondition: FREE, after `workload_killed` for any tombstone) write lease file (`mutation_id = action_id`); write tombstone for `scope_unit` | lease present with that `mutation_id` **and** tombstone present<br>*reconcile: evaluation only — a grant to a dead caller is never owed* |
+| renew | rewrite lease file (`mutation_id = action_id`, `generation + 1`) | lease present with that `mutation_id`<br>*reconcile: evaluation only — a grant to a dead caller is never owed* |
 | release | observe scope; stop if alive; remove tombstone; remove lease file | scope dead; tombstone absent; lease absent or `generation` > `generation_before` |
 | expire | as release | as release |
 | release_force | as defined under `4090.lease`/quarantine above | as defined there |
@@ -484,10 +491,13 @@ appends the second budget segment.
 `4090.lock`, resolve dangling intents; close substrate episodes that
 ended while down (`waking/substrate_returning`, `created_at` from the
 ledger's release/expire/release_force outcome, else boot time, with
-`closed_at_source`); reconstruct rest records for any ok `force_stop` or
-`ensure_stopped` by `force_stop` whose `episode_id` has none (the Python
-`force-stop` writes the record itself, so this covers only a crash between
-its record and its outcome); hydrate `_last_transition`; read the latest
+`closed_at_source`); reconstruct rest records for any ok `force_stop`
+whose `episode_id` has none (the Python `force-stop` writes the record
+itself, so this covers only a crash between its record and its outcome).
+`force_stop` only: `cmd_force_stop` ledgers the `ForceStop` action by that
+name, so a rest-less stop can never arrive under the `ensure_stopped` name
+— matching on it too would be matching on a row that cannot occur
+(amended 2026-09-15, implementation ruling); hydrate `_last_transition`; read the latest
 readiness observation for the current `InvocationID`.
 
 **Context ceiling (Codex r3 S2, r4 S1).**
@@ -532,7 +542,7 @@ record carries a declared holder and purpose, pending events remain
 pending, and affected wakes receive an operational note."
 
 Deployment: `deploy/ayllu-gpu`, `deploy/migrate-gpu-lease.sh`,
-`deploy/check-gpu-lease.sh`, `src/hamutay/gpu_lease.py` (the Python side:
+`deploy/check-gpu-lease.sh`, `src/hamutay/gpu_lease/` (a package — the Python side:
 reader/writer, gate, force-stop), edited units, `community/qwen/door.json`,
 operations lines in `community/README.md`.
 
@@ -649,7 +659,7 @@ launches after expiry; `systemd-run --scope` synchronous; short-TTL
 schedule): adopted — supervision from acquisition, `wait` validates the
 live lease under the lock, launch under the lock after scope
 registration, background `systemd-run` child reaped by the wrapper,
-absolute 3-minute margin, 10-minute minimum TTL for `run`. B3
+absolute 3-minute margin, 15-minute minimum TTL for `run` (raised in r6). B3
 (quarantine entry without an action; `release_force` reconciliation):
 adopted — `quarantine_enter` is an action with `cause_action_id`;
 `release_force` is a two-file clear with exact reconciliation; generation
@@ -697,3 +707,28 @@ gitignored migration artifact. M1 (scheduler assertion): adopted —
 removed. No round seven: every round-six finding was a consistency
 defect resolvable in text, which is the stopping rule the custodian set
 before round six ran.
+
+## Implementation notes (2026-09-15)
+
+Decisions taken while building this spec that the text above does not
+otherwise record:
+
+- **Python + shim.** One implementation of the state machine, in
+  `src/hamutay/gpu_lease/`; `deploy/ayllu-gpu` is a shim that resolves the
+  root and execs `uv run --project <root> python -m hamutay.gpu_lease`.
+- **`door.json` is the sole binding.** A door joins the lease by carrying
+  `{"gpu_lease": "4090"}` in its `door.json`; there is no environment
+  variable, and the drop-in sets none.
+- **Flags added for testability and operations.** `--unit-paths` (read-only
+  discovery of every directory systemd resolves user units from, defaulting
+  to `systemd-analyze --user unit-paths`), `--journalctl` and `--no-commit`
+  on the deploy scripts, and `--root` on the migration, so the whole runbook
+  can be exercised without touching a real systemd user instance.
+- **Evaluation-only reconciliation for `lease` and `renew`** — see the
+  action table and the flat-actions paragraph above.
+- **WorkingDirectory assertion.** `deploy/migrate-gpu-lease.sh` refuses to
+  run unless `$ROOT` equals `hamutay-heartbeat@qwen`'s own
+  `WorkingDirectory`: the door file it writes points the live heartbeat at
+  that tree, so migrating from a worktree would aim it at a tree systemd
+  never launches from. An empty property (fake systemctl, unknown unit) is
+  noted and skipped so `--dry-run` rehearsals still work.

@@ -25,6 +25,10 @@ class Action:
     action_id: str = ""
     intent_fields: dict
     extra_detail: dict | None = None
+    # Reconciliation contract. Most actions owe their side effect to the
+    # resource regardless of who asked, so resolve_dangling performs it.
+    # A few are owed to the *caller* instead; see resolve_dangling.
+    reconcile_by_evaluation_only: bool = False
 
     def intent(self, ctx: Ctx) -> dict: return {}
     def perform(self, ctx: Ctx) -> None: ...
@@ -130,7 +134,11 @@ def resolve_dangling(ctx: Ctx, registry: dict[str, Callable[[dict], Action]]) ->
         error = None
         observation_failed = None
         try:
-            if not action.predicate(ctx):
+            # Evaluation-only actions (lease, renew) are grants to a caller, not
+            # obligations to the resource: the caller that wrote this intent is
+            # dead, and a grant to a dead caller is never owed. Evaluate the
+            # predicate and record ok/not_performed; never perform.
+            if not action.predicate(ctx) and not action.reconcile_by_evaluation_only:
                 action.perform(ctx)
         except (SystemdUnavailable, MalformedState, OSError) as e:
             # Same rule as run(): an observation failure during reconciliation is
@@ -306,6 +314,7 @@ def quarantine_if_indeterminate(ctx: Ctx, outcome_row: dict, reason="indetermina
 
 class Lease(Action):
     name = "lease"
+    reconcile_by_evaluation_only = True
 
     def __init__(self, holder, purpose, ttl: timedelta, expected_until):
         self.holder, self.purpose, self.ttl, self.expected_until = holder, purpose, ttl, expected_until
@@ -362,6 +371,7 @@ def _lease_builder(row):
 
 class Renew(Action):
     name = "renew"
+    reconcile_by_evaluation_only = True
 
     def __init__(self, lease_id, ttl: timedelta):
         self.lease_id, self.ttl = lease_id, ttl
