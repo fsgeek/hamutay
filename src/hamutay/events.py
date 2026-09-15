@@ -965,14 +965,25 @@ def _parse_iso_utc(value) -> datetime | None:
     return parsed.astimezone(timezone.utc)
 
 
+def _rest_episode_key(detail: dict) -> object:
+    """The identity a 'resting' record's continuation is grouped by.
+
+    Substrate (GPU lease) rests carry detail.episode_id; budget rests carry
+    detail.day. A later 'resting' record with the same key continues the
+    episode, generalising the original same-day budget rule.
+    """
+    return detail.get("episode_id") or detail.get("day")
+
+
 def _rest_episodes(statuses: list[dict], now: datetime) -> list[dict]:
     """Rest episodes from heartbeat_status records, in order.
 
-    A 'resting' record starts an episode. Later 'resting' records for the
-    same day (a restart's continuation), and the 'waking' boot record that
-    precedes such a continuation, belong to it. The episode ends at the
-    first status that is none of those; an episode with no such status is
-    open, and carries end=None.
+    A 'resting' record starts an episode. Later 'resting' records with the
+    same key (detail.episode_id, or detail.day for budget rests — a
+    restart's continuation), and the 'waking' boot record that precedes
+    such a continuation, belong to it. The episode ends at the first status
+    that is none of those; an episode with no such status is open, and
+    carries end=None (and closing_index=None).
     """
     episodes: list[dict] = []
     i = 0
@@ -985,30 +996,91 @@ def _rest_episodes(statuses: list[dict], now: datetime) -> list[dict]:
         if start is None:
             i += 1
             continue
-        day = (record.get("detail") or {}).get("day")
+        detail = record.get("detail") or {}
+        key = _rest_episode_key(detail)
         j = i + 1
         end = None
+        closing_index = None
         while j < len(statuses):
             nxt = statuses[j]
-            same_day_rest = (
+            same_rest = (
                 nxt.get("status") == "resting"
-                and (nxt.get("detail") or {}).get("day") == day
+                and _rest_episode_key(nxt.get("detail") or {}) == key
             )
             boot_before_rest = (
                 nxt.get("status") == "waking"
                 and j + 1 < len(statuses)
                 and statuses[j + 1].get("status") == "resting"
-                and (statuses[j + 1].get("detail") or {}).get("day") == day
+                and _rest_episode_key(statuses[j + 1].get("detail") or {}) == key
             )
-            if same_day_rest or boot_before_rest:
+            if same_rest or boot_before_rest:
                 j += 1
                 continue
             end = _parse_iso_utc(nxt.get("created_at"))
+            closing_index = j
             break
-        episodes.append({"start": start, "end": end, "detail": record.get("detail") or {},
-                         "reason": record.get("reason") or "rest"})
+        episodes.append({
+            "start": start,
+            "end": end,
+            "detail": detail,
+            "reason": record.get("reason") or "rest",
+            "episode_id": detail.get("episode_id"),
+            "closing_index": closing_index,
+        })
         i = j if j > i else i + 1
     return episodes
+
+
+_SUBSTRATE_REASONS = {"substrate_lent", "substrate_lease_unreadable"}
+
+
+def _find_record_index(records: list[dict], target: dict) -> int | None:
+    """The index of `target` within `records`, matched by identity where
+    possible.
+
+    Real heartbeat_status records carry a unique heartbeat_record_id;
+    prefer that so two value-equal records (e.g. in tests) never collide.
+    Falls back to object identity, then value equality, for records that
+    lack it.
+    """
+    record_id = target.get("heartbeat_record_id")
+    if record_id is not None:
+        for i, r in enumerate(records):
+            if r.get("heartbeat_record_id") == record_id:
+                return i
+        return None
+    for i, r in enumerate(records):
+        if r is target:
+            return i
+    for i, r in enumerate(records):
+        if r == target:
+            return i
+    return None
+
+
+def _rest_episode_because(episode: dict) -> str:
+    """The clause explaining why the heartbeat rested for this episode."""
+    reason, detail = episode["reason"], episode["detail"]
+    if reason == "substrate_lent":
+        return (
+            f'GPU allocated to another workload; lease record: holder '
+            f'"{detail.get("holder")}", purpose "{detail.get("purpose")}"'
+        )
+    if reason == "substrate_lease_unreadable":
+        return f"GPU lease state unreadable; quarantine {detail.get('episode_id')}"
+    why = []
+    cost, daily_usd = detail.get("cost_usd"), detail.get("daily_usd")
+    if isinstance(cost, (int, float)) and isinstance(daily_usd, (int, float)):
+        bound = " (lower bound)" if detail.get("cost_is_lower_bound") else ""
+        why.append(f"cost {cost:.2f}{bound} of {daily_usd:.2f} USD")
+    if detail.get("wakes") is not None:
+        why.append(f"{detail['wakes']} wakes")
+    if detail.get("unmeasured_wakes") is not None:
+        why.append(f"{detail['unmeasured_wakes']} unmeasured")
+    because = str(reason).replace("_", " ")
+    if why:
+        because += ": " + ", ".join(why)
+    return because
 
 
 def operational_notes_for_event(
@@ -1016,38 +1088,42 @@ def operational_notes_for_event(
 ) -> list[str]:
     """Facts about the world the resident is owed when a wake runs an event.
 
-    One note per rest episode whose interval intersects the event's pending
-    interval (created_at up to now, the moment this wake claims it). The
-    wait reported is the overlap, not total queue age. An episode still
-    open is reported as resting-since with no invented end.
+    Rule (a): one note per rest episode whose interval intersects the
+    event's pending interval (created_at up to now, the moment this wake
+    claims it). The wait reported is the overlap, not total queue age. An
+    episode still open is reported as resting-since with no invented end.
+
+    Rule (b): for a closed substrate (GPU lease) episode that produced no
+    rule-(a) note in this envelope, the first event claimed after the loan
+    closed is told about it once — at-least-once: a failed/crashed claim
+    leaves the note in place for the retry.
     """
     created = _parse_iso_utc(event.get("created_at"))
     if created is None:
         return []
     now = now.astimezone(timezone.utc) if now.tzinfo else now.replace(tzinfo=timezone.utc)
     statuses = [r for r in records if r.get("record_type") == "heartbeat_status"]
+    episodes = _rest_episodes(statuses, now)
     notes: list[str] = []
-    for episode in _rest_episodes(statuses, now):
-        start, end, detail = episode["start"], episode["end"], episode["detail"]
+    told: set[object] = set()
+    for episode in episodes:
+        start, end = episode["start"], episode["end"]
         effective_end = end if end is not None else now
         if created >= effective_end or start >= now:
             continue
-        why = []
-        cost, daily_usd = detail.get("cost_usd"), detail.get("daily_usd")
-        if isinstance(cost, (int, float)) and isinstance(daily_usd, (int, float)):
-            bound = " (lower bound)" if detail.get("cost_is_lower_bound") else ""
-            why.append(f"cost {cost:.2f}{bound} of {daily_usd:.2f} USD")
-        if detail.get("wakes") is not None:
-            why.append(f"{detail['wakes']} wakes")
-        if detail.get("unmeasured_wakes") is not None:
-            why.append(f"{detail['unmeasured_wakes']} unmeasured")
-        because = str(episode["reason"]).replace("_", " ")
-        if why:
-            because += ": " + ", ".join(why)
+        because = _rest_episode_because(episode)
         waited = _format_wait((effective_end - max(created, start)).total_seconds())
         if end is None:
+            extra = []
+            if episode["detail"].get("expires_at"):
+                extra.append(f"the lease expires at {episode['detail']['expires_at']}")
+            if episode["detail"].get("expected_until"):
+                extra.append(
+                    f"the holder's estimate of return is {episode['detail']['expected_until']}"
+                )
+            clause = because if not extra else because + "; " + "; ".join(extra)
             notes.append(
-                f"heartbeat has been resting since {start.isoformat()} ({because}); "
+                f"heartbeat has been resting since {start.isoformat()} ({clause}); "
                 f"this event has waited {waited} of it."
             )
         else:
@@ -1055,6 +1131,30 @@ def operational_notes_for_event(
                 f"heartbeat rested from {start.isoformat()} to {end.isoformat()} "
                 f"({because}); this event waited {waited} of it."
             )
+        if episode.get("episode_id"):
+            told.add(episode["episode_id"])
+    for episode in episodes:
+        if episode["reason"] not in _SUBSTRATE_REASONS:
+            continue
+        if episode["end"] is None or episode.get("closing_index") is None:
+            continue
+        episode_id = episode.get("episode_id")
+        if episode_id in told:
+            continue
+        closing = statuses[episode["closing_index"]]
+        idx = _find_record_index(records, closing)
+        if idx is None:
+            continue
+        if any(
+            r.get("record_type") == "event_status" and r.get("status") == "completed"
+            for r in records[idx + 1 :]
+        ):
+            continue
+        because = _rest_episode_because(episode)
+        notes.append(
+            f"Before this event existed, the heartbeat rested from "
+            f"{episode['start'].isoformat()} to {episode['end'].isoformat()} ({because})."
+        )
     declaration = quiet_declaration_for_latest_wake(records)
     if declaration is not None:
         # The quiet began when the declaring wake completed, not when the
