@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from conftest import write_json
+from .conftest import write_json
 
 
 ROOT = Path(__file__).resolve().parents[2]

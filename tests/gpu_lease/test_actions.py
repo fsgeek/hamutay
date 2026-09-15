@@ -3,7 +3,7 @@ import pytest
 from hamutay.gpu_lease import ledger
 from hamutay.gpu_lease.actions import Action, Ctx, run, resolve_dangling
 from hamutay.gpu_lease.state import locked
-from conftest import StubbornSystemd
+from .conftest import StubbornSystemd
 
 NOW = datetime(2026, 9, 20, 15, 0, tzinfo=timezone.utc)
 

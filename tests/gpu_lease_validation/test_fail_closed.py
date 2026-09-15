@@ -17,7 +17,7 @@ from hamutay.gpu_lease.cli import main
 from hamutay.gpu_lease.ledger import rows
 from hamutay.gpu_lease.state import locked
 
-from conftest import SERVER, lease_object, write_json
+from .conftest import SERVER, lease_object, write_json
 
 
 def _outcomes(p, action):

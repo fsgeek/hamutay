@@ -9,7 +9,7 @@ import pytest
 
 from hamutay.gpu_lease.gate import LeaseGate
 
-from conftest import append_jsonl, lease_object, write_json
+from .conftest import append_jsonl, lease_object, write_json
 
 
 def _pending(event_id, at):

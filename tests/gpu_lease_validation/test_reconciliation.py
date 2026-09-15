@@ -20,7 +20,7 @@ from hamutay.gpu_lease.actions import (
 from hamutay.gpu_lease.ledger import append, rows
 from hamutay.gpu_lease.state import locked, write_atomic
 
-from conftest import SERVER, lease_object, write_json
+from .conftest import SERVER, lease_object, write_json
 
 
 REGISTRY = dict(actions.REGISTRY)

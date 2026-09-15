@@ -20,7 +20,7 @@ from hamutay.gpu_lease.ledger import rows
 from hamutay.gpu_lease.run import supervise
 from hamutay.gpu_lease.state import locked
 
-from conftest import SERVER, append_jsonl, lease_object, read_jsonl, write_json
+from .conftest import SERVER, append_jsonl, lease_object, read_jsonl, write_json
 
 
 def _door(tmp_path, p, lease):

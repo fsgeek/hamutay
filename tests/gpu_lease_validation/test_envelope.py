@@ -2,7 +2,7 @@ import inspect
 import json
 from datetime import datetime, timedelta
 
-from conftest import append_jsonl
+from .conftest import append_jsonl
 
 
 def _status(event_id, status, at):

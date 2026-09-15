@@ -60,7 +60,7 @@ def test_force_stop_refuses_while_heartbeat_holds_lock(p, sd, tmp_path, capsys):
 def test_release_force_exits_2_and_says_why_when_the_scope_will_not_die(p, sd, capsys):
     from hamutay.gpu_lease.actions import Lease, REGISTRY, run as run_action, Ctx
     from hamutay.gpu_lease.state import locked, read_lease, read_quarantine
-    from conftest import StubbornSystemd
+    from .conftest import StubbornSystemd
     from datetime import datetime, timezone
     NOW = datetime(2026, 9, 20, 15, 0, tzinfo=timezone.utc)
     from datetime import timedelta
@@ -80,7 +80,7 @@ def test_release_force_refusal_prints_two_lines_no_traceback(p, sd, capsys):
     string) and must never leak the stored traceback."""
     from hamutay.gpu_lease.actions import Lease, REGISTRY, run as run_action, Ctx
     from hamutay.gpu_lease.state import locked, read_lease, read_quarantine
-    from conftest import StubbornSystemd
+    from .conftest import StubbornSystemd
     from datetime import datetime, timezone, timedelta
     NOW = datetime(2026, 9, 20, 15, 0, tzinfo=timezone.utc)
     with locked(p):
