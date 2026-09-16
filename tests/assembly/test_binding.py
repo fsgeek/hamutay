@@ -79,3 +79,15 @@ def test_bind_refuses_when_an_open_question_snapshot_differs(tmp_path):
                    tmp_path / "community/qwen/session.jsonl.events.jsonl",
                    open_snapshots=[snap])
     assert b is None and "frozen" in note
+
+
+def test_load_members_rejects_duplicate_paths(tmp_path):
+    dup = dict(FOUR)
+    dup["elder"] = {"session": FOUR["qwen"]["session"], "events": "community/elder/session.jsonl.events.jsonl"}
+    _write_members(tmp_path, dup)
+    with pytest.raises(MembersMalformed, match="session"):
+        load_members(tmp_path)
+    dup["elder"] = {"session": "community/elder/session.jsonl", "events": FOUR["qwen"]["events"]}
+    _write_members(tmp_path, dup)
+    with pytest.raises(MembersMalformed, match="events"):
+        load_members(tmp_path)

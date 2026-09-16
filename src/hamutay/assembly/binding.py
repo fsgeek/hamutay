@@ -59,6 +59,22 @@ def load_members(project_root: Path) -> MembersConfig | None:
             raise MembersMalformed(f"{path}: member {name!r} needs session and events")
         members[str(name)] = Member(str(name), _inside(project_root, spec["session"]),
                                     _inside(project_root, spec["events"]))
+
+    # Check for duplicate session or events paths across members
+    session_paths: dict[Path, str] = {}
+    events_paths: dict[Path, str] = {}
+    for name, member in members.items():
+        if member.session in session_paths:
+            raise MembersMalformed(
+                f"{path}: session path {member.session} is shared by members {session_paths[member.session]!r} and {name!r}"
+            )
+        session_paths[member.session] = name
+        if member.events in events_paths:
+            raise MembersMalformed(
+                f"{path}: events path {member.events} is shared by members {events_paths[member.events]!r} and {name!r}"
+            )
+        events_paths[member.events] = name
+
     return MembersConfig(ledger=_inside(project_root, raw["ledger"]), members=members)
 
 
