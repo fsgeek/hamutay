@@ -114,11 +114,16 @@ def test_soft_threshold_withdraws_perception_tools_and_says_so(tmp_path):
     first, second = backend.payloads
     assert "read" in _names(first) and "bash" in _names(first)
     assert _names(second) == sorted(["update_state", "schedule_event", "declare_quiet"])
-    # The resident is told, once, in a system message appended to the conversation.
-    notes = [m for m in second["messages"] if m["role"] == "system"
+    # The resident is told, once, in a USER message appended to the conversation.
+    # Found live 2026-09-16 (community/qwen c8, the first wake to reach 80%):
+    # Qwen's chat template raises "System message must be at the beginning"
+    # on any system-role message after the first, so a mid-conversation
+    # harness note must never carry the system role.
+    notes = [m for m in second["messages"] if m["role"] == "user"
              and "context" in m["content"].lower() and "withdrawn" in m["content"].lower()]
     assert len(notes) == 1
     assert "850" in notes[0]["content"] and "1000" in notes[0]["content"]
+    assert [i for i, m in enumerate(second["messages"]) if m["role"] == "system"] == [0]
     pressure = _events(executor, "budget_pressure")
     assert pressure and pressure[0]["action"] == "perception_tools_withdrawn"
     assert pressure[0]["context_limit"] == 1000

@@ -1791,8 +1791,12 @@ class OpenAITasteBackend:
             kept = sorted(
                 t.get("function", {}).get("name") for t in _state_tools()
             )
+            # A user-role message, not system: local chat templates (Qwen's,
+            # found live 2026-09-16 on community/qwen c8) reject a system
+            # message anywhere but first, and the note is not the substrate's
+            # voice anyway; it is the harness speaking in the resident's ear.
             conversation.append({
-                "role": "system",
+                "role": "user",
                 "content": (
                     "Operational note from the harness: this wake's context "
                     f"is at its budget ({reason}: the last request measured "
