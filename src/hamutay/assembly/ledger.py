@@ -35,9 +35,10 @@ class Ledger:
     def __init__(self, path: str | Path):
         self.path = Path(path)
         self.lock_path = self.path.with_suffix(self.path.suffix + ".lock")
+        # _good_end: byte offset after the last complete line, set by read_unlocked()
+        # torn_tail: incomplete final line (no trailing newline), set by read_unlocked()
         self.torn_tail: str | None = None
-        self._good_end: int | None = None   # byte offset after the last complete line
-        self._has_middle_error: bool = False   # True if there's a malformed non-final line
+        self._good_end: int | None = None
 
     @contextmanager
     def locked(self):
@@ -76,7 +77,6 @@ class Ledger:
 
     def read_unlocked(self) -> list[dict]:
         self.torn_tail = None
-        self._has_middle_error = False
         if not self.path.exists():
             self._good_end = 0
             return []
@@ -95,7 +95,6 @@ class Ledger:
                     self.torn_tail = raw.decode("utf-8", "replace")
                     self._good_end = offset
                     return records
-                self._has_middle_error = True
                 raise LedgerMalformed(f"{self.path}: bad line at byte {offset}")
             offset += len(raw) + 1
         self._good_end = len(data)
@@ -106,48 +105,7 @@ class Ledger:
             return self.read_unlocked()
 
     def next_seq_unlocked(self) -> int:
-        try:
-            records = self.read_unlocked()
-        except LedgerMalformed:
-            # Can't read due to malformed content; but we need the seq count
-            # Re-read carefully to extract good records; don't modify _good_end for middle errors
-            saved_good_end = self._good_end
-            saved_torn_tail = self.torn_tail
-            self.torn_tail = None
-            self._good_end = None
-
-            if not self.path.exists():
-                self._good_end = 0
-                return 1
-            data = self.path.read_bytes()
-            records: list[dict] = []
-            offset = 0
-            for i, raw in enumerate(data.split(b"\n")):
-                is_last = (i == data.count(b"\n"))
-                if not raw.strip():
-                    offset += len(raw) + 1
-                    continue
-                try:
-                    records.append(json.loads(raw))
-                except json.JSONDecodeError:
-                    if is_last and not data.endswith(b"\n"):
-                        self.torn_tail = raw.decode("utf-8", "replace")
-                        self._good_end = offset
-                    else:
-                        # Malformed middle line; keep old state, don't update _good_end
-                        self._good_end = saved_good_end
-                        self.torn_tail = saved_torn_tail
-                    break
-                offset += len(raw) + 1
-            else:
-                # No error, update _good_end
-                self._good_end = len(data)
-
-            if not records:
-                if self._good_end is None:
-                    self._good_end = 0
-                return 1
-            return (max((int(r.get("seq", 0)) for r in records), default=0)) + 1
+        records = self.read_unlocked()
         return (max((int(r.get("seq", 0)) for r in records), default=0)) + 1
 
     def append_unlocked(self, record: dict) -> dict:
@@ -158,18 +116,10 @@ class Ledger:
         record.setdefault("created_at", iso(datetime.now(timezone.utc)))
         line = (json.dumps(record, sort_keys=True, default=str) + "\n").encode("utf-8")
         self.path.parent.mkdir(parents=True, exist_ok=True)
-
-        # If there's a middle error, append to the end of file to preserve the error evidence
-        if self._has_middle_error:
-            start = len(self.path.read_bytes()) if self.path.exists() else 0
-        else:
-            start = self._good_end if self._good_end is not None else 0
-
+        start = self._good_end if self._good_end is not None else 0
         with self.path.open("r+b" if self.path.exists() else "wb") as f:
             f.seek(start)
-            # Truncate to remove torn tail (incomplete final line), but NOT if there's a middle error
-            if self.torn_tail is not None:
-                f.truncate()
+            f.truncate()              # drops a torn tail, if any
             f.write(line)
             f.flush()
             os.fsync(f.fileno())

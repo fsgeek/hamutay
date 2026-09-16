@@ -48,7 +48,15 @@ def test_read_raises_on_a_malformed_middle_line(ledger_path):
     led.append({"record_type": "testimony", "text": "x"})
     with ledger_path.open("a") as f:
         f.write("not json\n")
-    led.append({"record_type": "testimony", "text": "y"})
+    # append() should fail when there's a malformed middle line (fail-closed)
+    with pytest.raises(LedgerMalformed):
+        led.append({"record_type": "testimony", "text": "y"})
+    # file should still contain exactly the good line and the garbage line, no write
+    lines = ledger_path.read_text().splitlines()
+    assert len(lines) == 2
+    assert json.loads(lines[0])["seq"] == 1
+    assert lines[1] == "not json"
+    # read() should also raise
     with pytest.raises(LedgerMalformed):
         led.read()
 
