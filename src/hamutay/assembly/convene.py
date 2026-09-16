@@ -1,6 +1,7 @@
 """Convening (spec §3). One locked write path for the CLI and the tool."""
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 
 from .binding import MembersConfig
@@ -9,6 +10,17 @@ from .records import build_procedure, build_question, payload_sha256, reduce, sh
 
 MIN_CLOSES_IN = timedelta(hours=24)
 MAX_CLOSES_IN = timedelta(days=30)
+
+_CLOSES_IN_RE = re.compile(r"^([0-9]+)([mhd])$")
+
+
+def parse_closes_in(s: str) -> timedelta:
+    """A duration like 7d, 48h, 90m. Bounds are convene()'s (MIN_CLOSES_IN..MAX_CLOSES_IN), not this parser's."""
+    m = _CLOSES_IN_RE.match(str(s).strip())
+    if not m:
+        raise ValueError(f"closes_in must match ^[0-9]+[mhd]$, got {s!r}")
+    n, unit = int(m.group(1)), m.group(2)
+    return timedelta(**{{"m": "minutes", "h": "hours", "d": "days"}[unit]: n})
 
 
 class ConveneRefused(RuntimeError):

@@ -373,16 +373,15 @@ class ToolExecutor:
                 "stance": pos["stance"], "seq": pos["seq"]}
 
     def _convene(self, tool_input: dict) -> dict:
-        from hamutay.assembly.convene import ConveneRefused
+        from hamutay.assembly.convene import ConveneRefused, parse_closes_in
         from hamutay.assembly.ledger import LedgerMalformed, LedgerUnavailable
         from hamutay.assembly.position import record_convene
-        from hamutay.gpu_lease.state import parse_ttl
         why = self._assembly_ready()
         if why:
             return {"error": why}
         try:
             q = record_convene(self._assembly.ledger, binding=self._assembly, text=str(tool_input.get("text", "")),
-                               closes_in=parse_ttl(str(tool_input.get("closes_in", ""))),
+                               closes_in=parse_closes_in(str(tool_input.get("closes_in", ""))),
                                now=datetime.now(timezone.utc))
         except (ConveneRefused, LedgerUnavailable, LedgerMalformed, ValueError, TypeError) as e:
             return {"error": f"convene: {e}"}

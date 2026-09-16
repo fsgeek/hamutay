@@ -113,3 +113,12 @@ def test_outbox_cancels_a_stale_question_delivery_after_its_closing(house, monke
     store = EventStore(cfg.members["qwen"].events)
     ids = {r.get("event_id") for r in store.read_records()}
     assert q["delivery"]["qwen"]["event_id"] not in ids and closing_event_id(cid, "qwen") in ids
+
+
+def test_parse_closes_in_units_and_rejects_garbage():
+    from hamutay.assembly.convene import parse_closes_in
+    assert parse_closes_in("7d") == timedelta(days=7)
+    assert parse_closes_in("48h") == timedelta(hours=48)
+    assert parse_closes_in("90m") == timedelta(minutes=90)
+    with pytest.raises(ValueError):
+        parse_closes_in("7 days")

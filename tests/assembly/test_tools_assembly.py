@@ -6,7 +6,7 @@ import pytest
 
 from hamutay.assembly.binding import bind, load_members
 from hamutay.assembly.convene import convene
-from hamutay.assembly.ledger import Ledger, iso
+from hamutay.assembly.ledger import Ledger, iso, parse_instant
 from hamutay.assembly.position import PositionRefused, record_position
 from hamutay.assembly.records import reduce
 from hamutay.events import EventStore, WakeContext, build_inbound_event
@@ -101,9 +101,11 @@ def test_executor_convene_writes_a_question_for_the_door(house):
     root, led, cfg, binding, q = house
     ex = ToolExecutor(project_root=root, cycle=2, scheduled_by_record_id=uuid4(),
                       wake_context=_wake(), assembly=binding)
-    out = ex.execute("convene", {"text": "should we?", "closes_in": "3d"})
+    out = ex.execute("convene", {"text": "should we?", "closes_in": "7d"})
     assert out["convened"] is True
-    assert reduce(led.read()).open_lineage_for("door:qwen")["question_id"] == out["question_id"]
+    new_q = reduce(led.read()).open_lineage_for("door:qwen")
+    assert new_q["question_id"] == out["question_id"]
+    assert parse_instant(new_q["closes_at"]) - parse_instant(new_q["opened_at"]) == timedelta(days=7)
 
 
 def test_session_offers_the_tools_only_with_binding_and_wake_context(house):
