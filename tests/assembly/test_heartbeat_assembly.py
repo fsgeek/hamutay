@@ -1,5 +1,6 @@
 import json
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 
 from hamutay.assembly.binding import bind, load_members
 from hamutay.assembly.convene import convene
@@ -106,3 +107,44 @@ def test_main_binds_and_prints_the_note(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(hb, "bind", fake_bind)
     note = hb.resolve_assembly_binding(tmp_path, cfg.members["qwen"].session, cfg.members["qwen"].events)
     assert note[0] is None and note[1] == "assembly: test note" and seen["snaps"] == []
+
+
+def test_step_survives_a_raising_pass(tmp_path):
+    """A pass that raises (not just returns an error dict) must not kill step().
+
+    run_pass itself only catches LedgerMalformed/LedgerUnavailable; any other
+    exception has to be caught in _assembly_step, or a bug in the pass (or in
+    a test double standing in for it) would take the whole daemon down.
+    """
+    cfg, b = _house(tmp_path)
+    calls = []
+
+    def raising_pass(binding, *, now, actor, memo=None, open_store=None):
+        calls.append(1)
+        raise RuntimeError("boom")
+
+    store = EventStore(cfg.members["qwen"].events)
+    loop = HeartbeatLoop(_Stub(), store, poll_interval=1.0, sleep=lambda s: None,
+                         run_pending=lambda s, st, **kw: {"results": []},
+                         summarize=lambda records, now=None: {"pending_runnable_count": 0, "pending_waiting_count": 0},
+                         assembly=b, assembly_pass=raising_pass)
+    assert loop.step()["state"] == "quiet"
+    # The loop is not disabled by one failure: the next step calls the pass again.
+    assert loop.step()["state"] == "quiet"
+    assert calls == [1, 1]
+
+
+def test_summarize_for_falls_back_when_the_assembly_block_fails(tmp_path):
+    """A summarize callback must never let a broken assembly ledger kill the report."""
+    from hamutay.heartbeat import _summarize_for
+
+    cfg, b = _house(tmp_path)
+    # Corrupt the ledger after binding: a malformed line raises LedgerMalformed
+    # when read, which _assembly_view swallows (returns None), and
+    # summarize_event_log with assembly_view=None produces no "assembly" key.
+    Path(cfg.ledger).write_text("garbage\n")
+
+    summarize = _summarize_for(b)
+    result = summarize([], now=T0)
+    assert "assembly" not in result
+    assert result["pending_runnable_count"] == 0

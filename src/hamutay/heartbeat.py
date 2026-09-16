@@ -383,17 +383,32 @@ class HeartbeatLoop:
     def _assembly_step(self, now) -> None:
         """Run the assembly pass first, before the guard or the budget.
 
-        An unbound loop never calls the pass. A pass error is emitted but
-        never stops the step — the heartbeat's own wake handling still runs.
+        An unbound loop never calls the pass. A pass error — returned OR
+        raised — is emitted but never stops the step: the heartbeat's own
+        wake handling still runs, and the next step still calls the pass
+        again. `run_pass` itself only catches LedgerMalformed/
+        LedgerUnavailable, so any other exception (a bad memo shape, a bug
+        in a test double, ...) must be caught here — the daemon four
+        residents depend on cannot die because of this pass.
         """
         if self._assembly is None:
             return
-        result, self._assembly_memo = self._assembly_pass(
-            self._assembly,
-            now=now,
-            actor=f"heartbeat:{self._assembly.door}",
-            memo=self._assembly_memo,
-        )
+        try:
+            result, self._assembly_memo = self._assembly_pass(
+                self._assembly,
+                now=now,
+                actor=f"heartbeat:{self._assembly.door}",
+                memo=self._assembly_memo,
+            )
+        except Exception as e:
+            self._emit(
+                {
+                    "heartbeat": "assembly",
+                    "error": f"{type(e).__name__}: {e}",
+                    "at": now.isoformat(),
+                }
+            )
+            return
         if result.get("error") or result.get("closed") or result.get("activated") or result.get("outbox"):
             self._emit(
                 {
@@ -798,6 +813,52 @@ def resolve_assembly_binding(project_root, log_path, event_store_path):
     return bind(Path(project_root), Path(log_path), Path(event_store_path), open_snapshots=snaps)
 
 
+def _assembly_view(binding):
+    """The assembly's current View for `binding`, or None on any failure.
+
+    Read outside the lock; observational — a broken ledger here must never
+    stop the heartbeat's own reporting.
+    """
+    if binding is None:
+        return None
+    from hamutay.assembly.records import reduce
+
+    try:
+        return reduce(binding.ledger.read())
+    except Exception:
+        return None
+
+
+def _summarize_for(binding):
+    """A `summarize=` callable for HeartbeatLoop that never lets the
+    assembly block take the report down with it.
+
+    Tries `summarize_event_log` with the assembly view attached; if
+    building that block raises for any reason (a shape the reducer's View
+    doesn't actually have, a bug in a test double, ...), emits one
+    `{"heartbeat": "assembly", "error": ...}` line and falls back to the
+    plain summary, with no `"assembly"` key, rather than propagating.
+    """
+
+    def _summarize(records, now=None):
+        if binding is None:
+            return summarize_event_log(records, now=now)
+        try:
+            return summarize_event_log(
+                records,
+                now=now,
+                assembly_view=_assembly_view(binding),
+                door=binding.door,
+            )
+        except Exception as e:
+            HeartbeatLoop._emit(
+                {"heartbeat": "assembly", "error": f"{type(e).__name__}: {e}"}
+            )
+            return summarize_event_log(records, now=now)
+
+    return _summarize
+
+
 def _positive_context_limit(value) -> int | None:
     """The record's `context_limit` if it is a usable ceiling, else None.
 
@@ -1167,7 +1228,6 @@ def main() -> None:
     import os
     from pathlib import Path
 
-    from hamutay.assembly.records import reduce
     from hamutay.events import default_event_log_path
     from hamutay.taste_open import (
         AnthropicTasteBackend,
@@ -1344,14 +1404,6 @@ def main() -> None:
             "heartbeat": "launch",
             "note": f"gpu lease: {store.lease_binding} (door.json)",
         })
-    def _assembly_view(b):
-        if b is None:
-            return None
-        try:
-            return reduce(b.ledger.read())
-        except Exception:
-            return None
-
     loop = HeartbeatLoop(
         session,
         store,
@@ -1361,12 +1413,7 @@ def main() -> None:
         budget=budget,
         guard=guard,
         assembly=assembly_binding,
-        summarize=lambda records, now=None: summarize_event_log(
-            records,
-            now=now,
-            assembly_view=_assembly_view(assembly_binding),
-            door=assembly_binding.door if assembly_binding else None,
-        ),
+        summarize=_summarize_for(assembly_binding),
     )
     try:
         loop.run_forever()
