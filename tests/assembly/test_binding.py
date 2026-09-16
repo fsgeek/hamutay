@@ -73,12 +73,15 @@ def test_bind_malformed_is_fail_closed_with_a_note(tmp_path):
 
 def test_bind_refuses_when_an_open_question_snapshot_differs(tmp_path):
     _write_members(tmp_path, FOUR)
-    snap = {"qwen": {"session": str((tmp_path / "community/qwen/session.jsonl").resolve()),
+    # a complete member set, so this exercises the PATH freeze, not the member-set freeze
+    snap = {"heartbeat": {"session": str((tmp_path / "community/heartbeat/session.jsonl").resolve()),
+                          "events": str((tmp_path / "community/heartbeat/session.jsonl.events.jsonl").resolve())},
+            "qwen": {"session": str((tmp_path / "community/qwen/session.jsonl").resolve()),
                      "events": str((tmp_path / "OLD/events.jsonl").resolve())}}
     b, note = bind(tmp_path, tmp_path / "community/qwen/session.jsonl",
                    tmp_path / "community/qwen/session.jsonl.events.jsonl",
                    open_snapshots=[snap])
-    assert b is None and "frozen" in note
+    assert b is None and "paths are frozen" in note
 
 
 def test_load_members_rejects_duplicate_paths(tmp_path):
@@ -91,3 +94,39 @@ def test_load_members_rejects_duplicate_paths(tmp_path):
     _write_members(tmp_path, dup)
     with pytest.raises(MembersMalformed, match="events"):
         load_members(tmp_path)
+
+
+def test_bind_refuses_when_a_member_is_added_while_a_lineage_is_open(tmp_path):
+    """I3: bind() checked only its own door's paths, so a member ADDED to members.json
+    mid-lineage bound happily and could speak on a question it was never a member of."""
+    _write_members(tmp_path, FOUR)
+    snap = {"qwen": {"session": str((tmp_path / "community/qwen/session.jsonl").resolve()),
+                     "events": str((tmp_path / "community/qwen/session.jsonl.events.jsonl").resolve())}}
+    b, note = bind(tmp_path, tmp_path / "community/qwen/session.jsonl",
+                   tmp_path / "community/qwen/session.jsonl.events.jsonl",
+                   open_snapshots=[snap])
+    assert b is None and "member set changed while a lineage is open" in note
+    assert "heartbeat" in note
+
+
+def test_bind_refuses_when_a_member_is_removed_while_a_lineage_is_open(tmp_path):
+    _write_members(tmp_path, FOUR)
+    snap = {d: {"session": str((tmp_path / f"community/{d}/session.jsonl").resolve()),
+                "events": str((tmp_path / f"community/{d}/session.jsonl.events.jsonl").resolve())}
+            for d in ("qwen", "heartbeat", "elder")}
+    b, note = bind(tmp_path, tmp_path / "community/qwen/session.jsonl",
+                   tmp_path / "community/qwen/session.jsonl.events.jsonl",
+                   open_snapshots=[snap])
+    assert b is None and "member set changed while a lineage is open" in note
+    assert "elder" in note
+
+
+def test_bind_allows_an_unchanged_member_set(tmp_path):
+    _write_members(tmp_path, FOUR)
+    snap = {d: {"session": str((tmp_path / f"community/{d}/session.jsonl").resolve()),
+                "events": str((tmp_path / f"community/{d}/session.jsonl.events.jsonl").resolve())}
+            for d in FOUR}
+    b, note = bind(tmp_path, tmp_path / "community/qwen/session.jsonl",
+                   tmp_path / "community/qwen/session.jsonl.events.jsonl",
+                   open_snapshots=[snap])
+    assert b is not None and b.door == "qwen"

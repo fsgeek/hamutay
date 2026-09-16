@@ -112,6 +112,14 @@ def bind(project_root: Path, log_path: Path, event_store_path: Path, *,
         return None, (f"assembly: member {door} configured store path {cfg.members[door].events} "
                       f"differs from the live store path {live}; no binding")
     for snap in open_snapshots or []:
+        # I3: an ADDED member would pass a check that only looks at its own door's paths.
+        if set(cfg.members) != set(snap):
+            added = sorted(set(cfg.members) - set(snap))
+            removed = sorted(set(snap) - set(cfg.members))
+            detail = ", ".join(filter(None, [f"added {','.join(added)}" if added else "",
+                                             f"removed {','.join(removed)}" if removed else ""]))
+            return None, (f"assembly: member set changed while a lineage is open ({detail}); "
+                          f"no binding")
         mine = snap.get(door)
         if mine and mine != cfg.members[door].snapshot():
             return None, (f"assembly: member {door} paths are frozen while a lineage is open and "

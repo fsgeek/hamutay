@@ -39,6 +39,15 @@ def convene(ledger: Ledger, members: MembersConfig, *, convener: str, text: str,
             raise ConveneRefused(f"{convener} already has an open lineage")
         snapshot = members.snapshot()
         for snap in view.snapshots_of_open_questions():
+            # I3: the member SET is frozen too, not only the paths of the doors the
+            # snapshot names — an added member would otherwise slip past this check.
+            if set(snapshot) != set(snap):
+                added = sorted(set(snapshot) - set(snap))
+                removed = sorted(set(snap) - set(snapshot))
+                detail = ", ".join(filter(None, [f"added {','.join(added)}" if added else "",
+                                                 f"removed {','.join(removed)}" if removed else ""]))
+                raise ConveneRefused(
+                    f"the member set is frozen while a lineage is open ({detail})")
             for door, paths in snap.items():
                 if snapshot.get(door) != paths:
                     raise ConveneRefused(f"member paths are frozen while a lineage is open ({door} differs)")

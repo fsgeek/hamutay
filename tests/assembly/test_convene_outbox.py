@@ -122,3 +122,32 @@ def test_parse_closes_in_units_and_rejects_garbage():
     assert parse_closes_in("90m") == timedelta(minutes=90)
     with pytest.raises(ValueError):
         parse_closes_in("7 days")
+
+
+def test_convene_refuses_when_a_member_was_added_while_a_lineage_is_open(house, tmp_path):
+    """I3: convene compared only the doors present in the snapshot, so a member ADDED
+    to members.json after a question opened slipped past the path freeze."""
+    root, led, cfg = house
+    convene(led, cfg, convener="custodian", text="first?", closes_in=timedelta(days=7), now=T0,
+            proposal_procedure={"rule": "consent-v0"}, artifact={})
+    plaza = root / "community" / "plaza"
+    members = {d: {"session": f"community/{d}/session.jsonl", "events": f"community/{d}/session.jsonl.events.jsonl"}
+               for d in ("qwen", "elder", "fable")}
+    (plaza / "members.json").write_text(json.dumps({"ledger": "community/plaza/assembly.jsonl", "members": members}))
+    (root / "community" / "fable").mkdir()
+    cfg2 = load_members(root)
+    with pytest.raises(ConveneRefused, match="fable"):
+        convene(led, cfg2, convener="tony", text="second?", closes_in=timedelta(days=2), now=T0)
+
+
+def test_convene_refuses_when_a_member_was_removed_while_a_lineage_is_open(house):
+    root, led, cfg = house
+    convene(led, cfg, convener="custodian", text="first?", closes_in=timedelta(days=7), now=T0,
+            proposal_procedure={"rule": "consent-v0"}, artifact={})
+    plaza = root / "community" / "plaza"
+    members = {"qwen": {"session": "community/qwen/session.jsonl",
+                        "events": "community/qwen/session.jsonl.events.jsonl"}}
+    (plaza / "members.json").write_text(json.dumps({"ledger": "community/plaza/assembly.jsonl", "members": members}))
+    cfg2 = load_members(root)
+    with pytest.raises(ConveneRefused, match="elder"):
+        convene(led, cfg2, convener="tony", text="second?", closes_in=timedelta(days=2), now=T0)
