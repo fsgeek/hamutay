@@ -148,3 +148,27 @@ def test_run_next_event_passes_a_wake_context(tmp_path):
     assert isinstance(ctx, WakeContext) and ctx.event_id == ev["event_id"]
     running = [r for r in store.read_records() if r.get("status") == "running"][0]
     assert ctx.run_id == running["run_id"] and ctx.started_at == running["started_at"]
+
+
+def test_next_pending_does_not_block_indefinitely_on_a_held_store_lock(tmp_path):
+    """I1: the poll loop calls next_pending on every door; a door whose store lock is
+    held must not stall the loop. It takes the bounded window and then reads unlocked."""
+    import time as _time
+    store = EventStore(tmp_path / "e.jsonl")
+    ev = build_inbound_event(purpose="x", sender="tony")
+    store.append(ev)
+    held, release = threading.Event(), threading.Event()
+
+    def holder():
+        with store._locked():
+            held.set(); release.wait(10)
+
+    t = threading.Thread(target=holder); t.start(); held.wait(5)
+    try:
+        start = _time.monotonic()
+        got = store.next_pending(now=T0)
+        elapsed = _time.monotonic() - start
+    finally:
+        release.set(); t.join()
+    assert elapsed < 2.5, f"next_pending blocked for {elapsed:.1f}s on the store lock"
+    assert got is not None and got["event_id"] == ev["event_id"]

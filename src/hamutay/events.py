@@ -503,6 +503,9 @@ class StoreUnavailable(RuntimeError):
     """The store could not be locked inside the window, or a line is unreadable."""
 
 
+NEXT_PENDING_LOCK_WINDOW_S = 2.0
+
+
 @dataclass(frozen=True)
 class WakeContext:
     """Framework-owned identity of the wake being run (spec §6, round three I1)."""
@@ -635,9 +638,22 @@ class EventStore:
         return self._latest_by_event_id_from_records(self.read_records())
 
     def next_pending(self, *, now: datetime | None = None) -> dict | None:
-        """Return the oldest claimable pending event by created_at, if any."""
-        with self._locked():
-            records = self._read_records_unlocked()
+        """Return the oldest claimable pending event by created_at, if any.
+
+        Read-only and advisory: the claim path re-checks under the lock. The lock
+        window is bounded because the poll loop calls this for every door, and a
+        door holding its own store lock must not stall the others (I1); on timeout
+        the read falls back to unlocked, which is what a torn concurrent append
+        would have done to the blocking read anyway.
+        """
+        try:
+            with self._try_locked(NEXT_PENDING_LOCK_WINDOW_S):
+                records = self._read_records_unlocked()
+        except StoreUnavailable:
+            try:
+                records = self._read_records_unlocked()
+            except json.JSONDecodeError:
+                return None
         latest = self._latest_by_event_id_from_records(records)
         pending = sorted((r for r in latest.values() if r.get("status") == "pending"),
                          key=lambda r: r.get("created_at", ""))
