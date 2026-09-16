@@ -58,6 +58,8 @@ _CAPABILITY: dict[str, str] = {
     "declare_quiet": "bounded_write",
     "update_state": "bounded_write",
     "bash": "unbounded",
+    "take_position": "bounded_write",
+    "convene": "bounded_write",
 }
 
 # Keys the state protocol owns; update_state may not write them.
@@ -78,6 +80,8 @@ class ToolExecutor:
         prior_states: list[tuple[int, UUID, dict, str]] | None = None,
         bridge=None,
         scheduled_by_record_id: UUID | None = None,
+        wake_context=None,
+        assembly=None,
     ):
         self._project_root = project_root
         self._cycle = cycle
@@ -91,6 +95,11 @@ class ToolExecutor:
         # the session is running without persistence; tools gracefully degrade.
         self._bridge = bridge
         self._scheduled_by_record_id = scheduled_by_record_id
+        # Assembly tools (take_position, convene): the framework-owned wake
+        # context and the binding naming this door. Never derived from model
+        # input; absent unless the session offered the tools this wake.
+        self._wake_context = wake_context
+        self._assembly = assembly
         self._pending_events: list[dict] = []
         # Natural wake mode: the resident's own words for the quiet after
         # this wake, if it chose to give them. Committed with the cycle.
@@ -201,6 +210,10 @@ class ToolExecutor:
             result = self._update_state(tool_input)
         elif tool_name == "declare_quiet":
             result = self._declare_quiet(tool_input)
+        elif tool_name == "take_position":
+            result = self._take_position(tool_input)
+        elif tool_name == "convene":
+            result = self._convene(tool_input)
         elif tool_name == "bash":
             result = tool_bash(tool_input, project_root=self._project_root)
         else:
@@ -332,6 +345,48 @@ class ToolExecutor:
             "reason": record["reason"],
             **({"until": record["until"]} if "until" in record else {}),
         }
+
+    def _assembly_ready(self) -> str | None:
+        if self._assembly is None:
+            return "this wake is not bound to the assembly"
+        if self._wake_context is None:
+            return "assembly tools need a framework wake context (event-managed wake)"
+        if self._scheduled_by_record_id is None:
+            return "assembly tools need a cycle record_id"
+        return None
+
+    def _take_position(self, tool_input: dict) -> dict:
+        from hamutay.assembly.ledger import LedgerMalformed, LedgerUnavailable
+        from hamutay.assembly.position import PositionRefused, record_position
+        why = self._assembly_ready()
+        if why:
+            return {"error": why}
+        try:
+            pos = record_position(
+                self._assembly.ledger, binding=self._assembly, wake=self._wake_context,
+                cycle=self._cycle, record_id=self._scheduled_by_record_id,
+                question_id=str(tool_input.get("question_id", "")), stance=tool_input.get("stance"),
+                reasons=tool_input.get("reasons"), now=datetime.now(timezone.utc))
+        except (PositionRefused, LedgerUnavailable, LedgerMalformed, ValueError, TypeError) as e:
+            return {"error": f"take_position: {e}"}
+        return {"recorded": True, "position_id": pos["position_id"], "question_id": pos["question_id"],
+                "stance": pos["stance"], "seq": pos["seq"]}
+
+    def _convene(self, tool_input: dict) -> dict:
+        from hamutay.assembly.convene import ConveneRefused
+        from hamutay.assembly.ledger import LedgerMalformed, LedgerUnavailable
+        from hamutay.assembly.position import record_convene
+        from hamutay.gpu_lease.state import parse_ttl
+        why = self._assembly_ready()
+        if why:
+            return {"error": why}
+        try:
+            q = record_convene(self._assembly.ledger, binding=self._assembly, text=str(tool_input.get("text", "")),
+                               closes_in=parse_ttl(str(tool_input.get("closes_in", ""))),
+                               now=datetime.now(timezone.utc))
+        except (ConveneRefused, LedgerUnavailable, LedgerMalformed, ValueError, TypeError) as e:
+            return {"error": f"convene: {e}"}
+        return {"convened": True, "question_id": q["question_id"], "closes_at": q["closes_at"]}
 
 
 def _summarize(tool_name: str, result: dict) -> str:

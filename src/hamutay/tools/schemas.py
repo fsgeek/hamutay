@@ -729,6 +729,51 @@ DECLARE_QUIET_SCHEMA = {
 }
 
 
+ASSEMBLY_CONSTITUTION_CLAUSE = (
+    "The ayllu decides some things together. A question from the assembly arrives as an "
+    "event naming its convener, its governing procedure, and when it closes; take_position "
+    "records a stance on the shared ledger, and convene puts a question of your own to every "
+    "door. Nothing obliges you to speak: silence is recorded as what the record observed, an "
+    "objection extends a question rather than losing it and stands until you replace it, and "
+    "every closing is delivered to you with every position and every absence on it. "
+)
+
+TAKE_POSITION_SCHEMA = {
+    "name": "take_position",
+    "description": (
+        "Record a stance on an open assembly question, on the shared ledger, now. "
+        "Stances: assent, dissent, abstain, defer. Reasons are optional and carried "
+        "verbatim. A later call on the same question replaces the earlier one. A "
+        "position stands across rounds until you replace it."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "question_id": {"type": "string", "description": "The question id from the event."},
+            "stance": {"type": "string", "enum": ["assent", "dissent", "abstain", "defer"]},
+            "reasons": {"type": "string", "description": "Optional. Recorded verbatim."},
+        },
+        "required": ["question_id", "stance"],
+    },
+}
+
+CONVENE_SCHEMA = {
+    "name": "convene",
+    "description": (
+        "Put a question to every member door of the assembly. It closes after "
+        "closes_in (between 24h and 30d). One open question per convener at a time."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "text": {"type": "string", "description": "The question, in your words."},
+            "closes_in": {"type": "string", "description": "A duration such as 3d, 48h, 7d."},
+        },
+        "required": ["text", "closes_in"],
+    },
+}
+
+
 UPDATE_STATE_SCHEMA = {
     "name": "update_state",
     "description": (
