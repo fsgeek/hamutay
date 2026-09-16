@@ -2806,6 +2806,7 @@ class OpenTasteSession:
         force_memory: tuple[int, dict] | None | _Unset = _UNSET,
         terminal_surface: dict | None = None,
         event_managed: bool = False,
+        wake_context=None,
     ) -> str:
         """One cycle: user speaks, model responds + updates state.
 
@@ -2827,6 +2828,7 @@ class OpenTasteSession:
                 force_memory=force_memory,
                 terminal_surface=terminal_surface,
                 event_managed=event_managed,
+                wake_context=wake_context,
             )
         except Exception:
             self._cycle -= 1
@@ -2837,6 +2839,7 @@ class OpenTasteSession:
         force_memory: tuple[int, dict] | None | _Unset = _UNSET,
         terminal_surface: dict | None = None,
         event_managed: bool = False,
+        wake_context=None,  # carried for the assembly tools; wired in Task 7
     ) -> str:
         """Body of exchange(). Separated so exchange() can roll back the
         cycle counter on any exception without an inline try/finally
