@@ -23,6 +23,17 @@ def _question(**kw):
     return build_question(**base)
 
 
+def _closing(q, *, outcome, proposal=None, next_question=None):
+    cid = closing_id_for(q["question_id"])
+    return {"record_type": "closing", "closing_id": cid, "question_id": q["question_id"],
+            "lineage_id": q["lineage_id"], "round": q["round"], "outcome": outcome, "governing": q["governing"],
+            "provisional": True, "proposal": proposal or q["proposal"],
+            "proposal_sha256": (proposal or q["proposal"])["sha256"], "tally": {}, "positions": [],
+            "testimony": [], "absent": [], "next_question": next_question, "closed_by": "cli:test",
+            "closed_at": iso(T0 + timedelta(days=7)),
+            "delivery": {d: {"event_id": closing_event_id(cid, d)} for d in q["members"]}}
+
+
 def test_ids_are_deterministic():
     q = "5f2a9e2e-1c7b-4a1e-9f3a-2b6c8d9e0f11"
     assert closing_id_for(q) == closing_id_for(q) and UUID(closing_id_for(q))
@@ -110,3 +121,54 @@ def test_governing_selector_prefers_the_active_procedure(ledger_path):
     view = reduce(led.read())
     assert view.active_procedure["procedure_id"] == prov["procedure_id"]
     assert view.governing_for_new_question()["procedure_id"] == prov["procedure_id"]
+
+
+def test_missing_activations_lists_assented_procedure_closings_without_a_derivation(ledger_path):
+    led = Ledger(ledger_path)
+    prov = led.append(build_procedure({"rule": "consent-v0"}, {"path": "p", "commit": "c", "sha256": "s"},
+                                      status="provisional", version=1))
+    proposal = {"kind": "procedure", "procedure_id": prov["procedure_id"], "sha256": prov["payload_sha256"]}
+    q = led.append(_question(proposal=proposal))
+    c = led.append(_closing(q, outcome="assented"))
+    view = reduce(led.read())
+    assert [x["closing_id"] for x in view.missing_activations()] == [c["closing_id"]]
+    act = build_procedure(prov["payload"], prov["artifact"], status="active", procedure_id=prov["procedure_id"],
+                          version=1, activated_by_closing_id=c["closing_id"])
+    led.append(act)
+    assert reduce(led.read()).missing_activations() == []
+    # a text proposal or a non-assented outcome never needs a derivation
+    q2 = led.append(_question(convener="tony"))
+    led.append(_closing(q2, outcome="unresolved"))
+    assert reduce(led.read()).missing_activations() == []
+
+
+def test_build_execution_requires_an_assented_closing_and_reasons_when_declined(ledger_path):
+    from hamutay.assembly.records import build_execution
+    q = _question()
+    ok = build_execution(closing=_closing(q, outcome="assented"), by="custodian", outcome="done", what="did it", reasons=None)
+    assert ok["closing_id"] == closing_id_for(q["question_id"]) and ok["proposal_sha256"] == q["proposal"]["sha256"]
+    with pytest.raises(ValueError):
+        build_execution(closing=_closing(q, outcome="unresolved"), by="custodian", outcome="done", what="x", reasons=None)
+    with pytest.raises(ValueError):
+        build_execution(closing=_closing(q, outcome="assented"), by="tony", outcome="declined", what="x", reasons=None)
+    dec = build_execution(closing=_closing(q, outcome="assented"), by="tony", outcome="declined", what="x", reasons="no")
+    assert dec["outcome"] == "declined" and dec["reasons"] == "no"
+
+
+def test_quorum_for_integer_and_ceil_half():
+    from hamutay.assembly.records import quorum_for
+    four = {d: {} for d in "abcd"}
+    assert quorum_for(four, {"quorum": "ceil(half)"}) == 2
+    assert quorum_for({d: {} for d in "abc"}, {"quorum": "ceil(half)"}) == 2
+    assert quorum_for(four, {"quorum": 3}) == 3
+
+
+def test_reduce_orders_by_seq_regardless_of_input_order(ledger_path):
+    led = Ledger(ledger_path)
+    q = led.append(_question())
+    a = led.append(build_delivery(for_="question", id_=q["question_id"], door="qwen",
+                                  event_id=q["delivery"]["qwen"]["event_id"], state="store_unreadable", detail={"error": "x"}))
+    b = led.append(build_delivery(for_="question", id_=q["question_id"], door="qwen",
+                                  event_id=q["delivery"]["qwen"]["event_id"], state="landed", landed_at=iso(T0)))
+    shuffled = [b, a, q]
+    assert reduce(shuffled).delivery_truth("question", q["question_id"], "qwen")["state"] == "landed"

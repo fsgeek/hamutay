@@ -231,6 +231,7 @@ class View:
 
 
 def reduce(records: list[dict]) -> View:
+    records = sorted(records, key=lambda r: int(r.get("seq", 0)))
     v = View(records=records)
     for r in records:
         t = r.get("record_type")
