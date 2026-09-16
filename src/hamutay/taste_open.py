@@ -1783,13 +1783,23 @@ class OpenAITasteBackend:
                 if t.get("function", {}).get("name") in _NATURAL_STATE_TOOLS
             ]
 
-        def _withdraw_perception(reason: str, **detail) -> None:
+        def _withdraw_perception(
+            reason: str, measured: int | None = None, **detail
+        ) -> None:
             nonlocal perception_withdrawn
             if perception_withdrawn:
                 return
             perception_withdrawn = True
             kept = sorted(
                 t.get("function", {}).get("name") for t in _state_tools()
+            )
+            # The number the resident is told must be the one the substrate
+            # actually measured: on the recovery path that is the rejected
+            # request's size, not the last request that succeeded (Codex's
+            # frozen validation, 2026-09-16, caught the note saying 100 when
+            # the server had just refused 68,025).
+            measured_tokens = (
+                measured if measured is not None else last_reported_prompt_tokens
             )
             # A user-role message, not system: local chat templates (Qwen's,
             # found live 2026-09-16 on community/qwen c8) reject a system
@@ -1800,7 +1810,7 @@ class OpenAITasteBackend:
                 "content": (
                     "Operational note from the harness: this wake's context "
                     f"is at its budget ({reason}: the last request measured "
-                    f"{last_reported_prompt_tokens} tokens against a ceiling "
+                    f"{measured_tokens} tokens against a ceiling "
                     f"of {context_limit}; the threshold is {soft_threshold}). "
                     "Reading, searching, shell, and memory tools are "
                     "withdrawn for the rest of this wake; "
@@ -1874,7 +1884,10 @@ class OpenAITasteBackend:
                     dropped_tokens = _truncate_largest_tool_results(
                         conversation, target_drop_tokens=target_drop
                     )
-                    _withdraw_perception("the server rejected an over-limit request")
+                    _withdraw_perception(
+                        "the server rejected an over-limit request",
+                        measured=requested,
+                    )
                     if tool_executor is not None:
                         tool_executor.log_event({
                             "tool": "_framework",

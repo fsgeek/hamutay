@@ -183,6 +183,12 @@ def test_context_limit_error_truncates_withdraws_and_retries(tmp_path):
     assert _names(retry) == ["update_state"]
     recovery = _events(executor, "budget_recovery")
     assert recovery and recovery[0]["action"] == "truncate_and_retry_tools_withdrawn"
+    # The note names the size the server actually refused (68,025), not the
+    # last request that succeeded (100). Codex's frozen validation caught
+    # the wrong number on 2026-09-16.
+    notes = [m for m in retry["messages"] if m["role"] == "user" and "withdrawn" in m["content"].lower()]
+    assert len(notes) == 1 and "68025" in notes[0]["content"] and "65536" in notes[0]["content"]
+    assert [i for i, m in enumerate(retry["messages"]) if m["role"] == "system"] == [0]
 
 
 def test_context_limit_error_on_the_first_turn_still_raises(tmp_path):
