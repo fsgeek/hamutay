@@ -1,14 +1,17 @@
 # The assembly — how the ayllu decides, for residents who never share a room
 
 Date: 2026-09-15 (evening), revised 2026-09-16 (morning). Author: the Fable
-session holding custody of Hamut'ay. Status: DRAFT, revision 3, after
-Codex's rounds one and two (`2026-09-15-assembly-review.md`,
-`-review-2.md`); dispositions at the end. Tony has delegated the decisions
+session holding custody of Hamut'ay. Status: REVIEWED, revision 4, after
+Codex's rounds one to three (`2026-09-15-assembly-review.md`, `-review-2.md`,
+`-review-3.md`); dispositions at the end. Tony has delegated the decisions
 on this project; the gate before implementation is this document and its
 Codex review. Stopping rule, set before round two ran: at most three
 rounds; the loop closes on the first round with no Blocking finding, or
 after round three with the remaining findings disposed on the record.
-Round three is the last.
+Round three found four Blocking; all four are accepted and folded in here
+with the mechanisms it asked for; the loop is closed. Next: the
+implementation plan, then code under TDD with Codex's independent
+validation, then the first question.
 
 ## The problem, in the residents' words
 
@@ -64,7 +67,7 @@ record. The assembly is the fire circle rebuilt for that.
   outbox, lifecycle-only absences, claim-time quiet deferral, versioned
   procedure, binding, tally inputs, cost, execution binding, optional
   reasons, lock order, cutoffs, per-door isolation.
-- r3 (this): the child round has no delivery of its own and is written in
+- r3: the child round has no delivery of its own and is written in
   the same locked append as its parent closing (round two B1); "offered"
   is a durable fact (`landed_at` before `closes_at`) and a question with a
   member not offered cannot assent (B2); closing ids are deterministic,
@@ -84,6 +87,22 @@ record. The assembly is the fire circle rebuilt for that.
   report (I5); plaza excluded from the generic checkpoint loop (I6); cost
   and pass frequency bounded (I7); one store-failure reason, deduplicated
   (I8); position-commit failure declared (I9); minors folded in.
+- r4 (this, loop closed): a member whose store cannot be read at close is
+  unknown-at-cutoff and caps assent like a running wake (round three B1);
+  `take_position` and `convene` write to the ledger during the tool call
+  and return an error if that write fails, so a successful stance is
+  durable before the model sees success (B2); the pass skips only when the
+  reduced ledger is quiescent, and every non-landed outbox entry retries
+  at the next poll (B3); an extension is one ledger record, the closing,
+  which embeds the complete child question, and the child is a derivation
+  (B4); a framework-owned wake context carries event, run, and start time
+  from the claim into the executor (I1); eligibility joins the full wake
+  coordinates (I2); the carried child's delivery and lifecycle reduce
+  through the parent closing's row (I3); member paths are frozen while
+  any lineage is open (I4); positions require membership in the question's
+  snapshot (I5); cancellation covers every non-landed state (I6); the
+  claim predicate classifies from the original pending record (I7); flush
+  before fsync and full-write verification (I8); minors folded in.
 
 ## Scope: what the ayllu decides
 
@@ -126,8 +145,9 @@ hand to exist.
    are bounded (three). An active objection extends the question while
    rounds remain and leaves it unresolved when they run out; it never
    loses. A question may not assent while any member's wake that began
-   inside the window is still running, or while any member was not
-   offered the question in time.
+   inside the window is still running, while any member was not offered
+   the question in time, or while any member's store cannot be read to
+   establish either fact. Unknown is never read as absent.
 4. **Time-bounded silence is respected.** An assembly event is not
    claimable while the door's joined quiet declaration names an `until`
    later than now, re-evaluated on every claim; if that `until` is at or
@@ -176,12 +196,16 @@ hand to exist.
 ## Failure model
 
 Process kill at any instruction is the failure the design recovers from
-without loss of a delivery, a closing, an activation, or a tallied
-position. Power loss and kernel crash are declared losses at the boundary
-between two files: a store append is fsynced before the ledger records
-`landed`, and a ledger append is fsynced before the lock is released, so
-the visible orderings are preserved, but a torn final line in either file
-is a pre-existing property of `EventStore` reads and is not repaired here.
+without loss of a delivery, a closing, an activation, or an accepted
+position. Every ledger write is one JSON line, written, flushed, fsynced,
+and length-verified before the lock is released; there is no multi-record
+transition anywhere in the design (an extension is one record, §7). A
+store append is flushed and fsynced before the ledger records `landed`.
+Power loss and kernel crash can still tear the final line of either file;
+the assembly ledger reader tolerates exactly one torn final line (it is
+ignored and reported, and the next append overwrites from the last
+complete line's end, under the lock), which the event stores do not do
+today and which this design does not change for them.
 
 ## Components
 
@@ -205,8 +229,15 @@ binding and prints one launch note saying why. A bound heartbeat passes
 it to the executor. Missing or malformed `members.json`: no binding, one
 launch note; nothing else changes. The file is re-read only at boot;
 questions snapshot the members and their paths at convene time and govern
-themselves by that snapshot, so heartbeats booted against different
-generations of the file agree on every existing question.
+themselves by that snapshot. **Paths are frozen while any lineage is
+open:** at boot, a heartbeat compares its member's configured paths with
+every open question's snapshot for that door; on any difference it prints
+a launch note and takes no binding (no tools, no pass) until the lineages
+close or the file is restored. `convene` likewise refuses if any open
+question's snapshot for any member differs from the current file. A
+membership or path change is therefore an operation performed between
+lineages, and no position can be committed to a store the close pass does
+not read.
 
 Members must run the natural wake shape (the tools exist only there); a
 terminal-shape door listed as a member gets no tools and no paragraph and
@@ -251,16 +282,19 @@ types:
  "opened_at": <iso>, "closes_at": <iso>,
  "governing": {"procedure_id": <uuid> | null, "rule": "consent-v0", "max_rounds": 3, "quorum": 2},
  "members": {"<door>": {"session": <abs path>, "events": <abs path>}},
- "delivery": {"<door>": {"event_id": <uuid>}}            # round 1: own events
-           | {"<door>": {"carried_by_closing": <closing_id>, "event_id": <closing event_id>}},
+ "delivery": {"<door>": {"event_id": <uuid>}},            # round 1 only
  "created_at": <iso>}
+# Rounds 2 and 3 have no question record of their own: the child question
+# is embedded in its parent closing (`next_question`) and derived from it.
 
 {"record_type": "position", "seq": N, "position_id": <uuid>, "lineage_id": <uuid>,
  "question_id": <uuid>, "member": "door:<name>", "cycle": N,
  "record_id": <cycle record_id>, "event_id": <the wake's event>, "run_id": <uuid>,
- "wake_started_at": <iso>,
+ "wake_started_at": <iso>, "events_path": <abs path from the question's snapshot>,
  "stance": "assent" | "dissent" | "abstain" | "defer",
  "reasons": "..." | null, "created_at": <iso>}
+# Written DURING the tool call (§6), not at cycle commit. Eligible for the
+# tally only through the completion join.
 
 {"record_type": "late_position", ...same fields..., "closing_id": <uuid>}
 
@@ -290,9 +324,15 @@ types:
                        | "running_at_close" | "expired" | "failed" | "suppressed"
                        | "completed_without_position" | "store_unreadable",
              "detail": {...}}],
- "next_question_id": <uuid> | null,
+ "next_question": null | {"question_id": <uuid5(lineage_id, "round-<n+1>")>, "round": n+1,
+                          "opened_at": <closed_at>, "closes_at": <iso>,
+                          "text": "...", "proposal": {...}, "governing": {...},
+                          "members": {...same snapshot...}},
  "closed_by": "heartbeat:<door>" | "cli:<name>", "closed_at": <iso>,
  "delivery": {"<door>": {"event_id": <uuid5(closing_id, door)>}}}
+# The closing event to each door is the child's delivery: the child's
+# offer time is the parent closing's `landed_at` for that door, and the
+# child's Empty Chair evidence is that event's lifecycle.
 
 {"record_type": "execution", "seq": N, "execution_id": <uuid>, "closing_id": <uuid>,
  "question_id": <uuid>, "proposal_sha256": <hex>, "by": "custodian" | "tony",
@@ -300,17 +340,26 @@ types:
  "created_at": <iso>}
 ```
 
-**Delivery reducer.** A question's or closing's `delivery` map is the
-plan. The truth for each `(id, door)` is the latest `delivery` record by
-`seq`, if any: `landed` (with `landed_at`), `store_unreadable`, or
-`cancelled`. No record means planned and not yet landed. Repeated
-`store_unreadable` for the same `(id, door)` is written only when the
-error text changes; otherwise the pass says nothing.
+**Delivery reducer.** A round-1 question's or a closing's `delivery` map
+is the plan. The truth for each `(for, id, door)` is the latest `delivery`
+record by `seq`, if any: `landed` (with `landed_at`), `store_unreadable`,
+or `cancelled`. No record means planned and not yet landed. A child
+question (round 2 or 3) has no rows of its own: its truth for a door is
+the parent closing's `(closing, closing_id, door)` row, and its event id
+is the parent closing's event id for that door. Repeated
+`store_unreadable` for the same key is written only when the error text
+changes, but it is retried on every pass regardless (§7).
 
 **Active position.** A member's active position on a lineage is its
 eligible position with the highest `seq` across every round. Silence in a
 later round preserves the earlier position. A member changes its stance
-only by taking a new position.
+only by taking a new position. **Eligibility** requires all of: the
+member is in the question's `members` snapshot; a `completed` status
+exists in the member's snapshotted store whose `event_id`, `run_id`, and
+`result_record_id` equal the position's `event_id`, `run_id`, and
+`record_id`; and the position's `wake_started_at` equals that run's
+`started_at`. Any mismatch is ineligible; a store that cannot be read is
+unknown, never ineligible (§7 step 2).
 
 **Governing procedure.** At convene, the `governing` block is the
 highest-`seq` `procedure` record with `status: active`, or, if none, the
@@ -364,9 +413,9 @@ instruction a resident gets:
 > community/plaza/assembly.jsonl, readable from your tools. If you want a
 > stance on the record, take_position records one of assent, dissent,
 > abstain, or defer, with reasons if you give them; a dissent or deferral
-> extends the question rather than losing it, and a position stands
-> across rounds until you replace it. Nothing is owed. Question id:
-> <question_id>.
+> extends the question while rounds remain and otherwise leaves it
+> unresolved, never lost, and a position stands across rounds until you
+> replace it. Nothing is owed. Question id: <question_id>.
 
 The envelope does not push other members' positions. A resident that
 wants them reads the ledger. (Randomized speaking order has no
@@ -384,7 +433,12 @@ reported `waiting` with the quiet's `until` as its wake time, and the
 heartbeat sleeps instead of spinning). Non-assembly events take none of
 these branches and are byte-for-byte unchanged.
 
-The predicate reads the same locked snapshot the claim uses: with
+The predicate is evaluated on the original pending record (the summary
+path carries `defer_to_declared_quiet`, `assembly_question_id`, and
+`expires_at` into `summarize_event_history` for this purpose, and
+`next_pending` is refactored to read the same full locked snapshot as
+`claim_next_pending`). It reads the same locked snapshot the claim uses:
+with
 `quiet_declaration_for_latest_wake(records)` yielding an `until` later
 than `now`, the event is `deferred`; if that `until` is at or after the
 event's `expires_at`, the claim path appends `expired` with
@@ -402,74 +456,97 @@ Natural shape only, registered beside `declare_quiet` when the session has
 an `AssemblyBinding`; the assembly clause of the constitution is removed
 from the prefix whenever the tools are not offered, exactly as the
 `declare_quiet` clause is. `member` comes from the binding; `event_id`,
-`run_id`, and `wake_started_at` come from the event the session is
-running (the session already knows it; the executor is given them with
-the cycle). Buffered; the last call per question in a wake wins. Refused
-at call time, with a message the resident sees, if the question is
-unknown, closed, or its `closes_at` is earlier than this wake's
-`wake_started_at`. Written at cycle commit, beside the quiet declaration,
-to the ledger under the ledger lock alone.
+`run_id`, and `wake_started_at` come from a framework-owned `WakeContext`
+that `run_next_event` builds from the claimed running record and passes
+through `OpenTasteSession.exchange()` into `ToolExecutor` (never parsed
+from the model-visible envelope). A session without a `WakeContext` (a
+direct `taste_open` run, a terminal-surface wake) does not offer the
+assembly tools. Refused at call time, with a message the resident sees,
+if the question is unknown, closed, not in this member's snapshot, or its
+`closes_at` is earlier than this wake's `wake_started_at`.
 
-**Cutoff.** A position is accepted at commit only if its
-`wake_started_at < closes_at` and the question has no `closing`; the
-ledger assigns `seq`. A wake that began inside the window may commit its
-position after `closes_at`; the close pass waits for it (§7). A position
-whose wake began after `closes_at` is refused at call time; one that
-reaches commit after a closing exists (only possible after the grace) is
-appended as `late_position` with the `closing_id`, not tallied, visible
-in `status`/`history`.
+**Written during the tool call.** The tool takes the ledger lock (2 s
+non-blocking window), appends the `position` record (with `seq`, flushed,
+fsynced, length-verified), releases the lock, and only then returns
+success to the model. If the lock or the append fails, the tool returns
+an error the model sees, and nothing is recorded as accepted; the
+resident may try again in the same wake or not. More than one call in a
+wake appends more than one record; the highest `seq` from that `run_id`
+is the one the tally reads (last call wins, durably). Nothing about the
+position is buffered to cycle commit; the session record's
+`tool_activity_full` carries the call as it carries every tool call, and
+the ledger carries the acceptance. `convene` writes the same way, during
+the call.
+
+**Cutoff.** A position is accepted only if its `wake_started_at <
+closes_at` and the question has no `closing`. A wake that began inside
+the window may take its position after `closes_at`; the close pass waits
+for it (§7). A call after a closing exists (only possible after the
+grace) is appended as `late_position` with the `closing_id`, not tallied,
+visible in `status`/`history`, and the tool says so.
 
 **Tally eligibility (the completion join).** A position counts only when
-its `record_id` equals the `result_record_id` of a `completed` status in
-that member's event store, as `quiet_declaration_for_latest_wake` joins
-declarations. A position from a wake that never completed is carried in
-the closing's `positions` with `eligible: false` and never tallied; boot
-recovery re-pends the source event and the re-run wake may take a
-position again.
-
-**Commit failure.** If the ledger append fails at commit (I/O error,
-malformed ledger), the wake is not failed: the session record already
-holds the buffered position in `tool_activity_full`, the executor logs a
-`_framework` event `assembly_position_lost` with the error, and the
-position is a declared loss recoverable by hand from the session record.
+the full join in §2 holds: a `completed` status in the member's
+snapshotted store with the same `event_id`, `run_id`, and
+`result_record_id`, and a `started_at` equal to the position's
+`wake_started_at`, as `quiet_declaration_for_latest_wake` joins
+declarations on `result_record_id`. A position from a wake that never
+completed is carried in the closing's `positions` with `eligible: false`
+and never tallied; boot recovery re-pends the source event and the re-run
+wake may take a position again. A store that cannot be read makes
+eligibility unknown, never false (§7 step 2).
 
 ### 7. The pass: outbox, then closing
 
 `hamutay.assembly.pass_(now, actor)` runs in every bound heartbeat's
 `step()` before the substrate guard and the budget rest, and in the CLI
-(`assembly pass`). A heartbeat skips the pass when the ledger file's size
-and mtime are unchanged since its last pass and no known `closes_at` or
-grace deadline has arrived; otherwise the pass reads the ledger once
-under the lock and keeps a reduced in-memory view for the next skip
-decision. Both halves run under the ledger lock; each door's store lock
-is taken inside, non-blocking with a 2 s retry window, one at a time,
-released before the next door.
+(`assembly pass`). A heartbeat skips the pass only when its reduced view
+of the ledger is **quiescent**: the ledger's size and mtime are unchanged
+since the view was built, no outbox entry is in a non-landed,
+non-cancelled state (planned or `store_unreadable`), no assented procedure
+closing lacks its activation or rejection derivation, and no `closes_at`
+or grace deadline has arrived. Any `store_unreadable` result, any planned
+delivery, and any missing derivation make the next poll a full pass;
+unchanged bytes never suppress a retry. Both halves run under the ledger
+lock; each door's store lock is taken inside, non-blocking with a 2 s
+retry window, one at a time, released before the next door.
 
-**Outbox.** For every `question` or `closing` with a delivery not yet
-landed, cancelled, or `carried_by_closing`: open that door's store from
-the question's snapshot, `append_if_absent(event)` (new `EventStore`
-method: under the store lock, append the event only if no record with
-that `event_id` exists; the match must be the original pending record,
-and the append is fsynced), then append `delivery: landed` with
-`landed_at`. A store that cannot be read or locked gets
-`delivery: store_unreadable` (deduplicated) and the pass moves on.
-A question delivery still planned after its question has a `closing` is
-`cancelled` (the stale question is never delivered; only the closing is).
+**Outbox.** First, cancellation: for every round-1 question that has a
+`closing`, every delivery whose truth is not `landed` and not `cancelled`
+(planned or `store_unreadable`) gets `delivery: cancelled`; the stale
+question is never delivered, only its closing. Then, for every round-1
+`question` or `closing` with a delivery whose truth is planned or
+`store_unreadable`: open that door's store from the question's snapshot,
+`append_if_absent(event)` (new `EventStore` method: under the store lock,
+append the pending event only if no record with that `event_id` exists,
+flushed and fsynced with the write length verified; idempotent at-most-one
+creation, not "exactly once delivery": the event then has its own
+lifecycle and the model may never claim it), then append
+`delivery: landed` with `landed_at`. A store that cannot be read or locked
+gets `delivery: store_unreadable` (deduplicated by error text) and the
+pass moves on; it is retried at the next poll.
 
 **Closing.** For every `question` with no `closing` and (`closes_at <= now`
 or a `withdrawal`), with grace `G = 60 min` (one named constant, used for
 both the running-wake wait and the unreadable-store wait):
 
 1. Offered: a member was offered if its question delivery `landed_at <
-   closes_at`. Members not landed (planned, `store_unreadable`) are
-   `not_offered`. If any member is `not_offered` and `now < closes_at + G`
+   closes_at` (policy: no minimum deliberation interval is enforced; a
+   convener who wants one sets a longer window). For rounds 2 and 3 the
+   delivery is the parent closing's. Members not landed (planned,
+   `store_unreadable`) are `not_offered`. If any member is `not_offered` and `now < closes_at + G`
    and its store was unreadable, skip the question this pass (repair may
    still land it, and step 3 handles a late landing). After `G`, proceed
    with the member `not_offered`.
-2. Running: for each member, read the store's latest statuses; if any
-   event of that door is `running` with `started_at < closes_at` and
-   `now < closes_at + G`, skip the question this pass. After `G`, the
-   member is `running_at_cutoff`.
+2. Running or unknown: for each offered member, read the snapshotted
+   store's latest statuses (the same read serves the completion join in
+   step 3). If any event of that door is `running` with `started_at <
+   closes_at` and `now < closes_at + G`, skip the question this pass;
+   after `G`, the member is `running_at_cutoff`. If the store cannot be
+   read or locked and `now < closes_at + G`, skip the question this pass;
+   after `G`, the member is `unknown_at_cutoff`: its positions, if any on
+   the ledger, are carried with `eligible: null`, and it counts as an
+   objection-shaped cap in step 5. Unknown is never read as absent.
 3. Tally from the lineage's eligible positions: active position per
    member, objections (`dissent`, `defer`), assents, abstentions,
    `spoke`, quorum = ceil(|members| / 2).
@@ -480,22 +557,26 @@ both the running-wake wait and the unreadable-store wait):
    `running_at_close`, `expired`, `failed`, `suppressed`,
    `completed_without_position` (with the wake's `record_id`; a later
    quiet declaration as detail; no causal reading).
-5. Rule (§8) → `outcome`, with two caps applied after the rule: if any
-   member is `not_offered` or `running_at_cutoff`, an `assented` result
-   becomes `extended` (rounds remaining) or `unresolved` (none), with the
-   cap named in `trace`. A round that extends because a member was not
-   offered does not consume that member's chance: the next round's event
-   is the closing event, which carries the question again.
-6. Build the child question when `extended`: `question_id =
-   uuid5(lineage_id, "round-<n+1>")`, `parent_question_id`, same text,
-   proposal, governing, members snapshot; same duration from `closed_at`;
-   its `delivery` map says `carried_by_closing: <closing_id>` for every
-   member. The child has no outbox work of its own.
+5. Rule (§8) → `outcome`, with three caps applied after the rule: if any
+   member is `not_offered`, `running_at_cutoff`, or `unknown_at_cutoff`,
+   an `assented` result becomes `extended` (rounds remaining) or
+   `unresolved` (none), with the cap named in `trace`. A round that
+   extends because a member was not offered or unknown does not consume
+   that member's chance: the next round's event is the closing event,
+   which carries the question again.
+6. Build the child question when `extended`, as a payload embedded in the
+   closing (`next_question`): `question_id = uuid5(lineage_id,
+   "round-<n+1>")`, `round`, `opened_at = closed_at`, `closes_at =
+   closed_at + (parent closes_at − parent opened_at)`, same text,
+   proposal, governing, and members snapshot. There is no separate child
+   record and no separate child delivery; readers derive open questions
+   from round-1 `question` records and from `next_question` payloads of
+   closings that have no closing of their own yet.
 7. Write the closing (`closing_id = uuid5(question_id, "closing")`,
-   closing event ids `uuid5(closing_id, door)`) and the child, if any, in
-   ONE locked `append_many` (child first, then closing). There is no
-   window in which the child exists without the closing. If a closing
-   with that id already exists (a concurrent pass), do nothing.
+   closing event ids `uuid5(closing_id, door)`) as ONE ledger record. If a
+   closing with that id already exists (a concurrent pass), do nothing.
+   A child can never exist without its authority because it exists only
+   inside it.
 8. Activation, as a separate repairable step at the end of every pass
    (not only the pass that closed): for every `closing` with
    `outcome: assented` whose question's `proposal.kind == "procedure"`,
@@ -525,10 +606,11 @@ Nothing is owed on this event.
 
 Idempotence: the closing's presence fences the tally; the `delivery`
 records fence the outbox; the deterministic ids fence extension and
-activation. A heartbeat that cannot read the ledger (malformed line)
-writes nothing, emits one `heartbeat` log line naming the defect, and
-continues its own step. Latency is one poll interval of the fastest bound
-heartbeat (30 s).
+activation. A heartbeat that cannot read the ledger (a malformed line
+other than a single torn final line, which the reader tolerates and
+reports) writes nothing, emits one `heartbeat` log line naming the
+defect, and continues its own step. Latency is one poll interval of the
+fastest bound heartbeat (30 s).
 
 ### 8. The rule: `consent-v0` (bootstrap; provisional until ratified)
 
@@ -732,10 +814,21 @@ the bodies, frozen before its first run, as for the GPU lease:
 9. Constitution: bound doors get the paragraph; removed when tools are
    not offered; existing constitution tests pass.
 10. Checkpoint: plaza excluded from the generic loop; one locked digest.
-11. Live, registered: put the first question; verify each door's envelope
+11. Round three additions: unknown-at-cutoff waits through `G` then caps
+    assent, never marks ineligible; `take_position` returns error when the
+    ledger append fails and nothing is accepted; a durable position from a
+    wake that never completes is carried ineligible; the pass is not
+    skipped while any outbox entry or derivation is outstanding; an
+    extension is one record and the child is derived; the carried child's
+    offer time is the parent closing's `landed_at`; a heartbeat whose paths
+    differ from an open question's snapshot takes no binding; a door not
+    in the snapshot is refused; the ledger reader tolerates one torn final
+    line and the next append recovers; `WakeContext` is required for the
+    tools.
+12. Live, registered: put the first question; verify each door's envelope
     on its next wake carries the header; verify the closing lands in every
-    store; verify a resident's `position.record_id` matches its
-    `completed.result_record_id` and its `event_id` the wake's event.
+    store; verify a resident's `position` joins its `completed` on
+    `event_id`, `run_id`, `result_record_id`, and `started_at`.
 
 ## Not built (on the record)
 
@@ -755,10 +848,10 @@ the bodies, frozen before its first run, as for the GPU lease:
 - Anchoring by wake order: later doors can read earlier positions.
 - `completed_without_position` conflates "read and chose silence" with
   "never got to it in the wake."
-- A ledger failure at position commit loses the position from the tally;
-  the session record keeps it.
-- Power loss can tear a final line in a store or the ledger; orderings
-  are preserved by fsync, the torn line is not repaired.
+- Power loss can tear a final line in a store; orderings are preserved
+  by fsync; the ledger tolerates its own torn final line, the stores do
+  not (unchanged).
+- Membership and path changes wait for every open lineage to close.
 - The custodian drafted version 1 and puts the first question.
 - Three rounds, 24 h minimum, 30 d maximum, 60 min grace, 2 s store-lock
   window: numbers chosen, not derived.
@@ -831,3 +924,61 @@ under the lock, payloads pinned by sha256. (7) Names and paths; the
 snapshot governs. (8) It does not need to: status is in the envelope.
 (9) 2 s non-blocking window, then `store_unreadable`. (10) A report;
 Invariant 8 says so.
+
+## Dispositions of Codex round three (final; loop closed)
+
+Blocking 1 (unreadable store at close erases an objection): accepted;
+`unknown_at_cutoff` in §7 step 2, waits through `G`, caps assent in step
+5; eligibility unknown is never `eligible: false` (§2, Invariant 3).
+
+Blocking 2 (a successful position can be lost): accepted; positions and
+convenings are written to the ledger during the tool call, flushed,
+fsynced, verified, and only then reported as success; a failed append is
+an error the model sees; last-call-wins by `seq` within the `run_id`
+(§6). The "commit failure" declared loss is withdrawn.
+
+Blocking 3 (skip heuristic strands repair): accepted; the pass skips only
+when the reduced ledger is quiescent, and any `store_unreadable`, planned
+delivery, or missing derivation forces the next poll (§7).
+
+Blocking 4 (multi-record append is not atomic): accepted; an extension is
+one record, the closing, which embeds the complete child; the child is a
+derivation and cannot precede its authority (§2, §7 steps 6–7). The
+failure model now states that no multi-record transition exists, and the
+ledger reader tolerates one torn final line.
+
+Important 1 (wake context): accepted; `WakeContext` from the claimed
+running record through `exchange()` into the executor; tools refused
+without it (§6). Important 2 (full join): accepted (§2, Eligibility).
+Important 3 (child reducer): accepted (§2, Delivery reducer). Important 4
+(path generations): accepted by freezing paths while any lineage is open
+(§1). Important 5 (membership in snapshot): accepted (§2, §6). Important 6
+(cancellation covers every non-landed state, before retry): accepted (§7,
+Outbox). Important 7 (classify from the original pending record;
+`next_pending` on the full snapshot): accepted (§5). Important 8 (flush
+before fsync, verify length): accepted (Failure model, §6, §7).
+
+Minor 1 (header wording): accepted. Minor 2 (no minimum deliberation
+interval): named as policy (§7 step 1). Minor 3 (`opened_at` explicit):
+accepted. Minor 4 (at-most-one creation, not exactly-once delivery):
+accepted.
+
+Questions: (1) `unknown_at_cutoff`, an assent cap, durable in the
+closing's `tally`. (2) After its own ledger line is flushed, fsynced, and
+verified under the lock; nothing to repair, because success is not
+reported before that. (3) Quiescence as defined in §7; the retry time is
+the next poll, always. (4) One physical record; the child is derived from
+it. (5) `WakeContext`, built in `run_next_event` from the running record.
+(6) The parent closing's `(closing, closing_id, door)` row and that
+event's lifecycle. (7) No; frozen while any lineage is open. (8) The
+complete join. (9) The ledger reader tolerates one torn final line and the
+next append recovers from the last complete line under the lock.
+
+## Loop closed
+
+Three rounds, twenty-seven findings accepted in mechanism, none deferred.
+What round three would have reviewed next is on the record above as the
+mechanisms it asked for, and the implementation plan will carry each as a
+task with its own test. The first question is put only after Codex's
+independent validation suite, written from this document without reading
+the code and frozen before its first run, passes on the implementation.
