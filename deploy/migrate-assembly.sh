@@ -30,10 +30,10 @@ fi
 for d in "${DOORS[@]}"; do
   unit="hamutay-heartbeat@$d"
   systemctl --user is-active --quiet "$unit" || { say "$unit is not active; skipping"; continue; }
-  since="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  since_epoch="$(date +%s)"
   systemctl --user restart "$unit"
   for i in $(seq 1 30); do
-    if journalctl --user -u "$unit" --since "$since" --no-pager 2>/dev/null | grep -q "assembly: member $d bound"; then
+    if journalctl --user -u "$unit" --since="@$since_epoch" --no-pager 2>/dev/null | grep -q "assembly: member $d bound"; then
       say "$d bound"; break
     fi
     if [ "$i" -eq 30 ]; then say "$d did not report a binding within 30 s; stopping here"; exit 1; fi

@@ -51,3 +51,14 @@ def test_migration_and_check_scripts_are_executable_and_dry_run_is_safe(tmp_path
 def test_readme_has_the_assembly_section():
     text = (ROOT / "community/README.md").read_text()
     assert "## The assembly" in text and "deploy/ayllu-assembly" in text and "2026-09-15-assembly-design.md" in text
+
+
+def test_migration_waits_on_a_journal_query_journalctl_accepts():
+    text = (ROOT / "deploy/migrate-assembly.sh").read_text()
+    assert '--since="@' in text
+    assert "%Y-%m-%dT%H:%M:%SZ" not in text
+
+
+def test_check_script_scopes_the_bound_check_to_the_current_invocation():
+    text = (ROOT / "deploy/check-assembly.sh").read_text()
+    assert "_SYSTEMD_INVOCATION_ID" in text
