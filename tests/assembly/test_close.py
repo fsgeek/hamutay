@@ -237,3 +237,31 @@ def test_a_position_from_a_running_wake_is_still_ineligible_not_unknown(house):
     cpos = [p for p in c["positions"] if p["record"]["member"] == "door:c"]
     assert len(cpos) == 1 and cpos[0]["eligible"] is False and "reason" not in cpos[0]
     assert c["tally"]["position_from_failed_wake"] == []
+
+
+def test_run_pass_bounds_the_ledger_lock_and_leaves_the_memo_unchanged(house):
+    """I2: the pass reads every door's store under the ledger lock, so it can hold that
+    lock for many seconds; a heartbeat waiting for it must give up, not block forever."""
+    import threading
+    import time as _time
+    root, led, cfg, q, bindings = house
+    _wake_and_position(led, cfg, bindings, q, "a", "assent", at=T0 + timedelta(days=1))
+    memo_in = run_pass(bindings["a"], now=T0 + timedelta(days=1), actor="heartbeat:a")[1]
+    held, release = threading.Event(), threading.Event()
+
+    def holder():
+        with led.locked():
+            held.set(); release.wait(30)
+
+    t = threading.Thread(target=holder); t.start(); held.wait(5)
+    try:
+        start = _time.monotonic()
+        out, memo = run_pass(bindings["b"], now=CLOSE + timedelta(seconds=1), actor="heartbeat:b", memo=memo_in)
+        elapsed = _time.monotonic() - start
+    finally:
+        release.set(); t.join()
+    assert 9.5 <= elapsed <= 10.5, f"run_pass waited {elapsed:.1f}s for the ledger lock"
+    assert out["skipped"] is False and "busy" in out["error"]
+    assert out["closed"] == [] and out["activated"] == []
+    assert memo == memo_in                                   # the memo is unchanged
+    assert [r for r in led.read() if r["record_type"] == "closing"] == []

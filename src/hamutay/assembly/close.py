@@ -24,11 +24,13 @@ def _read_store(path: str, open_store) -> list[dict] | None:
         return None
 
 
-def _latest_status(records: list[dict], event_id: str) -> dict | None:
-    latest = None
+def _latest_by_event_id(records: list[dict]) -> dict[str, dict]:
+    """event_id -> its latest event_status row. One pass per store (M1); the running
+    scan below was O(n^2) when it re-scanned the whole store for every status row."""
+    latest: dict[str, dict] = {}
     for r in records:
-        if r.get("record_type") == "event_status" and r.get("event_id") == event_id:
-            latest = r
+        if r.get("record_type") == "event_status":
+            latest[str(r.get("event_id"))] = r
     return latest
 
 
@@ -47,9 +49,10 @@ def _completed_index(records: list[dict]) -> dict[str, dict]:
 
 
 def eligible_positions(view: View, lineage_id: str, stores: dict[str, list[dict] | None],
-                       members: list[str]) -> list[dict]:
+                       members: list[str], latest: dict[str, dict[str, dict]] | None = None) -> list[dict]:
     out = []
     completed: dict[str, dict[str, dict]] = {}
+    latest = dict(latest or {})
     for p in view.positions_for_lineage(lineage_id):
         door = p["member"].removeprefix("door:")
         if door not in members:
@@ -66,7 +69,9 @@ def eligible_positions(view: View, lineage_id: str, stores: dict[str, list[dict]
             # C1: the join never completed. A wake that terminated `failed` is never
             # re-pended (boot recovery re-pends `running` orphans only), so this stance
             # can neither be counted nor discarded: unknown, and a cap in §7 step 5.
-            st = _latest_status(recs, p["event_id"])
+            if door not in latest:
+                latest[door] = _latest_by_event_id(recs)
+            st = latest[door].get(p["event_id"])
             if st is not None and st.get("status") == "failed":
                 out.append({"record": p, "eligible": None, "reason": "wake_failed"}); continue
         out.append({"record": p, "eligible": ok})
@@ -84,14 +89,15 @@ def active_positions(elig: list[dict], members: list[str]) -> dict[str, dict | N
     return active
 
 
-def absence_for(view: View, q: dict, door: str, recs: list[dict] | None) -> dict:
+def absence_for(view: View, q: dict, door: str, recs: list[dict] | None,
+                latest: dict[str, dict] | None = None) -> dict:
     truth = view.delivery_truth("question", q["question_id"], door)
     m = f"door:{door}"
     if truth["state"] == "store_unreadable" or recs is None:
         return {"member": m, "reason": "store_unreadable", "detail": truth.get("detail")}
     if truth["state"] != "landed":
         return {"member": m, "reason": "not_delivered", "detail": {"state": truth["state"]}}
-    st = _latest_status(recs, truth["event_id"])
+    st = (latest if latest is not None else _latest_by_event_id(recs)).get(truth["event_id"])
     if st is None:
         return {"member": m, "reason": "not_delivered", "detail": {"landed_but_absent_from_store": True}}
     status = st.get("status")
@@ -134,6 +140,7 @@ def try_close(ledger: Ledger, view: View, q: dict, *, now: datetime, actor: str,
         return None
     # step 2: running or unknown
     stores: dict[str, list[dict] | None] = {}
+    latest: dict[str, dict[str, dict]] = {}
     running_at_cutoff, unknown_at_cutoff = [], []
     for d in members:
         recs = _read_store(q["members"][d]["events"], open_store)
@@ -142,16 +149,16 @@ def try_close(ledger: Ledger, view: View, q: dict, *, now: datetime, actor: str,
             if not past_grace and not withdrawn:
                 return None
             unknown_at_cutoff.append(d); continue
-        for r in recs:
-            if r.get("record_type") == "event_status" and r.get("status") == "running":
-                if _latest_status(recs, r["event_id"]) is r and r.get("started_at") \
-                        and parse_instant(r["started_at"]) < closes_at:
-                    if not past_grace and not withdrawn:
-                        return None
-                    if d not in running_at_cutoff:
-                        running_at_cutoff.append(d)
+        latest[d] = _latest_by_event_id(recs)
+        for r in latest[d].values():
+            if r.get("status") == "running" and r.get("started_at") \
+                    and parse_instant(r["started_at"]) < closes_at:
+                if not past_grace and not withdrawn:
+                    return None
+                if d not in running_at_cutoff:
+                    running_at_cutoff.append(d)
     # step 3: tally
-    elig = eligible_positions(view, q["lineage_id"], stores, members)
+    elig = eligible_positions(view, q["lineage_id"], stores, members, latest)
     failed_positions = sorted({e["record"]["member"].removeprefix("door:")
                                for e in elig if e.get("reason") == "wake_failed"})
     active = active_positions(elig, members)
@@ -166,7 +173,7 @@ def try_close(ledger: Ledger, view: View, q: dict, *, now: datetime, actor: str,
                                   running_at_cutoff=running_at_cutoff, unknown_at_cutoff=unknown_at_cutoff,
                                   position_from_failed_wake=failed_positions)
     # step 4: the Empty Chair
-    absent = [absence_for(view, q, d, stores[d]) for d in members if active[d] is None]
+    absent = [absence_for(view, q, d, stores[d], latest.get(d)) for d in members if active[d] is None]
     # step 6: the child, embedded
     next_q = None
     if outcome == "extended":

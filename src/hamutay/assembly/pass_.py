@@ -13,6 +13,13 @@ from .outbox import run_outbox
 from .records import reduce
 
 
+# The pass holds the ledger lock across every door's store read (eligibility must be
+# judged against a store snapshot no older than the ledger snapshot), so under store
+# contention it can hold it for many seconds. A heartbeat that cannot take it inside
+# this window emits the error and tries again next poll rather than blocking (I2).
+LEDGER_LOCK_WINDOW_S = 10.0
+
+
 @dataclass(frozen=True)
 class PassMemo:
     signature: tuple
@@ -26,11 +33,13 @@ def run_pass(binding: AssemblyBinding, *, now: datetime, actor: str, memo: PassM
     if memo is not None and memo.signature == sig and memo.quiescent_until is not None and now < memo.quiescent_until:
         return {"skipped": True, "outbox": 0, "closed": [], "activated": []}, memo
     try:
-        with ledger.locked():
+        with ledger.try_locked(LEDGER_LOCK_WINDOW_S):
             view = reduce(ledger.read_unlocked())
             n = len(run_outbox(ledger, view, now=now, open_store=open_store))
             view = reduce(ledger.read_unlocked())
             closed = []
+            # frozen before the loop: a child created by an extension in this pass has
+            # closes_at > now, so it can never be due in the same pass
             for q in list(view.open_questions()):
                 c = try_close(ledger, view, q, now=now, actor=actor, open_store=open_store)
                 if c is not None:
