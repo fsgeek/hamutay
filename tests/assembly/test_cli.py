@@ -110,3 +110,17 @@ def test_history_includes_withdrawal_and_delivery_records(house, capsys):
     assert "withdrawal" in types
     delivery_ids = {r["id"] for r in h if r["record_type"] == "delivery"}
     assert q["question_id"] in delivery_ids
+
+
+def test_convene_by_is_restricted_to_tony_or_custodian(house, capsys):
+    """I4: --by was unconstrained on convene alone, so a human could sign as a resident."""
+    root, sha = house
+    with pytest.raises(SystemExit) as e:
+        _run(root, "convene", "--by", "door:qwen", "--text-file", "q.txt", "--closes-in", "7d",
+             "--proposal-procedure", "proc.json", "--artifact", "design.md", "--artifact-commit", sha)
+    assert e.value.code == 2
+    assert "invalid choice" in capsys.readouterr().err
+    ledger_path = root / "community/plaza/assembly.jsonl"
+    assert not ledger_path.exists() or not any(
+        json.loads(line).get("record_type") == "question"
+        for line in ledger_path.read_text().splitlines() if line.strip())
