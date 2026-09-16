@@ -1649,6 +1649,8 @@ def summarize_event_log(
     snippet_limit: int = 160,
     stale_after_seconds: int = 3600,
     now: datetime | None = None,
+    assembly_view=None,
+    door: str | None = None,
 ) -> dict:
     """Summarize an append-only event log for observability."""
     histories: dict[str, list[dict]] = {}
@@ -1821,7 +1823,7 @@ def summarize_event_log(
         record for record in records
         if record.get("record_type") == "heartbeat_status"
     ]
-    return {
+    summary = {
         "latest_quiet_declaration": (
             quiet_declarations[-1] if quiet_declarations else None
         ),
@@ -1873,6 +1875,24 @@ def summarize_event_log(
             ),
         ),
     }
+    if assembly_view is not None and door is not None:
+        mine = f"door:{door}"
+        opens = []
+        for q in assembly_view.open_questions():
+            if door not in q["members"]:
+                continue
+            latest = None
+            for p in assembly_view.positions_for_lineage(q["lineage_id"]):
+                if p["member"] == mine and (latest is None or p["seq"] > latest["seq"]):
+                    latest = p
+            opens.append({
+                "question_id": q["question_id"],
+                "round": q["round"],
+                "closes_at": q["closes_at"],
+                "my_position": latest["stance"] if latest else None,
+            })
+        summary["assembly"] = {"open_questions": opens, "observational": True}
+    return summary
 
 
 def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
@@ -2125,6 +2145,16 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
                 f"context_errors={event.get('context_error_count', 0)} "
                 f"{validation} "
                 f"response={snippet}"
+            )
+
+    assembly = report.get("assembly")
+    if assembly:
+        lines.append("")
+        lines.append(f"assembly (observational): {len(assembly['open_questions'])} open")
+        for q in assembly["open_questions"]:
+            lines.append(
+                f"  {q['question_id']} round {q['round']} closes {q['closes_at']} "
+                f"my position {q['my_position']}"
             )
 
     return "\n".join(lines)

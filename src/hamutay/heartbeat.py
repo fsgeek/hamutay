@@ -12,7 +12,12 @@ import time
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from hamutay.tools.schemas import DECLARE_QUIET_CONSTITUTION_CLAUSE
+from hamutay.tools.schemas import (
+    ASSEMBLY_CONSTITUTION_CLAUSE,
+    DECLARE_QUIET_CONSTITUTION_CLAUSE,
+)
+from hamutay.assembly.binding import bind
+from hamutay.assembly.pass_ import run_pass
 from hamutay.events import (
     EVENT_TYPE_REFLECTION,
     EventStore,
@@ -348,6 +353,8 @@ class HeartbeatLoop:
         ledger: DailyLedger | None = None,
         budget: WakeBudget | None = None,
         guard=None,
+        assembly=None,
+        assembly_pass=run_pass,
     ):
         self._session = session
         self._guard = guard
@@ -364,11 +371,37 @@ class HeartbeatLoop:
         # Set by _guard_step when a lease went live while a wake was still
         # running; the episode whose stop this step still owes.
         self._deferred_stop: str | None = None
+        self._assembly = assembly
+        self._assembly_pass = assembly_pass
+        self._assembly_memo = None
 
     @staticmethod
     def _emit(payload: dict) -> None:
         """One flushed JSON ops line per meaningful moment (journald-friendly)."""
         print(json.dumps(payload, default=str), flush=True)
+
+    def _assembly_step(self, now) -> None:
+        """Run the assembly pass first, before the guard or the budget.
+
+        An unbound loop never calls the pass. A pass error is emitted but
+        never stops the step — the heartbeat's own wake handling still runs.
+        """
+        if self._assembly is None:
+            return
+        result, self._assembly_memo = self._assembly_pass(
+            self._assembly,
+            now=now,
+            actor=f"heartbeat:{self._assembly.door}",
+            memo=self._assembly_memo,
+        )
+        if result.get("error") or result.get("closed") or result.get("activated") or result.get("outbox"):
+            self._emit(
+                {
+                    "heartbeat": "assembly",
+                    **{k: v for k, v in result.items() if k != "skipped"},
+                    "at": now.isoformat(),
+                }
+            )
 
     def _transition(
         self,
@@ -551,6 +584,7 @@ class HeartbeatLoop:
 
     def step(self) -> dict:
         now = self._now()
+        self._assembly_step(now)
         # The substrate guard runs before the budget: a door whose GPU is lent
         # has nothing to spend the budget on.
         if self._guard is not None:
@@ -672,12 +706,21 @@ GPU_LEASE_SENTENCE = (
 )
 
 
-def build_constitution(budget: "WakeBudget | None", gpu_lease: bool = False) -> str:
+def build_constitution(
+    budget: "WakeBudget | None", gpu_lease: bool = False, assembly: bool = False
+) -> str:
     """The operational prefix as configured: true under either setting."""
+    base = _CONSTITUTION_BASE
+    if assembly:
+        base = base.replace(
+            DECLARE_QUIET_CONSTITUTION_CLAUSE,
+            DECLARE_QUIET_CONSTITUTION_CLAUSE + ASSEMBLY_CONSTITUTION_CLAUSE,
+            1,
+        )
     if budget is None:
-        text = _CONSTITUTION_BASE + UNBUDGETED_SENTENCE
+        text = base + UNBUDGETED_SENTENCE
     else:
-        text = _CONSTITUTION_BASE + BUDGET_SENTENCE.format(
+        text = base + BUDGET_SENTENCE.format(
             usd=f" of {budget.daily_usd:.2f} USD",
             wakes=f" of {budget.daily_wakes} wakes",
         )
@@ -727,6 +770,32 @@ def resolve_heartbeat_launch(args) -> tuple[dict, list[str]]:
         defaults=HEARTBEAT_LAUNCH_DEFAULTS,
     )
     return launch, notes
+
+
+def resolve_assembly_binding(project_root, log_path, event_store_path):
+    """(binding | None, launch note). Any failure reading the ledger is no binding.
+
+    `bind` is imported at module level (`from hamutay.assembly.binding import
+    bind`) so tests can monkeypatch `hamutay.heartbeat.bind`; this function
+    calls the module attribute, not a locally-bound name, so the monkeypatch
+    takes effect.
+    """
+    from pathlib import Path
+
+    from hamutay.assembly.binding import MembersMalformed, load_members
+    from hamutay.assembly.ledger import Ledger
+    from hamutay.assembly.records import reduce
+
+    snaps = []
+    try:
+        cfg = load_members(Path(project_root))
+        if cfg is not None and cfg.ledger.exists():
+            snaps = reduce(Ledger(cfg.ledger).read()).snapshots_of_open_questions()
+    except MembersMalformed:
+        pass  # bind() reports it
+    except Exception as e:  # a malformed ledger: no binding, say why
+        return None, f"assembly: ledger unreadable ({e}); no binding"
+    return bind(Path(project_root), Path(log_path), Path(event_store_path), open_snapshots=snaps)
 
 
 def _positive_context_limit(value) -> int | None:
@@ -1098,6 +1167,7 @@ def main() -> None:
     import os
     from pathlib import Path
 
+    from hamutay.assembly.records import reduce
     from hamutay.events import default_event_log_path
     from hamutay.taste_open import (
         AnthropicTasteBackend,
@@ -1209,6 +1279,11 @@ def main() -> None:
             context_limit=context_limit,
         )
 
+    assembly_binding, assembly_note = resolve_assembly_binding(
+        args.project_root, args.log_path, event_log_path
+    )
+    HeartbeatLoop._emit({"heartbeat": "launch", "note": assembly_note})
+
     session = OpenTasteSession(
         model=args.model,
         backend=backend,
@@ -1220,8 +1295,11 @@ def main() -> None:
         resume=Path(args.log_path).exists(),
         enable_tools=True,
         project_root=Path(args.project_root),
-        system_prompt_prefix=build_constitution(budget, gpu_lease=bool(store.lease_binding)),
+        system_prompt_prefix=build_constitution(
+            budget, gpu_lease=bool(store.lease_binding), assembly=bool(assembly_binding)
+        ),
         wake_mode=wake_mode,
+        assembly=assembly_binding,
         launch_config={
             "model": args.model,
             "provider": args.provider,
@@ -1266,6 +1344,14 @@ def main() -> None:
             "heartbeat": "launch",
             "note": f"gpu lease: {store.lease_binding} (door.json)",
         })
+    def _assembly_view(b):
+        if b is None:
+            return None
+        try:
+            return reduce(b.ledger.read())
+        except Exception:
+            return None
+
     loop = HeartbeatLoop(
         session,
         store,
@@ -1274,6 +1360,13 @@ def main() -> None:
         ledger=DailyLedger(args.log_path),
         budget=budget,
         guard=guard,
+        assembly=assembly_binding,
+        summarize=lambda records, now=None: summarize_event_log(
+            records,
+            now=now,
+            assembly_view=_assembly_view(assembly_binding),
+            door=assembly_binding.door if assembly_binding else None,
+        ),
     )
     try:
         loop.run_forever()
