@@ -172,6 +172,8 @@ def try_close(ledger: Ledger, view: View, q: dict, *, now: datetime, actor: str,
         outcome, cap = apply_caps(outcome, round_n=q["round"], max_rounds=max_rounds, not_offered=not_offered,
                                   running_at_cutoff=running_at_cutoff, unknown_at_cutoff=unknown_at_cutoff,
                                   position_from_failed_wake=failed_positions)
+        if cap:
+            trace = f"{trace}; {cap}"
     # step 4: the Empty Chair
     absent = [absence_for(view, q, d, stores[d], latest.get(d)) for d in members if active[d] is None]
     # step 6: the child, embedded

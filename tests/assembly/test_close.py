@@ -157,6 +157,9 @@ def test_not_offered_member_caps_assent(house, monkeypatch):
         v = reduce(led.read_unlocked())
         c = try_close(led, v, v.questions[q["question_id"]], now=CLOSE + GRACE + timedelta(seconds=1), actor="x")
     assert c["outcome"] == "extended" and "not_offered:d" in c["tally"]["cap"]
+    # spec §7 step 5: the cap is named in trace, not only in tally["cap"]
+    assert "cap:not_offered" in c["tally"]["trace"]
+    assert c["tally"]["cap"] == "cap:not_offered:d"
 
 
 def test_skipped_by_quiet_is_named_in_the_empty_chair(house):
