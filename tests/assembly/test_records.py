@@ -103,7 +103,7 @@ def test_governing_selector_prefers_the_active_procedure(ledger_path):
     view = reduce(led.read())
     assert view.governing_for_new_question()["procedure_id"] is None
     prov = led.append(build_procedure({"rule": "consent-v0", "max_rounds": 3, "quorum": "ceil(half)"},
-                                      {"path": "p", "commit": "c", "sha256": "s"}, status="provisional"))
+                                      {"path": "p", "commit": "c", "sha256": "s"}, status="provisional", version=1))
     assert prov["version"] == 1
     act = dict(prov); act.pop("seq"); act.pop("created_at"); act["status"] = "active"; act["activated_by_closing_id"] = "x"
     led.append(act)
