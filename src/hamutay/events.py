@@ -578,9 +578,15 @@ class EventStore:
                 raise StoreUnavailable(f"{self.path}: malformed line: {e}") from e
             if any(r.get("event_id") == event["event_id"] for r in records):
                 return False
-            line = json.dumps(event, default=str) + "\n"
-            with self.path.open("a") as f:
-                f.write(line); f.flush(); os.fsync(f.fileno())
+            data = (json.dumps(event, default=str) + "\n").encode("utf-8")
+            before = self.path.stat().st_size if self.path.exists() else 0
+            with self.path.open("ab") as f:
+                f.write(data); f.flush(); os.fsync(f.fileno())
+            after = self.path.stat().st_size
+            if after != before + len(data):
+                raise StoreUnavailable(
+                    f"{self.path}: short write (expected {before + len(data)} bytes, got {after})"
+                )
             return True
 
     def _append_unlocked(self, record: dict) -> None:
@@ -685,15 +691,7 @@ class EventStore:
             pending.sort(key=lambda r: r.get("created_at", ""))
             for event in pending:
                 if is_expired(event, now=now):
-                    expired = {
-                        "record_type": "event_status",
-                        "event_id": event["event_id"],
-                        "event_type": event.get(
-                            "event_type", EVENT_TYPE_REFLECTION
-                        ),
-                        "status": "expired",
-                        "expired_at": utc_now_iso(),
-                    }
+                    expired = _expired_record(event)
                     self._append_unlocked(expired)
                     return event, expired
                 if event.get("defer_to_declared_quiet"):
@@ -702,10 +700,10 @@ class EventStore:
                     if kind == "deferred":
                         continue
                     if kind == "expire_by_quiet":
-                        expired = {"record_type": "event_status", "event_id": event["event_id"],
-                                   "event_type": event.get("event_type", EVENT_TYPE_REFLECTION),
-                                   "status": "expired", "expired_at": utc_now_iso(),
-                                   "detail": {"reason": "skipped_by_quiet", "quiet_until": detail["quiet_until"]}}
+                        expired = _expired_record(
+                            event,
+                            {"reason": "skipped_by_quiet", "quiet_until": detail["quiet_until"]},
+                        )
                         self._append_unlocked(expired)
                         return event, expired
                 if not is_due(event, now=now):
@@ -966,6 +964,24 @@ class EventStore:
                 self._append_unlocked(record)
                 suppressed.append(record)
         return suppressed
+
+
+def _expired_record(event: dict, detail: dict | None = None) -> dict:
+    """The event_status record claim_next_pending appends when an event expires.
+
+    detail is omitted (no "detail" key) for a plain expiry, and carries the
+    assembly_claimable reason/quiet_until when an assembly event expires by quiet.
+    """
+    record = {
+        "record_type": "event_status",
+        "event_id": event["event_id"],
+        "event_type": event.get("event_type", EVENT_TYPE_REFLECTION),
+        "status": "expired",
+        "expired_at": utc_now_iso(),
+    }
+    if detail is not None:
+        record["detail"] = detail
+    return record
 
 
 def is_expired(event: dict, *, now: datetime | None = None) -> bool:
@@ -1574,7 +1590,7 @@ def summarize_event_history(
         ),
         "not_before": first.get("not_before"),
         "expires_at": first.get("expires_at"),
-        "defer_to_declared_quiet": bool(first.get("defer_to_declared_quiet")),
+        "defer_to_declared_quiet": True if first.get("defer_to_declared_quiet") else None,
         "assembly_question_id": first.get("assembly_question_id"),
         "scheduled_by_cycle": first.get("scheduled_by_cycle"),
         "scheduled_by_record_id": first.get("scheduled_by_record_id"),

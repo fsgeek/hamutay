@@ -50,6 +50,20 @@ def test_append_if_absent_is_at_most_once(tmp_path):
     assert store.append_if_absent(ev) is False
 
 
+def test_append_if_absent_raises_on_a_short_write(tmp_path, monkeypatch):
+    import os
+    store = EventStore(tmp_path / "e.jsonl")
+    ev = _assembly_event(T0 + timedelta(days=7))
+    real_fsync = os.fsync
+
+    def truncating_fsync(fd):
+        real_fsync(fd)
+        os.ftruncate(fd, os.fstat(fd).st_size - 1)      # simulate a short write
+    monkeypatch.setattr(os, "fsync", truncating_fsync)
+    with pytest.raises(StoreUnavailable, match="short write"):
+        store.append_if_absent(ev)
+
+
 def test_try_read_records_times_out_and_wraps_malformed(tmp_path):
     store = EventStore(tmp_path / "e.jsonl")
     store.append(build_inbound_event(purpose="x", sender="tony"))
