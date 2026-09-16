@@ -49,6 +49,7 @@ def _completed_index(records: list[dict]) -> dict[str, dict]:
 def eligible_positions(view: View, lineage_id: str, stores: dict[str, list[dict] | None],
                        members: list[str]) -> list[dict]:
     out = []
+    completed: dict[str, dict[str, dict]] = {}
     for p in view.positions_for_lineage(lineage_id):
         door = p["member"].removeprefix("door:")
         if door not in members:
@@ -56,9 +57,18 @@ def eligible_positions(view: View, lineage_id: str, stores: dict[str, list[dict]
         recs = stores.get(door)
         if recs is None:
             out.append({"record": p, "eligible": None}); continue
-        c = _completed_index(recs).get(p["record_id"])
+        if door not in completed:
+            completed[door] = _completed_index(recs)
+        c = completed[door].get(p["record_id"])
         ok = bool(c) and c.get("event_id") == p["event_id"] and c.get("run_id") == p["run_id"] \
             and c.get("_started_at") == p["wake_started_at"]
+        if not ok and not c:
+            # C1: the join never completed. A wake that terminated `failed` is never
+            # re-pended (boot recovery re-pends `running` orphans only), so this stance
+            # can neither be counted nor discarded: unknown, and a cap in §7 step 5.
+            st = _latest_status(recs, p["event_id"])
+            if st is not None and st.get("status") == "failed":
+                out.append({"record": p, "eligible": None, "reason": "wake_failed"}); continue
         out.append({"record": p, "eligible": ok})
     return out
 
@@ -142,6 +152,8 @@ def try_close(ledger: Ledger, view: View, q: dict, *, now: datetime, actor: str,
                         running_at_cutoff.append(d)
     # step 3: tally
     elig = eligible_positions(view, q["lineage_id"], stores, members)
+    failed_positions = sorted({e["record"]["member"].removeprefix("door:")
+                               for e in elig if e.get("reason") == "wake_failed"})
     active = active_positions(elig, members)
     stances = {d: (p["stance"] if p else None) for d, p in active.items()}
     quorum = quorum_for(q["members"], q["governing"])
@@ -151,7 +163,8 @@ def try_close(ledger: Ledger, view: View, q: dict, *, now: datetime, actor: str,
     else:
         outcome, trace = consent_v0(stances, members=members, round_n=q["round"], max_rounds=max_rounds, quorum=quorum)
         outcome, cap = apply_caps(outcome, round_n=q["round"], max_rounds=max_rounds, not_offered=not_offered,
-                                  running_at_cutoff=running_at_cutoff, unknown_at_cutoff=unknown_at_cutoff)
+                                  running_at_cutoff=running_at_cutoff, unknown_at_cutoff=unknown_at_cutoff,
+                                  position_from_failed_wake=failed_positions)
     # step 4: the Empty Chair
     absent = [absence_for(view, q, d, stores[d]) for d in members if active[d] is None]
     # step 6: the child, embedded
@@ -173,7 +186,8 @@ def try_close(ledger: Ledger, view: View, q: dict, *, now: datetime, actor: str,
                          "abstentions": sorted(d for d, s in stances.items() if s == "abstain"),
                          "spoke": sum(1 for s in stances.values() if s is not None),
                          "not_offered": not_offered, "running_at_cutoff": running_at_cutoff,
-                         "unknown_at_cutoff": unknown_at_cutoff, "trace": trace, "cap": cap},
+                         "unknown_at_cutoff": unknown_at_cutoff,
+                         "position_from_failed_wake": failed_positions, "trace": trace, "cap": cap},
                "positions": elig, "testimony": view.testimony_for_lineage(q["lineage_id"]), "absent": absent,
                "next_question": next_q, "closed_by": actor, "closed_at": iso(now),
                "delivery": {d: {"event_id": closing_event_id(cid, d)} for d in members}}

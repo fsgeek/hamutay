@@ -201,3 +201,39 @@ def test_two_passes_one_closing(house):
     run_pass(bindings["a"], now=CLOSE + timedelta(seconds=1), actor="heartbeat:a")
     run_pass(bindings["b"], now=CLOSE + timedelta(seconds=1), actor="heartbeat:b")
     assert len([r for r in led.read() if r["record_type"] == "closing"]) == 1
+
+
+def test_a_position_from_a_failed_wake_caps_assent_and_is_neither_eligible_nor_ignorable(house):
+    """C1: a wake that records a dissent and then terminates `failed` is never re-pended
+    (boot recovery re-pends `running` orphans only), so its stance cannot be counted and
+    must not be silently discarded: the door enters cap:position_from_failed_wake."""
+    root, led, cfg, q, bindings = house
+    _wake_and_position(led, cfg, bindings, q, "a", "assent", at=T0 + timedelta(days=1))
+    _wake_and_position(led, cfg, bindings, q, "b", "assent", at=T0 + timedelta(days=1))
+    pos, ctx, store = _wake_and_position(led, cfg, bindings, q, "c", "dissent",
+                                         at=T0 + timedelta(days=1), complete=False)
+    store.append_failed(event=ctx.event, run_id=ctx.run_id, exc=RuntimeError("boom"))
+    with led.locked():
+        v = reduce(led.read_unlocked())
+        c = try_close(led, v, v.questions[q["question_id"]], now=CLOSE + timedelta(seconds=1), actor="x")
+    assert c["outcome"] == "extended"
+    assert c["tally"]["cap"] == "cap:position_from_failed_wake:c"
+    assert c["tally"]["position_from_failed_wake"] == ["c"]
+    cpos = [p for p in c["positions"] if p["record"]["member"] == "door:c"]
+    assert len(cpos) == 1 and cpos[0]["eligible"] is None and cpos[0]["reason"] == "wake_failed"
+    assert c["tally"]["objections"] == []            # the stance is not counted
+    assert {a["member"]: a["reason"] for a in c["absent"]}["door:c"] == "failed"
+
+
+def test_a_position_from_a_running_wake_is_still_ineligible_not_unknown(house):
+    """The `failed` carve-out is narrow: running/pending keep eligible: False."""
+    root, led, cfg, q, bindings = house
+    _wake_and_position(led, cfg, bindings, q, "a", "assent", at=T0 + timedelta(days=1))
+    _wake_and_position(led, cfg, bindings, q, "b", "assent", at=T0 + timedelta(days=1))
+    _wake_and_position(led, cfg, bindings, q, "c", "dissent", at=CLOSE - timedelta(minutes=5), complete=False)
+    with led.locked():
+        v = reduce(led.read_unlocked())
+        c = try_close(led, v, v.questions[q["question_id"]], now=CLOSE + GRACE + timedelta(seconds=1), actor="x")
+    cpos = [p for p in c["positions"] if p["record"]["member"] == "door:c"]
+    assert len(cpos) == 1 and cpos[0]["eligible"] is False and "reason" not in cpos[0]
+    assert c["tally"]["position_from_failed_wake"] == []

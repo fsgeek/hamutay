@@ -36,10 +36,18 @@ def test_trace_names_the_branch():
     assert "objection" in trace and "a" in trace
 
 
-@pytest.mark.parametrize("cap", ["not_offered", "running_at_cutoff", "unknown_at_cutoff"])
+CAPS = ["not_offered", "running_at_cutoff", "unknown_at_cutoff", "position_from_failed_wake"]
+
+
+def _kw(**over):
+    kw = {c: [] for c in CAPS}
+    kw.update(over)
+    return kw
+
+
+@pytest.mark.parametrize("cap", CAPS)
 def test_caps_convert_assent_only(cap):
-    kw = {"not_offered": [], "running_at_cutoff": [], "unknown_at_cutoff": []}
-    kw[cap] = ["d"]
+    kw = _kw(**{cap: ["d"]})
     assert apply_caps("assented", round_n=1, max_rounds=3, **kw) == ("extended", f"cap:{cap}:d")
     assert apply_caps("assented", round_n=3, max_rounds=3, **kw)[0] == "unresolved"
     assert apply_caps("extended", round_n=1, max_rounds=3, **kw) == ("extended", "")
@@ -47,5 +55,14 @@ def test_caps_convert_assent_only(cap):
 
 
 def test_no_caps_pass_through():
-    assert apply_caps("assented", round_n=1, max_rounds=3, not_offered=[], running_at_cutoff=[],
-                      unknown_at_cutoff=[]) == ("assented", "")
+    assert apply_caps("assented", round_n=1, max_rounds=3, **_kw()) == ("assented", "")
+
+
+def test_position_from_a_failed_wake_is_the_last_cap_checked_and_names_its_doors():
+    """C1's cap sits after unknown_at_cutoff; with several doors it names them sorted."""
+    out, trace = apply_caps("assented", round_n=1, max_rounds=3,
+                            **_kw(position_from_failed_wake=["qwen", "elder"]))
+    assert out == "extended" and trace == "cap:position_from_failed_wake:elder,qwen"
+    # an earlier cap still wins when both apply
+    assert apply_caps("assented", round_n=1, max_rounds=3,
+                      **_kw(not_offered=["d"], position_from_failed_wake=["c"]))[1] == "cap:not_offered:d"

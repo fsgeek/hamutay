@@ -20,11 +20,13 @@ def consent_v0(active: dict[str, str | None], *, members: list[str], round_n: in
 
 
 def apply_caps(outcome: str, *, round_n: int, max_rounds: int, not_offered: list[str],
-               running_at_cutoff: list[str], unknown_at_cutoff: list[str]) -> tuple[str, str]:
+               running_at_cutoff: list[str], unknown_at_cutoff: list[str],
+               position_from_failed_wake: list[str] | None = None) -> tuple[str, str]:
     if outcome != "assented":
         return outcome, ""
     for name, members in (("not_offered", not_offered), ("running_at_cutoff", running_at_cutoff),
-                          ("unknown_at_cutoff", unknown_at_cutoff)):
+                          ("unknown_at_cutoff", unknown_at_cutoff),
+                          ("position_from_failed_wake", position_from_failed_wake or [])):
         if members:
             capped = "extended" if round_n < max_rounds else "unresolved"
             return capped, f"cap:{name}:{','.join(sorted(members))}"
