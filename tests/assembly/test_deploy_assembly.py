@@ -62,3 +62,16 @@ def test_migration_waits_on_a_journal_query_journalctl_accepts():
 def test_check_script_scopes_the_bound_check_to_the_current_invocation():
     text = (ROOT / "deploy/check-assembly.sh").read_text()
     assert "_SYSTEMD_INVOCATION_ID" in text
+
+
+def test_migration_checks_for_a_running_wake_inside_the_restart_loop_and_documents_force():
+    """I5: the up-front pass ran ~90 s before the last door's restart, so it was advisory.
+    The check runs again immediately before each restart; --force skips it, loudly."""
+    text = (ROOT / "deploy/migrate-assembly.sh").read_text()
+    assert "--force" in text and "usage:" in text.lower()
+    loop = text.split('for d in "${DOORS[@]}"; do')[-1]          # the restart loop
+    assert "systemctl --user restart" in loop
+    check = loop.index("running_wake")
+    restart = loop.index("systemctl --user restart")
+    assert check < restart, "the running-wake check must precede the restart"
+    assert "FORCE" in loop
