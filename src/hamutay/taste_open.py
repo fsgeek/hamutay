@@ -1252,9 +1252,20 @@ class OpenAITasteBackend:
                     time.sleep(delay)
                     continue
                 return resp.json()
+            except httpx.ReadTimeout as e:
+                # Not transient. A read timeout means the substrate was still
+                # generating when our clock ran out; a retry re-runs the same
+                # generation against the same clock and cannot succeed (found
+                # live 2026-09-16, community/qwen c9: four identical 5.5-minute
+                # generations cancelled at 300 s, 21 minutes of GPU thrown away).
+                raise RuntimeError(
+                    "OpenAI backend transport failed: ReadTimeout after "
+                    f"{self._timeout:g}s (not retried: the substrate was still "
+                    "generating; raise the transport timeout for this "
+                    "substrate or shorten the wake)"
+                ) from e
             except (
                 httpx.RemoteProtocolError,
-                httpx.ReadTimeout,
                 httpx.ConnectTimeout,
                 httpx.ConnectError,
                 httpx.ReadError,

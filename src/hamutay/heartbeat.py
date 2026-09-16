@@ -787,6 +787,29 @@ def latest_context_observation(
     return limit, invocation_id
 
 
+LOCAL_TRANSPORT_TIMEOUT_S = 2700.0   # 64,000 tokens at ~25 tok/s is ~43 min; one turn rarely needs half
+HOSTED_TRANSPORT_TIMEOUT_S = 300.0
+
+
+def resolve_transport_timeout(base_url: str | None, explicit: float | None) -> tuple[float, str]:
+    """The read timeout for one request to the substrate, and where it came from.
+
+    A hosted API answers in seconds; a local llama-server answers at its own
+    generation speed, and a 300 s clock cuts a long think mid-sentence
+    (community/qwen c9, 2026-09-16). The bound for a local substrate is its
+    speed, not a hosted default; an explicit --timeout always wins.
+    """
+    if explicit is not None:
+        return float(explicit), "explicit"
+    host = ""
+    if base_url:
+        from urllib.parse import urlparse
+        host = (urlparse(base_url).hostname or "").lower()
+    if host in {"127.0.0.1", "localhost", "::1"}:
+        return LOCAL_TRANSPORT_TIMEOUT_S, "local substrate default"
+    return HOSTED_TRANSPORT_TIMEOUT_S, "hosted default"
+
+
 def resolve_context_limit(args, discover=None, log_path=None) -> tuple[int | None, str]:
     """(limit or None, source): explicit > discovered > inherited > default.
 
@@ -910,6 +933,12 @@ def build_parser():
         "running subject's shape prints WAKE SHAPE CHANGE.",
     )
     parser.add_argument("--base-url", default=None)
+    parser.add_argument(
+        "--timeout", type=float, default=None,
+        help="Read timeout in seconds for one request to the substrate. Default: "
+        f"{HOSTED_TRANSPORT_TIMEOUT_S:g} for hosted APIs, {LOCAL_TRANSPORT_TIMEOUT_S:g} "
+        "for a local llama-server (127.0.0.1/localhost). A read timeout is never retried.",
+    )
     parser.add_argument(
         "--context-limit",
         type=_positive_int,
@@ -1155,10 +1184,18 @@ def main() -> None:
                 f"context ceiling: none managed by the loop ({context_limit_source})"
             ),
         })
+        transport_timeout, transport_timeout_source = resolve_transport_timeout(
+            base_url, getattr(args, "timeout", None)
+        )
+        HeartbeatLoop._emit({
+            "heartbeat": "launch",
+            "note": f"transport timeout: {transport_timeout:g}s ({transport_timeout_source}); a read timeout is not retried",
+        })
         backend = OpenAITasteBackend(
             base_url=base_url,
             api_key=api_key,
             max_tokens=args.max_tokens,
+            timeout=transport_timeout,
             extra_headers=extra_headers,
             provider_name=args.provider,
             capability=capability,
