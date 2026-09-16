@@ -49,6 +49,8 @@ def run_outbox(ledger: Ledger, view: View, *, now: datetime, open_store=EventSto
                 for_=for_, id_=id_, door=door, event_id=truth["event_id"], state="cancelled")))
             continue
         obj = view.questions[id_] if for_ == "question" else view.closings_by_id[id_]
+        # a closing carries no `members` of its own; its delivery path comes from the
+        # QUESTION's member snapshot, which is frozen for the whole lineage
         path = Path(obj["members"][door]["events"]) if for_ == "question" \
             else Path(view.questions[obj["question_id"]]["members"][door]["events"])
         event = _event_for(view, for_, obj, door)

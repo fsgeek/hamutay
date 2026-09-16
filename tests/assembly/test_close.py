@@ -1,5 +1,7 @@
 import json
+import multiprocessing
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -265,3 +267,74 @@ def test_run_pass_bounds_the_ledger_lock_and_leaves_the_memo_unchanged(house):
     assert out["closed"] == [] and out["activated"] == []
     assert memo == memo_in                                   # the memo is unchanged
     assert [r for r in led.read() if r["record_type"] == "closing"] == []
+
+
+CLOSING_KEYS = {
+    "record_type", "closing_id", "question_id", "lineage_id", "round", "outcome", "governing",
+    "provisional", "proposal", "proposal_sha256", "tally", "positions", "testimony", "absent",
+    "next_question", "closed_by", "closed_at", "delivery", "seq", "created_at",
+}
+TALLY_KEYS = {
+    "eligible_members", "quorum", "active", "objections", "assents", "abstentions", "spoke",
+    "not_offered", "running_at_cutoff", "unknown_at_cutoff", "position_from_failed_wake",
+    "trace", "cap",
+}
+
+
+def test_closing_shape(house):
+    """The closing is the assembly's only durable verdict and is read by the outbox, the
+    activation derivation, the CLI and every door. Pin its key set, not only its values."""
+    root, led, cfg, q, bindings = house
+    _wake_and_position(led, cfg, bindings, q, "a", "assent", at=T0 + timedelta(days=1))
+    _wake_and_position(led, cfg, bindings, q, "b", "assent", at=T0 + timedelta(days=1))
+    with led.locked():
+        v = reduce(led.read_unlocked())
+        c = try_close(led, v, v.questions[q["question_id"]], now=CLOSE + timedelta(seconds=1), actor="cli:test")
+    assert set(c) == CLOSING_KEYS, f"unexpected: {set(c) ^ CLOSING_KEYS}"
+    assert set(c["tally"]) == TALLY_KEYS, f"unexpected: {set(c['tally']) ^ TALLY_KEYS}"
+    assert set(c["delivery"]) == set(DOORS)
+    assert all(set(v2) == {"event_id"} for v2 in c["delivery"].values())
+    assert all(set(p) <= {"record", "eligible", "reason"} for p in c["positions"])
+    assert all(set(a) == {"member", "reason", "detail"} for a in c["absent"])
+
+
+def _pass_worker(barrier, root, door, when_iso):
+    from hamutay.assembly.binding import bind, load_members
+    from hamutay.assembly.pass_ import run_pass
+    cfg = load_members(Path(root))
+    b = bind(Path(root), cfg.members[door].session, cfg.members[door].events)[0]
+    barrier.wait(30)
+    run_pass(b, now=parse_instant(when_iso), actor=f"heartbeat:{door}")
+
+
+def test_four_processes_close_once(house):
+    """Four heartbeats poll the same due question at the same instant. The ledger lock and
+    the deterministic closing id must yield exactly one closing and one delivery per door."""
+    root, led, cfg, q, bindings = house
+    _wake_and_position(led, cfg, bindings, q, "a", "assent", at=T0 + timedelta(days=1))
+    _wake_and_position(led, cfg, bindings, q, "b", "assent", at=T0 + timedelta(days=1))
+    for d in ("c", "d"):
+        s = EventStore(cfg.members[d].events); ev, run = s.claim_next_pending(now=T0 + timedelta(days=2))
+        s.append_completed(event=ev, run_id=run["run_id"], wake_cycle=1, result_record_id=uuid4(), response_text="r")
+    ctx = multiprocessing.get_context("fork")
+    barrier = ctx.Barrier(len(DOORS))
+    when = iso(CLOSE + timedelta(seconds=1))
+    procs = [ctx.Process(target=_pass_worker, args=(barrier, str(root), d, when)) for d in DOORS]
+    for p in procs:
+        p.start()
+    for p in procs:
+        p.join(60)
+    assert all(p.exitcode == 0 for p in procs), [p.exitcode for p in procs]
+
+    records = led.read()
+    cid = closing_id_for(q["question_id"])
+    closings = [r for r in records if r["record_type"] == "closing"]
+    assert len(closings) == 1 and closings[0]["closing_id"] == cid
+    landed = [r for r in records if r["record_type"] == "delivery" and r["for"] == "closing"
+              and r["id"] == cid and r["state"] == "landed"]
+    assert sorted(r["door"] for r in landed) == sorted(DOORS)
+    assert [r["seq"] for r in records] == list(range(1, len(records) + 1))
+    for d in DOORS:
+        evs = [r for r in EventStore(cfg.members[d].events).read_records() if r.get("record_type") != "event_status"]
+        ids = [r["event_id"] for r in evs if r.get("event_id")]
+        assert len(ids) == len(set(ids)), f"{d}: duplicate store events {ids}"
