@@ -313,11 +313,13 @@ types:
  "question_id": <uuid>, "lineage_id": <uuid>, "round": n,
  "outcome": "assented" | "extended" | "unresolved" | "withdrawn",
  "governing": {...copied from the question...}, "provisional": true | false,
+ "proposal": {...copied from the question...}, "proposal_sha256": <hex>,
  "tally": {"eligible_members": [...], "quorum": 2,
            "active": {"<door>": <position_id> | null},
            "objections": [...], "assents": [...], "abstentions": [...], "spoke": k,
-           "not_offered": [...], "running_at_cutoff": [...], "trace": "..."},
- "positions": [{"record": <verbatim>, "eligible": bool}],
+           "not_offered": [...], "running_at_cutoff": [...], "unknown_at_cutoff": [...],
+           "position_from_failed_wake": [...], "trace": "..."},
+ "positions": [{"record": <verbatim>, "eligible": true | false | null, "reason": "wake_failed" (only with null from a failed wake)}],
  "testimony": [<verbatim>],
  "absent": [{"member": "door:<name>",
              "reason": "not_delivered" | "skipped_by_quiet" | "pending_at_close"
@@ -333,6 +335,9 @@ types:
 # The closing event to each door is the child's delivery: the child's
 # offer time is the parent closing's `landed_at` for that door, and the
 # child's Empty Chair evidence is that event's lifecycle.
+# A closing copies the question's `proposal` and `proposal_sha256` so that execution and
+# activation can read them without a join; readers fall back to the question's proposal
+# when a closing lacks them.
 
 {"record_type": "execution", "seq": N, "execution_id": <uuid>, "closing_id": <uuid>,
  "question_id": <uuid>, "proposal_sha256": <hex>, "by": "custodian" | "tony",
@@ -492,8 +497,12 @@ snapshotted store with the same `event_id`, `run_id`, and
 `wake_started_at`, as `quiet_declaration_for_latest_wake` joins
 declarations on `result_record_id`. A position from a wake that never
 completed is carried in the closing's `positions` with `eligible: false`
-and never tallied; boot recovery re-pends the source event and the re-run
-wake may take a position again. A store that cannot be read makes
+and never tallied. Boot recovery re-pends a wake found `running` at boot;
+a wake that terminated `failed` is not retried, so a position from a
+failed wake is carried with `eligible: null` and its door enters the cap
+`position_from_failed_wake` (§7 step 5), which converts an assent to an
+extension: the stance cannot be counted, and the question cannot assent
+over it. A store that cannot be read makes
 eligibility unknown, never false (§7 step 2).
 
 ### 7. The pass: outbox, then closing
@@ -557,9 +566,11 @@ both the running-wake wait and the unreadable-store wait):
    `running_at_close`, `expired`, `failed`, `suppressed`,
    `completed_without_position` (with the wake's `record_id`; a later
    quiet declaration as detail; no causal reading).
-5. Rule (§8) → `outcome`, with three caps applied after the rule: if any
-   member is `not_offered`, `running_at_cutoff`, or `unknown_at_cutoff`,
-   an `assented` result becomes `extended` (rounds remaining) or
+5. Rule (§8) → `outcome`, with four caps applied after the rule: if any
+   member is `not_offered`, `running_at_cutoff`, `unknown_at_cutoff`, or
+   `position_from_failed_wake` (its position's wake terminated `failed`,
+   so the completion join can never be made and the wake is never
+   retried), an `assented` result becomes `extended` (rounds remaining) or
    `unresolved` (none), with the cap named in `trace`. A round that
    extends because a member was not offered or unknown does not consume
    that member's chance: the next round's event is the closing event,

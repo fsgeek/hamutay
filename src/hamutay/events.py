@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import fcntl
 import json
+import os
 import sys
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -295,6 +297,8 @@ def build_inbound_event(
     not_before: str | None = None,
     expires_at: str | None = None,
     requested_context: list[dict] | None = None,
+    event_id: str | None = None,
+    assembly: dict | None = None,
 ) -> dict:
     """Create an externally-originated pending event. Does not write it.
 
@@ -327,6 +331,17 @@ def build_inbound_event(
             # Validate parseability but preserve original ISO spelling.
             datetime.fromisoformat(str(value).replace("Z", "+00:00"))
             record[field] = str(value)
+    if event_id is not None:
+        record["event_id"] = str(UUID(str(event_id)))     # ValueError if not a UUID
+    if assembly is not None:
+        qid = str(assembly.get("assembly_question_id") or "")
+        exp = assembly.get("expires_at")
+        if not qid or not exp:
+            raise ValueError("assembly needs assembly_question_id and expires_at")
+        datetime.fromisoformat(str(exp).replace("Z", "+00:00"))
+        record["assembly_question_id"] = qid
+        record["expires_at"] = str(exp)
+        record["defer_to_declared_quiet"] = True
     return record
 
 
@@ -484,6 +499,22 @@ class LeaseGateRequired(RuntimeError):
     """This door participates in the GPU lease; only the heartbeat's gate may claim."""
 
 
+class StoreUnavailable(RuntimeError):
+    """The store could not be locked inside the window, or a line is unreadable."""
+
+
+NEXT_PENDING_LOCK_WINDOW_S = 2.0
+
+
+@dataclass(frozen=True)
+class WakeContext:
+    """Framework-owned identity of the wake being run (spec §6, round three I1)."""
+    event_id: str
+    run_id: str
+    started_at: str
+    event: dict
+
+
 class _GateToken:  # created only by hamutay.gpu_lease.gate while holding 4090.lock
     __slots__ = ()
 
@@ -515,6 +546,51 @@ class EventStore:
                 yield
             finally:
                 fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+    @contextmanager
+    def _try_locked(self, timeout_s: float):
+        self._lock_path.parent.mkdir(parents=True, exist_ok=True)
+        deadline = time.monotonic() + timeout_s
+        with self._lock_path.open("a") as lock_file:
+            while True:
+                try:
+                    fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    break
+                except BlockingIOError:
+                    if time.monotonic() >= deadline:
+                        raise StoreUnavailable(f"{self._lock_path} busy for {timeout_s}s")
+                    time.sleep(0.05)
+            try:
+                yield
+            finally:
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+
+    def try_read_records(self, timeout_s: float = 2.0) -> list[dict]:
+        with self._try_locked(timeout_s):
+            try:
+                return self._read_records_unlocked()
+            except json.JSONDecodeError as e:
+                raise StoreUnavailable(f"{self.path}: malformed line: {e}") from e
+
+    def append_if_absent(self, event: dict, *, timeout_s: float = 2.0) -> bool:
+        """At-most-once creation of a pending event by event_id (spec §7 outbox)."""
+        with self._try_locked(timeout_s):
+            try:
+                records = self._read_records_unlocked()
+            except json.JSONDecodeError as e:
+                raise StoreUnavailable(f"{self.path}: malformed line: {e}") from e
+            if any(r.get("event_id") == event["event_id"] for r in records):
+                return False
+            data = (json.dumps(event, default=str) + "\n").encode("utf-8")
+            before = self.path.stat().st_size if self.path.exists() else 0
+            with self.path.open("ab") as f:
+                f.write(data); f.flush(); os.fsync(f.fileno())
+            after = self.path.stat().st_size
+            if after != before + len(data):
+                raise StoreUnavailable(
+                    f"{self.path}: short write (expected {before + len(data)} bytes, got {after})"
+                )
+            return True
 
     def _append_unlocked(self, record: dict) -> None:
         with self.path.open("a") as f:
@@ -562,17 +638,36 @@ class EventStore:
         return self._latest_by_event_id_from_records(self.read_records())
 
     def next_pending(self, *, now: datetime | None = None) -> dict | None:
-        """Return the oldest claimable pending event by created_at, if any."""
-        pending = [
-            r for r in self.latest_by_event_id().values()
-            if r.get("status") == "pending"
-        ]
-        if not pending:
-            return None
-        pending.sort(key=lambda r: r.get("created_at", ""))
+        """Return the oldest claimable pending event by created_at, if any.
+
+        Read-only and advisory: the claim path re-checks under the lock. The lock
+        window is bounded because the poll loop calls this for every door, and a
+        door holding its own store lock must not stall the others (I1); on timeout
+        the read falls back to unlocked, which is what a torn concurrent append
+        would have done to the blocking read anyway.
+        """
+        try:
+            with self._try_locked(NEXT_PENDING_LOCK_WINDOW_S):
+                records = self._read_records_unlocked()
+        except StoreUnavailable:
+            try:
+                records = self._read_records_unlocked()
+            except json.JSONDecodeError:
+                return None
+        latest = self._latest_by_event_id_from_records(records)
+        pending = sorted((r for r in latest.values() if r.get("status") == "pending"),
+                         key=lambda r: r.get("created_at", ""))
+        current = now or datetime.now(timezone.utc)
         for event in pending:
-            if is_expired(event, now=now) or is_due(event, now=now):
+            if is_expired(event, now=current):
                 return event
+            if not is_due(event, now=current):
+                continue
+            if event.get("defer_to_declared_quiet"):
+                kind, _ = assembly_claimable(records, event, current)
+                if kind == "deferred":
+                    continue
+            return event
         return None
 
     def append_running(self, event: dict, run_id: UUID | None = None) -> dict:
@@ -603,9 +698,8 @@ class EventStore:
                 f"store bound to gpu lease {self.lease_binding}; claim through the heartbeat gate"
             )
         with self._locked():
-            latest = self._latest_by_event_id_from_records(
-                self._read_records_unlocked()
-            )
+            records = self._read_records_unlocked()
+            latest = self._latest_by_event_id_from_records(records)
             pending = [
                 r for r in latest.values()
                 if r.get("status") == "pending"
@@ -613,17 +707,21 @@ class EventStore:
             pending.sort(key=lambda r: r.get("created_at", ""))
             for event in pending:
                 if is_expired(event, now=now):
-                    expired = {
-                        "record_type": "event_status",
-                        "event_id": event["event_id"],
-                        "event_type": event.get(
-                            "event_type", EVENT_TYPE_REFLECTION
-                        ),
-                        "status": "expired",
-                        "expired_at": utc_now_iso(),
-                    }
+                    expired = _expired_record(event)
                     self._append_unlocked(expired)
                     return event, expired
+                if event.get("defer_to_declared_quiet"):
+                    kind, detail = assembly_claimable(
+                        records, event, now or datetime.now(timezone.utc))
+                    if kind == "deferred":
+                        continue
+                    if kind == "expire_by_quiet":
+                        expired = _expired_record(
+                            event,
+                            {"reason": "skipped_by_quiet", "quiet_until": detail["quiet_until"]},
+                        )
+                        self._append_unlocked(expired)
+                        return event, expired
                 if not is_due(event, now=now):
                     continue
                 running = self._build_running(event, run_id=run_id)
@@ -884,6 +982,24 @@ class EventStore:
         return suppressed
 
 
+def _expired_record(event: dict, detail: dict | None = None) -> dict:
+    """The event_status record claim_next_pending appends when an event expires.
+
+    detail is omitted (no "detail" key) for a plain expiry, and carries the
+    assembly_claimable reason/quiet_until when an assembly event expires by quiet.
+    """
+    record = {
+        "record_type": "event_status",
+        "event_id": event["event_id"],
+        "event_type": event.get("event_type", EVENT_TYPE_REFLECTION),
+        "status": "expired",
+        "expired_at": utc_now_iso(),
+    }
+    if detail is not None:
+        record["detail"] = detail
+    return record
+
+
 def is_expired(event: dict, *, now: datetime | None = None) -> bool:
     expires_at = event.get("expires_at")
     if not expires_at:
@@ -902,6 +1018,23 @@ def is_due(event: dict, *, now: datetime | None = None) -> bool:
     if threshold.tzinfo is None:
         threshold = threshold.replace(tzinfo=timezone.utc)
     return (now or datetime.now(timezone.utc)) >= threshold
+
+
+def assembly_claimable(records: list[dict], event: dict, now: datetime) -> tuple[str, dict]:
+    """Spec §5: an assembly event does not knock during a TIMED declared quiet."""
+    if not event.get("defer_to_declared_quiet"):
+        return "claimable", {}
+    decl = quiet_declaration_for_latest_wake(records)
+    until = (decl or {}).get("until")
+    if not until:
+        return "claimable", {}
+    until_dt = _parse_iso_utc(until)
+    if until_dt is None or until_dt <= now:
+        return "claimable", {}
+    exp = _parse_iso_utc(event.get("expires_at"))
+    if exp is not None and until_dt >= exp:
+        return "expire_by_quiet", {"quiet_until": until}
+    return "deferred", {"quiet_until": until}
 
 
 def _parse_iso(value: object) -> datetime | None:
@@ -1473,6 +1606,8 @@ def summarize_event_history(
         ),
         "not_before": first.get("not_before"),
         "expires_at": first.get("expires_at"),
+        "defer_to_declared_quiet": True if first.get("defer_to_declared_quiet") else None,
+        "assembly_question_id": first.get("assembly_question_id"),
         "scheduled_by_cycle": first.get("scheduled_by_cycle"),
         "scheduled_by_record_id": first.get("scheduled_by_record_id"),
         "wake_cycle": latest.get("wake_cycle"),
@@ -1530,6 +1665,8 @@ def summarize_event_log(
     snippet_limit: int = 160,
     stale_after_seconds: int = 3600,
     now: datetime | None = None,
+    assembly_view=None,
+    door: str | None = None,
 ) -> dict:
     """Summarize an append-only event log for observability."""
     histories: dict[str, list[dict]] = {}
@@ -1608,18 +1745,37 @@ def summarize_event_log(
     current_time = now or datetime.now(timezone.utc)
     pending = [event for event in events if event.get("status") == "pending"]
     pending.sort(key=lambda event: str(event.get("created_at", "")))
+    if any(e.get("defer_to_declared_quiet") for e in pending):
+        decl = quiet_declaration_for_latest_wake(records)
+        until = (decl or {}).get("until")
+        until_dt = _parse_iso_utc(until) if until else None
+        if until_dt is not None and until_dt > current_time:
+            for e in pending:
+                if not e.get("defer_to_declared_quiet"):
+                    continue
+                exp = _parse_iso_utc(e.get("expires_at"))
+                if exp is not None and until_dt >= exp:
+                    e["expires_at"] = e["expires_at"]          # stays; claim path will expire it
+                    e["not_before"] = None
+                    e["_expire_by_quiet"] = True
+                else:
+                    nb = _parse_iso_utc(e.get("not_before"))
+                    if nb is None or nb < until_dt:
+                        e["not_before"] = until
     pending_expired = [
         event for event in pending
-        if is_expired(event, now=current_time)
+        if is_expired(event, now=current_time) or event.get("_expire_by_quiet")
     ]
     pending_runnable = [
         event for event in pending
         if not is_expired(event, now=current_time)
+        and not event.get("_expire_by_quiet")
         and is_due(event, now=current_time)
     ]
     pending_waiting = [
         event for event in pending
         if not is_expired(event, now=current_time)
+        and not event.get("_expire_by_quiet")
         and not is_due(event, now=current_time)
     ]
     failed = [event for event in events if event.get("status") == "failed"]
@@ -1683,7 +1839,7 @@ def summarize_event_log(
         record for record in records
         if record.get("record_type") == "heartbeat_status"
     ]
-    return {
+    summary = {
         "latest_quiet_declaration": (
             quiet_declarations[-1] if quiet_declarations else None
         ),
@@ -1735,6 +1891,24 @@ def summarize_event_log(
             ),
         ),
     }
+    if assembly_view is not None and door is not None:
+        mine = f"door:{door}"
+        opens = []
+        for q in assembly_view.open_questions():
+            if door not in q["members"]:
+                continue
+            latest = None
+            for p in assembly_view.positions_for_lineage(q["lineage_id"]):
+                if p["member"] == mine and (latest is None or p["seq"] > latest["seq"]):
+                    latest = p
+            opens.append({
+                "question_id": q["question_id"],
+                "round": q["round"],
+                "closes_at": q["closes_at"],
+                "my_position": latest["stance"] if latest else None,
+            })
+        summary["assembly"] = {"open_questions": opens, "observational": True}
+    return summary
 
 
 def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
@@ -1989,6 +2163,16 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
                 f"response={snippet}"
             )
 
+    assembly = report.get("assembly")
+    if assembly:
+        lines.append("")
+        lines.append(f"assembly (observational): {len(assembly['open_questions'])} open")
+        for q in assembly["open_questions"]:
+            lines.append(
+                f"  {q['question_id']} round {q['round']} closes {q['closes_at']} "
+                f"my position {q['my_position']}"
+            )
+
     return "\n".join(lines)
 
 
@@ -2016,6 +2200,12 @@ def run_next_event(
         return running
 
     run_id = running["run_id"]
+    wake_context = WakeContext(
+        event_id=event["event_id"],
+        run_id=run_id,
+        started_at=running["started_at"],
+        event=event,
+    )
     context_results: list[dict] | None = None
     try:
         requested_context = event.get("requested_context")
@@ -2046,6 +2236,7 @@ def run_next_event(
             force_memory=None,
             terminal_surface=event.get("terminal_surface"),
             event_managed=True,
+            wake_context=wake_context,
         )
         after_state = _json_safe_state(getattr(session, "_state", None))
         outcome_observation = build_outcome_observation(

@@ -38,6 +38,7 @@ from hamutay.terminal_surface import (
 
 if TYPE_CHECKING:
     from anthropic.types import MessageParam
+    from hamutay.assembly.binding import AssemblyBinding
 
 
 OPEN_SCHEMA = {
@@ -245,13 +246,14 @@ def _strip_think(content):
     return content
 
 
-def _natural_tool_guidance(*, declare_quiet: bool = False) -> str:
+def _natural_tool_guidance(*, declare_quiet: bool = False, assembly: bool = False) -> str:
     """Derive the natural-mode tool text from the terminal text.
 
     Derived, not copied, so the two modes cannot drift apart in the parts
     they share. Every replacement is asserted to have matched. declare_quiet
-    is described only when the tool is actually offered (event-managed
-    wakes), so the prompt never names a tool the resident does not have.
+    and the assembly tools are described only when actually offered
+    (event-managed wakes, with a binding), so the prompt never names a tool
+    the resident does not have.
     """
     text = _TOOL_GUIDANCE
     declare_quiet_line = (
@@ -261,6 +263,12 @@ def _natural_tool_guidance(*, declare_quiet: bool = False) -> str:
         "not a wake. Undeclared quiet is also allowed and is recorded as "
         "undeclared.\n"
     ) if declare_quiet else ""
+    assembly_line = (
+        "- take_position(question_id, stance, reasons?): Record a stance (assent, "
+        "dissent, abstain, defer) on an open assembly question, on the shared "
+        "ledger, now; optional reasons are carried verbatim. convene(text, "
+        "closes_in): put a question to every door.\n"
+    ) if assembly else ""
     replacements = [
         (
             "Alongside think_and_respond you may call these tools before "
@@ -276,6 +284,7 @@ def _natural_tool_guidance(*, declare_quiet: bool = False) -> str:
             "times in a cycle; later writes win. Keys you don't mention carry "
             "forward.\n"
             + declare_quiet_line
+            + assembly_line
             + "\n### Shell",
         ),
         (
@@ -300,6 +309,7 @@ def _natural_tool_guidance(*, declare_quiet: bool = False) -> str:
 
 _TOOL_GUIDANCE_NATURAL = _natural_tool_guidance()
 _TOOL_GUIDANCE_NATURAL_EVENT = _natural_tool_guidance(declare_quiet=True)
+_TOOL_GUIDANCE_NATURAL_EVENT_ASSEMBLY = _natural_tool_guidance(declare_quiet=True, assembly=True)
 
 
 # Multi-turn budget accounting. The model limit is the hard API ceiling
@@ -322,7 +332,9 @@ _TOKEN_PER_CHAR_ESTIMATE = 4
 _MAX_TOOL_RESULT_CHARS = 200_000
 # Tools that survive a context-budget withdrawal on the natural shape: they
 # write the resident's own state and intentions and return tiny results.
-_NATURAL_STATE_TOOLS = frozenset({"update_state", "schedule_event", "declare_quiet"})
+_NATURAL_STATE_TOOLS = frozenset(
+    {"update_state", "schedule_event", "declare_quiet", "take_position", "convene"}
+)
 _RECOVERY_HEAD_CHARS = 8_000
 
 # Known output-token ceilings by model family (best-effort).
@@ -2311,6 +2323,7 @@ def _build_messages(
     curator_context: dict | None = None,
     wake_mode: str = "terminal",
     declare_quiet: bool = False,
+    assembly: bool = False,
 ) -> tuple[list[dict], str]:
     """Build messages for the call."""
     natural = wake_mode == "natural"
@@ -2321,14 +2334,23 @@ def _build_messages(
             # has it (direct exchanges, terminal-surface wakes).
             from hamutay.tools.schemas import DECLARE_QUIET_CONSTITUTION_CLAUSE
             system_prefix = system_prefix.replace(DECLARE_QUIET_CONSTITUTION_CLAUSE, "")
+        if not assembly:
+            # A wake that is not offered the assembly tools must not be told
+            # it has them (no binding, or no wake context this wake).
+            from hamutay.tools.schemas import ASSEMBLY_CONSTITUTION_CLAUSE
+            system_prefix = system_prefix.replace(ASSEMBLY_CONSTITUTION_CLAUSE, "")
         system_parts.append(system_prefix)
     system_parts.extend([_SYSTEM_PROMPT_NATURAL if natural else _SYSTEM_PROMPT, ""])
 
     if tools_enabled:
         if natural:
-            system_parts.append(
-                _TOOL_GUIDANCE_NATURAL_EVENT if declare_quiet else _TOOL_GUIDANCE_NATURAL
-            )
+            if assembly:
+                guidance = _TOOL_GUIDANCE_NATURAL_EVENT_ASSEMBLY
+            elif declare_quiet:
+                guidance = _TOOL_GUIDANCE_NATURAL_EVENT
+            else:
+                guidance = _TOOL_GUIDANCE_NATURAL
+            system_parts.append(guidance)
         else:
             system_parts.append(_TOOL_GUIDANCE)
         system_parts.append("")
@@ -2599,6 +2621,7 @@ class OpenTasteSession:
         protected_state_fields: Iterable[str] | None = None,
         launch_config: dict | None = None,
         wake_mode: str = "terminal",
+        assembly: "AssemblyBinding | None" = None,
     ):
         self._backend = backend or AnthropicTasteBackend(client)
         self._model = model
@@ -2622,6 +2645,10 @@ class OpenTasteSession:
         # What this session is running on — logged with every record so a
         # resume can inherit it instead of asking the human to remember.
         self._launch_config = launch_config
+        # Assembly binding for this session's door, if any. The tools
+        # (take_position, convene) and their constitution clause are offered
+        # only when this is set AND a wake context is passed to exchange().
+        self._assembly = assembly
         self._cycle = 0
         self._state: dict | None = None
         self._log_path = log_path
@@ -2806,6 +2833,7 @@ class OpenTasteSession:
         force_memory: tuple[int, dict] | None | _Unset = _UNSET,
         terminal_surface: dict | None = None,
         event_managed: bool = False,
+        wake_context=None,
     ) -> str:
         """One cycle: user speaks, model responds + updates state.
 
@@ -2827,6 +2855,7 @@ class OpenTasteSession:
                 force_memory=force_memory,
                 terminal_surface=terminal_surface,
                 event_managed=event_managed,
+                wake_context=wake_context,
             )
         except Exception:
             self._cycle -= 1
@@ -2837,6 +2866,7 @@ class OpenTasteSession:
         force_memory: tuple[int, dict] | None | _Unset = _UNSET,
         terminal_surface: dict | None = None,
         event_managed: bool = False,
+        wake_context=None,  # carried for the assembly tools; wired in Task 7
     ) -> str:
         """Body of exchange(). Separated so exchange() can roll back the
         cycle counter on any exception without an inline try/finally
@@ -2853,6 +2883,15 @@ class OpenTasteSession:
             and self._enable_tools
             and terminal_surface is None
             and self._event_store is not None
+        )
+        # The assembly tools (take_position, convene) are offered only when
+        # declare_quiet would be, AND this session is bound to the assembly,
+        # AND the framework passed a wake context this wake — never derived
+        # from model input (spec §6).
+        offer_assembly = (
+            offer_declare_quiet
+            and self._assembly is not None
+            and wake_context is not None
         )
         # Involuntary memory — maybe surface a prior self, unless the caller
         # forced a specific injection (or forced None) for a faithful fork.
@@ -2873,6 +2912,7 @@ class OpenTasteSession:
             curator_context=curator_context,
             wake_mode=self._wake_mode,
             declare_quiet=offer_declare_quiet,
+            assembly=offer_assembly,
         )
 
         # Pre-mint the cycle record_id so schedule_event tool calls can
@@ -2896,16 +2936,23 @@ class OpenTasteSession:
                 scheduled_by_record_id=(
                     record_id if self._event_store is not None else None
                 ),
+                wake_context=wake_context if offer_assembly else None,
+                assembly=self._assembly if offer_assembly else None,
             )
             extra_tools = list(TOOL_SCHEMAS.values())
             if self._wake_mode == "natural":
                 from hamutay.tools.schemas import (
+                    CONVENE_SCHEMA,
                     DECLARE_QUIET_SCHEMA,
+                    TAKE_POSITION_SCHEMA,
                     UPDATE_STATE_SCHEMA,
                 )
                 extra_tools.append(UPDATE_STATE_SCHEMA)
                 if offer_declare_quiet:
                     extra_tools.append(DECLARE_QUIET_SCHEMA)
+                if offer_assembly:
+                    extra_tools.append(TAKE_POSITION_SCHEMA)
+                    extra_tools.append(CONVENE_SCHEMA)
 
         if terminal_surface is not None:
             if extra_tools:
