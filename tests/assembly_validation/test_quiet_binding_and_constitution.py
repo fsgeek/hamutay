@@ -75,15 +75,22 @@ def test_timed_quiet_defers_then_releases_an_assembly_event(tmp_path):
 
 def test_quiet_outlasting_expiry_expires_without_a_wake(tmp_path):
     path = tmp_path / "expired.events.jsonl"
-    store = _store_with_quiet(path, until=(T0 + timedelta(days=2)).isoformat())
+    quiet_until = (T0 + timedelta(days=2)).isoformat()
+    store = _store_with_quiet(path, until=quiet_until)
     event = _assembly_event(expires_at=(T0 + timedelta(days=1)).isoformat())
     append_jsonl(path, event)
 
-    assert store.claim_next_pending(now=T0 + timedelta(hours=1)) is None
+    claimed = store.claim_next_pending(now=T0 + timedelta(hours=1))
+    assert claimed is not None
+    claimed_event, status = claimed
+    assert claimed_event["event_id"] == event["event_id"]
+    assert status["status"] == "expired"
+    assert status["detail"]["reason"] == "skipped_by_quiet"
+    assert status["detail"]["quiet_until"] == quiet_until
+
     statuses = [row for row in _records(path) if row.get("event_id") == event["event_id"]]
-    assert [row.get("status") for row in statuses] == ["pending", "expired"]
-    assert statuses[-1]["detail"]["reason"] == "skipped_by_quiet"
     assert not any(row.get("status") == "running" for row in statuses)
+    assert store.claim_next_pending(now=T0 + timedelta(hours=1)) is None
 
 
 def test_untimed_quiet_does_not_defer_assembly(tmp_path):
