@@ -133,3 +133,26 @@ def test_session_offers_the_tools_only_with_binding_and_wake_context(house):
     _, sys_text = _build_messages({}, "u", 1, system_prefix=ASSEMBLY_CONSTITUTION_CLAUSE, wake_mode="natural",
                                   tools_enabled=True, declare_quiet=True, assembly=False)
     assert "take_position" not in sys_text
+
+
+def test_session_withholds_the_tools_without_a_binding_even_with_a_wake_context(house):
+    from hamutay.taste_open import OpenAITasteBackend, OpenTasteSession
+    root, led, cfg, binding, q = house
+    seen = {}
+
+    class B(OpenAITasteBackend):
+        def call(self, *, extra_tools=None, system="", **kw):
+            seen["tools"] = sorted(t["name"] for t in (extra_tools or []))
+            seen["system"] = system
+            from hamutay.taste_open import ExchangeResult
+            return ExchangeResult(raw_output={"response": "ok"}, stop_reason="end_turn",
+                                  input_tokens=1, output_tokens=1)
+
+    log = root / "community" / "qwen" / "session.jsonl"
+    s2 = OpenTasteSession(model="m", backend=B(api_key="k", wake_mode="natural"), log_path=str(log),
+                          event_log_path=str(cfg.members["qwen"].events), enable_tools=True,
+                          project_root=root, wake_mode="natural", assembly=None,
+                          system_prompt_prefix="C. " + ASSEMBLY_CONSTITUTION_CLAUSE)
+    s2.exchange("hi", event_managed=True, wake_context=_wake())
+    assert "take_position" not in seen["tools"] and "convene" not in seen["tools"]
+    assert "take_position records" not in seen["system"]
