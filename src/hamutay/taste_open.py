@@ -222,6 +222,29 @@ or this may be the first cycle and there's nothing yet. Either way, \
 what you build here is for whoever comes next."""
 
 
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>\s*", re.S)
+
+
+def _strip_think(content):
+    """History carries the final output only, never the <think> block.
+
+    Found live 2026-09-16 (community/qwen c10): re-sending every turn's
+    think as history leaked the whole 65,536-token context mid-wake. The
+    record (interim_text, raw_output) still keeps the full text.
+    """
+    if content is None:
+        return None
+    if isinstance(content, str):
+        return _THINK_BLOCK_RE.sub("", content).strip() if "<think>" in content else content
+    if isinstance(content, list):
+        return [
+            {**b, "text": _strip_think(b.get("text"))}
+            if isinstance(b, dict) and isinstance(b.get("text"), str) else b
+            for b in content
+        ]
+    return content
+
+
 def _natural_tool_guidance(*, declare_quiet: bool = False) -> str:
     """Derive the natural-mode tool text from the terminal text.
 
@@ -1976,7 +1999,7 @@ class OpenAITasteBackend:
             if content_text.strip():
                 interim_text.append(content_text)
             conversation.append(
-                {"role": "assistant", "content": content, "tool_calls": tool_calls}
+                {"role": "assistant", "content": _strip_think(content), "tool_calls": tool_calls}
             )
             for tc in tool_calls:
                 fn = tc.get("function", {})
