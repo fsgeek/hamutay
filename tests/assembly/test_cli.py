@@ -84,3 +84,29 @@ def test_status_and_history_and_procedure(house, capsys):
 def test_missing_members_exits_2(tmp_path, capsys):
     assert main(["--project-root", str(tmp_path), "status"]) == 2
     assert "members.json" in capsys.readouterr().err
+
+
+def test_convene_artifact_failure_refuses_and_writes_nothing(house, capsys):
+    root, sha = house
+    ledger_path = root / "community/plaza/assembly.jsonl"
+    rc = _run(root, "convene", "--by", "custodian", "--text-file", "q.txt", "--closes-in", "7d",
+              "--proposal-procedure", "proc.json", "--artifact", "nope.md", "--artifact-commit", sha)
+    assert rc == 2
+    assert "convene:" in capsys.readouterr().err
+    assert not ledger_path.exists() or not any(
+        json.loads(line).get("record_type") == "question" for line in ledger_path.read_text().splitlines() if line.strip())
+
+
+def test_history_includes_withdrawal_and_delivery_records(house, capsys):
+    root, sha = house
+    _run(root, "convene", "--by", "custodian", "--text-file", "q.txt", "--closes-in", "2d",
+         "--proposal-procedure", "proc.json", "--artifact", "design.md", "--artifact-commit", sha)
+    q = json.loads(capsys.readouterr().out)
+    assert _run(root, "withdraw", "--by", "custodian", "--question-id", q["question_id"], "--reasons", "r") == 0
+    capsys.readouterr()
+    assert _run(root, "history", "--lineage-id", q["lineage_id"]) == 0
+    h = json.loads(capsys.readouterr().out)
+    types = [r["record_type"] for r in h]
+    assert "withdrawal" in types
+    delivery_ids = {r["id"] for r in h if r["record_type"] == "delivery"}
+    assert q["question_id"] in delivery_ids

@@ -26,7 +26,7 @@ def _now():
 def _artifact(root: Path, path: str, commit: str) -> dict:
     out = subprocess.run(["git", "show", f"{commit}:{path}"], cwd=root, capture_output=True)
     if out.returncode != 0:
-        raise SystemExit(f"artifact: git show {commit}:{path} failed: {out.stderr.decode()[:200]}")
+        raise ConveneRefused(f"artifact: git show {commit}:{path} failed: {out.stderr.decode()[:200]}")
     return {"path": path, "commit": commit, "sha256": hashlib.sha256(out.stdout).hexdigest()}
 
 
@@ -41,8 +41,9 @@ def cmd_convene(root, cfg, led, a) -> int:
         proposal = json.loads(Path(root / a.proposal_procedure).read_text())
         if not (a.artifact and a.artifact_commit):
             print("convene: --proposal-procedure needs --artifact and --artifact-commit", file=sys.stderr); return 2
-        artifact = _artifact(root, a.artifact, a.artifact_commit)
     try:
+        if proposal is not None:
+            artifact = _artifact(root, a.artifact, a.artifact_commit)
         q = convene(led, cfg, convener=a.by, text=text, closes_in=parse_closes_in(a.closes_in), now=_now(),
                     proposal_procedure=proposal, artifact=artifact)
     except (ConveneRefused, ValueError) as e:
@@ -123,10 +124,17 @@ def cmd_status(root, cfg, led, a) -> int:
 
 
 def cmd_history(root, cfg, led, a) -> int:
-    rows = [r for r in led.read() if r.get("lineage_id") == a.lineage_id
-            or (r.get("record_type") == "procedure" and any(
-                q.get("proposal", {}).get("procedure_id") == r["procedure_id"]
-                for q in reduce(led.read()).questions.values() if q["lineage_id"] == a.lineage_id))]
+    records = led.read()
+    view = reduce(records)
+    qids = {qid for qid, q in view.questions.items() if q["lineage_id"] == a.lineage_id}
+    cids = {c["closing_id"] for c in view.closings_by_id.values() if c["lineage_id"] == a.lineage_id}
+    pids = {q["proposal"]["procedure_id"] for q in view.questions.values()
+            if q["lineage_id"] == a.lineage_id and q["proposal"]["kind"] == "procedure"}
+    rows = [r for r in records if r.get("lineage_id") == a.lineage_id
+            or r.get("question_id") in qids
+            or r.get("closing_id") in cids
+            or (r.get("record_type") == "delivery" and r.get("id") in qids | cids)
+            or (r.get("record_type") == "procedure" and r.get("procedure_id") in pids)]
     print(json.dumps(rows, indent=2, default=str)); return 0
 
 
@@ -143,7 +151,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--artifact-commit"); s.set_defaults(fn=cmd_convene)
     s = sub.add_parser("testify"); s.add_argument("--by", required=True, choices=["tony", "custodian"])
     s.add_argument("--question-id", required=True); s.add_argument("--text-file", required=True); s.set_defaults(fn=cmd_testify)
-    s = sub.add_parser("withdraw"); s.add_argument("--by", required=True); s.add_argument("--question-id", required=True)
+    s = sub.add_parser("withdraw"); s.add_argument("--by", required=True, choices=["tony", "custodian"])
+    s.add_argument("--question-id", required=True)
     s.add_argument("--reasons"); s.set_defaults(fn=cmd_withdraw)
     s = sub.add_parser("execute"); s.add_argument("--by", required=True, choices=["tony", "custodian"])
     s.add_argument("--closing-id", required=True); s.add_argument("--outcome", required=True, choices=["done", "declined"])
