@@ -13,7 +13,7 @@ from hamutay.assembly.ledger import Ledger, iso, parse_instant
 from hamutay.assembly.outbox import run_outbox
 from hamutay.assembly.pass_ import run_pass
 from hamutay.assembly.position import record_position
-from hamutay.assembly.records import child_question_id, closing_id_for, reduce
+from hamutay.assembly.records import child_question_id, closing_event_id, closing_id_for, reduce
 from hamutay.events import EventStore, StoreUnavailable, WakeContext, build_quiet_declaration
 
 UTC = timezone.utc
@@ -75,6 +75,42 @@ def test_assent_by_quorum_with_the_empty_chair_and_activation(house):
         again = derive_activations(led, reduce(led.read_unlocked()))
     assert len(acts) == 1 and acts[0]["status"] == "active" and acts[0]["activated_by_closing_id"] == c["closing_id"]
     assert again == [] and reduce(led.read()).active_procedure["procedure_id"] == q["proposal"]["procedure_id"]
+
+
+def test_derive_activations_falls_back_to_the_question_proposal_when_the_closing_lacks_one(house):
+    """The spec's §2 closing schema block never documented `proposal`/`proposal_sha256` on
+    the closing itself. A closing built to the documented schema alone (no `proposal`) must
+    still be activated by reading the question's proposal."""
+    root, led, cfg, q, bindings = house
+    cid = closing_id_for(q["question_id"])
+    closing = {"record_type": "closing", "closing_id": cid, "question_id": q["question_id"],
+               "lineage_id": q["lineage_id"], "round": q["round"], "outcome": "assented", "governing": q["governing"],
+               "provisional": True, "tally": {}, "positions": [], "testimony": [], "absent": [],
+               "next_question": None, "closed_by": "cli:test", "closed_at": iso(CLOSE),
+               "delivery": {d: {"event_id": closing_event_id(cid, d)} for d in q["members"]}}
+    assert "proposal" not in closing and "proposal_sha256" not in closing
+    with led.locked():
+        led.append_unlocked(closing)
+        acts = derive_activations(led, reduce(led.read_unlocked()))
+    assert len(acts) == 1 and acts[0]["status"] == "active" and acts[0]["activated_by_closing_id"] == cid
+    assert reduce(led.read()).active_procedure["procedure_id"] == q["proposal"]["procedure_id"]
+
+
+def test_derive_activations_rejects_on_digest_mismatch_when_the_closing_lacks_a_proposal(house):
+    root, led, cfg, q, bindings = house
+    cid = closing_id_for(q["question_id"])
+    bad_question = dict(q); bad_question["proposal"] = dict(q["proposal"], sha256="0" * 64)
+    closing = {"record_type": "closing", "closing_id": cid, "question_id": q["question_id"],
+               "lineage_id": q["lineage_id"], "round": q["round"], "outcome": "assented", "governing": q["governing"],
+               "provisional": True, "tally": {}, "positions": [], "testimony": [], "absent": [],
+               "next_question": None, "closed_by": "cli:test", "closed_at": iso(CLOSE),
+               "delivery": {d: {"event_id": closing_event_id(cid, d)} for d in q["members"]}}
+    with led.locked():
+        led.append_unlocked(closing)
+        view = reduce(led.read_unlocked())
+        view.questions[q["question_id"]] = bad_question
+        acts = derive_activations(led, view)
+    assert len(acts) == 1 and acts[0]["status"] == "rejected" and acts[0]["activated_by_closing_id"] == cid
 
 
 def test_one_dissent_extends_as_one_record_and_the_position_stands_in_round_two(house):

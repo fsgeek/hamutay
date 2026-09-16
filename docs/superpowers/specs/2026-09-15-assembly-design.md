@@ -313,6 +313,7 @@ types:
  "question_id": <uuid>, "lineage_id": <uuid>, "round": n,
  "outcome": "assented" | "extended" | "unresolved" | "withdrawn",
  "governing": {...copied from the question...}, "provisional": true | false,
+ "proposal": {...copied from the question...}, "proposal_sha256": <hex>,
  "tally": {"eligible_members": [...], "quorum": 2,
            "active": {"<door>": <position_id> | null},
            "objections": [...], "assents": [...], "abstentions": [...], "spoke": k,
@@ -334,6 +335,9 @@ types:
 # The closing event to each door is the child's delivery: the child's
 # offer time is the parent closing's `landed_at` for that door, and the
 # child's Empty Chair evidence is that event's lifecycle.
+# A closing copies the question's `proposal` and `proposal_sha256` so that execution and
+# activation can read them without a join; readers fall back to the question's proposal
+# when a closing lacks them.
 
 {"record_type": "execution", "seq": N, "execution_id": <uuid>, "closing_id": <uuid>,
  "question_id": <uuid>, "proposal_sha256": <hex>, "by": "custodian" | "tony",

@@ -206,16 +206,17 @@ def try_close(ledger: Ledger, view: View, q: dict, *, now: datetime, actor: str,
 def derive_activations(ledger: Ledger, view: View) -> list[dict]:
     out = []
     for c in view.missing_activations():
-        pid = c["proposal"]["procedure_id"]
+        proposal = c.get("proposal") or view.questions[c["question_id"]]["proposal"]
+        pid = proposal["procedure_id"]
         rows = view.procedures.get(pid) or []
         prov = next((r for r in reversed(rows) if r.get("status") == "provisional"), None)
         if prov is None:
             continue
-        status = "active" if prov["payload_sha256"] == c["proposal"]["sha256"] else "rejected"
+        status = "active" if prov["payload_sha256"] == proposal["sha256"] else "rejected"
         rec = build_procedure(prov["payload"], prov["artifact"], status=status, procedure_id=pid,
                               version=prov["version"], proposed_by_question_id=prov.get("proposed_by_question_id"),
                               activated_by_closing_id=c["closing_id"])
         if status == "rejected":
-            rec["detail"] = {"expected": c["proposal"]["sha256"], "found": prov["payload_sha256"]}
+            rec["detail"] = {"expected": proposal["sha256"], "found": prov["payload_sha256"]}
         out.append(ledger.append_unlocked(rec))
     return out

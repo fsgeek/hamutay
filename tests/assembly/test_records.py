@@ -142,6 +142,27 @@ def test_missing_activations_lists_assented_procedure_closings_without_a_derivat
     assert reduce(led.read()).missing_activations() == []
 
 
+def test_missing_activations_falls_back_to_the_question_proposal_when_the_closing_lacks_one(ledger_path):
+    """The spec's §2 closing schema block never documented `proposal`/`proposal_sha256`
+    on the closing itself (they're a convenience `try_close` happens to copy). A closing
+    built to the documented schema alone must still be found."""
+    led = Ledger(ledger_path)
+    prov = led.append(build_procedure({"rule": "consent-v0"}, {"path": "p", "commit": "c", "sha256": "s"},
+                                      status="provisional", version=1))
+    proposal = {"kind": "procedure", "procedure_id": prov["procedure_id"], "sha256": prov["payload_sha256"]}
+    q = led.append(_question(proposal=proposal))
+    cid = closing_id_for(q["question_id"])
+    closing = {"record_type": "closing", "closing_id": cid, "question_id": q["question_id"],
+               "lineage_id": q["lineage_id"], "round": q["round"], "outcome": "assented", "governing": q["governing"],
+               "provisional": True, "tally": {}, "positions": [], "testimony": [], "absent": [],
+               "next_question": None, "closed_by": "cli:test", "closed_at": iso(T0 + timedelta(days=7)),
+               "delivery": {d: {"event_id": closing_event_id(cid, d)} for d in q["members"]}}
+    assert "proposal" not in closing and "proposal_sha256" not in closing
+    led.append(closing)
+    view = reduce(led.read())
+    assert [x["closing_id"] for x in view.missing_activations()] == [cid]
+
+
 def test_build_execution_requires_an_assented_closing_and_reasons_when_declined(ledger_path):
     from hamutay.assembly.records import build_execution
     q = _question()

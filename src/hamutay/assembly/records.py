@@ -206,9 +206,17 @@ class View:
     def missing_activations(self) -> list[dict]:
         out = []
         for c in self.closings_by_id.values():
-            if c["outcome"] != "assented" or c.get("proposal", {}).get("kind") != "procedure":
+            if c["outcome"] != "assented":
                 continue
-            pid = c["proposal"]["procedure_id"]
+            proposal = c.get("proposal")
+            if proposal is None:
+                q = self.questions.get(c["question_id"])
+                if q is None:
+                    continue
+                proposal = q["proposal"]
+            if proposal.get("kind") != "procedure":
+                continue
+            pid = proposal["procedure_id"]
             done = any(r.get("activated_by_closing_id") == c["closing_id"]
                        for r in self.procedures.get(pid, []))
             if not done:
