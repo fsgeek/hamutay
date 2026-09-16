@@ -318,7 +318,7 @@ types:
            "objections": [...], "assents": [...], "abstentions": [...], "spoke": k,
            "not_offered": [...], "running_at_cutoff": [...], "unknown_at_cutoff": [...],
            "position_from_failed_wake": [...], "trace": "..."},
- "positions": [{"record": <verbatim>, "eligible": bool}],
+ "positions": [{"record": <verbatim>, "eligible": true | false | null, "reason": "wake_failed" (only with null from a failed wake)}],
  "testimony": [<verbatim>],
  "absent": [{"member": "door:<name>",
              "reason": "not_delivered" | "skipped_by_quiet" | "pending_at_close"
