@@ -1260,7 +1260,7 @@ class OpenAITasteBackend:
                 # generations cancelled at 300 s, 21 minutes of GPU thrown away).
                 raise RuntimeError(
                     "OpenAI backend transport failed: ReadTimeout after "
-                    f"{self._timeout:g}s (not retried: the substrate was still "
+                    f"{self._timeout:g} seconds (not retried: the substrate was still "
                     "generating; raise the transport timeout for this "
                     "substrate or shorten the wake)"
                 ) from e
