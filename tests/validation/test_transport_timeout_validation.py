@@ -122,17 +122,18 @@ def test_5xx_response_is_retried(monkeypatch):
 def test_4xx_response_is_not_retried(monkeypatch):
     calls = []
     sleeps = []
+    body = {"error": "invalid request"}
 
     def post(url, *, json, headers, timeout):
         calls.append((url, json, headers, timeout))
-        return _Response(400, {"error": "invalid request"})
+        return _Response(400, body)
 
     monkeypatch.setattr(httpx, "post", post)
     monkeypatch.setattr(taste_open.time, "sleep", sleeps.append)
 
-    with pytest.raises(RuntimeError):
-        _backend(max_retries=5)._post_with_retry(URL, PAYLOAD, HEADERS)
+    result = _backend(max_retries=5)._post_with_retry(URL, PAYLOAD, HEADERS)
 
+    assert result == body
     assert len(calls) == 1
     assert sleeps == []
 
@@ -169,7 +170,9 @@ def test_explicit_transport_timeout_overrides_all_defaults(base_url):
 
 
 def test_heartbeat_parser_accepts_timeout_as_float():
-    args = build_parser().parse_args(["--timeout", "123.75"])
+    args = build_parser().parse_args(
+        ["--log-path", "heartbeat.jsonl", "--timeout", "42.5"]
+    )
 
-    assert args.timeout == pytest.approx(123.75)
+    assert args.timeout == 42.5
     assert isinstance(args.timeout, float)
