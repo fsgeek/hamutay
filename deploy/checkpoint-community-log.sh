@@ -32,6 +32,7 @@ shopt -s nullglob
 doors=()
 for d in community/*/; do
   d=${d%/}
+  [ "$d" = "community/plaza" ] && continue      # digested under its own lock below
   logs=("$d"/*.jsonl)
   [ ${#logs[@]} -gt 0 ] && doors+=("$d")
 done
@@ -53,6 +54,22 @@ for d in "${doors[@]}"; do
   echo "$line" >> "$ledger"
   ledgers+=("$ledger")
 done
+
+names=("${doors[@]#community/}")
+
+# The assembly ledger is shared by every door and written under one flock;
+# snapshot it under that lock so the digest is of a coherent byte range.
+plaza_ledger="community/plaza/assembly.jsonl"
+plaza_lock="community/plaza/assembly.jsonl.lock"
+if [ -f "$plaza_ledger" ]; then
+  plaza_snap="$snapdir/assembly.jsonl"
+  flock "$plaza_lock" cp "$plaza_ledger" "$plaza_snap"
+  plaza_digest=$(sha256sum "$plaza_snap" | cut -d' ' -f1)
+  plaza_bytes=$(stat -c%s "$plaza_snap")
+  echo "$stamp assembly.jsonl:$plaza_digest:$plaza_bytes" >> community/plaza/CHECKPOINTS.txt
+  ledgers+=("community/plaza/CHECKPOINTS.txt")
+  names+=("plaza")
+fi
 
 # The GPU lease's ledger lives outside community/<door>/ (it is a shared
 # house resource, not one door's log): community/gpu/CHECKPOINTS.txt. The
@@ -78,7 +95,6 @@ if [ ${#ledgers[@]} -eq 0 ]; then
   exit 0
 fi
 
-names=("${doors[@]#community/}")
 [ -f "$gpu_ledger" ] && names+=("gpu")
 
 if [ "$NO_COMMIT" -eq 1 ]; then
