@@ -1,6 +1,6 @@
 # Window-aware wakes on a local door
 
-Date: 2026-09-17. Author: the custodian session. Status: revision 6, after
+Date: 2026-09-17. Author: the custodian session. Status: revision 6.1 (one gate corrected during implementation, see §1), after
 Codex rounds five and six (`-review-5.md`: 1 Blocking, 2 Significant on
 revision 5; `-review-6.md` found that the revision-6 commit had carried no
 design text, so this is that text; rounds one to four had 4/5/2, 5/4/1,
@@ -224,7 +224,9 @@ with a tokenizer:
 - **Budget fields only on grammar-free turns** (round three, finding 27,
   conservative until live evidence): with `reasoning_budget == "probed"`,
   `tool_choice == "none"` (every tool withdrawn, the reply ends the wake),
-  and `room < THINK_UNRESTRICTED_ROOM_TOKENS`, the request carries
+  and `max_tokens < THINK_UNRESTRICTED_ROOM_TOKENS` (the generation limit
+  actually sent, so a small configured `--max-tokens` with ample room is
+  bounded too; r6.1, found in implementation), the request carries
   `reasoning_budget_tokens = max_tokens - REPLY_RESERVE_TOKENS -
   policy.forced_sequence_tokens` (never below `THINK_FLOOR_TOKENS`, by the
   floor check) and `reasoning_budget_message = "[harness: thinking budget
