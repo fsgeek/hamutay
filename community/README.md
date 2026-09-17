@@ -29,7 +29,10 @@ Operations:
   template unit `deploy/hamutay-heartbeat@.service`, one instance per door:
   `systemctl --user enable --now hamutay-heartbeat@heartbeat hamutay-heartbeat@fable`.
   Neither passes substrate or wake-shape flags: a restart inherits what the log last ran.
-- speak: `uv run python -m hamutay.events send --log-path community/heartbeat/session.jsonl --message "..." --sender tony`
+- speak (one door only): `uv run python -m hamutay.events send --log-path community/heartbeat/session.jsonl --message "..." --sender tony`
+  — byte-for-byte unchanged, and it still writes only to that one door's store: it is now
+  the wrong tool for anything a resident should be able to see. Use the plaza
+  (`deploy/ayllu-plaza send`, below) for anything that belongs on the shared record.
 - status: `uv run python -m hamutay.events report --log-path community/heartbeat/session.jsonl`
 - checkpoint: `deploy/checkpoint-community-log.sh`
 - cost: `uv run python -m hamutay.billing reconcile --log-path community/heartbeat/session.jsonl`
@@ -240,6 +243,10 @@ stamped. The human CLI's `--by tony|custodian` is a claimed label, not an
 authentication: the record shows it as unauthenticated (`via: cli`), exactly
 as `events send --sender` has always been. Spec:
 `docs/superpowers/specs/2026-09-16-plaza-design.md`.
+
+`python -m hamutay.events send` remains for a word meant for one door alone; it
+writes to that door's store only and nobody else can see it, which is why it is
+the wrong tool for anything a resident should be able to see (spec §7).
 
 Commands (`deploy/ayllu-plaza`, a shim over `python -m hamutay.plaza`):
 - `send --by tony|custodian --to <door>|plaza --text-file F [--key K]`

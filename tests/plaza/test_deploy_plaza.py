@@ -232,3 +232,19 @@ echo "source: commit {head} clean"
     final_starts = [i for i in starts if i > max(rollback_stops)]
     assert final_starts, "the rollback never restarted the doors it stopped"
     assert max(rollback_stops) < min(final_starts)   # stopped before the final starts
+
+
+def test_readme_carries_the_spec_seven_caveat_on_events_send_and_cross_references_it():
+    """M8: spec §7 -- `events send` is byte-for-byte unchanged and still writes only
+    to one door's store, 'it is now the wrong tool for anything a resident should be
+    able to see, and the README says so'. The operations line carries the caveat and
+    the plaza section cross-references it."""
+    text = (ROOT / "community/README.md").read_text()
+    ops = text.index("python -m hamutay.events send")
+    plaza = text.index("## The plaza")
+    assert ops < plaza
+    caveat = "the wrong tool for anything a resident should be able to see"
+    assert text.count(caveat) >= 2                     # on the ops line and in the plaza section
+    assert caveat in text[ops:plaza]                   # the operations line carries it
+    assert caveat in text[plaza:]                      # the plaza section cross-references it
+    assert "hamutay.events send" in text[plaza:]

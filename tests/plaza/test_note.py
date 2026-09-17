@@ -16,9 +16,14 @@ def _wake(ev, started=T0):
             "run_id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", "started_at": iso(started)}
 
 
-def _completed_wake(store: EventStore, *, started, completed):
+def _completed_wake(store: EventStore, *, started):
     """Produce a completed wake exactly as the real store would: a pending event,
-    a running record whose started_at is deterministic, and its completed join."""
+    a running record whose started_at is deterministic, and its completed join.
+
+    There is deliberately no `completed=`: note_lower_bound joins the completed
+    wake back to its running record and reads `started_at`, never `completed_at`,
+    so a completed time is not a parameter of anything under test. The earlier
+    version took one and mutated an in-memory copy that never reached the file."""
     e = build_inbound_event(purpose="p", sender="tony")
     store.append(e)
     run_id = uuid.uuid4()
@@ -28,25 +33,22 @@ def _completed_wake(store: EventStore, *, started, completed):
         event=e, run_id=str(run_id), wake_cycle=1, result_record_id=uuid.uuid4(),
         response_text="ok",
     )
-    completed_record = [r for r in store.read_records()
-                        if r.get("record_type") == "event_status" and r.get("status") == "completed"][-1]
-    completed_record["completed_at"] = iso(completed)
     return e, running
 
 
 def test_lower_bound_is_the_completed_wakes_started_at_by_event_and_run(tmp_path):
     st = EventStore(tmp_path / "s.events.jsonl")
     assert note_lower_bound(st.read_records()) is None
-    _completed_wake(st, started=T0, completed=T0 + timedelta(minutes=5))
+    _completed_wake(st, started=T0)
     assert note_lower_bound(st.read_records()) == T0
-    _completed_wake(st, started=T0 + timedelta(hours=1), completed=T0 + timedelta(hours=1, minutes=2))
+    _completed_wake(st, started=T0 + timedelta(hours=1))
     assert note_lower_bound(st.read_records()) == T0 + timedelta(hours=1)
 
 
 def test_note_names_exact_seqs_and_a_bounded_command(house):
     root, cfg, binding = house
     st = EventStore(cfg.members["fable"].events)
-    _completed_wake(st, started=T0, completed=T0 + timedelta(minutes=1))
+    _completed_wake(st, started=T0)
     send(cfg, actor="door:qwen", via="tool", to="elder", text="q→e", now=T0 + timedelta(minutes=2), wake=_wake("11111111-1111-4111-8111-111111111111"))
     send(cfg, actor="door:elder", via="tool", to="plaza", text="post", now=T0 + timedelta(minutes=3), wake=_wake("22222222-1111-4111-8111-111111111111"))
     send(cfg, actor="door:elder", via="tool", to="fable", text="e→f", now=T0 + timedelta(minutes=4), wake=_wake("33333333-1111-4111-8111-111111111111"))
