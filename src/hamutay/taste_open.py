@@ -498,6 +498,20 @@ def _cost_usage_fields(result: "ExchangeResult") -> dict:
         "generation_ids": list(result.generation_ids),
     }
 
+
+def _cost_usage_fields_from_responses(responses: list[dict]) -> dict:
+    """The same cost fields, for a wake that died before an ExchangeResult.
+
+    A truncated reply still cost what it cost. `OpenAITasteBackend._cost_kwargs`
+    returns exactly the ExchangeResult field names, so the existing helper reads
+    them off a lightweight carrier and keeps the same present-only rule.
+    """
+    from types import SimpleNamespace
+
+    return _cost_usage_fields(
+        SimpleNamespace(**OpenAITasteBackend._cost_kwargs(list(responses or [])))
+    )
+
 @dataclass
 class _ToolBlocks:
     """Partition of a response's tool_use blocks.
@@ -2670,9 +2684,30 @@ def _build_messages(
     wake_mode: str = "terminal",
     declare_quiet: bool = False,
     assembly: bool = False,
+    lean_activity_log: bool = False,
+    omit_activity_log: bool = False,
 ) -> tuple[list[dict], str]:
-    """Build messages for the call."""
+    """Build messages for the call.
+
+    `lean_activity_log` / `omit_activity_log` change only the *rendering* of
+    the state, memory and curator sections (spec 2026-09-17-window-aware-wakes
+    §3): the arguments are never mutated and the record keeps the full log.
+    With neither flag set the output is byte-identical to what it always was.
+    """
     natural = wake_mode == "natural"
+    if omit_activity_log:
+        from hamutay.window import _drop_activity_logs as _render
+    elif lean_activity_log:
+        from hamutay.window import lean_activity_logs as _render
+    else:
+        _render = None
+    activity_note = (
+        "(_activity_log is omitted from this compact wake; the record has it)"
+        if omit_activity_log
+        else "(_activity_log is shown without parameters; the record has them)"
+        if lean_activity_log
+        else None
+    )
     system_parts = []
     if system_prefix:
         if not declare_quiet:
@@ -2703,7 +2738,11 @@ def _build_messages(
 
     if prior_state is not None:
         system_parts.append(f"## Your state from cycle {cycle - 1}\n")
-        system_parts.append(json.dumps(prior_state, indent=2))
+        if activity_note is not None:
+            system_parts.append(activity_note)
+        system_parts.append(
+            json.dumps(_render(prior_state) if _render else prior_state, indent=2)
+        )
     else:
         system_parts.append(
             "This is cycle 1. There is no prior state."
@@ -2716,7 +2755,9 @@ def _build_messages(
             "This is a prior state that surfaced unbidden. "
             "You didn't ask for it. Do with it what you will."
         )
-        system_parts.append(json.dumps(memory_state, indent=2))
+        system_parts.append(
+            json.dumps(_render(memory_state) if _render else memory_state, indent=2)
+        )
 
     if curator_context is not None:
         system_parts.append("\n## Continuity curator summary\n")
@@ -2726,7 +2767,10 @@ def _build_messages(
             "evidence. Prefer prompt facts and explicit evidence over curator "
             "claims."
         )
-        system_parts.append(json.dumps(curator_context, indent=2, default=str))
+        system_parts.append(json.dumps(
+            _render(curator_context) if _render else curator_context,
+            indent=2, default=str,
+        ))
 
     return [{"role": "user", "content": user_message}], "\n".join(system_parts)
 
@@ -2970,6 +3014,15 @@ class OpenTasteSession:
         assembly: "AssemblyBinding | None" = None,
     ):
         self._backend = backend or AnthropicTasteBackend(client)
+        # The window policy this session runs under (spec
+        # 2026-09-17-window-aware-wakes, "The context policy"). The backend's
+        # holder when it has one — the session and the backend must see the
+        # same value, or a ceiling learned mid-life reaches only one of them.
+        # A backend without one (Anthropic-direct, the test doubles) gets a
+        # session-local holder carrying ContextPolicy.none().
+        from hamutay.context_policy import ContextPolicy, ContextPolicyHolder
+        self._policy_holder = getattr(self._backend, "_policy_holder", None) or \
+            ContextPolicyHolder(ContextPolicy.none())
         self._model = model
         # Wake shape: terminal (think_and_respond ends the wake) or natural
         # (final text ends the wake; state via update_state). Natural mode
@@ -3100,6 +3153,11 @@ class OpenTasteSession:
         self._continuity_curator_context = (
             _curator_context_from_record(curation) if curation else None
         )
+
+    @property
+    def context_policy(self):
+        """The live policy value; dereferenced at use, never snapshotted."""
+        return self._policy_holder.current
 
     @property
     def state(self) -> dict | None:
@@ -3259,6 +3317,10 @@ class OpenTasteSession:
             wake_mode=self._wake_mode,
             declare_quiet=offer_declare_quiet,
             assembly=offer_assembly,
+            # A window-aware door renders the activity log lean: the record
+            # keeps every parameter, the prompt spends no window on them.
+            # (Task 6 adds omit_activity_log for the compact wake.)
+            lean_activity_log=self.context_policy.window_aware,
         )
 
         # Pre-mint the cycle record_id so schedule_event tool calls can
@@ -3328,12 +3390,43 @@ class OpenTasteSession:
                     tool_executor.activity_log if tool_executor else None
                 )
                 self._last_full_activity = self._last_tool_activity
-                self._last_usage = {"input_tokens": 0, "output_tokens": 0}
                 failure_classification = {
                     "record_type": "protocol_failure",
                     "failure_stage": "api_call",
                     "error_type": type(e).__name__,
                     "error": str(e),
+                }
+                # A truncated reply is not an empty wake: it carries the
+                # account of everything the substrate spent getting there, and
+                # the interim text of the turns that completed before the cut
+                # (spec §4). The cut text itself is declared once, inside
+                # failure_classification — never promoted to interim_text,
+                # never to state.
+                from hamutay.window import TruncatedReply
+                usage = {"input_tokens": 0, "output_tokens": 0, "stop_reason": "error"}
+                interim = None
+                if isinstance(e, TruncatedReply):
+                    a = e.account
+                    usage = {
+                        "input_tokens": a.input_tokens,
+                        "output_tokens": a.output_tokens,
+                        "cache_read_input_tokens": a.cache_read,
+                        "cache_creation_input_tokens": a.cache_write,
+                        "stop_reason": "max_tokens",
+                        **_cost_usage_fields_from_responses(a.responses),
+                    }
+                    interim = list(a.interim_text) or None
+                    failure_classification["truncated_reply"] = {
+                        "text": e.text,
+                        "message": e.message,
+                        "turn_index": e.turn_index,
+                        "prompt_tokens": e.prompt_tokens,
+                        "completion_tokens": e.completion_tokens,
+                        "trusted": False,
+                    }
+                self._last_usage = {
+                    "input_tokens": usage["input_tokens"],
+                    "output_tokens": usage["output_tokens"],
                 }
                 self._log_entry(
                     user_message=user_message,
@@ -3343,13 +3436,11 @@ class OpenTasteSession:
                         json.loads(json.dumps(self._state)) if self._state else None
                     ),
                     record_id=record_id,
-                    usage={
-                        "input_tokens": 0,
-                        "output_tokens": 0,
-                        "stop_reason": "error",
-                    },
+                    usage=usage,
                     scheduled_events=[],
                     failure_classification=failure_classification,
+                    interim_text=interim,
+                    context_policy_invocation=self.context_policy.invocation_id,
                 )
                 raise
 
@@ -3942,6 +4033,8 @@ class OpenTasteSession:
         state_validation: dict | None = None,
         state_merge_diagnostics: dict | None = None,
         interim_text: list[str] | None = None,
+        admission: dict | None = None,
+        context_policy_invocation: str | None = None,
     ) -> None:
         """Append full record to JSONL log. Captures everything."""
         if not self._log_path:
@@ -4012,6 +4105,15 @@ class OpenTasteSession:
             record["state_validation"] = state_validation
         if state_merge_diagnostics is not None:
             record["state_merge_diagnostics"] = state_merge_diagnostics
+        # Written only when there is something to say, so a no-ceiling record
+        # stays byte-identical to what it always was — except on a
+        # window-aware door, where the key rides on every record (a null there
+        # says "this door is window-aware and no invocation was named", which
+        # is a different fact from the key's absence).
+        if admission is not None:
+            record["admission"] = admission
+        if context_policy_invocation is not None or self.context_policy.window_aware:
+            record["context_policy_invocation"] = context_policy_invocation
         with open(self._log_path, "a") as f:
             f.write(json.dumps(record, default=str) + "\n")
 
@@ -4020,17 +4122,45 @@ class OpenTasteSession:
     def apply_context_limit(self, limit: int, source: str, invocation_id: str) -> None:
         """The one setter for the ceiling a live session runs under.
 
-        The session owns both the backend reference (whose `_context_limit`
-        `_call_natural` snapshots) and `_launch_config` (what a resume reads),
-        so a ceiling learned mid-life must land in all three places at once —
-        backend, launch config, and the log — or the next boot inherits a lie.
+        The session owns both the policy holder (which the backend
+        dereferences on every send) and `_launch_config` (what a resume
+        reads), so a ceiling learned mid-life must land in both places at
+        once — and in the log — or the next boot inherits a lie.
+
+        The replacement is *built and probed first*, then assigned once. The
+        old path assigned a bare ceiling straight through the backend's
+        `_context_limit` setter, which discarded the tokenizer, the probe and
+        the reasoning-budget capability: `gpu_lease/gate.py` calls this on
+        every lease invocation whose ceiling is unvalidated, so a window-aware
+        door was demoted to the character-estimate loop on the first
+        rediscovery. If the rebuild fails, the previous value is kept: a door
+        that already counts exactly keeps counting exactly.
         """
-        if hasattr(self._backend, "_context_limit"):
+        from hamutay.context_policy import ContextPolicy
+
+        old = self._policy_holder.current
+        base_url = getattr(self._backend, "_base_url", None)
+        http = getattr(self._backend, "_http", None)
+        try:
+            new = ContextPolicy.for_launch(
+                limit, source, base_url, http=http, model=self._model,
+                invocation_id=invocation_id, cached=old.probe,
+            )
+        except Exception as e:
+            print(f"  context policy: kept the previous value; rebuilding failed: {e}")
+            return
+        self._policy_holder.current = new          # the one assignment
+        # A backend with no holder of its own (Anthropic-direct, a test
+        # double) still keeps its own ceiling attribute; it never shared this
+        # holder, so the assignment above could not have reached it.
+        if getattr(self._backend, "_policy_holder", None) is not self._policy_holder \
+                and hasattr(self._backend, "_context_limit"):
             self._backend._context_limit = limit
         if self._launch_config is None:
             self._launch_config = {}
         self._launch_config["context_limit"] = limit
         self._launch_config["context_limit_source"] = source
+        self._launch_config["context_policy"] = new.as_dict()
         self.append_substrate_observation(
             context_limit=limit, source=source, invocation_id=invocation_id
         )

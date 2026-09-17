@@ -505,3 +505,105 @@ def _terminal_surface_for_test():
             "input_schema": {"type": "object", "properties": {"summary": {"type": "string"}}, "required": ["summary"]},
             "state_update": {"response_field": "summary"},
             "tool_choice": "force"}
+
+
+# --- Task 5: the session's policy holder, lean rendering, the failure record ---
+from hamutay.taste_open import OpenTasteSession, _build_messages
+
+
+def _state_with_log():
+    return {"cycle": 2, "k": "v", "_activity_log": [{"cycle": 2, "timestamp": "t", "tool": "clock", "reason": "r",
+                                                     "result_summary": "s", "parameters": {"p": 1}, "result_hash": "h"}]}
+
+
+def _state_section(system: str) -> dict:
+    head = system.index("## Your state from cycle")
+    body = system[head:].split("\n", 2)[2]
+    if body.startswith("(_activity_log"):
+        body = body.split("\n", 1)[1]
+    return json.loads(body.split("\n## ")[0])
+
+
+def test_lean_activity_log_rendering_is_structural_and_leaves_the_state_untouched():
+    st = _state_with_log(); before = json.dumps(st)
+    _, system = _build_messages(st, "u", 3, tools_enabled=True, wake_mode="natural", lean_activity_log=True)
+    assert json.dumps(st) == before
+    parsed = _state_section(system)
+    assert list(parsed["_activity_log"][0]) == ["cycle", "timestamp", "tool", "reason", "result_summary"]
+    assert "(_activity_log is shown without parameters; the record has them)" in system
+    _, plain = _build_messages(st, "u", 3, tools_enabled=True, wake_mode="natural")
+    assert "parameters" in plain and "(_activity_log is shown" not in plain
+    _, omitted = _build_messages(st, "u", 3, tools_enabled=True, wake_mode="natural", omit_activity_log=True)
+    assert "_activity_log" not in _state_section(omitted) and "(_activity_log is omitted" in omitted
+
+
+def test_session_records_a_truncated_reply_with_real_usage_once(tmp_path):
+    b = _aware([_turn(content="first", tool_calls=[_tool_call("clock", {})], prompt_tokens=100),
+                _turn(content="<think>cut", finish="length", prompt_tokens=200)], counts=[100, 200])
+    log = tmp_path / "s.jsonl"
+    s = OpenTasteSession(model="m", backend=b, log_path=str(log), experiment_label="t", enable_tools=True, project_root=tmp_path)
+    s.seed_state({"cycle": 1}, 1)
+    with pytest.raises(TruncatedReply):
+        s.exchange("hi")
+    rec = json.loads(log.read_text().splitlines()[-1])
+    fc = rec["failure_classification"]
+    assert fc["error_type"] == "TruncatedReply" and fc["truncated_reply"]["text"] == "<think>cut"
+    assert fc["truncated_reply"]["trusted"] is False and fc["truncated_reply"]["turn_index"] == 1
+    assert rec["usage"]["input_tokens"] == 300 and rec["usage"]["output_tokens"] == 20 and rec["usage"]["stop_reason"] == "max_tokens"
+    # The spec's invariant (§4): the truncated text appears under
+    # `truncated_reply`, never in `interim_text`. `message` keeps the raw
+    # `choices[0].message` beside the flattened `text`, so a global substring
+    # count over the record is not the thing being asserted.
+    assert rec["interim_text"] == ["first"]
+    assert "<think>cut" not in json.dumps(rec["interim_text"])
+    assert rec["context_policy_invocation"] is None or isinstance(rec["context_policy_invocation"], str)
+
+
+def test_session_context_policy_is_the_backends_holder_and_replaces_once(tmp_path, monkeypatch):
+    from hamutay.context_policy import ContextPolicy
+    b = _aware([], counts=[])
+    s = OpenTasteSession(model="m", backend=b, log_path=str(tmp_path / "s.jsonl"), experiment_label="t")
+    assert s.context_policy is b.policy
+    seen = []
+    monkeypatch.setattr(ContextPolicy, "for_launch", classmethod(
+        lambda cls, limit, source, base_url, **kw: seen.append((limit, source, kw.get("invocation_id"))) or
+        ContextPolicy(limit, source, limit, "http://127.0.0.1:8081", "probed", {"build_info": "x"}, 20, kw.get("invocation_id"))))
+    s.apply_context_limit(32768, "discovered", "inv-1")
+    assert seen == [(32768, "discovered", "inv-1")]
+    assert b.policy.limit == 32768 and s.context_policy.invocation_id == "inv-1"
+    assert s._launch_config["context_limit"] == 32768 and s._launch_config["context_policy"]["limit"] == 32768
+    last = json.loads((tmp_path / "s.jsonl").read_text().splitlines()[-1])
+    assert last["record_type"] == "substrate_observation" and last["context_limit"] == 32768
+
+
+def test_apply_context_limit_keeps_the_old_policy_when_the_probe_raises(tmp_path, monkeypatch):
+    from hamutay.context_policy import ContextPolicy
+    b = _aware([], counts=[])
+    s = OpenTasteSession(model="m", backend=b, log_path=str(tmp_path / "s.jsonl"), experiment_label="t")
+    old = s.context_policy
+    def boom(cls, *a, **k):
+        raise RuntimeError("probe failed")
+    monkeypatch.setattr(ContextPolicy, "for_launch", classmethod(boom))
+    s.apply_context_limit(32768, "discovered", "inv-2")
+    assert s.context_policy is old
+
+
+def test_apply_context_limit_never_demotes_a_window_aware_door(tmp_path, monkeypatch):
+    """The blocker (Task 4 review, finding 1): gate.py calls this on every
+    unvalidated lease invocation. The old path assigned through the backend's
+    `_context_limit` setter, which replaced a probed, tokenizer-bearing policy
+    with a bare `for_limit` one — a window-aware door silently demoted to the
+    character-estimate loop on the first rediscovery."""
+    from hamutay.context_policy import ContextPolicy
+    b = _aware([], counts=[])
+    s = OpenTasteSession(model="m", backend=b, log_path=str(tmp_path / "s.jsonl"), experiment_label="t")
+    assert s.context_policy.window_aware
+    monkeypatch.setattr(ContextPolicy, "for_launch", classmethod(
+        lambda cls, limit, source, base_url, **kw: ContextPolicy(
+            limit, source, limit, "http://127.0.0.1:8081", "probed", {"build_info": "x"}, 20,
+            kw.get("invocation_id"))))
+    s.apply_context_limit(32768, "discovered", "inv-3")
+    assert s.context_policy.window_aware, "a rediscovery must not demote a window-aware door"
+    assert s.context_policy.tokenizer == "http://127.0.0.1:8081"
+    assert s.context_policy.reasoning_budget == "probed"
+    assert b.policy is s.context_policy and b.policy.limit == 32768

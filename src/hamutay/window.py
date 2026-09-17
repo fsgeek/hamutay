@@ -130,6 +130,21 @@ def lean_activity_logs(obj):
     return walk(json.loads(json.dumps(obj, default=str)))
 
 
+def _drop_activity_logs(obj):
+    """Deep copy with every `_activity_log` key removed at any depth.
+
+    The compact wake's rendering: the record still carries the log, the prompt
+    does not. Same walk as `lean_activity_logs`, deleting the key instead of
+    thinning its entries."""
+    def walk(x):
+        if isinstance(x, dict):
+            return {k: walk(v) for k, v in x.items() if k != "_activity_log"}
+        if isinstance(x, list):
+            return [walk(i) for i in x]
+        return x
+    return walk(json.loads(json.dumps(obj, default=str)))
+
+
 def project_context_results(results: list, cap_chars: int | None) -> list:
     """A deep-copied, lean, typed projection for the envelope; the argument is untouched."""
     if cap_chars is None:
