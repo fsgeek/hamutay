@@ -7,7 +7,7 @@ from pathlib import Path
 from hamutay.assembly.ledger import parse_instant
 from hamutay.events import EventStore, LeaseGateRequired, StoreUnavailable, quiet_declaration_for_latest_wake
 
-STORE_LOCK_WINDOW_S = 2.0
+from .ids import STORE_LOCK_WINDOW_S
 
 
 def land(path: Path, event: dict, *, timeout_s: float = STORE_LOCK_WINDOW_S) -> bool:

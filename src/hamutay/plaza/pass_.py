@@ -12,12 +12,11 @@ from hamutay.events import StoreUnavailable
 
 from . import store as _store
 from .event import inbound_event_for
+from .ids import PLAZA_LOCK_WINDOW_S, STORE_LOCK_WINDOW_S
 from .records import build_delivery, reduce, validate_plaza
-from .send import PLAZA_LOCK_WINDOW_S
 
 PASS_UNITS = 4
 PASS_BUDGET_S = 6.0
-STORE_LOCK_WINDOW_S = 2.0
 UNIT_NEEDS_S = PLAZA_LOCK_WINDOW_S + STORE_LOCK_WINDOW_S
 
 

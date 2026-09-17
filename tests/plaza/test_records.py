@@ -177,3 +177,38 @@ def test_view_truths_counts_and_visibility():
     assert [m["text"] for m in v.visible_since(T0 + timedelta(minutes=2, seconds=30), "fable")] == ["e→q"]
     assert v.by_key[m1["idempotency_key"]]["seq"] == 1
     assert SEND_CAP == 48
+
+
+def test_the_two_lock_windows_are_defined_once_and_imported(tmp_path):
+    """M2: the plan's Global Constraints name PLAZA_LOCK_WINDOW_S and
+    STORE_LOCK_WINDOW_S once each; ids.py is the one definition and every
+    plaza module is the same object, not a coincidentally equal float."""
+    import ast
+    from pathlib import Path
+
+    # via import_module, not attribute access -- hamutay.plaza's __init__ rebinds
+    # the name `send` on the package to the send *function*, shadowing the module.
+    from importlib import import_module
+
+    ids = import_module("hamutay.plaza.ids")
+    send = import_module("hamutay.plaza.send")
+    note = import_module("hamutay.plaza.note")
+    cli = import_module("hamutay.plaza.cli")
+    pass_ = import_module("hamutay.plaza.pass_")
+    store = import_module("hamutay.plaza.store")
+
+    assert ids.PLAZA_LOCK_WINDOW_S == ids.STORE_LOCK_WINDOW_S == 2.0
+    for mod in (send, note, cli, pass_):
+        assert mod.PLAZA_LOCK_WINDOW_S is ids.PLAZA_LOCK_WINDOW_S, mod.__name__
+    for mod in (store, pass_):
+        assert mod.STORE_LOCK_WINDOW_S is ids.STORE_LOCK_WINDOW_S, mod.__name__
+
+    # and nothing in the package assigns either name outside ids.py
+    pkg = Path(ids.__file__).parent
+    for py in sorted(pkg.glob("*.py")):
+        if py.name == "ids.py":
+            continue
+        for node in ast.walk(ast.parse(py.read_text())):
+            if isinstance(node, ast.Assign):
+                for t in node.targets:
+                    assert getattr(t, "id", None) not in ("PLAZA_LOCK_WINDOW_S", "STORE_LOCK_WINDOW_S"), py.name

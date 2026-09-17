@@ -6,6 +6,12 @@ import re
 import uuid
 
 PLAZA_NS = uuid.uuid5(uuid.NAMESPACE_URL, "hamutay:plaza")
+
+# The plan's Global Constraints name these once: every plaza-lock acquisition and
+# every event-store acquisition on the plaza path is bounded by them. Defined here,
+# imported everywhere -- four definitions of two numbers is three too many.
+PLAZA_LOCK_WINDOW_S = 2.0
+STORE_LOCK_WINDOW_S = 2.0
 DOOR_RE = re.compile(r"^door:[a-z0-9_-]+$")
 HUMANS = ("tony", "custodian")
 

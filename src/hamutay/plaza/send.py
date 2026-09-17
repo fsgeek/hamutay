@@ -11,10 +11,8 @@ from hamutay.events import StoreUnavailable
 
 from . import store as _store
 from .event import inbound_event_for
-from .ids import HUMANS, canonical_to, cli_key, door_name, is_door, resident_key
+from .ids import HUMANS, PLAZA_LOCK_WINDOW_S, canonical_to, cli_key, door_name, is_door, resident_key
 from .records import MAX_TEXT_CHARS, SEND_CAP, build_delivery, build_message, reduce, validate_plaza
-
-PLAZA_LOCK_WINDOW_S = 2.0
 
 
 class SendRefused(RuntimeError):

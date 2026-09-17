@@ -8,9 +8,8 @@ from hamutay.assembly.binding import MembersConfig
 from hamutay.assembly.ledger import Ledger, LedgerMalformed, LedgerUnavailable, parse_instant
 from hamutay.events import latest_completed_wake
 
+from .ids import PLAZA_LOCK_WINDOW_S
 from .records import reduce, validate_plaza
-
-PLAZA_LOCK_WINDOW_S = 2.0
 
 
 def note_lower_bound(store_records: list[dict]) -> datetime | None:

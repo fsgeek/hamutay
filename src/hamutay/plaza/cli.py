@@ -10,9 +10,10 @@ from pathlib import Path
 from hamutay.assembly.binding import AssemblyBinding, MembersMalformed, load_members
 from hamutay.assembly.ledger import Ledger, LedgerMalformed, LedgerUnavailable, parse_instant
 
+from .ids import PLAZA_LOCK_WINDOW_S
 from .pass_ import run_plaza_pass
 from .records import reduce, validate_plaza
-from .send import PLAZA_LOCK_WINDOW_S, SendRefused, send
+from .send import SendRefused, send
 
 
 def _now():
