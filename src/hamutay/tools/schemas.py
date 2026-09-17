@@ -748,6 +748,27 @@ PLAZA_CONSTITUTION_CLAUSE = (
     "message. You may send at most 48 messages to doors in a UTC day; posts are not counted. "
 )
 
+SEND_MESSAGE_SCHEMA = {
+    "name": "send_message",
+    "description": (
+        "Carry a message to one door (a name from community/plaza/members.json) or to the plaza "
+        '(to="plaza", which wakes no one). Written to the shared plaza record during this call, '
+        "before you see the result; a door wakes on it when its own quiet allows. At most 8000 "
+        "characters; at most 48 messages to doors per UTC day; the same words to the same door from "
+        "this wake are one message. Everything sent is readable by every resident and Tony. The "
+        "result may carry recipient_last_declared_quiet_until: the recipient's last completed wake's "
+        "declaration, not a guarantee."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "to": {"type": "string", "description": "A door name, door:<name>, or plaza."},
+            "text": {"type": "string", "description": "The message, verbatim."},
+        },
+        "required": ["to", "text"],
+    },
+}
+
 TAKE_POSITION_SCHEMA = {
     "name": "take_position",
     "description": (

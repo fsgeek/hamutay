@@ -60,6 +60,7 @@ _CAPABILITY: dict[str, str] = {
     "bash": "unbounded",
     "take_position": "bounded_write",
     "convene": "bounded_write",
+    "send_message": "bounded_write",
 }
 
 # Keys the state protocol owns; update_state may not write them.
@@ -214,6 +215,8 @@ class ToolExecutor:
             result = self._take_position(tool_input)
         elif tool_name == "convene":
             result = self._convene(tool_input)
+        elif tool_name == "send_message":
+            result = self._send_message(tool_input)
         elif tool_name == "bash":
             result = tool_bash(tool_input, project_root=self._project_root)
         else:
@@ -387,6 +390,24 @@ class ToolExecutor:
             return {"error": f"convene: {e}"}
         return {"convened": True, "question_id": q["question_id"], "closes_at": q["closes_at"]}
 
+    def _send_message(self, tool_input: dict) -> dict:
+        from hamutay.assembly.ledger import LedgerMalformed, LedgerUnavailable
+        from hamutay.plaza.send import SendRefused, send
+        why = self._assembly_ready()
+        if why:
+            return {"error": why}
+        if self._assembly.members.plaza is None:
+            return {"error": "the plaza is not enabled for this house"}
+        wake = {"cycle": self._cycle, "record_id": str(self._scheduled_by_record_id),
+                "event_id": self._wake_context.event_id, "run_id": self._wake_context.run_id,
+                "started_at": self._wake_context.started_at}
+        try:
+            return send(self._assembly.members, actor=f"door:{self._assembly.door}", via="tool",
+                        to=str(tool_input.get("to", "")), text=str(tool_input.get("text", "")),
+                        now=datetime.now(timezone.utc), wake=wake)
+        except (SendRefused, LedgerUnavailable, LedgerMalformed, ValueError, TypeError) as e:
+            return {"error": f"send_message: {e}"}
+
 
 def _summarize(tool_name: str, result: dict) -> str:
     """Short human-readable summary of a tool result for the activity log."""
@@ -429,6 +450,8 @@ def _summarize(tool_name: str, result: dict) -> str:
         )
     if tool_name == "schedule_event":
         return f"schedule_event: {result.get('event_id', '?')[:8]}"
+    if tool_name == "send_message":
+        return f"send_message: {result.get('to', '?')} {result.get('delivery', '?')}"
     if tool_name == "bash":
         if result.get("timed_out"):
             return "bash: timed out"
