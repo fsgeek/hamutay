@@ -299,6 +299,7 @@ def build_inbound_event(
     requested_context: list[dict] | None = None,
     event_id: str | None = None,
     assembly: dict | None = None,
+    origin: str = "external",
 ) -> dict:
     """Create an externally-originated pending event. Does not write it.
 
@@ -318,7 +319,7 @@ def build_inbound_event(
         "event_type": EVENT_TYPE_INBOUND,
         "status": "pending",
         "created_at": utc_now_iso(),
-        "origin": "external",
+        "origin": origin,
         "sender": sender,
         "purpose": purpose,
     }
@@ -1332,10 +1333,17 @@ def build_event_envelope(
 ) -> str:
     """Build the explicit user-message envelope for a wake cycle."""
     if event.get("event_type") == EVENT_TYPE_INBOUND:
-        event_instruction = (
-            "This is an external inbound event. Its origin, sender, and "
-            "purpose fields describe where it came from and what was sent. "
-        )
+        if event.get("origin") == "member":
+            who = "another resident" if str(event.get("sender", "")).startswith("door:") else "a human"
+            event_instruction = (
+                f"This is a message from {who}, carried by the plaza. Its sender and "
+                "purpose fields say who wrote it and what they wrote. "
+            )
+        else:
+            event_instruction = (
+                "This is an external inbound event. Its origin, sender, and "
+                "purpose fields describe where it came from and what was sent. "
+            )
     else:
         event_instruction = (
             "This is a self-scheduled reflection event. Use the provided "
