@@ -142,3 +142,23 @@ def test_two_senders_at_once_both_land_exactly_once(house):
     assert [r["record_type"] for r in recs] == ["message", "delivery", "message", "delivery"]
     assert len(EventStore(cfg.members["elder"].events).read_records()) == 1
     assert len(EventStore(cfg.members["qwen"].events).read_records()) == 1
+
+
+def test_send_and_the_validator_agree_that_whitespace_only_text_is_empty(house):
+    """M3: send.py refused `not text.strip()` while validate_plaza accepted it
+    (falsy only). The divergence was in the safe direction, but the two must agree
+    -- the validator is what every reader trusts about what a writer could produce."""
+    root, cfg, binding = house
+    with pytest.raises(SendRefused):
+        send(cfg, actor="door:qwen", via="tool", to="elder", text="   \n\t ", now=T0,
+             wake=_wake("11111111-1111-4111-8111-111111111111"))
+
+    from hamutay.assembly.ledger import LedgerMalformed
+    from hamutay.plaza.records import build_message, validate_plaza
+    from hamutay.plaza.ids import resident_key
+    ev = "22222222-1111-4111-8111-111111111111"
+    msg = build_message(actor="door:qwen", via="tool", to="plaza", text="  \t ",
+                        sent_at=iso(T0), idempotency_key=resident_key(ev, "plaza", "  \t "),
+                        delivery=None, wake=_wake(ev))
+    with pytest.raises(LedgerMalformed):
+        validate_plaza([{**msg, "seq": 1, "created_at": iso(T0)}], [1])

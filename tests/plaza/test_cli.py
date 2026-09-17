@@ -68,3 +68,47 @@ def test_shim_is_executable_and_names_the_module():
     shim = Path(__file__).resolve().parents[2] / "deploy/ayllu-plaza"
     assert shim.exists() and (shim.stat().st_mode & 0o111)
     assert "python -m hamutay.plaza" in shim.read_text()
+
+
+def test_read_reports_a_malformed_plaza_cleanly(house):
+    """I4: `read` is the command an operator reaches for first when the pass has just
+    emitted {"error": "plaza: line N ..."}. cmd_read's _read raises LedgerMalformed
+    and main() caught only LedgerUnavailable, so it escaped as a traceback on a
+    record the spec says is repaired by hand."""
+    root, cfg, binding = house
+    (root / "t.txt").write_text("x")
+    _cli(root, "send", "--by", "tony", "--to", "qwen", "--text-file", "t.txt")
+    with cfg.plaza.open("a") as f:
+        f.write(json.dumps({"record_type": "note", "seq": 3}) + "\n")
+    out = _cli(root, "read")
+    assert out.returncode != 0
+    assert "Traceback" not in out.stderr and "Traceback" not in out.stdout
+    assert out.stderr.strip().count("\n") == 0                  # one line
+    assert out.stderr.startswith("plaza: ") and "line 3" in out.stderr
+
+
+def test_status_reports_the_cap_actors_at_zero_and_a_physical_line_count(house):
+    """M4: the spec's 'per-door sends today against the cap' needs the cap in the
+    output, and an actor at zero is a fact, not an omission. M5: on a malformed
+    record `records` is reset to [], so seq reported 0 and understated the file."""
+    root, cfg, binding = house
+    now = datetime.now(UTC)
+    send(cfg, actor="door:elder", via="tool", to="fable", text="e2f", now=now,
+         wake=_wake("11111111-1111-4111-8111-111111111111"))
+    send(cfg, actor="door:qwen", via="tool", to="plaza", text="post", now=now,
+         wake=_wake("22222222-1111-4111-8111-111111111111"))
+    st = json.loads(_cli(root, "status", "--now", iso(now)).stdout)
+    from hamutay.plaza.records import SEND_CAP
+    assert st["cap"] == SEND_CAP
+    assert st["sent_today"]["door:elder"] == 1
+    assert st["sent_today"]["door:qwen"] == 0        # an actor at zero is reported, not dropped
+
+    with cfg.plaza.open("a") as f:
+        f.write(json.dumps({"record_type": "note", "seq": 99}) + "\n")
+    bad = _cli(root, "status", "--now", iso(now))
+    assert bad.returncode == 1
+    body = json.loads(bad.stdout)
+    assert body["valid"] is not True
+    physical = len([ln for ln in cfg.plaza.read_text().splitlines() if ln.strip()])
+    assert body["seq"] in (physical, None) and body["seq"] != 0
+    assert body["seq"] == physical

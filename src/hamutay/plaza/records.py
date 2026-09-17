@@ -134,7 +134,10 @@ def validate_plaza(records: list[dict], line_numbers: list[int]) -> None:
                 if r["idempotency_key"] != resident_key(wake["event_id"], to, r["text"]):
                     raise _bad(f"line {line}: idempotency_key is not the framework's")
             text = r["text"]
-            if not isinstance(text, str) or not text or len(text) > MAX_TEXT_CHARS:
+            # whitespace-only is empty here too: send.py refuses `not text.strip()`
+            # and the validator is what every reader trusts about what a writer
+            # could have produced, so the two must say the same thing (M3).
+            if not isinstance(text, str) or not text.strip() or len(text) > MAX_TEXT_CHARS:
                 raise _bad(f"line {line}: text empty or over {MAX_TEXT_CHARS}")
             _instant(r["sent_at"], f"line {line} sent_at")
             d = r["delivery"]

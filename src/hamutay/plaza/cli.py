@@ -12,7 +12,7 @@ from hamutay.assembly.ledger import Ledger, LedgerMalformed, LedgerUnavailable, 
 
 from .ids import PLAZA_LOCK_WINDOW_S
 from .pass_ import run_plaza_pass
-from .records import reduce, validate_plaza
+from .records import SEND_CAP, reduce, validate_plaza
 from .send import SendRefused, send
 
 
@@ -28,6 +28,14 @@ def _load(root: Path):
     if cfg is None or cfg.plaza is None:
         print(f"plaza: not enabled under {root} (no plaza key in members.json)", file=sys.stderr); return None
     return cfg
+
+
+def _physical_lines(cfg) -> int | None:
+    """How many non-empty lines the file physically has, or None if it cannot be read."""
+    try:
+        return sum(1 for line in cfg.plaza.read_text().splitlines() if line.strip())
+    except OSError:
+        return None
 
 
 def _read(cfg):
@@ -76,11 +84,17 @@ def cmd_status(root, cfg, a) -> int:
         records, valid = [], str(e)
     v = reduce(records)
     today = now.astimezone(timezone.utc).date()
-    actors = sorted({m["from"] for m in v.messages if m["to"] != "plaza"})
-    sent_today = {act: v.sent_today(act, today) for act in actors if v.sent_today(act, today)}
+    # every actor on the record, at zero or not: a door that has sent nothing
+    # directed today is a fact about the cap, not an omission. Posts do not count
+    # against the cap (Invariant 8) but a poster is still an actor to report (M4).
+    actors = sorted({m["from"] for m in v.messages})
+    sent_today = {act: v.sent_today(act, today) for act in actors}
     out = {"undelivered": [m["message_id"] for m in v.undelivered()],
            "sent_today": sent_today,
-           "seq": (records[-1]["seq"] if records else 0),
+           "cap": SEND_CAP,
+           # on a malformed record `records` is [], so the last record's seq would
+           # report 0 and understate the file; report what is physically there (M5).
+           "seq": (records[-1]["seq"] if records else (_physical_lines(cfg) if valid is not True else 0)),
            "bytes": (cfg.plaza.stat().st_size if cfg.plaza.exists() else 0), "valid": valid}
     print(json.dumps(out, indent=2)); return 0 if valid is True else 1
 
@@ -109,5 +123,8 @@ def main(argv=None) -> int:
     fn = {"send": cmd_send, "read": cmd_read, "status": cmd_status, "pass": cmd_pass}[a.cmd]
     try:
         return fn(root, cfg, a)
-    except LedgerUnavailable as e:
+    except (LedgerUnavailable, LedgerMalformed) as e:
+        # `read` is what an operator reaches for first when the pass has emitted
+        # {"error": "plaza: line N ..."}; a traceback is the worst thing to hand
+        # someone mid-incident on a record the spec says is repaired by hand (I4).
         print(f"plaza: {e}", file=sys.stderr); return 2
