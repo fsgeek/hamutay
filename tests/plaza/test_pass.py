@@ -1,7 +1,9 @@
 import json
 from datetime import datetime, timedelta, timezone
 
-from hamutay.assembly.ledger import Ledger, iso
+import pytest
+
+from hamutay.assembly.ledger import Ledger, LedgerUnavailable, iso
 from hamutay.events import EventStore, StoreUnavailable
 from hamutay.plaza.pass_ import PASS_BUDGET_S, PASS_UNITS, PlazaMemo, run_plaza_pass
 from hamutay.plaza.records import reduce
@@ -91,7 +93,10 @@ def test_pass_continues_past_per_message_failures_and_stops_on_malformed(house):
     a_event_id = reduce(Ledger(cfg.plaza).read()).by_id[a]["delivery"]["event_id"]
     def half(path, event, *, timeout_s=2.0):
         if event["event_id"] == a_event_id:
-            raise OSError("disk")
+            # store.land normalises OSError (and LeaseGateRequired) into
+            # StoreUnavailable, so StoreUnavailable is the only thing the pass
+            # can actually see from a real land (M6).
+            raise StoreUnavailable("disk")
         return True
     out, _ = run_plaza_pass(binding, now=T0, land=half)
     assert out["unreadable"] == [a] and out["landed"] == [b]
@@ -107,3 +112,37 @@ def test_pass_skips_when_the_lock_is_held(house):
     with Ledger(cfg.plaza).locked():
         out, _ = run_plaza_pass(binding, now=T0)
     assert out["skipped"] == "lock"
+
+
+def test_pass_keeps_the_advanced_cursor_when_the_lock_times_out_mid_pass(house):
+    """I1: a lock timeout part-way through a pass must not throw away the cursor
+    the completed units advanced. The LedgerMalformed path already returns the
+    advanced cursor and the fresh signature; LedgerUnavailable returned the
+    caller's original memo, so the next pass re-examined messages this one
+    already landed and could retry a stuck head indefinitely."""
+    root, cfg, binding = house
+    ids = _pending(cfg, 3)
+    seqs = {m: reduce(Ledger(cfg.plaza).read()).by_id[m]["seq"] for m in ids}
+    stale = PlazaMemo(("stale", 0.0), 0, 3)
+
+    calls = []
+    real_try_locked = Ledger.try_locked
+
+    def flaky_lock(self, timeout_s):
+        calls.append(1)
+        if len(calls) > 2:                       # the third unit cannot get the lock
+            raise LedgerUnavailable("plaza busy")
+        return real_try_locked(self, timeout_s)
+
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(Ledger, "try_locked", flaky_lock)
+    try:
+        out, memo = run_plaza_pass(binding, now=T0, memo=stale)
+    finally:
+        monkey.undo()
+
+    assert out["skipped"] == "lock" and out["landed"] == ids[:2]
+    assert memo is not stale
+    assert memo.cursor == seqs[ids[1]]           # the cursor the two landed units advanced
+    assert memo.signature != stale.signature     # and the signature read this pass
+    assert memo.undelivered >= 1                 # something is still pending

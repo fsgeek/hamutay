@@ -65,15 +65,21 @@ def run_plaza_pass(binding: AssemblyBinding, *, now: datetime, memo: PlazaMemo |
                     land(Path(target["delivery"]["events_path"]), inbound_event_for(target), timeout_s=STORE_LOCK_WINDOW_S)
                     ledger.append_unlocked(build_delivery(message=target, state="landed", landed_at=iso(now), detail=None))
                     landed.append(target["message_id"]); remaining_after -= 1
-                except (StoreUnavailable, OSError) as e:
+                except StoreUnavailable as e:   # store.land normalises OSError/LeaseGateRequired (M6)
                     err = str(e)
                     if not (truth["state"] == "store_unreadable" and (truth.get("detail") or {}).get("error") == err):
                         ledger.append_unlocked(build_delivery(message=target, state="store_unreadable",
                                                               landed_at=None, detail={"error": err}))
                     unreadable.append(target["message_id"])
         except LedgerUnavailable:
+            # The cursor units already completed in this pass advanced, and the
+            # signature read this pass -- not the caller's original memo. Returning
+            # that would re-examine messages this pass already landed (harmless, but
+            # it re-pays a lock acquisition and a full read+validate each) and could
+            # retry a stuck head indefinitely at the front. The spec's fairness
+            # paragraph resets the cursor on a process restart, not on a lock timeout.
             return {"skipped": "lock", "units": units, "landed": landed, "unreadable": unreadable}, \
-                (memo or PlazaMemo(sig, cursor, 1))
+                PlazaMemo(sig, cursor, max(remaining_after, 1))
         except LedgerMalformed as e:
             return {"skipped": False, "error": str(e), "units": units, "landed": landed, "unreadable": unreadable}, \
                 PlazaMemo(sig, cursor, 1)
