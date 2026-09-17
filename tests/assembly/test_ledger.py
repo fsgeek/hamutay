@@ -97,3 +97,34 @@ def test_fsync_is_called_on_append(ledger_path, monkeypatch):
     monkeypatch.setattr(os, "fsync", lambda fd: (calls.append(fd), real(fd)))
     Ledger(ledger_path).append({"record_type": "testimony", "text": "x"})
     assert calls
+
+
+# --- 2026-09-16, found by Codex's third review of the plaza design ---------
+# A final line that lacks its newline is a torn tail whether or not it parses:
+# the write is one buffer ending in "\n", so bytes without the "\n" are a cut
+# write, and appending after them would glue two records onto one line.
+
+def test_unterminated_final_line_is_torn_even_when_it_parses(ledger_path):
+    led = Ledger(ledger_path)
+    led.append({"record_type": "a"})
+    with ledger_path.open("ab") as f:
+        f.write(json.dumps({"record_type": "b", "seq": 2}).encode())   # no newline
+    recs = led.read()
+    assert [r["record_type"] for r in recs] == ["a"]
+    assert led.torn_tail is not None and '"b"' in led.torn_tail
+    led.append({"record_type": "c"})
+    lines = ledger_path.read_bytes().split(b"\n")
+    assert lines[-1] == b"" and len(lines) == 3          # two records, each newline-terminated
+    assert [json.loads(l)["record_type"] for l in lines[:-1]] == ["a", "c"]
+    assert json.loads(lines[1])["seq"] == 2
+
+
+def test_reader_records_each_records_physical_line_number(ledger_path):
+    led = Ledger(ledger_path)
+    led.append({"record_type": "a"})
+    with ledger_path.open("ab") as f:
+        f.write(b"\n")                                   # a blank physical line 2
+    led.append({"record_type": "b"})                     # physical line 3, seq 2
+    recs = led.read()
+    assert [r["seq"] for r in recs] == [1, 2]
+    assert led.line_numbers == [1, 3]

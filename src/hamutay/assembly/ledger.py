@@ -76,26 +76,40 @@ class Ledger:
         return (st.st_size, st.st_mtime)
 
     def read_unlocked(self) -> list[dict]:
+        """Parse the ledger; tolerate exactly one torn final line.
+
+        A write is one buffer ending in "\\n" (append_unlocked), so any
+        non-empty final bytes WITHOUT a newline are a cut write and are the
+        torn tail whether or not they happen to parse as JSON (2026-09-16,
+        Codex's third plaza review: a parseable unterminated tail used to be
+        accepted, and the next append was glued onto it). `line_numbers`
+        holds each record's physical one-based line number, parallel to the
+        returned list, for readers that need seq to equal line number.
+        """
         self.torn_tail = None
+        self.line_numbers: list[int] = []
         if not self.path.exists():
             self._good_end = 0
             return []
         data = self.path.read_bytes()
         records: list[dict] = []
         offset = 0
-        for i, raw in enumerate(data.split(b"\n")):
-            is_last = (i == data.count(b"\n"))
+        lines = data.split(b"\n")
+        terminated = data.endswith(b"\n")
+        for i, raw in enumerate(lines):
+            is_last = (i == len(lines) - 1)
+            if is_last and not terminated and raw.strip():
+                self.torn_tail = raw.decode("utf-8", "replace")
+                self._good_end = offset
+                return records
             if not raw.strip():
                 offset += len(raw) + 1
                 continue
             try:
                 records.append(json.loads(raw))
             except json.JSONDecodeError:
-                if is_last and not data.endswith(b"\n"):
-                    self.torn_tail = raw.decode("utf-8", "replace")
-                    self._good_end = offset
-                    return records
                 raise LedgerMalformed(f"{self.path}: bad line at byte {offset}")
+            self.line_numbers.append(i + 1)
             offset += len(raw) + 1
         self._good_end = len(data)
         return records
