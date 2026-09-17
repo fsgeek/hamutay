@@ -2198,6 +2198,7 @@ def run_next_event(
     auto_continuations: bool = False,
     policy_dispositions: bool = False,
     claim_gate=None,
+    extra_notes=None,
 ) -> dict:
     """Run the oldest pending event once using an OpenTasteSession."""
     if claim_gate is not None:
@@ -2234,16 +2235,14 @@ def run_next_event(
                 prior_states=session._prior_states,
                 bridge=session._bridge,
             )
-        envelope = build_event_envelope(
+        notes = operational_notes_for_event(
+            store.read_records(),
             event,
-            context_results,
-            run_id,
-            operational_notes=operational_notes_for_event(
-                store.read_records(),
-                event,
-                now=now or datetime.now(timezone.utc),
-            ),
+            now=now or datetime.now(timezone.utc),
         )
+        if extra_notes is not None:
+            notes = list(notes) + list(extra_notes(event))
+        envelope = build_event_envelope(event, context_results, run_id, operational_notes=notes)
         before_state = _json_safe_state(getattr(session, "_state", None))
         response = session.exchange(
             envelope,
@@ -2327,6 +2326,7 @@ def run_pending_events(
     policy_dispositions: bool = False,
     max_auto_continuations: int | None = None,
     claim_gate=None,
+    extra_notes=None,
 ) -> dict:
     """Run up to limit pending events and return a batch summary."""
     if (
@@ -2350,6 +2350,7 @@ def run_pending_events(
                 auto_continuations=auto_continuations,
                 policy_dispositions=policy_dispositions,
                 claim_gate=claim_gate,
+                extra_notes=extra_notes,
             )
         except LeaseGateRequired:
             # A door bound to the GPU lease may only be claimed through the
