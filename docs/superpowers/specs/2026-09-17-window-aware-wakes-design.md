@@ -1,6 +1,6 @@
 # Window-aware wakes on a local door
 
-Date: 2026-09-17. Author: the custodian session. Status: revision 6.1 (one gate corrected during implementation, see §1), after
+Date: 2026-09-17. Author: the custodian session. Status: revision 6.2 (three lines corrected during implementation, see §1 and §2), after
 Codex rounds five and six (`-review-5.md`: 1 Blocking, 2 Significant on
 revision 5; `-review-6.md` found that the revision-6 commit had carried no
 design text, so this is that text; rounds one to four had 4/5/2, 5/4/1,
@@ -250,7 +250,11 @@ finding 23).
   `prompt_tokens`, `room`, `max_tokens`, `reasoning_budget_tokens`,
   `forced_sequence_tokens`, `limit`, and the count latency.
 - The soft-threshold check (`prompt_tokens >= SOFT_THRESHOLD_FRACTION *
-  limit`) runs on turn 0 too, on the same count. The note says what fired:
+  limit`) runs on **every** turn of a window-aware door on the exact count
+  of the candidate payload (turn 0 included), never on the character
+  estimate; the estimate path remains only for doors that are not
+  window-aware (r6.2, found by the Task 4 review: the implementation had
+  the exact check at turn 0 only). The note says what fired:
   `"the next request counts {prompt_tokens} tokens ({count_source}); the
   last measured request was {last_reported_prompt_tokens}"`. After the
   withdrawal the three-turn rule (`all_tools_withdrawn`) is unchanged.
@@ -336,7 +340,8 @@ the envelope and try again. A count that cannot be taken at all raises
 only `ExhaustedBeforeRequest`. The final candidate is prepared with
 `candidate=False`, which applies the floor check and raises
 `ExhaustedBeforeRequest`. `call_prepared` consumes `prepared.payload`
-verbatim for the **first** send only; **every** later send on any path,
+verbatim for the **first** send only, passing `prepared.prompt_tokens` into
+the path as the pre-count so the first send is not counted twice (r6.2); **every** later send on any path,
 a multi-turn path's next turn (after a tool result, a withdrawal, the
 near-wall rule) and the single-tool path's resend after malformed
 arguments alike, is rebuilt from `inputs` plus the path's loop state and
