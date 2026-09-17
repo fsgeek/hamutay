@@ -4,6 +4,7 @@ import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from uuid import NAMESPACE_URL, uuid4, uuid5
 
 import pytest
 
@@ -178,10 +179,13 @@ def records(path: Path) -> list[dict]:
 
 
 def inbound_event(*, event_id=None):
+    resolved_event_id = (
+        uuid4() if event_id is None else uuid5(NAMESPACE_URL, str(event_id))
+    )
     return build_inbound_event(
         purpose="validate a window-aware wake",
         sender="validation-suite",
-        event_id=event_id,
+        event_id=resolved_event_id,
     )
 
 

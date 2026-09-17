@@ -175,6 +175,7 @@ def test_no_ceiling_payloads_match_a_baseline_backend_without_a_policy(tmp_path)
     class DeterministicExecutor:
         def __init__(self):
             self.activity_log = []
+            self.pending_state_updates = {"updates": {}, "deleted_regions": []}
 
         def execute(self, tool_name, tool_input):
             return {"accepted": True, "tool": tool_name, "input": tool_input}

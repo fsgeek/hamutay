@@ -166,6 +166,7 @@ def _position_attempt(house, door, stance, *, at, complete=True):
         record_id=record_id,
         question_id=house.question["question_id"],
         stance=stance,
+        reasons=None,
         now=at,
     )
     if complete:
