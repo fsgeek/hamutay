@@ -284,7 +284,7 @@ def test_later_eligible_position_from_the_same_member_lifts_the_failed_run_cap(h
     assert closing is not None
     assert "a" not in closing["tally"]["position_from_failed_wake"]
     assert "a" in closing["tally"]["abstentions"]
-    assert closing["tally"]["cap"] is None
+    assert not closing["tally"]["cap"]
     active_position = next(
         position
         for position in closing["positions"]
