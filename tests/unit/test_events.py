@@ -2566,3 +2566,49 @@ def test_boot_recovery_of_a_crashed_compact_run_stays_compact(tmp_path):
     recovered = recover_orphaned_running(store)
     assert len(recovered) == 1 and recovered[0]["detail"]["compact_context"] is True
     assert recovered[0]["recovered_from_run_id"] == store.read_records()[-2]["run_id"]
+
+
+def test_run_next_event_reraises_the_original_when_the_store_write_fails(tmp_path, monkeypatch):
+    from hamutay.context_policy import ContextPolicy
+    from hamutay.events import run_next_event
+    from hamutay.window import ExhaustedBeforeRequest
+    store = EventStore(tmp_path / "events.jsonl"); store.append(_event_record())
+
+    class S:
+        _prior_states = []; _bridge = None; _state = {}; cycle = 1; _last_admission = None
+        context_policy = ContextPolicy(65536, "discovered", 65536, "http://127.0.0.1:8081", "probed", {}, 20)
+        def exchange(self, msg, **kw):
+            raise ExhaustedBeforeRequest(prompt_tokens=65000, limit=65536, room=535, max_tokens=535)
+
+    store.claim_next_pending()  # let the claim land before the disk "fails"
+    monkeypatch.setattr(store, "claim_next_pending", lambda **kw: (_event_record(), {
+        "run_id": "r", "started_at": "2026-09-17T00:00:00+00:00", "status": "running"}))
+    def boom(lines):
+        raise OSError("disk")
+    monkeypatch.setattr(store, "_write_lines_unlocked", boom)
+    with pytest.raises(ExhaustedBeforeRequest) as caught:
+        run_next_event(S(), store)
+    assert any("disk" in note for note in getattr(caught.value, "__notes__", []))
+
+
+def test_run_next_event_reraises_a_plain_error_when_the_store_write_fails(tmp_path, monkeypatch):
+    from hamutay.context_policy import ContextPolicy
+    from hamutay.events import run_next_event
+    store = EventStore(tmp_path / "events.jsonl"); store.append(_event_record())
+
+    class S:
+        _prior_states = []; _bridge = None; _state = {}; cycle = 1; _last_admission = None
+        context_policy = ContextPolicy.none()
+        def exchange(self, msg, **kw):
+            raise RuntimeError("model went away")
+
+    store.claim_next_pending()
+    monkeypatch.setattr(store, "claim_next_pending", lambda **kw: (_event_record(), {
+        "run_id": "r", "started_at": "2026-09-17T00:00:00+00:00", "status": "running"}))
+    def boom(lines):
+        raise OSError("disk")
+    monkeypatch.setattr(store, "_write_lines_unlocked", boom)
+    with pytest.raises(RuntimeError) as caught:
+        run_next_event(S(), store)
+    assert "model went away" in str(caught.value)
+    assert any("disk" in note for note in getattr(caught.value, "__notes__", []))

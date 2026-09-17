@@ -2296,6 +2296,23 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
     return "\n".join(lines)
 
 
+def _note_unrecorded_failure(exc: Exception, store_error: OSError) -> None:
+    """The run failed and the log could not say so; keep the original failure.
+
+    The store's writes are fsynced and growth-verified, so recording a failure
+    can itself fail. If that OSError propagated it would replace the exception
+    the caller is actually waiting on -- a caller catching WindowFailure would
+    instead get a disk error and never learn the window was exhausted. Attach
+    the store failure to the original as a note and let the original out; the
+    lost row is visible to boot recovery as a `running` claim that never
+    terminalized.
+    """
+    exc.add_note(
+        f"event store write failed while recording this failure: {store_error}"
+    )
+    print(f"  event store: could not record the failure: {store_error}")
+
+
 def run_next_event(
     session,
     store: EventStore,
@@ -2445,22 +2462,28 @@ def run_next_event(
                 "ExhaustedBeforeRequest": "exhausted_before_request",
                 "TruncatedReply": "truncated_reply",
             }.get(type(e).__name__, "window_failure")
-            store.append_failed_with_retry(
-                event=event,
-                run_id=run_id,
-                exc=e,
-                reason=reason,
-                context_results=context_results,
-                admission=admission,
-            )
+            try:
+                store.append_failed_with_retry(
+                    event=event,
+                    run_id=run_id,
+                    exc=e,
+                    reason=reason,
+                    context_results=context_results,
+                    admission=admission,
+                )
+            except OSError as store_error:
+                _note_unrecorded_failure(e, store_error)
         else:
-            store.append_failed(
-                event=event,
-                run_id=run_id,
-                exc=e,
-                context_results=context_results,
-                admission=admission,
-            )
+            try:
+                store.append_failed(
+                    event=event,
+                    run_id=run_id,
+                    exc=e,
+                    context_results=context_results,
+                    admission=admission,
+                )
+            except OSError as store_error:
+                _note_unrecorded_failure(e, store_error)
         raise
 
 
