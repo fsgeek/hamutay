@@ -4310,10 +4310,13 @@ class OpenTasteSession:
         The policy-state fields (`window_aware`, `tokenizer`,
         `reasoning_budget`) say what the door can actually do after this
         observation, so the log shows the policy state rather than only the
-        number. `context_policy_kept` with a `reason` marks the one case where
-        the ceiling was learned but deliberately not applied. All are optional
-        and omitted when None, so an observation written by an older caller is
-        unchanged.
+        number. They ride only on a window-aware door: a door that cannot
+        count has nothing to say about its tokenizer, and writing
+        `window_aware: false` would widen every non-window-aware door's record
+        by three keys for no information. `context_policy_kept` with a
+        `reason` marks the one case where the ceiling was learned but
+        deliberately not applied. All are optional and omitted when None, so
+        an observation written by an older caller is unchanged.
         """
         launch = self._launch_config or {}
         record = {
@@ -4326,8 +4329,15 @@ class OpenTasteSession:
             "provider": launch.get("provider"),
             "at": datetime.now(timezone.utc).isoformat(),
         }
-        for key, value in (("window_aware", window_aware), ("tokenizer", tokenizer),
-                           ("reasoning_budget", reasoning_budget),
+        # The three policy-state keys ride only on a window-aware door's
+        # observation. `window_aware=False` is not None, so an `is not None`
+        # guard would grow a non-window-aware door's record by three keys —
+        # additive drift the spec's byte-identity clause does not declare (M2).
+        # `or None` collapses False to absent, which is the honest reading:
+        # a door that cannot count has nothing to say about its tokenizer.
+        for key, value in (("window_aware", window_aware or None),
+                           ("tokenizer", tokenizer if window_aware else None),
+                           ("reasoning_budget", reasoning_budget if window_aware else None),
                            ("context_policy_kept", context_policy_kept),
                            ("reason", reason)):
             if value is not None:

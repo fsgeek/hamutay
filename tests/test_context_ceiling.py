@@ -674,7 +674,12 @@ def test_a_non_window_aware_door_is_not_blocked_from_gaining_a_ceiling(tmp_path)
     assert s.context_policy.limit == 32768
     rec = json.loads((tmp_path / "s.jsonl").read_text().splitlines()[-1])
     assert rec["context_limit"] == 32768 and "context_policy_kept" not in rec
-    assert rec["window_aware"] is False
+    # M2: the three policy-state keys ride only on a window-aware door. A door
+    # that cannot count has nothing to say about its tokenizer or its
+    # reasoning budget, so its observation record is what it always was —
+    # byte-identical, not three keys wider.
+    assert "window_aware" not in rec
+    assert "tokenizer" not in rec and "reasoning_budget" not in rec
 
 
 def test_the_activity_note_follows_whichever_section_was_thinned():

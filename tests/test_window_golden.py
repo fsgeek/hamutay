@@ -56,6 +56,10 @@ def test_explicit_ceiling_without_tokenizer_is_byte_identical(tmp_path):
     payloads, rec = _run(tmp_path, b)
     assert payloads == g["payloads"]
     assert rec["system_prompt"] == g["system_prompt"]
+    # The spec pins "every completed wake record", not only the payloads: an
+    # explicit-ceiling door is not window-aware, so neither `admission` nor
+    # `context_policy_invocation` may appear on its record either (M1).
+    assert json.loads(json.dumps(rec, sort_keys=True, default=str)) == g["record"]
 
 
 def test_no_ceiling_length_failure_differs_only_in_the_four_declared_places(tmp_path):
