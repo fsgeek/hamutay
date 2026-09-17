@@ -1,9 +1,9 @@
 # Window-aware wakes on a local door
 
-Date: 2026-09-17. Author: the custodian session. Status: revision 4, after
-Codex round three (`2026-09-17-window-aware-wakes-review-3.md`: 4 Blocking,
-4 Significant, 1 Minor on revision 3; rounds one and two had 4/5/2 and
-5/4/1). Every finding of the three rounds is accepted in mechanism except
+Date: 2026-09-17. Author: the custodian session. Status: revision 5, after
+Codex round four (`2026-09-17-window-aware-wakes-review-4.md`: 2 Blocking,
+3 Significant, 0 Minor on revision 4; rounds one to three had 4/5/2,
+5/4/1 and 4/4/1). Every finding of the three rounds is accepted in mechanism except
 two, declared where they arise: the reply reserve is a target (§1), and
 the resident's state is not cut (§6, "Acceptance"). Codex's sandbox could not reach the
 local server, so the live evidence this design requires comes from the
@@ -188,8 +188,9 @@ bounded completions cost under 100 tokens of generation.
 
 Everything below is gated on the door being window-aware
 (`policy.limit is not None and policy.tokenizer is not None`), except
-§3, which is gated on `policy.limit is not None`, and §4, which is
-universal (see "What stays byte-identical" for the exact guarantee).
+§4, which is universal (see "What stays byte-identical" for the exact
+guarantee). A ceiling without a tokenizer therefore keeps its payloads
+byte-identical to today (round four, finding 33).
 
 ### 1. The exact count and the reserve
 
@@ -312,13 +313,34 @@ transform the schemas, resolve `tool_choice`, add the terminal or
 in the backend, behind one interface:
 
 ```
-backend.prepare(system, messages, extra_tools, terminal_surface, policy)
-    -> Prepared(payload: dict, prompt_tokens: int, path: str)
-backend.call_prepared(prepared, ...)   # sends exactly prepared.payload first
+backend.prepare(model, system, messages, extra_tools, terminal_surface,
+                tool_executor, policy, *, candidate: bool = False)
+    -> Prepared(payload: dict, prompt_tokens: int, path: str,
+                sendable: bool, reason: str | None,
+                inputs: PreparedInputs)   # model, system, messages, tools,
+                                          # terminal_surface, tool_executor,
+                                          # policy: everything the path needs
+backend.call_prepared(prepared, **path_kwargs)
 ```
 
-`prepare` builds the exact first payload the chosen path would send and
-counts it (§1). The runner passes the session an `envelope: Callable[[int
+`prepare` builds the exact first payload the chosen path (single-tool,
+terminal surface, multi-turn, natural) would send, with the path's own
+tool transformation and `tool_choice`, and counts it (§1). With
+`candidate=True` (admission) it never raises: an unsendable count comes
+back as `sendable=False` with the reason, so admission can shrink the
+envelope and try again. The final candidate is prepared with
+`candidate=False`, which applies the floor check and raises
+`ExhaustedBeforeRequest`. `call_prepared` consumes `prepared.payload`
+verbatim for the **first** send only; every later payload of a
+multi-turn path (after a tool result, a withdrawal, the near-wall rule)
+is rebuilt from `inputs` plus the path's loop state and passed through
+the same `_count_and_bound(payload)` helper, so the invariant is
+asserted on the payload actually sent, every time. Rule (round four,
+finding 35): **after any change to the tool set, rebuild, recount, then
+assert and send**; a request is never sent with a count taken before a
+tool was withdrawn. That applies at turn 0 (the soft-threshold check
+withdraws perception, the payload is rebuilt without those tools and
+recounted before the first send) and inside the loop. The runner passes the session an `envelope: Callable[[int
 | None], str]`, a closure over the **immutable full** `context_results`
 that returns the envelope built at a given cap (the runner still records
 the full results). At the prepared-wake boundary the session calls
@@ -348,7 +370,8 @@ rendered through the same `lean_activity_logs` projection §2 defines, on a
 JSON deep copy (`json.loads(json.dumps(...))`); the caller's objects are
 byte-identical after the call, and a test asserts it.
 The state on disk and every record are unchanged. The session passes
-`lean_activity_log = policy.limit is not None`. A one-line note under the
+`lean_activity_log = policy.window_aware` (limit and tokenizer both
+present). A one-line note under the
 state heading says: `"(_activity_log is shown without parameters; the
 record has them)"`. The test parses the rendered state section back to
 JSON and asserts on the structure, not on the whole prompt string.
@@ -414,12 +437,19 @@ and fields, `detail: {"compact_context": true, "retry_of_run": <run_id>,
 "reason": "count_unavailable" | "exhausted_before_request" |
 "truncated_reply"}`, due immediately; the method re-checks under the lock
 that no compact row exists and appends only the `failed` row if one does.
-A crash between the two appends cannot happen because there is one write
-(the two lines are one buffer, fsynced, as the assembly ledger writes);
-`recover_orphaned_running` is unchanged and copies the most recent
-pending record, so a crashed compact `running` run is recovered compact,
-and the marker prevents a third deliberate attempt. This does not widen
-the pre-existing at-least-once window of orphan recovery.
+The two lines are one buffer, written, flushed and fsynced with the
+file's growth verified, as `Ledger.append_unlocked` does (this change
+gives `EventStore._append_unlocked` the same discipline). That is not
+crash-atomic (round four, finding 32): a power loss or short write can
+persist the `failed` row without its retry, or leave a torn second line.
+The contract is therefore declared, not claimed away: a `failed` row
+persisted without its compact retry leaves the event terminal-failed with
+no retry, exactly where a failed wake lands today; a torn final line is
+the store's pre-existing hazard (the reader does not tolerate it) and is
+not widened by this write beyond one extra line. `recover_orphaned_running`
+copies the most recent pending record, so a crashed compact `running`
+run is recovered compact, and the marker prevents a third **deliberate**
+attempt.
 
 **The compact run.** The prepared wake is built compact: the envelope at
 metadata-only stubs from the first pass, the prior state, memory and
@@ -430,29 +460,41 @@ omitting it cuts nothing of the resident's), and the budget fields as §1
 allows. A second `WindowFailure` is terminal, recorded as today, and the
 door is not re-pended again for that event.
 
-**The close pass is attempt-aware (round three, finding 22).** Today
-`eligible_positions` classifies a position as `wake_failed` by the
-event's **latest** status, so a compact `pending`/`running`/`completed`
-row after a failed first attempt would hide that failure and silently
-drop `position_from_failed_wake`. The change: `_latest_by_event_id` keeps
-its meaning for delivery and absence, and a new `_terminal_by_run`
-indexes terminal statuses by `(event_id, run_id)`; a position is
-classified against **its own run**: `wake_failed` when its run's terminal
-status is `failed`, eligible when its run completed with the joined
-record, and `running_at_cutoff` is computed per run too. A completed
+**The close pass is attempt-aware (round three, finding 22; round four,
+31).** Today `eligible_positions` classifies a position as `wake_failed`
+by the event's **latest** status, so a compact `pending`/`running`/
+`completed` row after a failed first attempt would hide that failure and
+silently drop `position_from_failed_wake`. The change: `_latest_by_event_id`
+keeps its meaning for delivery and absence, and a new `_runs_by_event`
+builds a per-run lifecycle: each `run_id`'s latest status, and whether it
+is **superseded**. A run is superseded when a later pending row for the
+same event carries `detail.recovered_from_run_id == run_id` (boot
+recovery's pending copy gains that marker in this change; today it copies
+the pending record and leaves the abandoned `running` row without a
+terminal status forever) or `detail.retry_of_run == run_id` (§6's compact
+retry). A position is classified against **its own run**: `wake_failed`
+when its run's terminal status is `failed`, eligible when its run
+completed with the joined record. `running_at_cutoff` considers only runs
+that are `running` **and not superseded**, so a recovered orphan cannot
+hold a question open or cap it after its successor completed. A completed
 compact run that records no position leaves the first attempt's
 `wake_failed` cap in force; one that records a position supersedes it
 through `active_positions` as today (one latest eligible position per
 member). Close tests cover: failed position then compact pending; then
 compact running at cutoff; then compact completed without a position
 (cap stands); then compact completed with a replacement (replacement
-counts). This is a change to `src/hamutay/assembly/close.py` made under
+counts); and running → boot recovery → replacement completed before the
+cutoff (no `running_at_cutoff`). This is a change to `src/hamutay/assembly/close.py` made under
 the operational rule; it changes no outcome of any wake recorded so far
 (no event has two runs today) and is listed in the README's held matters.
 
-**Acceptance (round three, finding 29, declared).** The operational
-criterion is: **at most two attempts per event, terminal failure
-allowed, every attempt recorded in full.** A completed wake is made
+**Acceptance (round three, finding 29; round four, 32; declared).** The
+operational criterion is: **at most two terminalised window-failure
+attempts per event, terminal failure allowed, each terminalised attempt
+recorded in full.** Orphan re-executions after a process crash remain
+what they are today, at-least-once, each leaving its `running` row and
+superseded by recovery's pending copy; they are not attempts in this
+count and this design neither adds to nor removes that behaviour. A completed wake is made
 likely, not guaranteed: a resident whose state alone leaves less than the
 floor fails both attempts before generation, recorded as such, and the
 harness does not cut the resident's state to prevent that (the house's
@@ -553,12 +595,31 @@ that returns a count the test chooses):
     position from a failed first run followed by a compact pending row,
     a compact running row at cutoff, a compact completion without a
     position, and a compact completion with a replacement position, each
-    classified as §6 states; the existing close tests unchanged.
+    classified as §6 states; a `running` run superseded by boot recovery
+    whose successor completed is not `running_at_cutoff`; the existing
+    close tests unchanged. Boot recovery's pending copy carries
+    `recovered_from_run_id` (`tests/test_heartbeat.py`).
+15. Store write discipline: `_append_unlocked` flushes, fsyncs and
+    verifies growth; the two-line transition is one write; a `failed`
+    row without its retry (fixture) reads as terminal-failed with no
+    retry and no crash.
+16. Admission ordering: a first candidate below the floor that fits
+    after one cap halving is admitted (no `ExhaustedBeforeRequest`
+    raised during admission); the payload sent at turn 0 after a
+    soft-threshold withdrawal is the rebuilt, recounted one (the
+    scripted tokenizer records every count call and the test asserts the
+    last count precedes the send and matches the sent payload).
+17. No-tokenizer ceiling: a two-turn wake with `--context-limit` and no
+    tokenizer produces payloads and a system prompt byte-identical to
+    the 9-06 golden (lean rendering off, no count calls).
 14. `prepare`/`call_prepared`: on each of the four paths the payload sent
-    first equals `Prepared.payload` byte for byte; the session's admission
-    loop calls `prepare` per pass and `call_prepared` once; the record's
-    `user_message` is the final rendered envelope and `admission` is
-    present on the wake record and the store's completed/failed records.
+    first equals `Prepared.payload` byte for byte and carries `model`; the
+    session's admission loop calls `prepare(candidate=True)` per pass and
+    `call_prepared` once; later payloads in the loop each pass through
+    `_count_and_bound` (the scripted tokenizer sees one count per send);
+    the record's `user_message` is the final rendered envelope and
+    `admission` is present on the wake record and the store's
+    completed/failed records.
 12. Launch note and record: the clause is formatted from the constants and
     absent without a limit.
 
