@@ -675,14 +675,20 @@ class EventStore:
         self.append(record)
         return record
 
-    def _build_running(self, event: dict, run_id: UUID | None = None) -> dict:
+    def _build_running(self, event: dict, run_id: UUID | None = None,
+                       now: datetime | None = None) -> dict:
+        # The claim is evaluated at `now` (due, expiry, quiet); the wake it
+        # opens starts at the same instant. The assembly compares this stamp
+        # against a question's closes_at, so a stamp from a different clock
+        # than the one that judged the claim would let a wake begin "after"
+        # a closing that the same call judged still open.
         return {
             "record_type": "event_status",
             "event_id": event["event_id"],
             "event_type": event.get("event_type", EVENT_TYPE_REFLECTION),
             "status": "running",
             "run_id": str(run_id or uuid4()),
-            "started_at": utc_now_iso(),
+            "started_at": (now or datetime.now(timezone.utc)).isoformat(),
         }
 
     def claim_next_pending(
@@ -724,7 +730,7 @@ class EventStore:
                         return event, expired
                 if not is_due(event, now=now):
                     continue
-                running = self._build_running(event, run_id=run_id)
+                running = self._build_running(event, run_id=run_id, now=now)
                 self._append_unlocked(running)
                 return event, running
         return None

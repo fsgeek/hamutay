@@ -2433,3 +2433,20 @@ def test_format_event_report_includes_lifecycle_anomalies(tmp_path):
     assert "Lifecycle anomalies:" in report
     assert "missing_initial_pending" in report
     assert "completed_missing_fields" in report
+
+
+def test_event_store_claim_stamps_started_at_with_the_caller_clock(tmp_path):
+    # A claim evaluated at `now` must start at `now`: the assembly compares a
+    # position's wake_started_at against the question's closes_at, and Codex's
+    # frozen validation (2026-09-16) convenes at a fixed date. Stamping the
+    # running record with the wall clock made that suite fail the moment the
+    # wall clock passed the fixed closing (2026-09-17 12:00Z).
+    store = EventStore(tmp_path / "events.jsonl")
+    store.append(_event_record())
+    at = datetime(2026, 9, 16, 12, 0, tzinfo=timezone.utc)
+
+    claim = store.claim_next_pending(now=at)
+
+    assert claim is not None
+    _event, running = claim
+    assert running["started_at"] == at.isoformat()
