@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from pathlib import Path
 
+from hamutay.assembly.ledger import parse_instant
 from hamutay.events import EventStore, LeaseGateRequired, StoreUnavailable, quiet_declaration_for_latest_wake
 
 STORE_LOCK_WINDOW_S = 2.0
@@ -29,6 +30,10 @@ def recipient_quiet_until(path: Path) -> str | None:
     for r in records:
         if r.get("record_type") == "event_status":
             latest[r["event_id"]] = r
+    # quiet_declaration_for_latest_wake (via latest_wake_outcome) only looks at
+    # terminal statuses (completed/failed); a running wake is invisible to it,
+    # so without this guard a running wake would return the PRIOR wake's
+    # (stale) declaration instead of "no declaration is in force right now".
     if any(r.get("status") == "running" for r in latest.values()):
         return None
     decl = quiet_declaration_for_latest_wake(records)
@@ -36,9 +41,9 @@ def recipient_quiet_until(path: Path) -> str | None:
     if not until:
         return None
     try:
-        dt = datetime.fromisoformat(str(until).replace("Z", "+00:00"))
+        dt = parse_instant(until)
     except ValueError:
         return None
-    if dt.tzinfo is None or dt <= datetime.now(timezone.utc):
+    if dt <= datetime.now(timezone.utc):
         return None
     return until
