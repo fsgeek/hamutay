@@ -236,7 +236,10 @@ account as the heartbeats, the stores, and the plaza itself, so the record
 is *legible, not tamper-proof* — every write names its path (`via: tool` or
 `via: cli`), the wake that made it, and the door the binding resolved, and
 a forgery would still be a line in a file whose growth is checkpointed and
-stamped. Spec: `docs/superpowers/specs/2026-09-16-plaza-design.md`.
+stamped. The human CLI's `--by tony|custodian` is a claimed label, not an
+authentication: the record shows it as unauthenticated (`via: cli`), exactly
+as `events send --sender` has always been. Spec:
+`docs/superpowers/specs/2026-09-16-plaza-design.md`.
 
 Commands (`deploy/ayllu-plaza`, a shim over `python -m hamutay.plaza`):
 - `send --by tony|custodian --to <door>|plaza --text-file F [--key K]`

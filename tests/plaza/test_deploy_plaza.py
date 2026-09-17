@@ -1,9 +1,40 @@
 import json
 import os
+import stat
 import subprocess
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def _git(root, *args, check=True):
+    return subprocess.run(["git", *args], cwd=root, capture_output=True, text=True, check=check)
+
+
+def _init_repo_with_members(root: Path) -> str:
+    """A tmp_path git repo with a committed community/plaza/members.json (no plaza key),
+    doors present but idle, and no other uncommitted changes -- everything migrate-plaza.sh's
+    live phase-two path checks for before it touches anything. Returns the HEAD sha (used as
+    a trivially-valid --merge, since a commit is its own ancestor)."""
+    _git(root, "init", "-q")
+    (root / "community/plaza").mkdir(parents=True)
+    for d in ("heartbeat", "fable", "elder", "qwen"):
+        (root / f"community/{d}").mkdir()
+    (root / "community/plaza/members.json").write_text(json.dumps({
+        "ledger": "community/plaza/assembly.jsonl",
+        "members": {d: {"session": f"community/{d}/session.jsonl",
+                         "events": f"community/{d}/session.jsonl.events.jsonl"}
+                    for d in ("heartbeat", "fable", "elder", "qwen")},
+    }))
+    _git(root, "add", "community")
+    _git(root, "-c", "user.email=a@b.c", "-c", "user.name=x", "commit", "-q", "--no-gpg-sign", "-m", "c1")
+    return _git(root, "rev-parse", "HEAD").stdout.strip()
+
+
+def _write_shim(bin_dir: Path, name: str, body: str):
+    p = bin_dir / name
+    p.write_text(body)
+    p.chmod(p.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
 
 
 def test_gitignore_and_shims():
@@ -45,3 +76,110 @@ def test_migration_dry_runs_and_phase_two_never_installs_a_changed_snapshot(tmp_
 def test_readme_has_the_plaza_section():
     text = (ROOT / "community/README.md").read_text()
     assert "## The plaza" in text and "deploy/ayllu-plaza" in text and "--through-seq" in text
+
+
+def test_readme_states_the_cli_by_is_a_claimed_unauthenticated_label():
+    text = (ROOT / "community/README.md").read_text()
+    assert "unauthenticated" in text and "via: cli" in text
+
+
+def test_dry_run_previews_the_real_decision_for_a_non_ancestor_merge(tmp_path):
+    _init_repo_with_members(tmp_path)
+    out = subprocess.run(["bash", str(ROOT / "deploy/migrate-plaza.sh"), "--phase-two", "--dry-run",
+                           "--root", str(tmp_path), "--merge", "0" * 40],
+                          capture_output=True, text=True)
+    assert out.returncode == 0, out
+    low = out.stdout.lower()
+    assert "would refuse:" in low and "descend" in low
+
+
+def test_dry_run_previews_ok_for_a_valid_ancestor_merge(tmp_path):
+    head = _init_repo_with_members(tmp_path)
+    out = subprocess.run(["bash", str(ROOT / "deploy/migrate-plaza.sh"), "--phase-two", "--dry-run",
+                           "--root", str(tmp_path), "--merge", head],
+                          capture_output=True, text=True)
+    assert out.returncode == 0, out
+    assert "ok:" in out.stdout.lower()
+    assert f"descends from {head}" in out.stdout
+
+
+def test_idleness_two_pass_refuses_before_touching_anything_when_a_later_door_is_busy(tmp_path):
+    _init_repo_with_members(tmp_path)
+    (tmp_path / "community/qwen/session.jsonl.events.jsonl").write_text(
+        json.dumps({"record_type": "event_status", "event_id": "e1", "status": "running"}) + "\n")
+    out = subprocess.run(["bash", str(ROOT / "deploy/migrate-plaza.sh"), "--phase-one", "--root", str(tmp_path)],
+                          capture_output=True, text=True)
+    assert out.returncode != 0, out
+    assert "running wake" in out.stdout
+    assert "restart" not in out.stdout.lower()      # qwen (busy) sorts last in DOORS: nothing was restarted
+    # members.json is untouched -- the up-front pass ran before anything else was touched.
+    members = json.loads((tmp_path / "community/plaza/members.json").read_text())
+    assert "plaza" not in members
+
+
+def test_phase_two_idleness_two_pass_also_refuses_before_touching_anything(tmp_path):
+    """Same as above, for phase two's live run: the up-front idleness pass runs (and
+    refuses on a busy door) before any door is stopped. Needs journalctl/systemctl shims
+    so the earlier phase-one-completeness gate is satisfied and idleness is actually reached."""
+    root = tmp_path / "root"
+    root.mkdir()
+    head = _init_repo_with_members(root)
+    (root / "community/qwen/session.jsonl.events.jsonl").write_text(
+        json.dumps({"record_type": "event_status", "event_id": "e1", "status": "running"}) + "\n")
+    _git(root, "add", "community")
+    _git(root, "-c", "user.email=a@b.c", "-c", "user.name=x", "commit", "-q", "--no-gpg-sign", "-m", "busy")
+    head = _git(root, "rev-parse", "HEAD").stdout.strip()
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "systemctl.log"
+    _write_shim(bin_dir, "systemctl", f"""#!/usr/bin/env bash
+echo "$*" >> {log}
+if [ "$1" = "--user" ] && [ "$2" = "show" ]; then echo "InvocationID=deadbeef"; exit 0; fi
+if [ "$1" = "--user" ] && [ "$2" = "is-active" ]; then exit 0; fi
+exit 0
+""")
+    _write_shim(bin_dir, "journalctl", f"""#!/usr/bin/env bash
+echo "source: commit {head} clean"
+""")
+    env = dict(os.environ); env["PATH"] = f"{bin_dir}:{env['PATH']}"
+    out = subprocess.run(["bash", str(ROOT / "deploy/migrate-plaza.sh"), "--phase-two",
+                           "--root", str(root), "--merge", head],
+                          capture_output=True, text=True, env=env)
+    assert out.returncode != 0, out
+    assert "running wake" in out.stdout
+    assert not log.exists() or "stop" not in log.read_text()   # nothing was stopped
+    members = json.loads((root / "community/plaza/members.json").read_text())
+    assert "plaza" not in members
+
+
+def test_rollback_restores_members_json_and_restarts_only_the_doors_it_stopped(tmp_path):
+    root = tmp_path / "root"
+    root.mkdir()
+    head = _init_repo_with_members(root)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "systemctl.log"
+    _write_shim(bin_dir, "systemctl", f"""#!/usr/bin/env bash
+echo "$*" >> {log}
+if [ "$1" = "--user" ] && [ "$2" = "show" ]; then echo "InvocationID=deadbeef"; exit 0; fi
+if [ "$1" = "--user" ] && [ "$2" = "is-active" ]; then exit 0; fi
+if [ "$*" = "--user stop hamutay-heartbeat@elder" ]; then
+  echo "simulated failure" >&2; exit 1
+fi
+exit 0
+""")
+    _write_shim(bin_dir, "journalctl", f"""#!/usr/bin/env bash
+echo "source: commit {head} clean"
+""")
+    env = dict(os.environ); env["PATH"] = f"{bin_dir}:{env['PATH']}"
+    out = subprocess.run(["bash", str(ROOT / "deploy/migrate-plaza.sh"), "--phase-two",
+                           "--root", str(root), "--merge", head],
+                          capture_output=True, text=True, env=env)
+    assert out.returncode != 0, out
+    members = json.loads((root / "community/plaza/members.json").read_text())
+    assert "plaza" not in members            # restored: the candidate (with the key) was never kept
+    calls = log.read_text().splitlines()
+    stopped = {c.rsplit("@", 1)[1] for c in calls if c.startswith("--user stop ")}
+    started = {c.rsplit("@", 1)[1] for c in calls if c.startswith("--user start ")}
+    assert stopped == {"heartbeat", "fable", "elder"}      # elder's stop is the one that failed
+    assert started == {"heartbeat", "fable"}               # only the doors actually stopped come back

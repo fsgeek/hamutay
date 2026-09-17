@@ -4,6 +4,9 @@
 #   --phase-one  restart idle doors one at a time so every unit runs plaza-capable code (key absent)
 #   --phase-two  with every door idle: candidate members.json checked, stop all, atomic install, start all, verify
 #   --merge SHA  the plaza merge commit every running unit must descend from (default: env PLAZA_MERGE)
+#   --dry-run    perform every precondition check and print its verdict ("ok: <check>" or
+#                "would refuse: <reason>"), then print the plan; writes nothing, restarts
+#                nothing, always exits 0 (a dry run is a preview, not a partial run)
 set -euo pipefail
 PHASE=""; DRY=0; ROOT="$(cd "$(dirname "$0")/.." && pwd)"; MERGE="${PLAZA_MERGE:-}"
 while [ $# -gt 0 ]; do case "$1" in --phase-one) PHASE=one; shift;; --phase-two) PHASE=two; shift;;
@@ -36,11 +39,28 @@ source_ok() {  # $1 door: the current invocation's source note is a clean descen
   [ "$state" = clean ] || { say "$1: source is dirty ($sha)"; return 1; }
   git merge-base --is-ancestor "$MERGE" "$sha" || { say "$1: $sha does not descend from $MERGE"; return 1; }
 }
+# an up-front pass over all four doors: report every door's idleness before touching
+# anything (dry run: each door's own ok/would-refuse line; live run: refuse on the first).
+idleness_upfront() {
+  local any_busy=0
+  for d in "${DOORS[@]}"; do
+    if running_wake "$d"; then
+      any_busy=1
+      if [ "$DRY" -eq 1 ]; then say "would refuse: door $d has a running wake"
+      else say "door $d has a running wake; refusing to migrate now"; exit 1; fi
+    elif [ "$DRY" -eq 1 ]; then say "ok: door $d idle"
+    fi
+  done
+  return $any_busy
+}
 if [ "$PHASE" = one ]; then
+  idleness_upfront
   [ "$DRY" -eq 1 ] && say "dry run: would restart ${DOORS[*]} one at a time when idle (plaza key stays absent)" && exit 0
   for d in "${DOORS[@]}"; do
     unit="hamutay-heartbeat@$d"
-    running_wake "$d" && { say "door $d has a running wake; stopping here"; exit 1; }
+    # re-check immediately before THIS door's restart: the up-front pass can be
+    # stale by the time the last door is reached, and a wake may have started since.
+    running_wake "$d" && { say "door $d started a wake since the first check; stopping here"; exit 1; }
     systemctl --user is-active --quiet "$unit" || { say "$unit is not active; skipping"; continue; }
     since=$(date +%s); systemctl --user restart "$unit"
     for i in $(seq 1 30); do
@@ -52,16 +72,28 @@ if [ "$PHASE" = one ]; then
   say "phase one done; run deploy/check-plaza.sh --phase-one --merge <sha>"; exit 0
 fi
 # phase two
-[ "$DRY" -eq 1 ] && say "dry run: would check phase one, stop ${DOORS[*]}, install the plaza key atomically, start them, verify both notes" && exit 0
+if [ "$DRY" -eq 1 ]; then
+  if [ -n "$MERGE" ]; then say "ok: --merge given ($MERGE)"; else say "would refuse: --merge SHA (or PLAZA_MERGE) is required for phase two"; fi
+  if [ -z "$(git status --porcelain)" ]; then say "ok: working tree clean"; else say "would refuse: working tree is dirty"; fi
+  if [ -n "$MERGE" ] && git merge-base --is-ancestor "$MERGE" HEAD 2>/dev/null; then say "ok: HEAD descends from $MERGE"
+  else say "would refuse: HEAD does not descend from $MERGE"; fi
+  for d in "${DOORS[@]}"; do
+    if [ -n "$MERGE" ] && source_ok "$d" >/dev/null 2>&1; then say "ok: door $d source clean and descended from $MERGE"
+    else say "would refuse: door $d phase one incomplete (no verified source note descended from $MERGE)"; fi
+  done
+  idleness_upfront || true
+  say "dry run: would check phase one, stop ${DOORS[*]}, install the plaza key atomically, start them, verify both notes"
+  exit 0
+fi
 [ -n "$MERGE" ] || { say "--merge SHA (or PLAZA_MERGE) is required for phase two"; exit 2; }
 [ -z "$(git status --porcelain)" ] || { say "working tree is dirty; refusing"; exit 1; }
 git merge-base --is-ancestor "$MERGE" HEAD || { say "HEAD does not descend from $MERGE; refusing"; exit 1; }
 for d in "${DOORS[@]}"; do source_ok "$d" || { say "phase one incomplete; refusing"; exit 1; }; done
-for d in "${DOORS[@]}"; do running_wake "$d" && { say "door $d has a running wake; refusing"; exit 1; }; done
+idleness_upfront
 MEMBERS=community/plaza/members.json
 cp "$MEMBERS" "$MEMBERS.previous"
 # candidate: current file plus the plaza key, written durably beside it, then its snapshot compared BEFORE any rename
-uv run python - "$MEMBERS" <<'PY'
+if ! uv run python - "$MEMBERS" <<'PY'
 import json, os, sys, hashlib
 from pathlib import Path
 from hamutay.assembly.binding import load_members
@@ -82,17 +114,21 @@ if rel(before, root) != rel(after, tmpdir.parents[1]):
     cand.unlink(); print("candidate would change the member snapshot; nothing installed"); sys.exit(1)
 print("candidate snapshot equal; ready")
 PY
-for d in "${DOORS[@]}"; do systemctl --user stop "hamutay-heartbeat@$d"; done
-uv run python - "$MEMBERS" <<'PY'
-import os, sys
-from pathlib import Path
-p = Path(sys.argv[1]); cand = p.with_name("members.json.candidate")
-os.replace(cand, p)                       # atomic rename
-fd = os.open(p.parent, os.O_RDONLY); os.fsync(fd); os.close(fd)
-PY
+then
+  rm -f "$MEMBERS.previous"; exit 1
+fi
+STOPPED=()
 rollback() {
-  say "rolling back"; for d in "${DOORS[@]}"; do systemctl --user stop "hamutay-heartbeat@$d" || true; done
-  uv run python - "$MEMBERS" <<'PY'
+  local rc=$?
+  trap - ERR
+  say "rolling back (exit $rc)"
+  # Restore members.json from the snapshot taken before any door was touched,
+  # then start only the doors THIS attempt actually stopped (recorded in
+  # STOPPED as each stop succeeded) -- never a door the attempt never reached,
+  # and never a door twice.
+  rm -f "$MEMBERS.candidate"
+  if [ -f "$MEMBERS.previous" ]; then
+    uv run python - "$MEMBERS" <<'PY'
 import os, sys
 from pathlib import Path
 p = Path(sys.argv[1]); prev = p.with_name("members.json.previous"); tmp = p.with_name("members.json.rollback")
@@ -100,9 +136,26 @@ tmp.write_bytes(prev.read_bytes())
 with tmp.open("rb+") as f: os.fsync(f.fileno())
 os.replace(tmp, p); fd = os.open(p.parent, os.O_RDONLY); os.fsync(fd); os.close(fd)
 PY
-  for d in "${DOORS[@]}"; do systemctl --user start "hamutay-heartbeat@$d"; done
+  fi
+  for d in "${STOPPED[@]:-}"; do [ -n "$d" ] && systemctl --user start "hamutay-heartbeat@$d" 2>/dev/null || true; done
   exit 1
 }
+trap rollback ERR
+for d in "${DOORS[@]}"; do
+  # re-check immediately before THIS door's stop: the up-front pass can be stale
+  # by the time the last door is reached, and a wake may have started since. Once
+  # any door has been stopped, a busy door found here means rolling the stopped
+  # ones back rather than refusing clean, so this goes through the ERR trap too.
+  if running_wake "$d"; then say "door $d started a wake since the first check; stopping here"; false; fi
+  systemctl --user stop "hamutay-heartbeat@$d"; STOPPED+=("$d")
+done
+uv run python - "$MEMBERS" <<'PY'
+import os, sys
+from pathlib import Path
+p = Path(sys.argv[1]); cand = p.with_name("members.json.candidate")
+os.replace(cand, p)                       # atomic rename
+fd = os.open(p.parent, os.O_RDONLY); os.fsync(fd); os.close(fd)
+PY
 for d in "${DOORS[@]}"; do systemctl --user start "hamutay-heartbeat@$d"; done
 for d in "${DOORS[@]}"; do
   ok=0
@@ -110,7 +163,8 @@ for d in "${DOORS[@]}"; do
     if [ -n "$(inv_note "$d" "plaza: door $d may send")" ] && source_ok "$d" >/dev/null 2>&1; then ok=1; say "$d: plaza bound, source verified"; break; fi
     sleep 1
   done
-  [ "$ok" -eq 1 ] || { say "$d did not report both notes within 30 s"; rollback; }
+  if [ "$ok" -ne 1 ]; then say "$d did not report both notes within 30 s"; false; fi
 done
+trap - ERR
 rm -f "$MEMBERS.previous"
 say "phase two done; run deploy/check-plaza.sh --merge $MERGE"
