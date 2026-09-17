@@ -2695,6 +2695,11 @@ def _build_messages(
     With neither flag set the output is byte-identical to what it always was.
     """
     natural = wake_mode == "natural"
+    if lean_activity_log and omit_activity_log:
+        raise ValueError(
+            "lean_activity_log and omit_activity_log are mutually exclusive: "
+            "a section is either thinned or dropped, never both"
+        )
     if omit_activity_log:
         from hamutay.window import _drop_activity_logs as _render
     elif lean_activity_log:
@@ -2708,6 +2713,20 @@ def _build_messages(
         if lean_activity_log
         else None
     )
+
+    def _rendered(obj, parts: list) -> object:
+        """Render one section, appending the note first when it applies.
+
+        The note describes a section that was actually thinned or stripped, so
+        it is emitted under whichever heading that was — not once under the
+        state heading, which on cycle 1 describes nothing at all.
+        """
+        if _render is None:
+            return obj
+        from hamutay.window import _has_activity_log
+        if _has_activity_log(obj):
+            parts.append(activity_note)
+        return _render(obj)
     system_parts = []
     if system_prefix:
         if not declare_quiet:
@@ -2738,11 +2757,8 @@ def _build_messages(
 
     if prior_state is not None:
         system_parts.append(f"## Your state from cycle {cycle - 1}\n")
-        if activity_note is not None:
-            system_parts.append(activity_note)
-        system_parts.append(
-            json.dumps(_render(prior_state) if _render else prior_state, indent=2)
-        )
+        rendered_state = _rendered(prior_state, system_parts)
+        system_parts.append(json.dumps(rendered_state, indent=2))
     else:
         system_parts.append(
             "This is cycle 1. There is no prior state."
@@ -2755,9 +2771,8 @@ def _build_messages(
             "This is a prior state that surfaced unbidden. "
             "You didn't ask for it. Do with it what you will."
         )
-        system_parts.append(
-            json.dumps(_render(memory_state) if _render else memory_state, indent=2)
-        )
+        rendered_memory = _rendered(memory_state, system_parts)
+        system_parts.append(json.dumps(rendered_memory, indent=2))
 
     if curator_context is not None:
         system_parts.append("\n## Continuity curator summary\n")
@@ -2767,10 +2782,8 @@ def _build_messages(
             "evidence. Prefer prompt facts and explicit evidence over curator "
             "claims."
         )
-        system_parts.append(json.dumps(
-            _render(curator_context) if _render else curator_context,
-            indent=2, default=str,
-        ))
+        rendered_curator = _rendered(curator_context, system_parts)
+        system_parts.append(json.dumps(rendered_curator, indent=2, default=str))
 
     return [{"role": "user", "content": user_message}], "\n".join(system_parts)
 
@@ -4149,6 +4162,22 @@ class OpenTasteSession:
         except Exception as e:
             print(f"  context policy: kept the previous value; rebuilding failed: {e}")
             return
+        # `for_launch` swallows a failed `/props` and returns `for_limit` — the
+        # right answer at launch (a door with no tokenizer is still a door),
+        # the wrong one here. A rediscovery that came back without the
+        # tokenizer would otherwise replace an exactly-counting policy with a
+        # bare ceiling on the success path, demoting the door without raising
+        # anything. Keep the old value and say so in the log.
+        if old.window_aware and not new.window_aware:
+            print("  context policy: kept the previous value; the rediscovery "
+                  "lost the tokenizer (the door stays window-aware)")
+            self.append_substrate_observation(
+                context_limit=old.limit, source=source, invocation_id=invocation_id,
+                context_policy_kept=True, reason="rediscovery lost the tokenizer",
+                window_aware=old.window_aware, tokenizer=old.tokenizer is not None,
+                reasoning_budget=old.reasoning_budget,
+            )
+            return
         self._policy_holder.current = new          # the one assignment
         # A backend with no holder of its own (Anthropic-direct, a test
         # double) still keeps its own ceiling attribute; it never shared this
@@ -4162,11 +4191,15 @@ class OpenTasteSession:
         self._launch_config["context_limit_source"] = source
         self._launch_config["context_policy"] = new.as_dict()
         self.append_substrate_observation(
-            context_limit=limit, source=source, invocation_id=invocation_id
+            context_limit=limit, source=source, invocation_id=invocation_id,
+            window_aware=new.window_aware, tokenizer=new.tokenizer is not None,
+            reasoning_budget=new.reasoning_budget,
         )
 
     def append_substrate_observation(
-        self, *, context_limit, source, invocation_id
+        self, *, context_limit, source, invocation_id,
+        window_aware=None, tokenizer=None, reasoning_budget=None,
+        context_policy_kept=None, reason=None,
     ) -> dict:
         """Append one stateless `substrate_observation` record to the log.
 
@@ -4174,6 +4207,14 @@ class OpenTasteSession:
         substrate, not a wake. It carries no cycle, no state, no usage — and
         `infer_launch_from_log` skips stateless records, so it can never be
         mistaken for the launch itself.
+
+        The policy-state fields (`window_aware`, `tokenizer`,
+        `reasoning_budget`) say what the door can actually do after this
+        observation, so the log shows the policy state rather than only the
+        number. `context_policy_kept` with a `reason` marks the one case where
+        the ceiling was learned but deliberately not applied. All are optional
+        and omitted when None, so an observation written by an older caller is
+        unchanged.
         """
         launch = self._launch_config or {}
         record = {
@@ -4186,6 +4227,12 @@ class OpenTasteSession:
             "provider": launch.get("provider"),
             "at": datetime.now(timezone.utc).isoformat(),
         }
+        for key, value in (("window_aware", window_aware), ("tokenizer", tokenizer),
+                           ("reasoning_budget", reasoning_budget),
+                           ("context_policy_kept", context_policy_kept),
+                           ("reason", reason)):
+            if value is not None:
+                record[key] = value
         if not self._log_path:
             return record
         with open(self._log_path, "a") as f:

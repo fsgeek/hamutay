@@ -130,6 +130,18 @@ def lean_activity_logs(obj):
     return walk(json.loads(json.dumps(obj, default=str)))
 
 
+def _has_activity_log(obj) -> bool:
+    """True when `obj` carries an `_activity_log` key at any depth.
+
+    What decides whether a rendered section was actually thinned, and so
+    whether the one-line note under its heading is true of it."""
+    if isinstance(obj, dict):
+        return "_activity_log" in obj or any(_has_activity_log(v) for v in obj.values())
+    if isinstance(obj, list):
+        return any(_has_activity_log(i) for i in obj)
+    return False
+
+
 def _drop_activity_logs(obj):
     """Deep copy with every `_activity_log` key removed at any depth.
 

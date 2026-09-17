@@ -607,3 +607,98 @@ def test_apply_context_limit_never_demotes_a_window_aware_door(tmp_path, monkeyp
     assert s.context_policy.tokenizer == "http://127.0.0.1:8081"
     assert s.context_policy.reasoning_budget == "probed"
     assert b.policy is s.context_policy and b.policy.limit == 32768
+
+
+def test_apply_context_limit_keeps_a_window_aware_policy_when_props_fails(tmp_path):
+    """`for_launch` swallows a failed `/props` and returns `for_limit`.
+
+    That is the right answer at launch (a door with no tokenizer is still a
+    door) and the wrong one at rediscovery: the success path would replace a
+    probed, counting policy with a bare ceiling and demote the door without
+    raising anything. No monkeypatch here — the real `for_launch` runs against
+    an `_http` whose `/props` raises, which is exactly what a llama-server
+    that is up but not yet answering looks like."""
+    b = _aware([], counts=[])
+
+    def dead_http(method, url, body=None):
+        raise RuntimeError("connection refused")
+
+    b._http = dead_http
+    s = OpenTasteSession(model="m", backend=b, log_path=str(tmp_path / "s.jsonl"), experiment_label="t")
+    old = s.context_policy
+    assert old.window_aware
+    s.apply_context_limit(32768, "discovered", "inv-props")
+    assert s.context_policy is old and s.context_policy.window_aware
+    assert s.context_policy.limit == 65536          # the old ceiling, not the new one
+    rec = json.loads((tmp_path / "s.jsonl").read_text().splitlines()[-1])
+    assert rec["record_type"] == "substrate_observation"
+    assert rec["context_policy_kept"] is True
+    assert rec["reason"] == "rediscovery lost the tokenizer"
+    assert rec["window_aware"] is True and rec["tokenizer"] is True
+    assert rec["reasoning_budget"] == "probed"
+
+
+def test_a_successful_apply_records_the_new_policy_state(tmp_path, monkeypatch):
+    from hamutay.context_policy import ContextPolicy
+    b = _aware([], counts=[])
+    s = OpenTasteSession(model="m", backend=b, log_path=str(tmp_path / "s.jsonl"), experiment_label="t")
+    monkeypatch.setattr(ContextPolicy, "for_launch", classmethod(
+        lambda cls, limit, source, base_url, **kw: ContextPolicy(
+            limit, source, limit, "http://127.0.0.1:8081", "probed", {"build_info": "x"}, 20,
+            kw.get("invocation_id"))))
+    s.apply_context_limit(32768, "discovered", "inv-ok")
+    rec = json.loads((tmp_path / "s.jsonl").read_text().splitlines()[-1])
+    assert rec["window_aware"] is True and rec["reasoning_budget"] == "probed"
+    assert "context_policy_kept" not in rec and "reason" not in rec
+
+
+def test_a_non_window_aware_door_is_not_blocked_from_gaining_a_ceiling(tmp_path):
+    """The keep rule is a demotion guard, not a freeze: a door that was never
+    window-aware must still be able to learn its ceiling."""
+    from hamutay.context_policy import ContextPolicy, ContextPolicyHolder
+    b = OpenAITasteBackend(api_key="k", wake_mode="natural",
+                           context_policy=ContextPolicyHolder(ContextPolicy.none()))
+
+    def dead_http(method, url, body=None):
+        raise RuntimeError("connection refused")
+
+    b._http = dead_http
+    s = OpenTasteSession(model="m", backend=b, log_path=str(tmp_path / "s.jsonl"), experiment_label="t")
+    assert not s.context_policy.window_aware
+    s.apply_context_limit(32768, "discovered", "inv-new")
+    assert s.context_policy.limit == 32768
+    rec = json.loads((tmp_path / "s.jsonl").read_text().splitlines()[-1])
+    assert rec["context_limit"] == 32768 and "context_policy_kept" not in rec
+    assert rec["window_aware"] is False
+
+
+def test_the_activity_note_follows_whichever_section_was_thinned():
+    """Cycle 1 has no prior state, so a note under the state heading would
+    describe nothing. The note belongs under the section it describes."""
+    mem = {"cycle": 1, "_activity_log": [{"cycle": 1, "timestamp": "t", "tool": "clock",
+                                          "reason": "r", "result_summary": "s",
+                                          "parameters": {"p": 1}, "result_hash": "h"}]}
+    before = json.dumps(mem)
+    _, system = _build_messages(None, "u", 1, tools_enabled=True, wake_mode="natural",
+                                memory=(1, mem), lean_activity_log=True)
+    assert json.dumps(mem) == before
+    head = system.index("## A memory from cycle 1")
+    tail = system[head:]
+    assert "(_activity_log is shown without parameters; the record has them)" in tail
+    parsed = json.loads(tail[tail.index("{"):].split("\n## ")[0])
+    assert list(parsed["_activity_log"][0]) == ["cycle", "timestamp", "tool", "reason", "result_summary"]
+    _, plain = _build_messages(None, "u", 1, tools_enabled=True, wake_mode="natural",
+                               memory=(1, mem))
+    assert "parameters" in plain and "(_activity_log is shown" not in plain
+
+
+def test_the_note_is_not_emitted_for_a_section_with_no_activity_log():
+    """A state with no `_activity_log` was not thinned; claiming it was is a lie."""
+    _, system = _build_messages({"cycle": 2, "k": "v"}, "u", 3, tools_enabled=True,
+                                wake_mode="natural", lean_activity_log=True)
+    assert "(_activity_log is shown" not in system
+
+
+def test_lean_and_omit_together_are_refused():
+    with pytest.raises(ValueError):
+        _build_messages({"cycle": 2}, "u", 3, lean_activity_log=True, omit_activity_log=True)
