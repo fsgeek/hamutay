@@ -407,3 +407,78 @@ def test_constitution_declares_wake_ending_physics():
     lowered = CONSTITUTION.lower()
     assert "wake ends" in lowered
     assert "prose" in lowered
+
+
+# --- launch builds the context policy, says the window clause (spec §5) ----
+
+
+def _launch_args(tmp_path, *, provider, base_url=None, context_limit=None, model="m"):
+    from hamutay.heartbeat import build_parser
+
+    argv = [
+        "--log-path", str(tmp_path / "session.jsonl"),
+        "--provider", provider,
+        "--model", model,
+        "--api-key", "test-key",
+    ]
+    if base_url is not None:
+        argv += ["--base-url", base_url]
+    if context_limit is not None:
+        argv += ["--context-limit", str(context_limit)]
+    return build_parser().parse_args(argv)
+
+
+def test_launch_builds_the_policy_and_says_the_window_clause(tmp_path, monkeypatch):
+    import json
+
+    from hamutay import heartbeat as hb
+    from hamutay.context_policy import ContextPolicy
+    from hamutay.window import (
+        REPLY_RESERVE_TOKENS,
+        THINK_FLOOR_TOKENS,
+        THINK_UNRESTRICTED_ROOM_TOKENS,
+    )
+
+    built = {}
+
+    def fake_for_launch(cls, limit, source, base_url, **kw):
+        built.update(limit=limit, source=source, base_url=base_url, cached=kw.get("cached"))
+        return ContextPolicy(limit, source, limit, "http://127.0.0.1:8081", "probed", {"build_info": "b"}, 20)
+
+    monkeypatch.setattr(ContextPolicy, "for_launch", classmethod(fake_for_launch))
+    notes = []
+    monkeypatch.setattr(hb.HeartbeatLoop, "_emit", staticmethod(lambda d: notes.append(d)))
+    args = _launch_args(tmp_path, provider="openai", base_url="http://127.0.0.1:8081/v1", context_limit=65536)
+    session, backend, launch_config = hb.build_session(args)
+    assert built["limit"] == 65536 and backend.policy.window_aware and launch_config["context_policy"]["reasoning_budget"] == "probed"
+    clause = [n["note"] for n in notes if "window:" in n.get("note", "")]
+    assert clause and f"reserve reply {REPLY_RESERVE_TOKENS} floor {THINK_FLOOR_TOKENS}" in clause[0]
+    assert f"think unrestricted above {THINK_UNRESTRICTED_ROOM_TOKENS} of room" in clause[0] and "compact retry once" in clause[0]
+
+
+def test_launch_without_a_ceiling_has_no_window_clause(tmp_path, monkeypatch):
+    from hamutay import heartbeat as hb
+    from hamutay.taste_open import _default_http as real_default_http
+
+    def unreachable(*a, **kw):
+        raise AssertionError("_default_http must not be called when there is no ceiling")
+
+    monkeypatch.setattr("hamutay.taste_open._default_http", unreachable)
+    notes = []
+    monkeypatch.setattr(hb.HeartbeatLoop, "_emit", staticmethod(lambda d: notes.append(d)))
+    args = _launch_args(tmp_path, provider="openrouter")
+    session, backend, launch_config = hb.build_session(args)
+    assert not any("window:" in n.get("note", "") for n in notes) and launch_config["context_policy"]["window_aware"] is False
+
+
+def test_latest_context_probe_reads_the_last_launch_record(tmp_path):
+    import json
+
+    from hamutay.heartbeat import latest_context_probe
+
+    log = tmp_path / "s.jsonl"
+    log.write_text(
+        json.dumps({"state": {}, "launch": {"context_policy": {"probe": {"build_info": "b1"}}}}) + "\n"
+        + json.dumps({"state": {}, "launch": {"context_policy": {"probe": {"build_info": "b2"}}}}) + "\n"
+    )
+    assert latest_context_probe(str(log)) == {"build_info": "b2"}
