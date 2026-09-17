@@ -63,8 +63,7 @@ def _instant(s, what: str) -> datetime:
 
 def validate_plaza(records: list[dict], line_numbers: list[int]) -> None:
     """Raise LedgerMalformed on anything the writers could not have produced."""
-    if not isinstance(records, list) or not isinstance(line_numbers, list) \
-            or len(records) != len(line_numbers):
+    if len(records) != len(line_numbers):
         raise _bad("line numbers do not match records")
     seen_ids: set[str] = set()
     seen_keys: set[str] = set()

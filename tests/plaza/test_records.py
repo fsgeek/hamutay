@@ -1,4 +1,5 @@
 import json
+import re
 import uuid
 from datetime import date, datetime, timedelta, timezone
 
@@ -74,33 +75,64 @@ def test_validator_accepts_everything_the_writers_produce():
     validate_plaza(recs, [1, 2, 3, 4, 5])
 
 
-@pytest.mark.parametrize("mutate", [
-    lambda r, ln: (r.__setitem__(0, {**r[0], "record_type": "note"}), ln),
-    lambda r, ln: (r.__setitem__(0, {**r[0], "extra": 1}), ln),
-    lambda r, ln: (r.__setitem__(0, {**r[0], "seq": 2}), ln),                       # seq != line
-    lambda r, ln: (r, [2, 3]),                                                         # blank line before
-    lambda r, ln: (r.__setitem__(0, {**r[0], "sent_at": "2026-09-20T12:00:00"}), ln),  # naive
-    lambda r, ln: (r.__setitem__(0, {**r[0], "message_id": str(uuid.uuid5(PLAZA_NS, "x"))}), ln),
-    lambda r, ln: (r.__setitem__(0, {**r[0], "idempotency_key": str(uuid.uuid4())}), ln),
-    lambda r, ln: (r.__setitem__(0, {**r[0], "from": "Door:Qwen"}), ln),
-    lambda r, ln: (r.__setitem__(0, {**r[0], "to": "door:qwen"}), ln),               # to == from
-    lambda r, ln: (r.__setitem__(0, {**r[0], "via": "cli"}), ln),                    # cli with door actor
-    lambda r, ln: (r.__setitem__(0, {**r[0], "delivery": None}), ln),                # directed without delivery
-    lambda r, ln: (r.__setitem__(0, {**r[0], "delivery": {**r[0]["delivery"], "door": "fable"}}), ln),
-    lambda r, ln: (r.__setitem__(0, {**r[0], "delivery": {**r[0]["delivery"], "events_path": "rel/p"}}), ln),
-    lambda r, ln: (r.__setitem__(0, {**r[0], "delivery": {**r[0]["delivery"], "members_digest": "zz"}}), ln),
-    lambda r, ln: (r.__setitem__(0, {**r[0], "delivery": {**r[0]["delivery"], "event_id": str(uuid.uuid5(PLAZA_NS, "y"))}}), ln),
-    lambda r, ln: (r.__setitem__(0, {**r[0], "text": ""}), ln),
-    lambda r, ln: (r.__setitem__(0, {**r[0], "text": "x" * (MAX_TEXT_CHARS + 1)}), ln),
-    lambda r, ln: (r.__setitem__(1, {**r[1], "landed_at": None}), ln),               # landed without instant
-    lambda r, ln: (r.__setitem__(1, {**r[1], "message_id": str(uuid.uuid4())}), ln),
-    lambda r, ln: (r.__setitem__(1, {**r[1], "event_id": str(uuid.uuid5(PLAZA_NS, "z"))}), ln),
+def _mut(fn):
+    """Wrap a plan mutator (which returns `(r.__setitem__(...), ln)`, discarding the
+    in-place-mutated list) so it instead mutates in place AND returns the pair the
+    caller actually needs: `(recs, ln)`. Preserves each case's mutation text verbatim."""
+    return lambda recs, ln: (fn(recs, ln), (recs, ln))[1]
+
+
+@pytest.mark.parametrize("mutate, expect", [
+    (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "record_type": "note"}), ln)),
+     "unknown record_type"),
+    (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "extra": 1}), ln)),
+     "message fields are"),
+    (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "seq": 2}), ln)),                       # seq != line
+     "is not the line number"),
+    (lambda r, ln: (r, [2, 3]),                                                            # blank line before
+     "is not the line number"),
+    (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "sent_at": "2026-09-20T12:00:00"}), ln)),  # naive
+     "sent_at is not a timezone-bearing instant"),
+    (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "message_id": str(uuid.uuid5(PLAZA_NS, "x"))}), ln)),
+     "message_id is not a version-4"),
+    (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "idempotency_key": str(uuid.uuid4())}), ln)),
+     "idempotency_key is not a version-5"),
+    (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "from": "Door:Qwen"}), ln)),
+     "bad actor"),
+    (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "to": "door:qwen"}), ln)),               # to == from
+     "cannot address itself"),
+    (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "via": "cli"}), ln)),                    # cli with door actor
+     "via cli needs a human actor"),
+    (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "delivery": None}), ln)),                # directed without delivery
+     "bad delivery block"),
+    (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "delivery": {**r[0]["delivery"], "door": "fable"}}), ln)),
+     "delivery.door is not the addressee"),
+    (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "delivery": {**r[0]["delivery"], "events_path": "rel/p"}}), ln)),
+     "delivery.events_path is not absolute"),
+    (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "delivery": {**r[0]["delivery"], "members_digest": "zz"}}), ln)),
+     "delivery.members_digest is not sha256 hex"),
+    (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "delivery": {**r[0]["delivery"],
+                                                                "event_id": str(uuid.uuid5(PLAZA_NS, "y"))}}), ln)),
+     "delivery.event_id is not derived from the message"),
+    (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "text": "",
+                          "idempotency_key": resident_key(r[0]["wake"]["event_id"], r[0]["to"], "")}), ln)),
+     "text empty or over"),
+    (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "text": "x" * (MAX_TEXT_CHARS + 1),
+                          "idempotency_key": resident_key(r[0]["wake"]["event_id"], r[0]["to"],
+                                                          "x" * (MAX_TEXT_CHARS + 1))}), ln)),
+     "text empty or over"),
+    (_mut(lambda r, ln: (r.__setitem__(1, {**r[1], "landed_at": None}), ln)),               # landed without instant
+     "landed needs landed_at"),
+    (_mut(lambda r, ln: (r.__setitem__(1, {**r[1], "message_id": str(uuid.uuid4())}), ln)),
+     "delivery for an unknown or undirected message"),
+    (_mut(lambda r, ln: (r.__setitem__(1, {**r[1], "event_id": str(uuid.uuid5(PLAZA_NS, "z"))}), ln)),
+     "delivery door/event_id differ"),
 ])
-def test_validator_rejects_each_condition(mutate):
+def test_validator_rejects_each_condition(mutate, expect):
     m1 = _msg(); d1 = build_delivery(message=m1, state="landed", landed_at=iso(T0), detail=None)
     recs = _seq([m1, d1]); ln = [1, 2]
     recs, ln = mutate(recs, ln)
-    with pytest.raises(LedgerMalformed):
+    with pytest.raises(LedgerMalformed, match=re.escape(expect)):
         validate_plaza(recs, ln)
 
 
