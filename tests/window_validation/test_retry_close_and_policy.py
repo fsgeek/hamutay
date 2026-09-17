@@ -283,9 +283,15 @@ def test_later_eligible_position_from_the_same_member_lifts_the_failed_run_cap(h
 
     assert closing is not None
     assert "a" not in closing["tally"]["position_from_failed_wake"]
-    assert closing["tally"]["active"]["a"]["run_id"] == compact_running["run_id"]
-    assert closing["tally"]["active"]["a"]["stance"] == "abstain"
+    assert "a" in closing["tally"]["abstentions"]
     assert closing["tally"]["cap"] is None
+    active_position = next(
+        position
+        for position in closing["positions"]
+        if position["eligible"] is True and position["record"]["member"] == "door:a"
+    )
+    assert active_position["record"]["run_id"] == compact_running["run_id"]
+    assert closing["tally"]["active"]["a"] == active_position["record"]["position_id"]
 
 
 def test_recovered_orphan_run_is_not_running_at_cutoff(house_factory):
