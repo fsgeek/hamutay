@@ -183,3 +183,52 @@ echo "source: commit {head} clean"
     started = {c.rsplit("@", 1)[1] for c in calls if c.startswith("--user start ")}
     assert stopped == {"heartbeat", "fable", "elder"}      # elder's stop is the one that failed
     assert started == {"heartbeat", "fable"}               # only the doors actually stopped come back
+
+
+def test_rollback_stops_the_doors_it_started_when_verification_fails(tmp_path):
+    """Spec §9: 'If any unit fails either check the script stops all four units,
+    restores the previous members.json, starts the four units again, exits non-zero.'
+    The journalctl stub withholds the `plaza: door <d> may send` note, so every door
+    fails its post-start verification; every door the install started must be stopped
+    again before the final restarts, and members.json must be back without the key."""
+    root = tmp_path / "root"
+    root.mkdir()
+    head = _init_repo_with_members(root)
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    log = tmp_path / "systemctl.log"
+    _write_shim(bin_dir, "systemctl", f"""#!/usr/bin/env bash
+echo "$*" >> {log}
+if [ "$1" = "--user" ] && [ "$2" = "show" ]; then echo "InvocationID=deadbeef"; exit 0; fi
+if [ "$1" = "--user" ] && [ "$2" = "is-active" ]; then exit 0; fi
+exit 0
+""")
+    # the source note is present (phase one passes) but the plaza note never is,
+    # so the post-start verification loop times out on the first door.
+    _write_shim(bin_dir, "journalctl", f"""#!/usr/bin/env bash
+echo "source: commit {head} clean"
+""")
+    env = dict(os.environ); env["PATH"] = f"{bin_dir}:{env['PATH']}"
+    out = subprocess.run(["bash", str(ROOT / "deploy/migrate-plaza.sh"), "--phase-two",
+                           "--root", str(root), "--merge", head],
+                          capture_output=True, text=True, env=env, timeout=600)
+    assert out.returncode != 0, out
+    assert "rolling back" in out.stdout, out.stdout
+    members = json.loads((root / "community/plaza/members.json").read_text())
+    assert "plaza" not in members            # restored to the pre-migration file
+
+    calls = [c for c in log.read_text().splitlines() if c.startswith("--user stop ")
+             or c.startswith("--user start ")]
+    starts = [i for i, c in enumerate(calls) if c.startswith("--user start ")]
+    stops = [i for i, c in enumerate(calls) if c.startswith("--user stop ")]
+    # the install's four starts, then a stop of every started door, then the final starts
+    first_start = starts[0]
+    started_doors = {c.rsplit("@", 1)[1] for c in calls[first_start:first_start + 4]}
+    assert started_doors == {"heartbeat", "fable", "elder", "qwen"}
+    rollback_stops = [i for i in stops if i > first_start]
+    assert rollback_stops, f"no door was stopped after the install starts: {calls}"
+    stopped_again = {calls[i].rsplit("@", 1)[1] for i in rollback_stops}
+    assert stopped_again == started_doors        # every started door is stopped again
+    final_starts = [i for i in starts if i > max(rollback_stops)]
+    assert final_starts, "the rollback never restarted the doors it stopped"
+    assert max(rollback_stops) < min(final_starts)   # stopped before the final starts

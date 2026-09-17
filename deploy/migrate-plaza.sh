@@ -117,11 +117,19 @@ PY
 then
   rm -f "$MEMBERS.previous"; exit 1
 fi
-STOPPED=()
+STOPPED=(); STARTED=()
 rollback() {
   local rc=$?
   trap - ERR
   say "rolling back (exit $rc)"
+  # Spec §9: stop all four units, restore the previous members.json, start them
+  # again, exit non-zero. A post-start verification failure is reached with every
+  # door already started against the installed key, and `systemctl start` on a
+  # running unit is a no-op -- so the doors STARTED by this attempt must be stopped
+  # HERE, before the restore, or they keep running plaza-enabled against a
+  # members.json that no longer says so. The STOPPED loop below brings them back
+  # on the restored file.
+  for d in "${STARTED[@]:-}"; do [ -n "$d" ] && systemctl --user stop "hamutay-heartbeat@$d" 2>/dev/null || true; done
   # Restore members.json from the snapshot taken before any door was touched,
   # then start only the doors THIS attempt actually stopped (recorded in
   # STOPPED as each stop succeeded) -- never a door the attempt never reached,
@@ -156,7 +164,7 @@ p = Path(sys.argv[1]); cand = p.with_name("members.json.candidate")
 os.replace(cand, p)                       # atomic rename
 fd = os.open(p.parent, os.O_RDONLY); os.fsync(fd); os.close(fd)
 PY
-for d in "${DOORS[@]}"; do systemctl --user start "hamutay-heartbeat@$d"; done
+for d in "${DOORS[@]}"; do systemctl --user start "hamutay-heartbeat@$d"; STARTED+=("$d"); done
 for d in "${DOORS[@]}"; do
   ok=0
   for i in $(seq 1 30); do
