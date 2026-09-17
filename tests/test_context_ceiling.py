@@ -556,7 +556,12 @@ def test_session_records_a_truncated_reply_with_real_usage_once(tmp_path):
     # count over the record is not the thing being asserted.
     assert rec["interim_text"] == ["first"]
     assert "<think>cut" not in json.dumps(rec["interim_text"])
-    assert rec["context_policy_invocation"] is None or isinstance(rec["context_policy_invocation"], str)
+    # M4: this policy carries no invocation id, so the key is present (the door
+    # is window-aware) and null. The completed-wake case, where the id exists
+    # and must be recorded, is
+    # test_a_completed_window_aware_wake_records_the_invocation_id.
+    assert "context_policy_invocation" in rec
+    assert rec["context_policy_invocation"] is None
 
 
 def test_session_context_policy_is_the_backends_holder_and_replaces_once(tmp_path, monkeypatch):
@@ -791,3 +796,111 @@ def test_no_envelope_or_no_window_means_no_admission(tmp_path):
     s = OpenTasteSession(model="m", backend=b, log_path=str(tmp_path / "s.jsonl"), experiment_label="t")
     s.exchange("plain")
     assert s._last_admission is None
+
+
+# --- the recovery loop: one count per send, typed failures fail closed --------
+
+
+def test_budget_recovery_recounts_the_rebuilt_payload(tmp_path):
+    """C1: the resend after a truncation is bounded by its own count.
+
+    `_truncate_largest_tool_results` mutates the conversation and
+    `_withdraw_perception` may shrink the tool set, so the `precounted` value
+    computed before the recovery describes bytes that are no longer being
+    sent. Reusing it bounds the resend on a number nobody measured — which is
+    exactly what a door whose whole purpose is to never guess must not do.
+    Round-seven items 1 and 3, and the spec's "one count per send".
+    """
+    executor = ToolExecutor(project_root=tmp_path, cycle=1)
+    b = _aware([
+        _turn(tool_calls=[_tool_call("read", {"path": "README.md"})], prompt_tokens=20000),
+        RuntimeError(LLAMA_ERR),
+        _turn(content="recovered", prompt_tokens=500),
+    ], counts=[20000, 20000, 5000])
+    executor.execute = lambda name, args: {"content": "z" * 200_000}  # type: ignore[assignment]
+    result = b.call(model="m", system="s", messages=[{"role": "user", "content": "hi"}],
+                    experiment_label="t",
+                    extra_tools=[TOOL_SCHEMAS["read"], UPDATE_STATE_SCHEMA],
+                    tool_executor=executor)
+    assert result.raw_output["response"] == "recovered"
+    # Three sends, three counts: the recovery resend is not exempt.
+    assert len(b.payloads) == 3 and len(b._counter.seen) == 3
+    # Each count saw the bytes its send carried.
+    for c, p in zip(b._counter.seen, b.payloads):
+        assert c["messages"] == p["messages"] and c.get("tools") == p.get("tools")
+    # The resend's bound derives from its own count (5000), not the stale one.
+    assert b.payloads[-1]["max_tokens"] == 65536 - 1 - 5000
+    assert all(pt + p["max_tokens"] < 65536
+               for pt, p in zip((20000, 20000, 5000), b.payloads))
+
+
+def test_a_window_failure_quoting_the_servers_phrasing_never_enters_recovery(tmp_path):
+    """I2: window failures are routed by type, never by message text.
+
+    `WindowFailure` subclasses `RuntimeError`, so all three typed failures
+    reach the recovery loop's `except RuntimeError`. A `CountUnavailable`
+    wrapping a `/tokenize` refusal that quotes the server's own context
+    phrasing — the likeliest text for that endpoint to return on an oversized
+    body — would be misread as a wall hit and answered with truncate-and-retry
+    instead of failing closed (spec §1; round three finding 23).
+
+    The failure has to come from inside `_send`, which is where the loop's
+    `try` reaches. Turn 0 counts over the soft threshold, so perception is
+    withdrawn and `precounted` is dropped; turn 1 then has perception already
+    withdrawn, so it takes no count of its own and `_send` counts — and that
+    is the count that fails.
+    """
+    executor = ToolExecutor(project_root=tmp_path, cycle=1)
+    quoting = CountUnavailable(
+        "request (70000 tokens) exceeds the available context size (65536 tokens)"
+    )
+    from hamutay.taste_open import _is_context_limit_error
+    assert _is_context_limit_error(quoting), "the premise: this text reads as a wall hit"
+    b = _aware([
+        _turn(tool_calls=[_tool_call("read", {"path": "README.md"})], prompt_tokens=53000),
+        _turn(content="never"),
+    # Three spare counts after the failing one: today's buggy path retries
+    # three times, and the test must fail on the assertion below rather
+    # than on an exhausted script.
+    ], counts=[53000, 52000, quoting, quoting, quoting, quoting])
+    executor.execute = lambda name, args: {"content": "z" * 200_000}  # type: ignore[assignment]
+    with pytest.raises(CountUnavailable):
+        b.call(model="m", system="s", messages=[{"role": "user", "content": "hi"}],
+               experiment_label="t",
+               extra_tools=[TOOL_SCHEMAS["read"], UPDATE_STATE_SCHEMA],
+               tool_executor=executor)
+    # One send only: no second post, and nothing was truncated on the way out.
+    assert len(b.payloads) == 1
+    assert not _events(executor, "budget_recovery")
+    assert _events(executor, "budget_pressure")[-1]["action"] == "count_unavailable"
+
+
+def test_a_completed_window_aware_wake_records_the_invocation_id(tmp_path):
+    """I1: the success path names the invocation the failure path names.
+
+    `_log_entry` writes `context_policy_invocation` on every window-aware
+    record, so a success path that does not pass it writes `null` — making a
+    completed wake indistinguishable from "no invocation was ever named",
+    which is the ambiguity the field exists to remove.
+    """
+    from hamutay.context_policy import ContextPolicy, ContextPolicyHolder
+    holder = ContextPolicyHolder(ContextPolicy(
+        65536, "discovered", 65536, "http://127.0.0.1:8081", "probed", {}, 20, "inv-live"))
+    b = OpenAITasteBackend(api_key="k", wake_mode="natural", context_policy=holder,
+                           max_tokens=64000)
+    b.payloads = []
+    b._counter = _Counter([100])
+    script = [_turn(content="done", prompt_tokens=100)]
+
+    def fake_post(payload):
+        b.payloads.append(json.loads(json.dumps(payload)))
+        return script.pop(0)
+
+    b._post_chat = fake_post
+    log = tmp_path / "s.jsonl"
+    s = OpenTasteSession(model="m", backend=b, log_path=str(log), experiment_label="t",
+                         enable_tools=True, project_root=tmp_path)
+    s.seed_state({"cycle": 1}, 1)
+    s.exchange("hi")
+    rec = json.loads(log.read_text().splitlines()[-1])
+    assert rec["context_policy_invocation"] == "inv-live"

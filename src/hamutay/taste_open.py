@@ -2090,7 +2090,8 @@ class OpenAITasteBackend:
         raw_output here, so the session's state path is unchanged.
         """
         from hamutay.window import (SOFT_THRESHOLD_FRACTION, THINK_UNRESTRICTED_ROOM_TOKENS,
-                                    WITHDRAWN_TOOL_TURNS_NEAR_WALL, WakeAccount, bound_payload)
+                                    WITHDRAWN_TOOL_TURNS_NEAR_WALL, WakeAccount, WindowFailure,
+                                    bound_payload)
 
         conversation = [{"role": "system", "content": system}] + list(messages)
         tools = [self._openai_tool_def(tool) for tool in extra_tools]
@@ -2287,6 +2288,13 @@ class OpenAITasteBackend:
                                       tool_executor=tool_executor, precounted=precounted)
                     break
                 except RuntimeError as e:
+                    # Typed window failures subclass RuntimeError and must be
+                    # routed by type, never by message text: a CountUnavailable
+                    # wrapping a /tokenize refusal that quotes the server's own
+                    # context phrasing would otherwise be answered with
+                    # truncate-and-retry instead of failing closed (spec §1).
+                    if isinstance(e, WindowFailure):
+                        raise
                     if not _is_context_limit_error(e) or turn_index == 0:
                         raise
                     requested, limit = _parse_requested_vs_limit(e)
@@ -2313,6 +2321,12 @@ class OpenAITasteBackend:
                             "recovery_attempt": recovery_attempt + 1,
                             "error": str(e)[:300],
                         })
+                    # The truncation mutated `conversation` and the
+                    # withdrawal may have shrunk the tool set, so the count
+                    # taken before this recovery describes bytes that are no
+                    # longer being sent. Drop it: `_send` recounts the payload
+                    # it is about to post (one count per send, spec §1).
+                    precounted = None
                     if recovery_attempt == 2:
                         raise
             if data is None:
