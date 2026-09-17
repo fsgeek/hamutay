@@ -1439,7 +1439,11 @@ class OpenAITasteBackend:
         choice = data["choices"][0]
         if (choice.get("finish_reason") or "unknown") == "length":
             message = choice.get("message", {}) or {}
-            text = self._content_text(message.get("content")) + (message.get("reasoning_content") or "")
+            # Content and reasoning are two separate utterances; joined bare
+            # they would read as one run-on word across the seam.
+            parts = [p for p in (self._content_text(message.get("content")),
+                                 message.get("reasoning_content") or "") if p]
+            text = "\n".join(parts)
             raise TruncatedReply(
                 text=text, message=message, turn_index=turn_index,
                 prompt_tokens=int(usage.get("prompt_tokens", 0) or 0),
@@ -1540,16 +1544,21 @@ class OpenAITasteBackend:
         return Prepared(payload, b.prompt_tokens, path, b.sendable, b.reason, inputs)
 
     def call_prepared(self, prepared: "Prepared") -> ExchangeResult:
-        """Send what `prepare` counted, through the path that built it."""
+        """Send what `prepare` counted, through the path that built it.
+
+        The count travels with it: the first send's bytes are the ones
+        `prepare` counted, so counting them again would be a second tokenizer
+        round trip for an answer already in hand (spec r6.2 §2)."""
         i = prepared.inputs
         if prepared.path == "terminal_surface":
             return self.call_terminal_surface(
                 model=i["model"], system=i["system"], messages=i["messages"],
                 experiment_label="prepared", terminal_surface=i["terminal_surface"],
+                precounted=prepared.prompt_tokens,
             )
         return self.call(model=i["model"], system=i["system"], messages=i["messages"],
                          experiment_label="prepared", extra_tools=i["extra_tools"],
-                         tool_executor=i["tool_executor"])
+                         tool_executor=i["tool_executor"], precounted=prepared.prompt_tokens)
 
     def call(
         self,
@@ -1559,6 +1568,7 @@ class OpenAITasteBackend:
         experiment_label: str,  # required by TasteBackend protocol
         extra_tools: list[dict] | None = None,
         tool_executor: Any | None = None,
+        precounted: int | None = None,
     ) -> ExchangeResult:
         del experiment_label  # not consumed by OpenAI backend (protocol requirement)
         if self.wake_mode == "natural":
@@ -1568,6 +1578,7 @@ class OpenAITasteBackend:
                 messages=messages,
                 extra_tools=extra_tools or [],
                 tool_executor=tool_executor,
+                precounted=precounted,
             )
         if extra_tools:
             return self._call_multi_turn(
@@ -1576,8 +1587,10 @@ class OpenAITasteBackend:
                 messages=messages,
                 extra_tools=extra_tools,
                 tool_executor=tool_executor,
+                precounted=precounted,
             )
-        return self._call_single_tool(model=model, system=system, messages=messages)
+        return self._call_single_tool(model=model, system=system, messages=messages,
+                                      precounted=precounted)
 
     def _first_payload_single_tool(self, model: str, system: str, messages: list[dict]) -> dict:
         """The exact first payload `_call_single_tool` sends."""
@@ -1597,6 +1610,7 @@ class OpenAITasteBackend:
         model: str,
         system: str,
         messages: list[dict],
+        precounted: int | None = None,
     ) -> ExchangeResult:
         from hamutay.window import WakeAccount
 
@@ -1611,7 +1625,8 @@ class OpenAITasteBackend:
         turn_index = 0
         while True:
             data = self._send(payload, acct, turn_index=turn_index,
-                              tool_choice_none=payload.get("tool_choice") == "none")
+                              tool_choice_none=payload.get("tool_choice") == "none",
+                              precounted=precounted if turn_index == 0 else None)
             turn_index += 1
 
             choice = data["choices"][0]
@@ -1750,6 +1765,7 @@ class OpenAITasteBackend:
         messages: list[dict],
         experiment_label: str,
         terminal_surface: dict,
+        precounted: int | None = None,
     ) -> ExchangeResult:
         del experiment_label
         from hamutay.window import WakeAccount
@@ -1759,7 +1775,8 @@ class OpenAITasteBackend:
 
         acct = WakeAccount()
         data = self._send(payload, acct, turn_index=0,
-                          tool_choice_none=payload.get("tool_choice") == "none")
+                          tool_choice_none=payload.get("tool_choice") == "none",
+                          precounted=precounted)
         choice = data["choices"][0]
         raw_stop: str = choice.get("finish_reason") or "unknown"
         stop_reason: str = {
@@ -1851,6 +1868,7 @@ class OpenAITasteBackend:
         messages: list[dict],
         extra_tools: list[dict],
         tool_executor: Any | None,
+        precounted: int | None = None,
     ) -> ExchangeResult:
         """OpenAI-compatible multi-turn tool loop.
 
@@ -1874,7 +1892,8 @@ class OpenAITasteBackend:
 
             data = self._send(payload, acct, turn_index=_turn_index,
                               tool_choice_none=payload.get("tool_choice") == "none",
-                              tool_executor=tool_executor)
+                              tool_executor=tool_executor,
+                              precounted=precounted if _turn_index == 0 else None)
             choice = data["choices"][0]
             raw_stop: str = choice.get("finish_reason") or "unknown"
             stop_reason: str = {
@@ -2046,6 +2065,7 @@ class OpenAITasteBackend:
         messages: list[dict],
         extra_tools: list[dict],
         tool_executor: Any | None,
+        precounted: int | None = None,
     ) -> ExchangeResult:
         """Natural wake: tools until done, then text; the text ends the wake.
 
@@ -2060,6 +2080,9 @@ class OpenAITasteBackend:
 
         conversation = [{"role": "system", "content": system}] + list(messages)
         tools = [self._openai_tool_def(tool) for tool in extra_tools]
+        # `prepare` counted turn 0's exact bytes; held apart from the per-turn
+        # `precounted` local, which is rebuilt every turn.
+        first_turn_count = precounted
         acct = WakeAccount()
         malformed = 0
         max_turns = 20
@@ -2162,25 +2185,38 @@ class OpenAITasteBackend:
             if (
                 soft_threshold is not None
                 and not perception_withdrawn
+                and not window_aware
                 and estimated_next_input_tokens >= soft_threshold
             ):
+                # The character estimate decides only for doors that cannot
+                # count. A window-aware door has the exact number below and
+                # must not act on a guess (spec r6.2 §1).
                 _withdraw_perception("soft threshold reached")
             precounted: int | None = None
             # A turn that withdraws perception is the first turn under the
             # smaller tool set, not one of the turns allowed after it.
             withdrew_this_turn = False
-            if window_aware and turn_index == 0:
-                # Turn 0 has no server report to estimate from: count the exact
-                # payload about to be sent and decide the withdrawal on the
-                # number rather than on zero (spec §1). A rebuild after
-                # withdrawal is different bytes, so the count is not reused.
+            if window_aware and not perception_withdrawn:
+                # Every turn, not just the first: count the exact payload about
+                # to be sent and decide the withdrawal on that number. Turn 0
+                # has no server report to estimate from, and after it the
+                # estimate is still only a guess (spec r6.2 §1). The count is
+                # handed to `_send` as `precounted` when nothing changed since;
+                # a rebuild after withdrawal is different bytes, so that count
+                # is dropped and `_send` recounts.
                 self._refresh_counter()
                 from hamutay.window import CountUnavailable
-                try:
-                    counted = self._counter.count(_build_payload())
-                except CountUnavailable as e:
-                    self._log_pressure(tool_executor, "count_unavailable", error=e.error)
-                    raise
+                if turn_index == 0 and first_turn_count is not None:
+                    # `prepare` already counted these exact bytes; counting them
+                    # again would be a second tokenizer round trip for an answer
+                    # already in hand (spec r6.2 §2 "Admission").
+                    counted = first_turn_count
+                else:
+                    try:
+                        counted = self._counter.count(_build_payload())
+                    except CountUnavailable as e:
+                        self._log_pressure(tool_executor, "count_unavailable", error=e.error)
+                        raise
                 last_counted_prompt_tokens = counted
                 precounted = counted
                 # Exhaustion is decided on the count before the withdrawal is:
@@ -2199,8 +2235,7 @@ class OpenAITasteBackend:
                     raise ExhaustedBeforeRequest(prompt_tokens=probe.prompt_tokens,
                                                  limit=policy.limit, room=probe.room,
                                                  max_tokens=probe.max_tokens)
-                if (soft_threshold is not None and not perception_withdrawn
-                        and counted >= soft_threshold):
+                if soft_threshold is not None and counted >= soft_threshold:
                     _withdraw_perception("soft threshold reached", measured=counted,
                                          count_source="server")
                     precounted = None

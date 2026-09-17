@@ -334,6 +334,32 @@ def test_turn_zero_soft_threshold_withdraws_rebuilds_and_recounts(tmp_path):
     assert ev[0]["action"] == "perception_tools_withdrawn" and ev[0]["prompt_tokens"] == 53000
 
 
+def test_soft_threshold_is_checked_by_count_on_later_turns_too(tmp_path):
+    """A window-aware door never withdraws on the character estimate.
+
+    The exact count is taken before every send, not only the first: a turn-0
+    payload under the threshold and a turn-1 payload over it must withdraw on
+    turn 1, on the counted number rather than on the estimate (spec r6.2 §1).
+    """
+    executor = ToolExecutor(project_root=tmp_path, cycle=1)
+    script = [_turn(tool_calls=[_tool_call("clock", {})], prompt_tokens=20000),
+              _turn(content="done", prompt_tokens=53000)]
+    # turn 0 counts 20000 (under 0.8*65536 = 52428) and is reused by the send;
+    # turn 1 counts 53000 (over), withdraws, rebuilds, and the send recounts.
+    b = _aware(script, counts=[20000, 53000, 52500])
+    b.call(model="m", system="s", messages=[{"role": "user", "content": "hi"}], experiment_label="t",
+           extra_tools=_tools(), tool_executor=executor)
+    assert len(b._counter.seen) == 3 and len(b.payloads) == 2   # 1 on turn 0, 2 on turn 1
+    assert "read" in _names(b.payloads[0]) and "bash" in _names(b.payloads[0])
+    assert _names(b.payloads[1]) == sorted(["update_state", "schedule_event", "declare_quiet"])
+    assert b.payloads[1]["max_tokens"] == 65536 - 1 - 52500
+    note = [m for m in b.payloads[1]["messages"] if m["role"] == "user" and "withdrawn" in (m["content"] or "")]
+    assert note and "53000" in note[0]["content"] and "server" in note[0]["content"]
+    ev = _events(executor, "budget_pressure")
+    assert ev[0]["action"] == "perception_tools_withdrawn"
+    assert ev[0]["prompt_tokens"] == 53000 and ev[0]["count_source"] == "server"
+
+
 def test_near_the_wall_all_tools_go_after_one_turn_and_the_budget_arrives(tmp_path):
     executor = ToolExecutor(project_root=tmp_path, cycle=1)
     script = [_turn(tool_calls=[_tool_call("clock", {})], prompt_tokens=53000),
@@ -443,11 +469,13 @@ def test_single_tool_malformed_resend_is_recounted(tmp_path):
 
 def test_prepare_returns_the_exact_first_payload_and_call_prepared_sends_it(tmp_path):
     executor = ToolExecutor(project_root=tmp_path, cycle=1)
-    b = _aware([_turn(content="done", prompt_tokens=100)], counts=[100, 100])
+    b = _aware([_turn(content="done", prompt_tokens=100)], counts=[100])
     prep = b.prepare("m", "s", [{"role": "user", "content": "hi"}], _tools(), None, executor, candidate=True)
     assert prep.path == "natural" and prep.prompt_tokens == 100 and prep.sendable and prep.payload["model"] == "m"
     assert "max_tokens" not in prep.payload   # candidate mode leaves the payload unbounded
     b.call_prepared(prep)
+    # The prepare counted these exact bytes; the send must not count them again.
+    assert len(b._counter.seen) == 1
     assert b.payloads[0]["messages"] == prep.payload["messages"] and b.payloads[0]["tools"] == prep.payload["tools"]
     assert b.payloads[0]["max_tokens"] == min(64000, 65536 - 1 - 100)
 
