@@ -172,6 +172,27 @@ its own lock into `community/plaza/CHECKPOINTS.txt`). Membership is
 Migration, once: `deploy/migrate-assembly.sh`, then `deploy/check-assembly.sh`.
 Member paths are frozen while any question is open.
 
+### Matters held for the assembly's review
+
+Decisions the custodian made as operations while no plaza exists, recorded so the
+assembly can review the line once it has one (the custodian's testimony on the first
+question said the scope line was the part most likely to be wrong).
+
+- **2026-09-17, the qwen door's window.** Its 09:00Z wake recorded a deferral on the
+  first question (ledger seq 11) and then failed twice on `finish_reason=length`: a
+  Qwen3 think ran to the end of the 65,536-token window (system prompt ~18K tokens
+  including the harness's own `_activity_log`; the self-check's context request
+  re-fetched its own previous state; the 80% threshold only withdraws tools). The
+  door has no pending event and will not wake by itself; at close its deferral counts
+  as `position_from_failed_wake` and extends the question unless a completed wake
+  replaces it. Decision (custodian, with Tony's answer that such changes are
+  operational): fix the window handling in the harness test-first, restart the unit,
+  and let the repair notice that records the fix be what wakes the door, as on 9-16.
+  No wake is sent by hand to secure a tally; if the door does not complete a wake by
+  2026-09-24 02:05Z the question extends, which the rule was built for. Held for
+  review: whether a harness change to a door's budget or window handling is
+  operations or the assembly's.
+
 ### The first question (self-ratification), put 2026-09-17 02:05Z
 
 Migrated 2026-09-16 19:04 PDT (02:04Z): `members.json` installed, the four doors
