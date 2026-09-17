@@ -1,9 +1,10 @@
 # Window-aware wakes on a local door
 
-Date: 2026-09-17. Author: the custodian session. Status: revision 5, after
-Codex round four (`2026-09-17-window-aware-wakes-review-4.md`: 2 Blocking,
-3 Significant, 0 Minor on revision 4; rounds one to three had 4/5/2,
-5/4/1 and 4/4/1). Every finding of the three rounds is accepted in mechanism except
+Date: 2026-09-17. Author: the custodian session. Status: revision 6, after
+Codex rounds five and six (`-review-5.md`: 1 Blocking, 2 Significant on
+revision 5; `-review-6.md` found that the revision-6 commit had carried no
+design text, so this is that text; rounds one to four had 4/5/2, 5/4/1,
+4/4/1 and 2/3/0). Every finding of the three rounds is accepted in mechanism except
 two, declared where they arise: the reply reserve is a target (§1), and
 the resident's state is not cut (§6, "Acceptance"). Codex's sandbox could not reach the
 local server, so the live evidence this design requires comes from the
@@ -326,16 +327,21 @@ backend.call_prepared(prepared, **path_kwargs)
 `prepare` builds the exact first payload the chosen path (single-tool,
 terminal surface, multi-turn, natural) would send, with the path's own
 tool transformation and `tool_choice`, and counts it (§1). With
-`candidate=True` (admission) it never raises: an unsendable count comes
-back as `sendable=False` with the reason, so admission can shrink the
-envelope and try again. The final candidate is prepared with
+`candidate=True` (admission) a count below the floor does not raise: it
+comes back as `sendable=False` with the reason, so admission can shrink
+the envelope and try again. A count that cannot be taken at all raises
+`CountUnavailable` immediately in either mode; candidate mode suppresses
+only `ExhaustedBeforeRequest`. The final candidate is prepared with
 `candidate=False`, which applies the floor check and raises
 `ExhaustedBeforeRequest`. `call_prepared` consumes `prepared.payload`
-verbatim for the **first** send only; every later payload of a
-multi-turn path (after a tool result, a withdrawal, the near-wall rule)
-is rebuilt from `inputs` plus the path's loop state and passed through
-the same `_count_and_bound(payload)` helper, so the invariant is
-asserted on the payload actually sent, every time. Rule (round four,
+verbatim for the **first** send only; **every** later send on any path,
+a multi-turn path's next turn (after a tool result, a withdrawal, the
+near-wall rule) and the single-tool path's resend after malformed
+arguments alike, is rebuilt from `inputs` plus the path's loop state and
+passed through the same `_count_and_bound(payload)` helper immediately
+before `_post_chat`, so the invariant is asserted on the payload actually
+sent, every time; the tests count one tokenizer call per send on each
+path. Rule (round four,
 finding 35): **after any change to the tool set, rebuild, recount, then
 assert and send**; a request is never sent with a count taken before a
 tool was withdrawn. That applies at turn 0 (the soft-threshold check
@@ -468,11 +474,12 @@ silently drop `position_from_failed_wake`. The change: `_latest_by_event_id`
 keeps its meaning for delivery and absence, and a new `_runs_by_event`
 builds a per-run lifecycle: each `run_id`'s latest status, and whether it
 is **superseded**. A run is superseded when a later pending row for the
-same event carries `detail.recovered_from_run_id == run_id` (boot
-recovery's pending copy gains that marker in this change; today it copies
-the pending record and leaves the abandoned `running` row without a
-terminal status forever) or `detail.retry_of_run == run_id` (§6's compact
-retry). A position is classified against **its own run**: `wake_failed`
+same event carries `recovered_from_run_id == run_id` at the row's top
+level (the marker `recover_orphaned_running` already writes, beside
+`recovered_by` and `recovered_at`; the nested `detail.recovered_from_run_id`
+is accepted too for compatibility) or `detail.retry_of_run == run_id`
+(§6's compact retry). The abandoned `running` row itself is left as it
+is today. A position is classified against **its own run**: `wake_failed`
 when its run's terminal status is `failed`, eligible when its run
 completed with the joined record. `running_at_cutoff` considers only runs
 that are `running` **and not superseded**, so a recovered orphan cannot
@@ -596,9 +603,9 @@ that returns a count the test chooses):
     a compact running row at cutoff, a compact completion without a
     position, and a compact completion with a replacement position, each
     classified as §6 states; a `running` run superseded by boot recovery
-    whose successor completed is not `running_at_cutoff`; the existing
-    close tests unchanged. Boot recovery's pending copy carries
-    `recovered_from_run_id` (`tests/test_heartbeat.py`).
+    whose successor completed is not `running_at_cutoff`, using the actual
+    pending row `recover_orphaned_running` returns (not a hand-built one);
+    the existing close tests unchanged.
 15. Store write discipline: `_append_unlocked` flushes, fsyncs and
     verifies growth; the two-line transition is one write; a `failed`
     row without its retry (fixture) reads as terminal-failed with no
