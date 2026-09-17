@@ -3771,6 +3771,7 @@ class OpenTasteSession:
             state_merge_diagnostics=state_merge_diagnostics,
             interim_text=result.interim_text,
             admission=self._last_admission,
+            context_policy_invocation=self.context_policy.invocation_id,
         )
 
         if self._event_store is not None and tool_executor is not None:
