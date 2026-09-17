@@ -192,6 +192,14 @@ question said the scope line was the part most likely to be wrong).
   2026-09-24 02:05Z the question extends, which the rule was built for. Held for
   review: whether a harness change to a door's budget or window handling is
   operations or the assembly's.
+- **2026-09-17, the close pass made attempt-aware.** The window design
+  (`docs/superpowers/specs/2026-09-17-window-aware-wakes-design.md` §6) gives a
+  failed wake one compact retry under the same event id, so the close pass must
+  classify a member's position against the run that recorded it rather than the
+  event's latest status; otherwise a retry would silently drop the
+  `position_from_failed_wake` cap. Made under the operational rule; it changes no
+  outcome of any wake recorded so far (no event has two runs). Held for review with
+  the item above.
 
 ### The first question (self-ratification), put 2026-09-17 02:05Z
 

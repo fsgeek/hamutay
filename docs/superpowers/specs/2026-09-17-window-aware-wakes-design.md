@@ -1,10 +1,11 @@
 # Window-aware wakes on a local door
 
-Date: 2026-09-17. Author: the custodian session. Status: revision 3, after
-Codex round two (`2026-09-17-window-aware-wakes-review-2.md`: 5 Blocking,
-4 Significant, 1 Minor on revision 2; round one had 4/5/2). Every finding
-of both rounds is accepted in mechanism except one, declared under §1
-("the reply reserve is a target"). Codex's sandbox could not reach the
+Date: 2026-09-17. Author: the custodian session. Status: revision 4, after
+Codex round three (`2026-09-17-window-aware-wakes-review-3.md`: 4 Blocking,
+4 Significant, 1 Minor on revision 3; rounds one and two had 4/5/2 and
+5/4/1). Every finding of the three rounds is accepted in mechanism except
+two, declared where they arise: the reply reserve is a target (§1), and
+the resident's state is not cut (§6, "Acceptance"). Codex's sandbox could not reach the
 local server, so the live evidence this design requires comes from the
 custodian's runs, recorded in the review file before the merge. Amends
 `2026-09-06-local-substrate-door-design.md` §5 ("The harness must know the
@@ -90,10 +91,19 @@ only live wakes answer them.
 
 ## The property
 
-For every request a ceiling-aware door sends:
+A door is **window-aware** when its policy has both a limit and a
+tokenizer (a llama-server that renders and counts the exact prompt). For
+every request a window-aware door sends:
 
 > `prompt_tokens + max_tokens < context_limit`, with `prompt_tokens` the
 > server's own count of the prompt it will tokenize, never an estimate.
+
+A ceiling with no tokenizer (an explicit `--context-limit` against a
+server that is not llama-server; no door has one today) is **not**
+window-aware: it keeps §5 of the 9-06 spec exactly as it runs today (the
+80% soft threshold on the running estimate, the over-limit recovery) and
+none of §§1, 2, 6 engage. The property is claimed only where it can be
+measured (round three, finding 28).
 
 Strict, because llama-server stops a slot when `n_tokens + 1 >= n_ctx`
 (`tools/server/server-context.cpp`, the context-exhaustion check runs
@@ -157,13 +167,18 @@ prints `limit`, `source`, whether the count is `server` or `estimate`, and
 deterministic completions at launch, no tools, `seed: 7`, `temperature:
 0`, `max_tokens: 48`, the same one-line user prompt; the first is the
 control, the second adds `reasoning_budget_tokens: 0` and
-`reasoning_budget_message: ""`. The raw `message` of each (both `content`
-and `reasoning_content`) is inspected for a think body between the
-template's tags. `probed` when the control has a think body and the
-zero-budget reply has none; `unsupported` when both are identical;
-`inconclusive` when the control itself has no think body (the model did
-not think; the fields are then not sent and the probe is retried at the
-next launch). The result is cached in the launch record keyed by
+`reasoning_budget_message: ""`. Three facts are recorded separately (round
+three, finding 26): `accepted` (the zero-budget request returned 200
+rather than a schema error), `template_has_tags` (`/props`'s
+`chat_template` names a think start and end tag), and `forcing_observed`
+(the control's reasoning body, taken from `reasoning_content` when
+present or from `content` between the end tag and, if present, the start
+tag, since the start tag may be prefilled by the template and never
+generated, is non-empty, and the zero-budget reply's reasoning body is
+empty). `probed` iff all three hold; `unsupported` when `accepted` is
+false or `template_has_tags` is false; `inconclusive` when accepted with
+tags but the control itself had no reasoning body (the fields are not
+sent and the probe is retried at the next launch). The result is cached in the launch record keyed by
 `(build_info, model_alias, sha256(chat_template))` and reused while the
 key matches, so a restart against the same server costs nothing. Each
 probe records its wall time and marks `queued` when it exceeded 5 s. Two
@@ -171,9 +186,10 @@ bounded completions cost under 100 tokens of generation.
 
 ## Changes
 
-Everything below is gated on `policy.limit is not None`, except §4, which
-is universal, and §6, which is gated on the two failures §1 and §4 define
-(see "What stays byte-identical" for the exact guarantee).
+Everything below is gated on the door being window-aware
+(`policy.limit is not None and policy.tokenizer is not None`), except
+§3, which is gated on `policy.limit is not None`, and §4, which is
+universal (see "What stays byte-identical" for the exact guarantee).
 
 ### 1. The exact count and the reserve
 
@@ -190,32 +206,42 @@ with a tokenizer:
   `tokenize(..., add_special=true)`). The integration test requires this
   count to **equal** the `usage.prompt_tokens` the server then reports.
 - **Fail closed.** If either call fails, the request is not sent: the wake
-  fails with `RuntimeError("OpenAI backend: the prompt could not be
-  counted: {error}")`, logged as `budget_pressure / count_unavailable`,
-  and qualifies for the one compact retry of §6. On a llama-server ceiling
-  an estimate is never the count. Only a ceiling with no tokenizer (an
-  explicit `--context-limit` against a server that is not llama-server, a
-  case no door has today) uses the estimate `chars/4 +
-  ESTIMATE_MARGIN_TOKENS` (`12000`, above the largest demonstrated
-  under-count, 8,686), and its launch note says `count estimate` so the
-  record shows the property is estimated there.
+  fails with `CountUnavailable` (below), logged as `budget_pressure /
+  count_unavailable`, and qualifies for the one compact retry of §6. An
+  estimate is never the count.
 - `room = limit - 1 - prompt_tokens` (the strict inequality's one token).
-- If `room < REPLY_RESERVE_TOKENS + THINK_FLOOR_TOKENS +
-  policy.forced_sequence_tokens` the request is not sent: the wake fails
-  with `RuntimeError("OpenAI backend: context exhausted before the
-  request: {prompt_tokens} of {limit} in hand, {room} left")`, logged as
-  `budget_pressure / exhausted_before_request`, and qualifies for §6.
-  Zero GPU time.
-- Otherwise `max_tokens = min(self._max_tokens, room)`, and the property is
-  asserted.
-- With `reasoning_budget == "probed"` and `room <
-  THINK_UNRESTRICTED_ROOM_TOKENS`, the request also carries
+- `max_tokens = min(self._max_tokens, room)`. If `max_tokens <
+  REPLY_RESERVE_TOKENS + THINK_FLOOR_TOKENS + policy.forced_sequence_tokens`
+  the request is not sent: the wake fails with `ExhaustedBeforeRequest`,
+  logged as `budget_pressure / exhausted_before_request` with both `room`
+  and `max_tokens`, and qualifies for §6. Zero GPU time. The floor is
+  checked against the generation limit actually sent, not against room
+  (round three, finding 25): a configured `--max-tokens` below the floor
+  fails here on every attempt, which the launch note makes visible.
+- The property is asserted on `max_tokens`.
+- **Budget fields only on grammar-free turns** (round three, finding 27,
+  conservative until live evidence): with `reasoning_budget == "probed"`,
+  `tool_choice == "none"` (every tool withdrawn, the reply ends the wake),
+  and `room < THINK_UNRESTRICTED_ROOM_TOKENS`, the request carries
   `reasoning_budget_tokens = max_tokens - REPLY_RESERVE_TOKENS -
-  policy.forced_sequence_tokens` and `reasoning_budget_message =
-  "[harness: thinking budget reached; about {REPLY_RESERVE_TOKENS} tokens
-  remain for this turn. Do not open another think block. Finish the
-  turn.]"`. With more room the fields are omitted (server default,
-  unrestricted), so a wake with ample room is unchanged.
+  policy.forced_sequence_tokens` (never below `THINK_FLOOR_TOKENS`, by the
+  floor check) and `reasoning_budget_message = "[harness: thinking budget
+  reached; about {REPLY_RESERVE_TOKENS} tokens remain for this turn. Do
+  not open another think block. Finish the turn.]"`. On a turn with tools
+  active only `max_tokens` bounds the turn. So that budgeted turns arrive
+  while room remains, the three-turn rule becomes: once perception is
+  withdrawn **and** `room < THINK_UNRESTRICTED_ROOM_TOKENS`, all tools are
+  withdrawn after **one** further tool turn (the constant
+  `WITHDRAWN_TOOL_TURNS_NEAR_WALL = 1`; the existing three-turn rule holds
+  above that room). The one-line gate is named in the tests; lifting it
+  to `tool_choice == "auto"` is an amendment that requires the
+  forced-interaction evidence of Testing (c) recorded in the review file.
+
+The three failures above are typed: `class WindowFailure(RuntimeError)`,
+with `CountUnavailable`, `ExhaustedBeforeRequest` and `TruncatedReply`
+(§4) as subclasses, each carrying its numbers as attributes. The runner
+recognises §6's triggers by type, never by message text (round three,
+finding 23).
 - Every budgeted request logs `budget_pressure / generation_budgeted` with
   `prompt_tokens`, `room`, `max_tokens`, `reasoning_budget_tokens`,
   `forced_sequence_tokens`, `limit`, and the count latency.
@@ -235,27 +261,19 @@ is recorded in full (§4) and retried once with a smaller prompt (§6). The
 message asks the model not to open another block; whether it complies is
 observed, not assumed, and the record shows it.
 
-**Budget with tools active (round one, finding 2).** llama-server runs the
-budget sampler before the lazy tool grammar; if the model opens tool-call
-syntax inside an unclosed think and the budget then forces the message
-and the end tag, the turn can parse as malformed content or a malformed
-tool call. That is a turn the model had already malformed, and the loop
-already survives malformed tool calls (`_MAX_MALFORMED_PER_WAKE`, a tool
-result that says so). The design accepts it as a declared loss and
-requires a deterministic live test before merge (Testing, integration c):
-`seed: 7`, `temperature: 0`, tools active, `tool_choice: "auto"`, a prompt
-that reliably produces a tool call under the control run, and
-`reasoning_budget_tokens: 32`; the test asserts the loop's handling of
-whatever the server returns (a parseable call, a text reply, or a
-malformed call that lands as a tool result) and records the raw reply. If
-that test cannot be made to pass, the fields are sent only when
-`tool_choice == "none"` (a one-line gate, named in the test) and this
-section is amended.
+**Budget with tools active (round one, finding 2; round three, 27).**
+llama-server runs the budget sampler before the lazy tool grammar; if the
+model opens tool-call syntax inside an unclosed think and the budget
+forces the message and end tag, the turn can parse as malformed. The
+design does not send budget fields on such turns (the gate above). The
+observational live case (Testing, integration c) records what the server
+does with a small budget and tools active; it is evidence for a future
+amendment, not a test this design passes or fails on.
 
 Constants (module level, formatted into the launch note from the
 constants, never duplicated): `REPLY_RESERVE_TOKENS = 2048`,
 `THINK_FLOOR_TOKENS = 512`, `THINK_UNRESTRICTED_ROOM_TOKENS = 32768`,
-`ESTIMATE_MARGIN_TOKENS = 12000`, `SOFT_THRESHOLD_FRACTION = 0.8`.
+`WITHDRAWN_TOOL_TURNS_NEAR_WALL = 1`, `SOFT_THRESHOLD_FRACTION = 0.8`.
 
 ### 2. Context results: a typed projection, deep-copied, admitted at the prepared wake
 
@@ -284,27 +302,43 @@ the full structured results; `_context_error_count`,
 `EventPolicy.branch_visible_context_results` and every other reader of
 records see what they see today.
 
-**Admission at the prepared wake (round two, finding 14).** The runner
-does not know the system prompt, the involuntary memory, the curator
-context, the constitution filtering or the offered tools; the session
-assembles them once in `_exchange_impl`. So the runner passes the session
-an `envelope: Callable[[int | None], str]`, a closure over the **immutable
-full** `context_results` that returns the envelope built at a given cap
-(the runner still records the full results). At the prepared-wake
-boundary, after `_build_messages` and the tools list exist and before the
-backend is called, the session with a tokenizer counts the exact prompt
-(`/apply-template` + `/tokenize`, as §1) with `envelope(cap)` as the user
-message. If the count exceeds `ADMISSION_TARGET_FRACTION = 0.5` of the
-limit it halves the cap and rebuilds from the full results, at most
-`ADMISSION_MAX_PASSES = 8` times, stopping when under the target or when
-every result is a metadata-only stub. Each pass logs `budget_pressure /
-envelope_admission` with the cap and the count. The outcome is recorded
-on the wake as `admission: {passes, final_cap, count, over_target:
-bool}`; when the state and system prompt alone exceed the target the
-outcome says so (`over_target: true, envelope_exhausted: true`) and the
-wake proceeds to §1, which decides at the request. The state is never cut
-by the harness. Without a tokenizer, admission is skipped and the initial
-cap alone applies.
+**Admission at the prepared wake (round two, finding 14; round three,
+24).** The runner does not know the system prompt, the involuntary
+memory, the curator context, the constitution filtering or the offered
+tools; the session assembles them once in `_exchange_impl`. And the
+session does not know the exact OpenAI payload: the backend's four paths
+transform the schemas, resolve `tool_choice`, add the terminal or
+`think_and_respond` tool and apply provider options. So the count lives
+in the backend, behind one interface:
+
+```
+backend.prepare(system, messages, extra_tools, terminal_surface, policy)
+    -> Prepared(payload: dict, prompt_tokens: int, path: str)
+backend.call_prepared(prepared, ...)   # sends exactly prepared.payload first
+```
+
+`prepare` builds the exact first payload the chosen path would send and
+counts it (§1). The runner passes the session an `envelope: Callable[[int
+| None], str]`, a closure over the **immutable full** `context_results`
+that returns the envelope built at a given cap (the runner still records
+the full results). At the prepared-wake boundary the session calls
+`prepare` with `envelope(cap)` as the user message; if `prompt_tokens`
+exceeds `ADMISSION_TARGET_FRACTION = 0.5` of the limit it halves the cap
+and calls `prepare` again, at most `ADMISSION_MAX_PASSES = 8` times,
+stopping when under the target or when every result is a metadata-only
+stub, and then calls `call_prepared` with the last `Prepared`, so the
+request sent is the request counted. Each pass logs `budget_pressure /
+envelope_admission` with the cap and the count. The final rendered
+envelope string, not the closure, is what the wake record stores as
+`user_message`. The outcome is recorded as a new `admission` field
+`{passes, final_cap, prompt_tokens, over_target: bool,
+envelope_exhausted: bool}` on the session's wake record and on the event
+store's completed and failed records (both builders gain the optional
+field; absent when admission did not run). When the state and system
+prompt alone exceed the target the outcome says so and the wake proceeds
+to §1, which decides at the request. The state is never cut by the
+harness. `call_terminal_surface` and the single-tool path go through the
+same `prepare`, so their exact tool and `tool_choice` are counted too.
 
 ### 3. The activity log is rendered lean into the prompt
 
@@ -367,22 +401,66 @@ note and record are unchanged.
 
 Round two, finding 16: a door whose wakes fail on the window, with no
 pending event, is left exactly where it was. So the runner gives a wake
-one more chance, once. When a wake fails with `count_unavailable`,
-`exhausted_before_request` or `TruncatedReply` and the event's status
-history holds no earlier `compact_context` retry, the runner re-pends the
-event with `detail: {"compact_context": true, "retry_of_run": <run_id>,
-"reason": <which failure>}`, due immediately. On that run the prepared
-wake is built compact: the envelope at metadata-only stubs from the first
-pass, the prior state, memory and curator context rendered with every
-`_activity_log` **omitted** (a note under the state heading says so and
-that the record has it; `_activity_log` is the harness's record, not the
-resident's curation, so omitting it from the prompt cuts nothing of the
-resident's), and the `generation_budgeted` fields from turn 0 when the
-server is `probed`. A second failure is terminal, recorded as today, and
-the door is not re-pended again for that event. The two runs are joined in
-the store by `retry_of_run`, so the close pass and the report see one
-event with two attempts. This is the mechanism that gives the migration
-wake of §Migration its second chance; it is not specific to it.
+one more chance, once, and the records stay honest about both attempts.
+
+**The transition is one locked append (round three, finding 23).** When a
+window-aware wake fails with a `WindowFailure` and the event's status
+history holds no row with `compact_context`, the runner calls
+`EventStore.append_failed_with_retry(event, run_id, error, *,
+retry_detail)`, which under the store lock appends **two** rows: the
+`failed` row for this run (as `append_failed` writes today, plus
+`error_type`), and a full copied pending event with the same `event_id`
+and fields, `detail: {"compact_context": true, "retry_of_run": <run_id>,
+"reason": "count_unavailable" | "exhausted_before_request" |
+"truncated_reply"}`, due immediately; the method re-checks under the lock
+that no compact row exists and appends only the `failed` row if one does.
+A crash between the two appends cannot happen because there is one write
+(the two lines are one buffer, fsynced, as the assembly ledger writes);
+`recover_orphaned_running` is unchanged and copies the most recent
+pending record, so a crashed compact `running` run is recovered compact,
+and the marker prevents a third deliberate attempt. This does not widen
+the pre-existing at-least-once window of orphan recovery.
+
+**The compact run.** The prepared wake is built compact: the envelope at
+metadata-only stubs from the first pass, the prior state, memory and
+curator context rendered with every `_activity_log` **omitted** (a note
+under the state heading says so and that the record has it;
+`_activity_log` is the harness's record, not the resident's curation, so
+omitting it cuts nothing of the resident's), and the budget fields as §1
+allows. A second `WindowFailure` is terminal, recorded as today, and the
+door is not re-pended again for that event.
+
+**The close pass is attempt-aware (round three, finding 22).** Today
+`eligible_positions` classifies a position as `wake_failed` by the
+event's **latest** status, so a compact `pending`/`running`/`completed`
+row after a failed first attempt would hide that failure and silently
+drop `position_from_failed_wake`. The change: `_latest_by_event_id` keeps
+its meaning for delivery and absence, and a new `_terminal_by_run`
+indexes terminal statuses by `(event_id, run_id)`; a position is
+classified against **its own run**: `wake_failed` when its run's terminal
+status is `failed`, eligible when its run completed with the joined
+record, and `running_at_cutoff` is computed per run too. A completed
+compact run that records no position leaves the first attempt's
+`wake_failed` cap in force; one that records a position supersedes it
+through `active_positions` as today (one latest eligible position per
+member). Close tests cover: failed position then compact pending; then
+compact running at cutoff; then compact completed without a position
+(cap stands); then compact completed with a replacement (replacement
+counts). This is a change to `src/hamutay/assembly/close.py` made under
+the operational rule; it changes no outcome of any wake recorded so far
+(no event has two runs today) and is listed in the README's held matters.
+
+**Acceptance (round three, finding 29, declared).** The operational
+criterion is: **at most two attempts per event, terminal failure
+allowed, every attempt recorded in full.** A completed wake is made
+likely, not guaranteed: a resident whose state alone leaves less than the
+floor fails both attempts before generation, recorded as such, and the
+harness does not cut the resident's state to prevent that (the house's
+standing rule against harness priors on a resident's memory). The launch
+note and the failure records make the size visible to the resident and
+to the custodian; what to do about a state that no longer fits its own
+window is the resident's, and if it cannot act, the custodian's by a
+repair message, not the harness's by silent projection.
 
 Not a retry of a truncated *turn* inside a wake (still declared out):
 the retry is a new wake with a smaller prompt, not the same prompt
@@ -399,9 +477,9 @@ record on `finish_reason=length` (§4), which gains
 `"TruncatedReply"`. Golden fixtures captured from commit `0aeb0674`
 before implementation pin the first list; a second fixture pins the
 no-ceiling length failure and the test asserts the new record differs
-from it only in those four places. §6 never fires without a ceiling
-(its three triggers are ceiling-gated except `TruncatedReply`, and the
-retry is gated on `policy.limit is not None` explicitly).
+from it only in those four places. §6 never fires on a door that is not
+window-aware (the retry is gated on it explicitly, and `TruncatedReply`
+on a no-ceiling door is recorded and terminal as today).
 
 ## Testing
 
@@ -422,10 +500,14 @@ that returns a count the test chooses):
    recorded payloads, including the equality boundary `prompt_tokens +
    max_tokens == limit - 1`).
 3. Fail closed: a tokenizer that errors yields no payload, the
-   `count_unavailable` event and error; a no-tokenizer explicit ceiling
-   uses the estimate with the margin and says `count estimate`.
-4. `room < REPLY_RESERVE + THINK_FLOOR + forced_sequence_tokens` fails
-   before any request (no payload recorded), with the error and event.
+   `count_unavailable` event and a `CountUnavailable`; a ceiling with no
+   tokenizer is not window-aware and its payloads equal the 9-06 golden.
+4. `max_tokens < REPLY_RESERVE + THINK_FLOOR + forced_sequence_tokens`
+   fails before any request (no payload recorded) with
+   `ExhaustedBeforeRequest`, for a configured `--max-tokens` below the
+   floor, at it, and above it with room below it; budget fields appear
+   only with `tool_choice == "none"`; the near-wall one-turn rule fires
+   below the unrestricted room and the three-turn rule above it.
 5. Envelope projection: small result unchanged as an object; large result
    a typed dict; below `MIN_STUB_CHARS` metadata only; `lean_activity_logs`
    on fixtures built from real `tool_recall` (by cycle, by record id, by
@@ -461,10 +543,22 @@ that returns a count the test chooses):
     `run_next_event`, `run_pending_events`, `step_pending_events`, the
     fork/join runner and the CLI path all see the new value with no
     restart.
-11. Compact retry: each of the three failures re-pends the event once with
-    the detail; the retried wake's prompt has no `_activity_log` and a
-    stub-only envelope; a second failure does not re-pend; no retry
-    without a ceiling.
+11. Compact retry: each of the three typed failures produces one locked
+    append of the `failed` row plus the compact pending copy; a second
+    call with a compact row present appends only `failed`; the retried
+    wake's prompt has no `_activity_log` and a stub-only envelope; boot
+    recovery of a crashed compact `running` run yields exactly one compact
+    pending row; no retry on a door that is not window-aware.
+13. Attempt-aware close (`tests/assembly/test_close.py`): a member's
+    position from a failed first run followed by a compact pending row,
+    a compact running row at cutoff, a compact completion without a
+    position, and a compact completion with a replacement position, each
+    classified as §6 states; the existing close tests unchanged.
+14. `prepare`/`call_prepared`: on each of the four paths the payload sent
+    first equals `Prepared.payload` byte for byte; the session's admission
+    loop calls `prepare` per pass and `call_prepared` once; the record's
+    `user_message` is the final rendered envelope and `admission` is
+    present on the wake record and the store's completed/failed records.
 12. Launch note and record: the clause is formatted from the constants and
     absent without a limit.
 
@@ -478,10 +572,16 @@ door's wake, with the output pasted into the review record before merge):
   same request with `max_tokens: 1`.
 - (b) the probe classifies the live server, and the result is the same on
   a second run (cache key stable).
-- (c) the deterministic budget-with-tools case of §1.
-- (d) `forced_sequence_tokens` equals the difference in
-  `completion_tokens` between a zero-budget reply and its control when
-  both produce no other text (bounded prompt, `max_tokens: 48`).
+- (c) observational, recorded, not pass/fail: `seed: 7`, `temperature:
+  0`, tools active, `tool_choice: "auto"`, `reasoning_budget_tokens: 32`
+  on a tool-inviting prompt; the raw reply and the loop's handling are
+  written into the review record as evidence for or against lifting the
+  grammar-free gate.
+- (d) `forced_sequence_tokens` from `/tokenize` over the message plus the
+  end tag equals, within the tokenizer's own count of the message alone,
+  the `completion_tokens` difference between a zero-budget reply and its
+  control on the probe prompt; recorded as observational if the two
+  replies produce other text.
 
 Codex authors an independent validation suite from the invariants above
 (`tests/window_validation/`), frozen before its first run.
@@ -520,7 +620,13 @@ door's.
 - Retrying a truncated *turn* with the same prompt. §6 retries the wake
   once with a smaller prompt instead.
 - Cutting the resident's state. §6 omits only the harness's own
-  `_activity_log` from the prompt.
+  `_activity_log` from the prompt (declared under §6 "Acceptance").
+- Threading. The heartbeat is single-threaded and the lease gate applies
+  the policy before the next claim; the holder's one assignment is
+  sufficient for that model, documented in code, and every wake record
+  carries the policy's `invocation_id` so provenance is checkable (round
+  three, finding 30). A shared-session threading model would need a
+  session lock around publication; none exists today.
 - Any change to the Anthropic backend.
 
 ## Cost
