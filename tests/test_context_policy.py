@@ -142,3 +142,28 @@ def test_probe_records_latency_and_queued_flag(monkeypatch):
     http = FakeHTTP(chat=[_chat("<think>\nt\n</think>x"), _chat("<think>\n</think>x")])
     probe = probe_reasoning_budget("http://127.0.0.1:8081", "qwen", http, template=TEMPLATE, props=PROPS)
     assert probe["latency_s"] == pytest.approx(6.5) and probe["queued"] is True
+
+
+def test_a_tokenize_failure_falls_back_to_the_named_constant_and_says_so(capsys):
+    """M3: the `/tokenize` fallback is named and printed, not a silent literal.
+
+    A door whose tokenizer will not answer still gets a policy — the fallback
+    only shifts the floor check by a few tokens, and on a door whose reasoning
+    budget is `unsupported` it is never consulted at all. But the number is a
+    guess on a door whose whole purpose is to not guess, so its use is said out
+    loud, and the constant carries its own reasoning.
+    """
+    from hamutay.context_policy import FORCED_SEQUENCE_FALLBACK_TOKENS
+
+    http = FakeHTTP(props=PROPS, tokens_per_call=[],
+                    chat=[_chat("<think>\nlong thought\n</think>ready"),
+                          _chat("<think>\n</think>ready")],
+                    fail={"/tokenize"})
+    p = ContextPolicy.for_launch(65536, "discovered", "http://127.0.0.1:8081/v1",
+                                 http=http, model="qwen")
+    assert p.forced_sequence_tokens == FORCED_SEQUENCE_FALLBACK_TOKENS == 96
+    # The door is still window-aware: a missing forced-sequence length is not a
+    # missing tokenizer.
+    assert p.window_aware and p.reasoning_budget == "probed"
+    out = capsys.readouterr().out
+    assert "/tokenize did not answer" in out and "96" in out

@@ -15,6 +15,14 @@ from dataclasses import asdict, dataclass, field
 from hamutay.window import BUDGET_MESSAGE, REPLY_RESERVE_TOKENS
 
 PROBE_PROMPT = "Say the word 'ready'."
+# What `forced_sequence_tokens` falls back to when `/tokenize` cannot answer.
+# The forced sequence is the budget message plus the think-end tag, whose
+# real length is a door-and-template property; 96 is a deliberately generous
+# over-estimate of it, so the floor check errs towards refusing a send rather
+# than towards a request that will not fit. It is a fallback, never a default:
+# a door that reaches it is a door whose tokenizer is not answering, which is
+# why the use is printed.
+FORCED_SEQUENCE_FALLBACK_TOKENS = 96
 PROBE_MAX_TOKENS = 48
 PROBE_SEED = 7
 PROBE_QUEUED_S = 5.0
@@ -142,8 +150,10 @@ class ContextPolicy:
         message = BUDGET_MESSAGE.format(reserve=REPLY_RESERVE_TOKENS)
         try:
             forced = len(http("POST", f"{root}/tokenize", {"content": message + THINK_END, "add_special": False})["tokens"])
-        except Exception:
-            forced = 96
+        except Exception as e:
+            forced = FORCED_SEQUENCE_FALLBACK_TOKENS
+            print(f"  context policy: /tokenize did not answer ({e}); "
+                  f"forced_sequence_tokens falls back to {forced}")
         return cls(limit, source, _result_cap_chars(limit), root, _classify(probe), probe, forced, invocation_id)
 
 
