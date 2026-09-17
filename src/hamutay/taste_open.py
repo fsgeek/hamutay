@@ -1971,6 +1971,9 @@ class OpenAITasteBackend:
                             "Model called tools but no tool_executor was provided "
                             "to resolve them"
                         )
+                    content_text = self._content_text(message.get("content"))
+                    if content_text.strip():
+                        acct.interim_text.append(content_text)
                     assistant_message = {
                         "role": "assistant",
                         "content": message.get("content"),
@@ -2014,6 +2017,9 @@ class OpenAITasteBackend:
                     "to resolve them"
                 )
 
+            content_text = self._content_text(message.get("content"))
+            if content_text.strip():
+                acct.interim_text.append(content_text)
             assistant_message = {
                 "role": "assistant",
                 "content": message.get("content"),

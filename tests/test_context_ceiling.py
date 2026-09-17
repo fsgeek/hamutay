@@ -438,6 +438,21 @@ def test_truncated_reply_carries_the_snapshot_after_accounting(tmp_path):
     assert e.account.interim_text == ["first"]
 
 
+def test_multi_turn_truncated_reply_carries_earlier_interim_text(tmp_path):
+    """The multi-turn (terminal wake mode + extra tools) path must collect
+    interim text the same way the natural path does (spec §4: the snapshot
+    carries "the earlier turns' interim_text"), so a TruncatedReply raised on
+    a later turn does not silently drop an earlier turn's content text."""
+    executor = ToolExecutor(project_root=tmp_path, cycle=1)
+    b = _aware([_turn(content="earlier-text", tool_calls=[_tool_call("clock", {})], prompt_tokens=100),
+                _turn(content="<think>cut", finish="length", prompt_tokens=200)], counts=[100, 200],
+               wake_mode="terminal")
+    with pytest.raises(TruncatedReply) as ei:
+        b.call(model="m", system="s", messages=[{"role": "user", "content": "hi"}], experiment_label="t",
+               extra_tools=_tools(), tool_executor=executor)
+    assert ei.value.account.interim_text == ["earlier-text"]
+
+
 def test_truncation_is_typed_on_all_four_paths(tmp_path):
     cut = _turn(content="cut", finish="length")
     # single tool (terminal wake mode, no extra tools)
