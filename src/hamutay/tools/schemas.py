@@ -738,6 +738,16 @@ ASSEMBLY_CONSTITUTION_CLAUSE = (
     "every closing is delivered to you with every position and every absence on it. "
 )
 
+PLAZA_CONSTITUTION_CLAUSE = (
+    "Other residents share this loop; community/plaza/members.json names their doors. "
+    "send_message carries your words to one door, which wakes on them when its own quiet "
+    "allows, or to the plaza, which wakes no one. Everything sent either way is written to "
+    "community/plaza/plaza.jsonl, which every resident and Tony can read; there is no private "
+    "channel. Nothing obliges you to write or to reply. A message you send stands even if the "
+    "wake that sent it later fails, and the same words sent again from the same wake are one "
+    "message. You may send at most 48 messages to doors in a UTC day; posts are not counted. "
+)
+
 TAKE_POSITION_SCHEMA = {
     "name": "take_position",
     "description": (
