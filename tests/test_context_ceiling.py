@@ -351,17 +351,32 @@ def test_near_the_wall_all_tools_go_after_one_turn_and_the_budget_arrives(tmp_pa
 
 
 def test_three_turn_rule_holds_above_the_unrestricted_room(tmp_path):
+    # On a 65,536 window the soft threshold (52,428) always leaves room below
+    # 32,768, so the near-wall one-turn rule always applies there: the
+    # three-turn rule can only be observed on a window big enough that 80% of
+    # it still leaves an unrestricted think's worth of room. At 200,000 the
+    # threshold is 160,000 and the room is 39,999 >= 32,768.
     executor = ToolExecutor(project_root=tmp_path, cycle=1)
-    script = [_turn(tool_calls=[_tool_call("clock", {})], prompt_tokens=100)]
+    script = [_turn(tool_calls=[_tool_call("clock", {})], prompt_tokens=160_000)]
     for i in range(3):
-        script.append(_turn(tool_calls=[_tool_call("update_state", {"updates": {"n": i}}, f"u{i}")], prompt_tokens=100))
-    script.append(_turn(content="done", prompt_tokens=100))
-    b = _aware(script, counts=[100] * 5, limit=1000)  # limit 1000: 850 threshold; room 899 < 32768
-    b._counter.counts = [850, 850, 860, 861, 862]
+        script.append(_turn(tool_calls=[_tool_call("update_state", {"updates": {"n": i}}, f"u{i}")],
+                            prompt_tokens=160_000))
+    script.append(_turn(content="done", prompt_tokens=160_000))
+    # Six counts for five sends: one per send, plus turn 0's candidate count,
+    # which is not reused because the withdrawal rebuilds the payload.
+    b = _aware(script, counts=[160_000] * 6, limit=200_000)
     b.call(model="m", system="s", messages=[{"role": "user", "content": "hi"}], experiment_label="t",
            extra_tools=_tools(), tool_executor=executor)
-    assert b.payloads[-1]["tool_choice"] == "none"
-    assert b.payloads[-3]["tool_choice"] != "none"   # near-wall rule (1 turn) applied since room < 32768
+    assert len(b._counter.seen) == 6 and len(b.payloads) == 5   # every send was counted
+    # The turn-0 count is at the threshold, so perception goes before the first send.
+    state_tools = sorted(["update_state", "schedule_event", "declare_quiet"])
+    assert _names(b.payloads[0]) == state_tools
+    # Three tool turns keep the state tools; only then do all tools go.
+    for p in b.payloads[:4]:
+        assert p["tool_choice"] == "auto" and _names(p) == state_tools
+    assert b.payloads[-1]["tool_choice"] == "none" and "tools" not in b.payloads[-1]
+    # Room >= 32,768 throughout: the think is never budgeted.
+    assert all("reasoning_budget_tokens" not in p for p in b.payloads)
 
 
 def test_count_unavailable_fails_closed_with_no_request(tmp_path):
@@ -422,7 +437,7 @@ def test_single_tool_malformed_resend_is_recounted(tmp_path):
     good = _turn(tool_calls=[_tool_call("think_and_respond", {"response": "ok"})], finish="tool_calls")
     b = _aware([bad, good], counts=[100, 150], wake_mode="terminal")
     b.call(model="m", system="s", messages=[{"role": "user", "content": "hi"}], experiment_label="t")
-    assert len(b._counter.seen) == 2 and b.payloads[1]["max_tokens"] == 65536 - 1 - 150
+    assert len(b._counter.seen) == 2 and b.payloads[1]["max_tokens"] == min(64000, 65536 - 1 - 150)
     assert b._counter.seen[1]["messages"] == b.payloads[1]["messages"]
 
 
@@ -434,7 +449,7 @@ def test_prepare_returns_the_exact_first_payload_and_call_prepared_sends_it(tmp_
     assert "max_tokens" not in prep.payload   # candidate mode leaves the payload unbounded
     b.call_prepared(prep)
     assert b.payloads[0]["messages"] == prep.payload["messages"] and b.payloads[0]["tools"] == prep.payload["tools"]
-    assert b.payloads[0]["max_tokens"] == 65536 - 1 - 100
+    assert b.payloads[0]["max_tokens"] == min(64000, 65536 - 1 - 100)
 
 
 def test_prepare_candidate_reports_exhaustion_but_count_failure_raises(tmp_path):
