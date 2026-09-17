@@ -2235,13 +2235,16 @@ def run_next_event(
                 prior_states=session._prior_states,
                 bridge=session._bridge,
             )
+        store_records = store.read_records()
         notes = operational_notes_for_event(
-            store.read_records(),
+            store_records,
             event,
             now=now or datetime.now(timezone.utc),
         )
         if extra_notes is not None:
-            notes = list(notes) + list(extra_notes(event))
+            # the records this wake already read, so an extra-note producer never
+            # takes a second (and, on EventStore, unbounded) lock on the same store
+            notes = list(notes) + list(extra_notes(event, store_records))
         envelope = build_event_envelope(event, context_results, run_id, operational_notes=notes)
         before_state = _json_safe_state(getattr(session, "_state", None))
         response = session.exchange(

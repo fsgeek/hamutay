@@ -106,3 +106,108 @@ def test_run_next_event_extra_notes_none_is_unchanged_and_producer_appends(house
     st.append(build_inbound_event(purpose="p2", sender="tony"))
     run_next_event(Session(), st, now=T0, extra_notes=note_producer(cfg, "fable", st, on_error=lambda s: None))
     assert seen[-1]["operational_notes"][-1].startswith("plaza: 1 message(s)")
+
+
+def test_the_note_does_not_read_the_store_a_second_time(house):
+    """I3: run_next_event already reads the store's records two statements before it
+    calls extra_notes; the note used to call store.read_records() again -- an
+    unbounded, blocking flock -- on a path whose whole contract is that it never
+    costs the wake anything. The producer now receives those records."""
+    root, cfg, binding = house
+    st = EventStore(cfg.members["fable"].events)
+    send(cfg, actor="door:qwen", via="tool", to="plaza", text="p", now=T0,
+         wake=_wake("11111111-1111-4111-8111-111111111111"))
+
+    reads = []
+
+    class CountingStore:
+        def __init__(self, inner):
+            self._inner = inner
+
+        def read_records(self):
+            reads.append(1)
+            return self._inner.read_records()
+
+        def __getattr__(self, name):
+            return getattr(self._inner, name)
+
+    produce = note_producer(cfg, "fable", CountingStore(st), on_error=lambda s: None)
+    notes = produce(build_inbound_event(purpose="p", sender="tony"), st.read_records())
+    assert notes and notes[0].startswith("plaza: 1 message(s)")
+    assert reads == [], "the note read the store again instead of using the records it was given"
+
+
+def test_a_held_store_lock_does_not_stall_the_wake_and_yields_no_note(house):
+    """I3, the behaviour that matters: a store lock held by someone else must not
+    stall the note. With the records passed through there is no second acquisition
+    at all, so the note is produced promptly whatever the lock is doing."""
+    import threading
+    import time
+
+    root, cfg, binding = house
+    st = EventStore(cfg.members["fable"].events)
+    send(cfg, actor="door:qwen", via="tool", to="plaza", text="p", now=T0,
+         wake=_wake("11111111-1111-4111-8111-111111111111"))
+    records = st.read_records()          # what run_next_event holds when it calls the producer
+
+    held = threading.Event()
+    release = threading.Event()
+
+    def hold_the_store_lock():
+        with EventStore(cfg.members["fable"].events)._locked():
+            held.set()
+            release.wait(30)
+
+    t = threading.Thread(target=hold_the_store_lock, daemon=True)
+    t.start()
+    assert held.wait(10)
+    result = {}
+
+    def produce_the_note():
+        try:
+            fn = note_producer(cfg, "fable", st, on_error=lambda s: None)
+            result["notes"] = fn(build_inbound_event(purpose="p", sender="tony"), records)
+        except Exception as e:                                    # pragma: no cover
+            result["error"] = e
+
+    started = time.monotonic()
+    w = threading.Thread(target=produce_the_note, daemon=True)
+    w.start()
+    w.join(10)
+    elapsed = time.monotonic() - started
+    release.set(); t.join(10)
+
+    assert not w.is_alive(), "the note blocked on the held store lock"
+    assert elapsed < 5, f"the note took {elapsed:.1f}s while the store lock was held"
+    assert result.get("notes"), result
+    assert result["notes"][0].startswith("plaza: 1 message(s)")
+
+
+def test_run_next_event_passes_its_records_to_extra_notes(house):
+    """The wiring end to end: the real run_next_event calls the real producer, and the
+    note reaches the envelope, with no second store read."""
+    root, cfg, binding = house
+    st = EventStore(cfg.members["fable"].events)
+    send(cfg, actor="door:qwen", via="tool", to="plaza", text="p", now=T0,
+         wake=_wake("11111111-1111-4111-8111-111111111111"))
+    seen = []
+
+    class Session:
+        _prior_states = [(1, uuid.uuid4(), {}, iso(T0))]
+        _bridge = None
+        _state = {}
+        cycle = 1
+
+        def exchange(self, envelope, **kw):
+            seen.append(json.loads(envelope)); return "ok"
+
+    got = []
+
+    def extra(event, records):
+        got.append((event["event_id"], len(records)))
+        return ["x"]
+
+    st.append(build_inbound_event(purpose="p", sender="tony"))
+    run_next_event(Session(), st, now=T0, extra_notes=extra)
+    assert len(got) == 1 and got[0][1] > 0          # the records run_next_event had read
+    assert seen[-1]["operational_notes"][-1] == "x"

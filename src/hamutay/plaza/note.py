@@ -60,9 +60,19 @@ def plaza_note(cfg: MembersConfig, door: str, store_records: list[dict],
 
 
 def note_producer(cfg: MembersConfig, door: str, store, on_error: Callable[[str], None]):
-    def produce(event: dict) -> list[str]:
+    """An `extra_notes` callable: (event, store_records) -> notes.
+
+    `store_records` are the ones run_next_event has already read for this wake.
+    The note used to call `store.read_records()` itself, which is EventStore's
+    unbounded blocking flock -- a contended store lock could then stall the wake
+    for an unbounded time on a path whose whole contract is that the note never
+    costs the wake anything (Invariant 11 bounds every acquisition). Taking the
+    records it was handed removes the second acquisition rather than bounding it.
+    `store` is retained only so callers keep one shape; nothing reads it here.
+    """
+    def produce(event: dict, store_records: list[dict]) -> list[str]:
         try:
-            return plaza_note(cfg, door, store.read_records(), on_error=on_error)
+            return plaza_note(cfg, door, store_records, on_error=on_error)
         except Exception as e:  # the note must never take a wake down
             on_error(f"plaza note: {type(e).__name__}: {e}; no note this wake"); return []
     return produce

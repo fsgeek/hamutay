@@ -906,7 +906,9 @@ def _run_pending_for(binding, store, on_error):
     An unbound loop, or a bound one whose members lack the `plaza` key, runs
     `run_pending_events` itself untouched. A plaza-set binding gets the same
     function with `extra_notes` bound to this door's note producer, so every
-    wake sees what appeared on the plaza since its last wake began.
+    wake sees what appeared on the plaza since its last wake began. The producer
+    is called `(event, store_records)` with the records run_next_event has already
+    read, so the note never takes a second lock on this door's own store.
     """
     if binding is None or binding.members.plaza is None:
         return run_pending_events
