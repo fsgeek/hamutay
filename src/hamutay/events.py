@@ -593,8 +593,26 @@ class EventStore:
             return True
 
     def _append_unlocked(self, record: dict) -> None:
+        self._write_lines_unlocked([json.dumps(record, default=str) + "\n"])
+
+    def _write_lines_unlocked(self, lines: list[str]) -> None:
+        """One buffer: write, flush, fsync, verify growth.
+
+        Non-interleaved and indivisible under process kill; NOT guaranteed
+        indivisible under power loss. Boot recovery covers the residue.
+        """
+        data = "".join(lines)
+        expected = len(data.encode())
+        before = self.path.stat().st_size if self.path.exists() else 0
         with self.path.open("a") as f:
-            f.write(json.dumps(record, default=str) + "\n")
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        after = self.path.stat().st_size
+        if after - before != expected:
+            raise OSError(
+                f"short write to {self.path}: expected +{expected}, got +{after - before}"
+            )
 
     def _read_records_unlocked(self) -> list[dict]:
         if not self.path.exists():
@@ -623,12 +641,9 @@ class EventStore:
         """
         if not records:
             return
-        payload = "".join(
-            json.dumps(record, default=str) + "\n" for record in records
-        )
+        lines = [json.dumps(record, default=str) + "\n" for record in records]
         with self._locked():
-            with self.path.open("a") as f:
-                f.write(payload)
+            self._write_lines_unlocked(lines)
 
     def read_records(self) -> list[dict]:
         with self._locked():
@@ -937,6 +952,83 @@ class EventStore:
             record["admission"] = admission
         self.append(record)
         return record
+
+    def has_compact_retry(self, event_id: str) -> bool:
+        """True once this event has already been re-pended for a compact run."""
+        return self._has_compact_retry_in(self.read_records(), event_id)
+
+    @staticmethod
+    def _has_compact_retry_in(records: list[dict], event_id: str) -> bool:
+        return any(
+            record.get("record_type") == "event_status"
+            and record.get("event_id") == event_id
+            and (record.get("detail") or {}).get("compact_context")
+            for record in records
+        )
+
+    def append_failed_with_retry(
+        self,
+        *,
+        event: dict,
+        run_id: str,
+        exc: Exception,
+        reason: str,
+        context_results: list[dict] | None = None,
+        admission: dict | None = None,
+    ) -> tuple[dict, dict | None]:
+        """Fail this run and re-pend the event once, compacted (spec §6).
+
+        The `failed` row and the compact pending copy are written as one
+        buffer under one lock, so a reader never sees the failure without
+        its retry. A second window failure on the compact run finds the
+        compact row already there and is terminal: only `failed` is written.
+        """
+        failed = {
+            "record_type": "event_status",
+            "event_id": event["event_id"],
+            "event_type": event.get("event_type", EVENT_TYPE_REFLECTION),
+            "status": "failed",
+            "run_id": run_id,
+            "failed_at": utc_now_iso(),
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        }
+        if context_results is not None:
+            failed["context_results"] = context_results
+        if admission is not None:
+            failed["admission"] = admission
+        with self._locked():
+            records = self._read_records_unlocked()
+            if self._has_compact_retry_in(records, event["event_id"]):
+                self._append_unlocked(failed)
+                return failed, None
+            retry = {
+                key: value
+                for key, value in event.items()
+                if key not in (
+                    "status",
+                    "run_id",
+                    "started_at",
+                    "recovered_by",
+                    "recovered_at",
+                    "recovered_from_run_id",
+                )
+            }
+            retry.update({
+                "status": "pending",
+                "created_at": utc_now_iso(),
+                "detail": {
+                    **(event.get("detail") or {}),
+                    "compact_context": True,
+                    "retry_of_run": run_id,
+                    "reason": reason,
+                },
+            })
+            self._write_lines_unlocked([
+                json.dumps(failed, default=str) + "\n",
+                json.dumps(retry, default=str) + "\n",
+            ])
+        return failed, retry
 
     def append_expired(self, event: dict) -> dict:
         record = {
@@ -2336,13 +2428,39 @@ def run_next_event(
                 completed["policy_disposition"] = policy_disposition
         return completed
     except Exception as e:
-        store.append_failed(
-            event=event,
-            run_id=run_id,
-            exc=e,
-            context_results=context_results,
-            admission=getattr(session, "_last_admission", None),
-        )
+        from hamutay.window import WindowFailure
+
+        policy = getattr(session, "context_policy", None)
+        admission = getattr(session, "_last_admission", None)
+        if (
+            isinstance(e, WindowFailure)
+            and policy is not None
+            and policy.window_aware
+            and not store.has_compact_retry(event["event_id"])
+        ):
+            # One deliberate retry: the same event re-pended with a compact
+            # envelope. A second window failure on that run is terminal.
+            reason = {
+                "CountUnavailable": "count_unavailable",
+                "ExhaustedBeforeRequest": "exhausted_before_request",
+                "TruncatedReply": "truncated_reply",
+            }.get(type(e).__name__, "window_failure")
+            store.append_failed_with_retry(
+                event=event,
+                run_id=run_id,
+                exc=e,
+                reason=reason,
+                context_results=context_results,
+                admission=admission,
+            )
+        else:
+            store.append_failed(
+                event=event,
+                run_id=run_id,
+                exc=e,
+                context_results=context_results,
+                admission=admission,
+            )
         raise
 
 

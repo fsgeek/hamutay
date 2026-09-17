@@ -2471,3 +2471,98 @@ def test_build_event_envelope_projects_without_mutating_and_records_keep_full_re
                                  response_text="ok", context_results=results, admission={"passes": 2})
     assert rec["context_results"][0]["result"]["content"]["_activity_log"][0]["parameters"] == {"p": 1}
     assert rec["admission"] == {"passes": 2}
+
+
+def test_append_unlocked_fsyncs_and_verifies_growth(tmp_path, monkeypatch):
+    import os
+    store = EventStore(tmp_path / "events.jsonl")
+    synced = []
+    monkeypatch.setattr(os, "fsync", lambda fd: synced.append(fd))
+    store.append(_event_record())
+    assert synced
+    real_write = open  # a short write: patch the file object's write to write half
+    class Short:
+        def __init__(self, f): self.f = f
+        def write(self, s): return self.f.write(s[: len(s) // 2])
+        def flush(self): return self.f.flush()
+        def fileno(self): return self.f.fileno()
+        def __enter__(self): return self
+        def __exit__(self, *a): return self.f.__exit__(*a)
+    monkeypatch.setattr(Path, "open", lambda self, mode="r", **k: Short(real_write(self, mode, **k)) if "a" in mode else real_write(self, mode, **k))
+    with pytest.raises(OSError):
+        store.append(_event_record())
+
+
+def test_append_failed_with_retry_writes_two_rows_once(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    ev = _event_record(); store.append(ev)
+    _, running = store.claim_next_pending()
+    failed, retry = store.append_failed_with_retry(event=ev, run_id=running["run_id"], exc=RuntimeError("cut"),
+                                                   reason="truncated_reply")
+    rows = store.read_records()
+    assert [r["status"] for r in rows] == ["pending", "running", "failed", "pending"]
+    assert retry["detail"] == {"compact_context": True, "retry_of_run": running["run_id"], "reason": "truncated_reply"}
+    assert retry["event_id"] == ev["event_id"] and retry["purpose"] == ev["purpose"] and retry["created_at"] != ev["created_at"]
+    assert store.has_compact_retry(ev["event_id"])
+    _, running2 = store.claim_next_pending()
+    failed2, retry2 = store.append_failed_with_retry(event=retry, run_id=running2["run_id"], exc=RuntimeError("cut"),
+                                                     reason="truncated_reply")
+    assert retry2 is None and [r["status"] for r in store.read_records()][-2:] == ["running", "failed"]
+
+
+def test_a_failed_row_without_its_retry_reads_as_terminal(tmp_path):
+    store = EventStore(tmp_path / "events.jsonl")
+    ev = _event_record(); store.append(ev)
+    _, running = store.claim_next_pending()
+    store.append_failed(event=ev, run_id=running["run_id"], exc=RuntimeError("x"))
+    assert store.claim_next_pending() is None and not store.has_compact_retry(ev["event_id"])
+
+
+def test_run_next_event_retries_a_window_failure_once(tmp_path, monkeypatch):
+    from hamutay.context_policy import ContextPolicy
+    from hamutay.events import run_next_event
+    from hamutay.window import ExhaustedBeforeRequest
+    store = EventStore(tmp_path / "events.jsonl"); store.append(_event_record())
+    calls = []
+
+    class S:
+        _prior_states = []; _bridge = None; _state = {}; cycle = 1; _last_admission = None
+        context_policy = ContextPolicy(65536, "discovered", 65536, "http://127.0.0.1:8081", "probed", {}, 20)
+        def exchange(self, msg, **kw):
+            calls.append(kw.get("compact"))
+            raise ExhaustedBeforeRequest(prompt_tokens=65000, limit=65536, room=535, max_tokens=535)
+    with pytest.raises(ExhaustedBeforeRequest):
+        run_next_event(S(), store)
+    assert [r["status"] for r in store.read_records()] == ["pending", "running", "failed", "pending"]
+    with pytest.raises(ExhaustedBeforeRequest):
+        run_next_event(S(), store)
+    assert calls == [False, True] and [r["status"] for r in store.read_records()][-1] == "failed"
+    assert store.claim_next_pending() is None
+
+
+def test_run_next_event_does_not_retry_without_a_window(tmp_path):
+    from hamutay.context_policy import ContextPolicy
+    from hamutay.events import run_next_event
+    from hamutay.window import TruncatedReply, WakeAccount
+    store = EventStore(tmp_path / "events.jsonl"); store.append(_event_record())
+
+    class S:
+        _prior_states = []; _bridge = None; _state = {}; cycle = 1; _last_admission = None
+        context_policy = ContextPolicy.none()
+        def exchange(self, msg, **kw):
+            raise TruncatedReply(text="t", message={}, turn_index=0, prompt_tokens=1, completion_tokens=1, account=WakeAccount())
+    with pytest.raises(TruncatedReply):
+        run_next_event(S(), store)
+    assert [r["status"] for r in store.read_records()] == ["pending", "running", "failed"]
+
+
+def test_boot_recovery_of_a_crashed_compact_run_stays_compact(tmp_path):
+    from hamutay.heartbeat import recover_orphaned_running
+    store = EventStore(tmp_path / "events.jsonl")
+    ev = _event_record(); store.append(ev)
+    _, running = store.claim_next_pending()
+    _, retry = store.append_failed_with_retry(event=ev, run_id=running["run_id"], exc=RuntimeError("x"), reason="count_unavailable")
+    store.claim_next_pending()                      # the compact run starts, then the process dies
+    recovered = recover_orphaned_running(store)
+    assert len(recovered) == 1 and recovered[0]["detail"]["compact_context"] is True
+    assert recovered[0]["recovered_from_run_id"] == store.read_records()[-2]["run_id"]
