@@ -58,17 +58,29 @@ done
 names=("${doors[@]#community/}")
 
 # The assembly ledger is shared by every door and written under one flock;
-# snapshot it under that lock so the digest is of a coherent byte range.
+# the plaza record is a second, independent ledger under its own flock.
+# Each is snapshotted under its own lock, in its own scope, and the two
+# locks are never held together (Invariant 11) -- the assembly scope closes
+# before the plaza scope opens. Both digests land on one CHECKPOINTS.txt
+# line as two individually coherent snapshots, never one cross-ledger instant.
 plaza_ledger="community/plaza/assembly.jsonl"
-plaza_lock="community/plaza/assembly.jsonl.lock"
-if [ -f "$plaza_ledger" ]; then
-  plaza_snap="$snapdir/assembly.jsonl"
-  flock "$plaza_lock" cp "$plaza_ledger" "$plaza_snap"
-  plaza_digest=$(sha256sum "$plaza_snap" | cut -d' ' -f1)
-  plaza_bytes=$(stat -c%s "$plaza_snap")
-  echo "$stamp assembly.jsonl:$plaza_digest:$plaza_bytes" >> community/plaza/CHECKPOINTS.txt
-  ledgers+=("community/plaza/CHECKPOINTS.txt")
-  names+=("plaza")
+plaza_log="community/plaza/plaza.jsonl"
+if [ -f "$plaza_ledger" ] || [ -f "$plaza_log" ]; then
+  line="$stamp"
+  if [ -f "$plaza_ledger" ]; then
+    plaza_lock="community/plaza/assembly.jsonl.lock"
+    snap="$snapdir/assembly.jsonl"
+    flock "$plaza_lock" cp "$plaza_ledger" "$snap"            # scope 1: the assembly lock, released here
+    line+=" assembly.jsonl:$(sha256sum "$snap" | cut -d' ' -f1):$(stat -c%s "$snap")"
+  fi
+  if [ -f "$plaza_log" ]; then
+    plaza_log_lock="community/plaza/plaza.jsonl.lock"
+    snap="$snapdir/plaza.jsonl"
+    flock "$plaza_log_lock" cp "$plaza_log" "$snap"           # scope 2: the plaza lock, on its own
+    line+=" plaza.jsonl:$(sha256sum "$snap" | cut -d' ' -f1):$(stat -c%s "$snap")"
+  fi
+  echo "$line" >> community/plaza/CHECKPOINTS.txt
+  ledgers+=("community/plaza/CHECKPOINTS.txt"); names+=("plaza")
 fi
 
 # The GPU lease's ledger lives outside community/<door>/ (it is a shared
