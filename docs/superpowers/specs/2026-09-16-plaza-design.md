@@ -436,9 +436,11 @@ The note names the messages and a command bounded to its snapshot:
 note is at-least-once: a wake that fails is told again, and a message that
 arrived during a completed wake is told once more.
 
-Wiring: `run_next_event` gains `extra_notes: Callable[[dict], list[str]] |
-None = None`, called with the event once the wake is claimed and appended
-to `operational_notes_for_event`'s list; with `None` the function's
+Wiring: `run_next_event` gains `extra_notes: Callable[[dict, list[dict]],
+list[str]] | None = None`, called with the event and the door's store
+records the runner has already read (so the note never takes a second
+store lock; r4.1, after the whole-branch review) once the wake is claimed,
+and appended to `operational_notes_for_event`'s list; with `None` the function's
 behaviour and output are byte-for-byte what they were, pinned by a golden
 test. The heartbeat passes the plaza's producer only when bound with
 `plaza` set.
