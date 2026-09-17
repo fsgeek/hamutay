@@ -1,6 +1,6 @@
 # Window-aware wakes on a local door
 
-Date: 2026-09-17. Author: the custodian session. Status: revision 6.2 (three lines corrected during implementation, see §1 and §2), after
+Date: 2026-09-17. Author: the custodian session. Status: revision 6.3 (five lines corrected during implementation, see §1 and §2), after
 Codex rounds five and six (`-review-5.md`: 1 Blocking, 2 Significant on
 revision 5; `-review-6.md` found that the revision-6 commit had carried no
 design text, so this is that text; rounds one to four had 4/5/2, 5/4/1,
@@ -353,16 +353,19 @@ finding 35): **after any change to the tool set, rebuild, recount, then
 assert and send**; a request is never sent with a count taken before a
 tool was withdrawn. That applies at turn 0 (the soft-threshold check
 withdraws perception, the payload is rebuilt without those tools and
-recounted before the first send) and inside the loop. The runner passes the session an `envelope: Callable[[int
+recounted before the first send) and inside the loop. The runner passes the session a `render_envelope: Callable[[int
 | None], str]`, a closure over the **immutable full** `context_results`
 that returns the envelope built at a given cap (the runner still records
-the full results). At the prepared-wake boundary the session calls
+the full results; the keyword is `render_envelope`, not `envelope`, because
+existing `exchange()` doubles take `envelope` positionally; r6.3). At the prepared-wake boundary the session calls
 `prepare` with `envelope(cap)` as the user message; if `prompt_tokens`
 exceeds `ADMISSION_TARGET_FRACTION = 0.5` of the limit it halves the cap
 and calls `prepare` again, at most `ADMISSION_MAX_PASSES = 8` times,
-stopping when under the target or when every result is a metadata-only
-stub, and then calls `call_prepared` with the last `Prepared`, so the
-request sent is the request counted. Each pass logs `budget_pressure /
+stopping when under the target, when every result is a metadata-only
+stub, or at the pass bound (on a 65,536 window the bound arrives first:
+eight halvings from 32,768 chars reach `MIN_STUB_CHARS`, not 0; r6.3), and
+then calls `call_prepared` with the last `Prepared`, so the request sent
+is the request counted. Each pass logs `budget_pressure /
 envelope_admission` with the cap and the count. The final rendered
 envelope string, not the closure, is what the wake record stores as
 `user_message`. The outcome is recorded as a new `admission` field
