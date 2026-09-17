@@ -6,7 +6,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 
-from hamutay.assembly.ledger import LedgerMalformed, parse_instant
+from hamutay.assembly.ledger import LedgerMalformed, iso, parse_instant
 
 from .ids import HUMANS, canonical_to, delivery_event_id, door_name, is_door, resident_key
 
@@ -39,6 +39,36 @@ def build_delivery(*, message: dict, state: str, landed_at: str | None, detail: 
     d = message["delivery"]
     return {"record_type": "delivery", "message_id": message["message_id"], "door": d["door"],
             "event_id": d["event_id"], "state": state, "landed_at": landed_at, "detail": detail}
+
+
+def append_validated(ledger, records: list[dict], line_numbers: list[int], record: dict) -> dict:
+    """Append `record` under the caller's already-held lock, validator first.
+
+    Spec §2: the validator is "run by every reader before reduction and by every
+    writer before append (on the records it read plus the one it is about to
+    write, at the line it will occupy)". Every plaza append goes through here --
+    the message record and all four delivery records -- so a writer output the
+    validator would reject is refused by the writer rather than discovered by a
+    later reader, at which point every send and every pass refuses until a human
+    repairs the file by hand.
+
+    `records`/`line_numbers` are what the caller read under this same lock, and
+    must be the caller's own lists: `ledger.line_numbers` is rebuilt by each
+    append_unlocked's own read and cannot carry state across two appends. On a
+    successful append both are extended in place with the stamped record and its
+    line, so a second append in the same lock scope validates against what the
+    first one wrote (a delivery record is only well-formed beside its message).
+
+    Raises LedgerMalformed without writing; returns the stamped record on success.
+    """
+    next_line = (line_numbers[-1] if line_numbers else 0) + 1
+    created_at = record.get("created_at") or iso(datetime.now(timezone.utc))
+    candidate = {**record, "seq": next_line, "created_at": created_at}
+    validate_plaza(records + [candidate], list(line_numbers) + [next_line])
+    written = ledger.append_unlocked(candidate)
+    records.append(written)
+    line_numbers.append(written["seq"])
+    return written
 
 
 def _bad(msg: str) -> LedgerMalformed:

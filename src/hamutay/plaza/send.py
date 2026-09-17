@@ -12,7 +12,8 @@ from hamutay.events import StoreUnavailable
 from . import store as _store
 from .event import inbound_event_for
 from .ids import HUMANS, PLAZA_LOCK_WINDOW_S, canonical_to, cli_key, door_name, is_door, resident_key
-from .records import MAX_TEXT_CHARS, SEND_CAP, build_delivery, build_message, reduce, validate_plaza
+from .records import (MAX_TEXT_CHARS, SEND_CAP, append_validated, build_delivery, build_message,
+                      reduce, validate_plaza)
 
 
 class SendRefused(RuntimeError):
@@ -54,7 +55,11 @@ def send(cfg: MembersConfig, *, actor: str, via: str, to: str, text: str, now: d
     ledger = Ledger(cfg.plaza)
     with ledger.try_locked(PLAZA_LOCK_WINDOW_S):
         records = ledger.read_unlocked()
-        validate_plaza(records, ledger.line_numbers)
+        # ledger.line_numbers is rebuilt by each append_unlocked's own read, so
+        # this scope keeps its own copy for the "records read plus the one about
+        # to be written" the validator needs (see records.append_validated).
+        lines = list(ledger.line_numbers)
+        validate_plaza(records, lines)
         view = reduce(records)
         prior = view.by_key.get(idem)
         if prior is not None:
@@ -76,20 +81,20 @@ def send(cfg: MembersConfig, *, actor: str, via: str, to: str, text: str, now: d
                         "members_digest": cfg.digest}
         msg = build_message(actor=actor, via=via, to=to, text=text, sent_at=sent_at, idempotency_key=idem,
                             delivery=delivery, wake=wake)
-        next_line = (ledger.line_numbers[-1] if ledger.line_numbers else 0) + 1
-        validate_plaza(records + [{**msg, "seq": next_line, "created_at": sent_at}], ledger.line_numbers + [next_line])
-        msg = ledger.append_unlocked(msg)
+        msg = append_validated(ledger, records, lines, {**msg, "created_at": sent_at})
         out = {"sent": True, "message_id": msg["message_id"], "seq": msg["seq"], "to": to, "delivery": "post"}
         if delivery is None:
             return out
         path = Path(msg["delivery"]["events_path"])
         try:
             land(path, inbound_event_for(msg))
-            ledger.append_unlocked(build_delivery(message=msg, state="landed", landed_at=iso(now), detail=None))
+            append_validated(ledger, records, lines,
+                             build_delivery(message=msg, state="landed", landed_at=iso(now), detail=None))
             out["delivery"] = "landed"
         except StoreUnavailable as e:
-            ledger.append_unlocked(build_delivery(message=msg, state="store_unreadable", landed_at=None,
-                                                  detail={"error": str(e)}))
+            append_validated(ledger, records, lines,
+                             build_delivery(message=msg, state="store_unreadable", landed_at=None,
+                                            detail={"error": str(e)}))
             out["delivery"] = "pending"
         q = quiet(path) if out["delivery"] == "landed" else None
         if q:

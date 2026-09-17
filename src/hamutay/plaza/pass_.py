@@ -13,7 +13,7 @@ from hamutay.events import StoreUnavailable
 from . import store as _store
 from .event import inbound_event_for
 from .ids import PLAZA_LOCK_WINDOW_S, STORE_LOCK_WINDOW_S
-from .records import build_delivery, reduce, validate_plaza
+from .records import append_validated, build_delivery, reduce, validate_plaza
 
 PASS_UNITS = 4
 PASS_BUDGET_S = 6.0
@@ -47,7 +47,8 @@ def run_plaza_pass(binding: AssemblyBinding, *, now: datetime, memo: PlazaMemo |
         try:
             with ledger.try_locked(PLAZA_LOCK_WINDOW_S):
                 records = ledger.read_unlocked()
-                validate_plaza(records, ledger.line_numbers)
+                lines = list(ledger.line_numbers)   # append_unlocked rebuilds the ledger's own
+                validate_plaza(records, lines)
                 view = reduce(records)
                 pending = view.undelivered()
                 remaining_after = len(pending)
@@ -63,13 +64,15 @@ def run_plaza_pass(binding: AssemblyBinding, *, now: datetime, memo: PlazaMemo |
                 truth = view.delivery_truth(target["message_id"])
                 try:
                     land(Path(target["delivery"]["events_path"]), inbound_event_for(target), timeout_s=STORE_LOCK_WINDOW_S)
-                    ledger.append_unlocked(build_delivery(message=target, state="landed", landed_at=iso(now), detail=None))
+                    append_validated(ledger, records, lines,
+                                     build_delivery(message=target, state="landed", landed_at=iso(now), detail=None))
                     landed.append(target["message_id"]); remaining_after -= 1
                 except StoreUnavailable as e:   # store.land normalises OSError/LeaseGateRequired (M6)
                     err = str(e)
                     if not (truth["state"] == "store_unreadable" and (truth.get("detail") or {}).get("error") == err):
-                        ledger.append_unlocked(build_delivery(message=target, state="store_unreadable",
-                                                              landed_at=None, detail={"error": err}))
+                        append_validated(ledger, records, lines,
+                                         build_delivery(message=target, state="store_unreadable",
+                                                        landed_at=None, detail={"error": err}))
                     unreadable.append(target["message_id"])
         except LedgerUnavailable:
             # The cursor units already completed in this pass advanced, and the

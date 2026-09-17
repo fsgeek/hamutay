@@ -212,3 +212,48 @@ def test_the_two_lock_windows_are_defined_once_and_imported(tmp_path):
             if isinstance(node, ast.Assign):
                 for t in node.targets:
                     assert getattr(t, "id", None) not in ("PLAZA_LOCK_WINDOW_S", "STORE_LOCK_WINDOW_S"), py.name
+
+
+def test_append_validated_refuses_a_malformed_delivery_before_it_is_appended(house):
+    """I2: spec §2 runs the validator 'by every writer before append (on the records
+    it read plus the one it is about to write, at the line it will occupy)'. A
+    delivery record is a writer output too: if build_delivery ever produced a
+    malformed line, the writer -- not a later reader -- must be the one to refuse."""
+    from hamutay.assembly.ledger import Ledger, LedgerMalformed
+    from hamutay.plaza.records import append_validated
+    from hamutay.plaza.send import send
+
+    root, cfg, binding = house
+    send(cfg, actor="door:qwen", via="tool", to="elder", text="m", now=T0,
+         wake=_wake("11111111-1111-4111-8111-111111111111"))
+    led = Ledger(cfg.plaza)
+    with led.try_locked(2.0):
+        records = led.read_unlocked()
+        before = len(records)
+        good = dict(records[-1])                      # the landed delivery just written
+        bad = {k: v for k, v in good.items() if k not in ("seq", "created_at")}
+        bad["state"] = "vanished"                     # not landed, not store_unreadable
+        with pytest.raises(LedgerMalformed):
+            append_validated(led, records, led.line_numbers, bad)
+    assert len(Ledger(cfg.plaza).read()) == before     # nothing reached the file
+
+
+def test_append_validated_appends_and_returns_the_stamped_record(house):
+    from hamutay.assembly.ledger import Ledger
+    from hamutay.plaza.records import append_validated
+    from hamutay.plaza.send import send
+
+    root, cfg, binding = house
+    send(cfg, actor="door:qwen", via="tool", to="plaza", text="p", now=T0,
+         wake=_wake("11111111-1111-4111-8111-111111111111"))
+    led = Ledger(cfg.plaza)
+    with led.try_locked(2.0):
+        records = led.read_unlocked()
+        msg = build_message(actor="door:elder", via="tool", to="plaza", text="q",
+                            sent_at=iso(T0), idempotency_key=resident_key(
+                                "22222222-1111-4111-8111-111111111111", "plaza", "q"),
+                            delivery=None,
+                            wake=_wake("22222222-1111-4111-8111-111111111111"))
+        out = append_validated(led, records, led.line_numbers, msg)
+    assert out["seq"] == 2 and out["record_type"] == "message"
+    assert len(Ledger(cfg.plaza).read()) == 2
