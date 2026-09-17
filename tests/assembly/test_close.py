@@ -377,3 +377,133 @@ def test_four_processes_close_once(house):
         evs = [r for r in EventStore(cfg.members[d].events).read_records() if r.get("record_type") != "event_status"]
         ids = [r["event_id"] for r in evs if r.get("event_id")]
         assert len(ids) == len(set(ids)), f"{d}: duplicate store events {ids}"
+
+
+def _compact_retry(store, event, run_id):
+    """A window failure on `run_id`: the `failed` row plus its compact pending copy."""
+    return store.append_failed_with_retry(event=event, run_id=run_id, exc=RuntimeError("cut"),
+                                          reason="truncated_reply")[1]
+
+
+def test_a_compact_pending_row_does_not_hide_the_failed_first_attempts_position(house):
+    """§6: the first attempt recorded a position and then failed with a window failure.
+    The compact retry makes the event's *latest* status `pending`, but the position's own
+    run is `failed` — the cap must stand."""
+    root, led, cfg, q, bindings = house
+    _wake_and_position(led, cfg, bindings, q, "a", "assent", at=T0 + timedelta(days=1))
+    _wake_and_position(led, cfg, bindings, q, "b", "assent", at=T0 + timedelta(days=1))
+    pos, ctx, store = _wake_and_position(led, cfg, bindings, q, "c", "assent",
+                                         at=T0 + timedelta(days=1), complete=False)
+    retry = _compact_retry(store, ctx.event, ctx.run_id)
+    assert retry["detail"]["compact_context"] is True and retry["detail"]["retry_of_run"] == ctx.run_id
+    with led.locked():
+        v = reduce(led.read_unlocked())
+        c = try_close(led, v, v.questions[q["question_id"]], now=CLOSE + timedelta(seconds=1), actor="x")
+    assert c["tally"]["position_from_failed_wake"] == ["c"]
+    assert c["tally"]["cap"].startswith("cap:position_from_failed_wake")
+    cpos = [p for p in c["positions"] if p["record"]["member"] == "door:c"]
+    assert len(cpos) == 1 and cpos[0]["eligible"] is None and cpos[0]["reason"] == "wake_failed"
+
+
+def test_a_compact_retry_running_at_the_cutoff_waits_then_caps_as_running(house):
+    """The compact run itself is claimed just before the deadline: it is a live run and
+    holds the close open through the grace window, then caps as running_at_cutoff."""
+    root, led, cfg, q, bindings = house
+    _wake_and_position(led, cfg, bindings, q, "a", "assent", at=T0 + timedelta(days=1))
+    _wake_and_position(led, cfg, bindings, q, "b", "assent", at=T0 + timedelta(days=1))
+    store = EventStore(cfg.members["c"].events)
+    ev, running = store.claim_next_pending(now=T0 + timedelta(days=1))
+    _compact_retry(store, ev, running["run_id"])
+    store.claim_next_pending(now=CLOSE - timedelta(minutes=5))       # the compact run starts
+    with led.locked():
+        v = reduce(led.read_unlocked())
+        assert try_close(led, v, v.questions[q["question_id"]], now=CLOSE + timedelta(minutes=30), actor="x") is None
+    with led.locked():
+        v = reduce(led.read_unlocked())
+        c = try_close(led, v, v.questions[q["question_id"]], now=CLOSE + GRACE + timedelta(seconds=1), actor="x")
+    assert c["tally"]["running_at_cutoff"] == ["c"] and c["tally"]["cap"].startswith("cap:running_at_cutoff")
+
+
+def test_a_compact_completion_without_a_position_leaves_the_failed_wake_cap(house):
+    """The compact run completes but records no position. The first attempt's stance is
+    still unjoinable, so its cap stands: the compact completion does not absolve it."""
+    root, led, cfg, q, bindings = house
+    _wake_and_position(led, cfg, bindings, q, "a", "assent", at=T0 + timedelta(days=1))
+    _wake_and_position(led, cfg, bindings, q, "b", "assent", at=T0 + timedelta(days=1))
+    pos, ctx, store = _wake_and_position(led, cfg, bindings, q, "c", "dissent",
+                                         at=T0 + timedelta(days=1), complete=False)
+    retry = _compact_retry(store, ctx.event, ctx.run_id)
+    _, running2 = store.claim_next_pending(now=T0 + timedelta(days=1, minutes=1))
+    store.append_completed(event=retry, run_id=running2["run_id"], wake_cycle=2,
+                           result_record_id=uuid4(), response_text="quiet")
+    with led.locked():
+        v = reduce(led.read_unlocked())
+        c = try_close(led, v, v.questions[q["question_id"]], now=CLOSE + timedelta(seconds=1), actor="x")
+    assert c["tally"]["position_from_failed_wake"] == ["c"]
+    assert c["tally"]["cap"].startswith("cap:position_from_failed_wake")
+    assert c["tally"]["objections"] == []
+
+
+def test_a_compact_completion_with_a_replacement_position_replaces_the_failed_one(house):
+    """The compact run records its own position and completes with the joined record. That
+    position is the active one and no failed-wake cap is raised: the door spoke."""
+    root, led, cfg, q, bindings = house
+    _wake_and_position(led, cfg, bindings, q, "a", "assent", at=T0 + timedelta(days=1))
+    _wake_and_position(led, cfg, bindings, q, "b", "assent", at=T0 + timedelta(days=1))
+    pos, ctx, store = _wake_and_position(led, cfg, bindings, q, "c", "dissent",
+                                         at=T0 + timedelta(days=1), complete=False)
+    _compact_retry(store, ctx.event, ctx.run_id)
+    # the compact run: claim, take a replacement position, complete with its record id
+    pos2, ctx2, _ = _wake_and_position(led, cfg, bindings, q, "c", "assent",
+                                       at=T0 + timedelta(days=1, minutes=1))
+    assert ctx2.run_id != ctx.run_id
+    with led.locked():
+        v = reduce(led.read_unlocked())
+        c = try_close(led, v, v.questions[q["question_id"]], now=CLOSE + timedelta(seconds=1), actor="x")
+    assert c["tally"]["position_from_failed_wake"] == []
+    assert c["tally"]["active"]["c"] == pos2["position_id"]
+    assert c["tally"]["assents"] == ["a", "b", "c"] and c["outcome"] == "assented"
+    cfailed = [p for p in c["positions"]
+               if p["record"]["member"] == "door:c" and p["record"]["position_id"] == pos["position_id"]]
+    assert len(cfailed) == 1 and cfailed[0]["eligible"] is None and cfailed[0]["reason"] == "wake_failed"
+
+
+def test_a_recovered_orphan_run_is_superseded_and_not_running_at_cutoff(house):
+    """Boot recovery re-pends a `running` orphan. The dead run must not hold the question
+    open forever: it is superseded by the pending row that names it."""
+    from hamutay.heartbeat import recover_orphaned_running
+    root, led, cfg, q, bindings = house
+    _wake_and_position(led, cfg, bindings, q, "a", "assent", at=T0 + timedelta(days=1))
+    _wake_and_position(led, cfg, bindings, q, "b", "assent", at=T0 + timedelta(days=1))
+    store = EventStore(cfg.members["c"].events)
+    ev, running = store.claim_next_pending(now=T0 + timedelta(days=1))   # the wake starts, the process dies
+    recovered = recover_orphaned_running(store)                          # boot recovery re-pends it
+    assert len(recovered) == 1 and recovered[0]["recovered_from_run_id"] == running["run_id"]
+    _, running2 = store.claim_next_pending(now=T0 + timedelta(days=1, minutes=5))
+    store.append_completed(event=recovered[0], run_id=running2["run_id"], wake_cycle=2,
+                           result_record_id=uuid4(), response_text="ok")
+    with led.locked():
+        v = reduce(led.read_unlocked())
+        c = try_close(led, v, v.questions[q["question_id"]], now=CLOSE + timedelta(seconds=1), actor="x")
+    assert c is not None and c["tally"]["running_at_cutoff"] == []
+    assert c["outcome"] == "assented"
+
+
+def test_a_failed_wake_after_an_earlier_eligible_position_still_caps(house):
+    """The suppression is ordered, not merely present: a door that spoke, then spoke again
+    on a wake that failed, has a later stance nobody can read — the cap stands."""
+    root, led, cfg, q, bindings = house
+    _wake_and_position(led, cfg, bindings, q, "a", "assent", at=T0 + timedelta(days=1))
+    _wake_and_position(led, cfg, bindings, q, "b", "assent", at=T0 + timedelta(days=1))
+    first, _, store = _wake_and_position(led, cfg, bindings, q, "c", "assent", at=T0 + timedelta(days=1))
+    store.append(dict(q["delivery"]["c"], record_type="event_status", event_type="inbound_message",
+                      status="pending", created_at=iso(T0 + timedelta(days=2))))
+    pos2, ctx2, _ = _wake_and_position(led, cfg, bindings, q, "c", "dissent",
+                                       at=T0 + timedelta(days=2), complete=False)
+    store.append_failed(event=ctx2.event, run_id=ctx2.run_id, exc=RuntimeError("boom"))
+    with led.locked():
+        v = reduce(led.read_unlocked())
+        c = try_close(led, v, v.questions[q["question_id"]], now=CLOSE + timedelta(seconds=1), actor="x")
+    assert c["tally"]["active"]["c"] == first["position_id"]      # the older stance is the active one
+    assert c["tally"]["position_from_failed_wake"] == ["c"]       # but the newer one is unread
+    assert c["tally"]["cap"].startswith("cap:position_from_failed_wake")

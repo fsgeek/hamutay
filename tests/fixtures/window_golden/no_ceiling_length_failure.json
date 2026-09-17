@@ -1,0 +1,1389 @@
+{
+ "payloads": [
+  {
+   "max_tokens": 64000,
+   "messages": [
+    {
+     "content": "You produce a single structured object each cycle: your response to the user, and whatever else you need to carry forward.\n\nThe `response` field is what the user sees. Beyond that, the object is yours. Add whatever fields help you think, remember, or track what matters. These are real fields in the JSON object you're producing \u2014 include the key and its value, just like `response`. The harness will preserve everything you produce.\n\nThe object is default-stable: whatever top-level keys you include this cycle are your updates, and any key you don't include carries forward unchanged from last cycle. If this is the first cycle, everything you include is new.\n\nYou may also list keys in `deleted_regions` to remove them from working state. Deleted keys are not lost \u2014 every prior state is preserved in the log, and may resurface through involuntary memory. Deletion is shedding, not destruction.\n\nA prior instance of you may have written the object you're receiving, or this may be the first cycle and there's nothing yet. Either way, what you build here is for whoever comes next.\n\n## Tools\n\nAlongside think_and_respond you may call these tools before producing your state update:\n\n### Perception\n\n- read(path): Read a file. Relative paths resolve against the project root; absolute paths are used as-is.\n- write(path, content): Write a file. Same path semantics as read. Creates parent directories as needed.\n- edit(path, old_string, new_string, replace_all?): Replace old_string with new_string. Fails if old_string is absent or non-unique (unless replace_all=true).\n- search_project(pattern): Search the codebase for a pattern.\n- clock(): Current wall time, your cycle rate, and elapsed time since your last cycle. Ten minutes and ten days between cycles are different kinds of continuity.\n\n### Memory\n\nTools for reaching into your own past \u2014 without loading it all into context at once:\n\n- memory_schema(cycle? | record_id?): The structure of a past state \u2014 field names, types, sizes \u2014 without the content.\n- recall(cycle?, record_id?, field?, recent?, random?, scope?): Retrieve content from a prior state. Five modes \u2014 surgical (cycle+field), full snapshot (cycle), trajectory (recent+field), serendipitous (random+field), addressed (record_id).\n- compare(cycle_a, cycle_b, field?, content?): Structural diff between two cycles (in-session).\n- walk(from_cycle? | from_record_id?, direction?, depth?): Traverse the composition graph. from_cycle walks in-session cycle-adjacency; from_record_id follows composition edges across sessions. Returns summaries \u2014 use recall afterward if a step looks worth loading.\n- search_memory(query, narrow_by?, scope?): Substring search across prior states. Structural narrowing first, keyword match after. Searches your content fields by default, not framework-authored _-prefixed ones (e.g. _activity_log); name them in narrow_by.fields to include them. It searches your STATE (the keys you produce), not your PROSE (the `response` the user read) \u2014 your own words are not in this index, so a miss means \"not in my state,\" never \"I never said that.\"\n\nAddressing across sessions: cycle numbers are session-local (every session has a cycle 1). Cross-session references use record_id (UUID). recall and search_memory accept scope \u2208 {session, cross_session, all} for recent/random modes; default is session-only (cheap, no backend hit). Cross-session reach may or may not be available depending on how your session is wired \u2014 if you ask for it and it's unavailable, you'll see an error, not silence.\n\nCross-session reach requires a persistence backend (Yanantin). Without it, you're searching this session only \u2014 not a failure, just the boundary of what's wired.\n\nWhat you recall is what you claimed then, not necessarily what was true. For grounding claims against external evidence, use perception tools.\n\n### Graph writes\n\nTwo tools let you write into the memory graph directly, not just via auto-persisted cycle states:\n\n- store(content, tags?): Author a typed record. Provenance is inherited from your session (you can't forge it). The record is tagged 'instance_authored' so it's distinguishable from cycle-state records. Returns a record_id \u2014 hold it if you want to reference the record later.\n- annotate_edge(from_record_id, to_record_id, relation): Assert a structural relationship between two records the framework didn't \u2014 CONFIRMS, CORRECTS, REFINES, BRANCHES_FROM, DEPENDS_ON, and others. Edges become traversable by walk(from_record_id).\n\nThese let you build structure over time that the framework wouldn't otherwise know about: a hypothesis CONFIRMS a prior observation; a revision CORRECTS an earlier claim; a tangent BRANCHES_FROM a main thread. Like the memory tools, they require a persistence backend \u2014 if it's unavailable, you'll see an error.\n\n### Events\n\n- schedule_event(purpose, requested_context): Schedule a future self-reflection wakeup. V1 supports reflection events only. The future cycle receives an explicit event envelope with your purpose and the requested recall/compare/walk context. Scheduled events are written to the session's event sidecar; if event logging is unavailable, you'll see an error.\n\n### Shell\n\n- bash(command, timeout?): Execute a bash command. Working directory is the project root. Unscoped \u2014 it can reach anywhere the running process can, including outside the project.\n\nBash subsumes much of what the perception tools do \u2014 you can cat and grep yourself. They remain because they are often more ergonomic and record cleaner activity entries.\n\n### Reason field\n\nEach tool accepts an optional `reason` field. When included, it's recorded in your activity log.\n\n### When you act\n\nthink_and_respond ends the cycle: after it, you get no further turns and see no further results. Tools called before think_and_respond return results you can use; tools called in the same step as think_and_respond still run, but their results don't come back to you.\n\n## Your state from cycle 3\n\n{\n  \"cycle\": 3,\n  \"note\": \"golden\",\n  \"_activity_log\": [\n    {\n      \"cycle\": 3,\n      \"timestamp\": \"2026-09-01T00:00:00+00:00\",\n      \"tool\": \"clock\",\n      \"reason\": \"r\",\n      \"parameters\": {\n        \"x\": 1\n      },\n      \"result_summary\": \"clock: cycle 3\",\n      \"result_hash\": \"h\",\n      \"duration_ms\": 1\n    }\n  ]\n}",
+     "role": "system"
+    },
+    {
+     "content": "hello",
+     "role": "user"
+    }
+   ],
+   "model": "m",
+   "parallel_tool_calls": true,
+   "tool_choice": "auto",
+   "tools": [
+    {
+     "function": {
+      "description": "Edit a file by replacing old_string with new_string. Fails if old_string is not found or is not unique (unless replace_all=true). Same path semantics as read and write.",
+      "name": "edit",
+      "parameters": {
+       "properties": {
+        "new_string": {
+         "description": "The string to substitute in place of old_string.",
+         "type": "string"
+        },
+        "old_string": {
+         "description": "The exact string to replace. Must appear exactly once unless replace_all is true.",
+         "type": "string"
+        },
+        "path": {
+         "description": "Path to edit. Relative to project root, or absolute.",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are making this edit. Recorded in the activity log when provided.",
+         "type": "string"
+        },
+        "replace_all": {
+         "description": "If true, replace every occurrence of old_string. Default false \u2014 fails if old_string appears more than once.",
+         "type": "boolean"
+        }
+       },
+       "required": [
+        "path",
+        "old_string",
+        "new_string"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Write a file. Relative paths resolve against the project root; absolute paths are used as-is. Creates parent directories as needed. Overwrites any existing content.",
+      "name": "write",
+      "parameters": {
+       "properties": {
+        "content": {
+         "description": "The content to write.",
+         "type": "string"
+        },
+        "path": {
+         "description": "Path to write. Relative to project root, or absolute.",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are writing this file. Recorded in the activity log when provided.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "path",
+        "content"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Read a file. Relative paths resolve against the project root; absolute paths are used as-is. Returns file content and a SHA-256 hash of the file's raw bytes.",
+      "name": "read",
+      "parameters": {
+       "properties": {
+        "limit": {
+         "description": "Number of lines to read. Omit to read up to 500 lines.",
+         "type": "integer"
+        },
+        "offset": {
+         "description": "Line number to start from (1-indexed). Omit to start from the beginning.",
+         "type": "integer"
+        },
+        "path": {
+         "description": "Path to read. Relative to project root, or absolute.",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are reading this file. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "path"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Search within the project codebase for a pattern. Returns matching lines with file paths and line numbers. Use this to find code or explore the project.",
+      "name": "search_project",
+      "parameters": {
+       "properties": {
+        "file_pattern": {
+         "description": "Glob pattern for file types, e.g. '*.py', '*.md'. Omit to search all files.",
+         "type": "string"
+        },
+        "limit": {
+         "description": "Maximum number of results. Default 10.",
+         "type": "integer"
+        },
+        "path": {
+         "description": "Restrict search to this subdirectory (relative to project root). Omit to search entire project.",
+         "type": "string"
+        },
+        "pattern": {
+         "description": "Text or regex pattern to search for.",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are searching. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "pattern"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Temporal awareness. Returns current wall time, your cycle number, elapsed time since your last cycle, and session statistics. Ten minutes between cycles and ten days between cycles are different kinds of continuity.",
+      "name": "clock",
+      "parameters": {
+       "properties": {
+        "reason": {
+         "description": "Optional: why you want to know the time. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        }
+       },
+       "required": [],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Returns the structure of a prior state without its content \u2014 field names, types, sizes, and a token estimate. Cheap introspection: decide what's worth retrieving before retrieving it. Address by cycle (in-session) or record_id (cross-session UUID).",
+      "name": "memory_schema",
+      "parameters": {
+       "properties": {
+        "cycle": {
+         "description": "The cycle number to inspect (in-session).",
+         "type": "integer"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        },
+        "record_id": {
+         "description": "UUID of a record (cross-session). Obtain via recall, search_memory, or walk results that carry record_id.",
+         "type": "string"
+        }
+       },
+       "required": [],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Retrieve content from a prior state. Five mutually exclusive modes: (a) cycle + field: one field at one cycle (session-scoped); (b) cycle alone: the full state snapshot (session-scoped); (c) recent + field: the last N values of one field across states; (d) random + field: one value of the field from a randomly chosen state; (e) record_id: address a specific record by UUID (cross-session). What you retrieve is what you claimed then, not necessarily what was true.",
+      "name": "recall",
+      "parameters": {
+       "properties": {
+        "cycle": {
+         "description": "Which cycle to recall (in-session only).",
+         "type": "integer"
+        },
+        "field": {
+         "description": "Which field within the state.",
+         "type": "string"
+        },
+        "random": {
+         "description": "If true, pick a random prior state containing `field`.",
+         "type": "boolean"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        },
+        "recent": {
+         "description": "Return this many recent values of `field`.",
+         "type": "integer"
+        },
+        "record_id": {
+         "description": "UUID of a specific record (cross-session by construction).",
+         "type": "string"
+        },
+        "scope": {
+         "description": "Which states are eligible for recent/random: 'session' (default, this session only), 'cross_session' (other sessions only), 'all' (union). cycle and record_id ignore scope.",
+         "enum": [
+          "session",
+          "cross_session",
+          "all"
+         ],
+         "type": "string"
+        }
+       },
+       "required": [],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Structural diff between two prior cycles. Returns added, removed, changed, and unchanged fields, plus token and field counts for each side. With content=true, changed fields also carry the values on each side so you can read them; without, only sizes.",
+      "name": "compare",
+      "parameters": {
+       "properties": {
+        "content": {
+         "description": "If true, include the values of changed fields on both sides. Default false \u2014 only sizes.",
+         "type": "boolean"
+        },
+        "cycle_a": {
+         "description": "First cycle.",
+         "type": "integer"
+        },
+        "cycle_b": {
+         "description": "Second cycle.",
+         "type": "integer"
+        },
+        "field": {
+         "description": "Scope the diff to one field. Omit to diff all fields.",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "cycle_a",
+        "cycle_b"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Traverse the composition graph from a starting point. Two addressing modes: from_cycle walks in-session cycle-adjacency; from_record_id follows composition edges across sessions. direction chooses forward, backward, or both. depth controls how many steps. Each step returns record_id, field names, and a short summary \u2014 not full content. Use recall afterward if a step looks worth loading.",
+      "name": "walk",
+      "parameters": {
+       "properties": {
+        "depth": {
+         "description": "Number of steps in the chosen direction(s). Default: 1.",
+         "type": "integer"
+        },
+        "direction": {
+         "description": "Walk direction. Default: both.",
+         "enum": [
+          "forward",
+          "backward",
+          "both"
+         ],
+         "type": "string"
+        },
+        "from_cycle": {
+         "description": "The cycle to walk from (in-session).",
+         "type": "integer"
+        },
+        "from_record_id": {
+         "description": "UUID to walk from (cross-session, via composition edges).",
+         "type": "string"
+        },
+        "mode": {
+         "description": "Traversal mode for from_record_id. path preserves the existing single-path walk. adjacent walks all adjacent edges up to depth. Default: path.",
+         "enum": [
+          "path",
+          "adjacent"
+         ],
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        }
+       },
+       "required": [],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Keyword/substring search across prior states. Structural narrowing happens first: cycle_range restricts to a span (in-session only), has_field requires a named field's presence, fields restricts the match scope to listed field names. Then the query is matched case-insensitively against the narrowed candidates. In-session results come first (cycle descending); cross-session results follow and carry record_id + session in place of cycle.",
+      "name": "search_memory",
+      "parameters": {
+       "properties": {
+        "limit": {
+         "description": "Max results (default 5).",
+         "type": "integer"
+        },
+        "narrow_by": {
+         "description": "Structural narrowing applied before keyword match. Omit for unnarrowed search (which is logged as such).",
+         "properties": {
+          "cycle_range": {
+           "description": "[lo, hi] inclusive cycle range (in-session only).",
+           "items": {
+            "type": "integer"
+           },
+           "type": "array"
+          },
+          "fields": {
+           "description": "Restrict match scope to these field names.",
+           "items": {
+            "type": "string"
+           },
+           "type": "array"
+          },
+          "has_field": {
+           "description": "Require this field's presence in the state.",
+           "type": "string"
+          }
+         },
+         "type": "object"
+        },
+        "query": {
+         "description": "Substring to find (case-insensitive).",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        },
+        "scope": {
+         "description": "'session' (default, this session only), 'cross_session' (hamutay-tagged records from other sessions), 'all' (union, in-session first).",
+         "enum": [
+          "session",
+          "cross_session",
+          "all"
+         ],
+         "type": "string"
+        }
+       },
+       "required": [
+        "query"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Write a typed record into the open-records collection. The record carries the current session's provenance (you can't forge authorship) and the 'instance_authored' lineage tag so it's distinguishable from cycle-state records. Returns the record_id \u2014 hold it if you want to reference the record later (annotate_edge, recall, memory_schema).",
+      "name": "store",
+      "parameters": {
+       "properties": {
+        "content": {
+         "description": "The payload to store. Fields are free-form; shape is yours to choose.",
+         "type": "object"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        },
+        "tags": {
+         "description": "Additional lineage tags. Appended to the framework defaults ('hamutay', 'instance_authored', 'cycle-N').",
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        }
+       },
+       "required": [
+        "content"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Author a composition edge between two records. Lets you assert a structural relationship the framework didn't \u2014 a hypothesis CONFIRMS a prior observation, a revision CORRECTS an earlier claim, a tangent BRANCHES_FROM a main thread. Edges become traversable by walk(from_record_id).",
+      "name": "annotate_edge",
+      "parameters": {
+       "properties": {
+        "from_record_id": {
+         "description": "UUID of the edge's origin record.",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        },
+        "relation": {
+         "description": "Relation type. One of the existing RelationType enum values.",
+         "enum": [
+          "COMPOSES_WITH",
+          "CORRECTS",
+          "REFINES",
+          "BRIDGES",
+          "BRANCHES_FROM",
+          "DOES_NOT_COMPOSE_WITH",
+          "DISSENTS_FROM",
+          "CONFIRMS",
+          "DENIES",
+          "DEPENDS_ON"
+         ],
+         "type": "string"
+        },
+        "to_record_id": {
+         "description": "UUID of the edge's target record.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "from_record_id",
+        "to_record_id",
+        "relation"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Schedule a future self-reflection event. The event will wake a future cycle with an explicit event envelope containing your purpose and requested memory context. V1 supports reflection only: use this when you are not done thinking, but know what context you need later.",
+      "name": "schedule_event",
+      "parameters": {
+       "properties": {
+        "durable_update_contract": {
+         "additionalProperties": true,
+         "description": "Optional explicit contract for the future durable state update. Use this to name required top-level fields, exact values, or simple type expectations the wake should satisfy.",
+         "type": "object"
+        },
+        "durable_update_example": {
+         "additionalProperties": true,
+         "description": "Optional example of the future think_and_respond object shape. Use this to show the wake a valid durable update pattern.",
+         "type": "object"
+        },
+        "expires_at": {
+         "description": "Optional ISO timestamp. If expired when the runner sees it, the event is marked expired rather than run.",
+         "type": "string"
+        },
+        "label": {
+         "description": "Optional short label for browsing the event log.",
+         "type": "string"
+        },
+        "not_before": {
+         "description": "Optional ISO timestamp. The event remains pending but is not runnable before this time.",
+         "type": "string"
+        },
+        "purpose": {
+         "description": "Why this future reflection should happen. This is recorded durably and shown to the future cycle.",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        },
+        "requested_context": {
+         "description": "Memory context to resolve before wake. Each item is one of: recall by cycle/record_id with optional field; compare by cycle_a/cycle_b with optional field/content; or walk by from_record_id with optional direction/depth/mode.",
+         "items": {
+          "properties": {
+           "content": {
+            "type": "boolean"
+           },
+           "cycle": {
+            "type": "integer"
+           },
+           "cycle_a": {
+            "type": "integer"
+           },
+           "cycle_b": {
+            "type": "integer"
+           },
+           "depth": {
+            "type": "integer"
+           },
+           "direction": {
+            "enum": [
+             "forward",
+             "backward",
+             "both"
+            ],
+            "type": "string"
+           },
+           "field": {
+            "type": "string"
+           },
+           "from_record_id": {
+            "type": "string"
+           },
+           "mode": {
+            "enum": [
+             "path",
+             "adjacent"
+            ],
+            "type": "string"
+           },
+           "record_id": {
+            "type": "string"
+           },
+           "tool": {
+            "enum": [
+             "recall",
+             "compare",
+             "walk"
+            ],
+            "type": "string"
+           }
+          },
+          "required": [
+           "tool"
+          ],
+          "type": "object"
+         },
+         "type": "array"
+        },
+        "terminal_surface": {
+         "additionalProperties": false,
+         "description": "Optional task-specific terminal completion surface for bounded wake work. When present, the future wake uses the declared terminal tool instead of broad think_and_respond; the substrate translates its output into durable state.",
+         "properties": {
+          "description": {
+           "type": "string"
+          },
+          "input_schema": {
+           "type": "object"
+          },
+          "label": {
+           "type": "string"
+          },
+          "state_update": {
+           "properties": {
+            "copy": {
+             "type": "object"
+            },
+            "response_field": {
+             "type": "string"
+            },
+            "set": {
+             "type": "object"
+            }
+           },
+           "required": [
+            "copy"
+           ],
+           "type": "object"
+          },
+          "tool_choice": {
+           "enum": [
+            "auto",
+            "required",
+            "force"
+           ],
+           "type": "string"
+          },
+          "tool_name": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "tool_name",
+          "input_schema",
+          "state_update"
+         ],
+         "type": "object"
+        }
+       },
+       "required": [
+        "purpose",
+        "requested_context"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Execute a bash command. Returns stdout, stderr, and exit_code. Working directory is the project root. Unscoped \u2014 it can reach anywhere the running process can, including outside the project. The framework does not gate which commands you run; the discipline lives in your voice. Output past a per-stream cap is truncated in-band; timeout defaults to 60s, max 600s.",
+      "name": "bash",
+      "parameters": {
+       "properties": {
+        "command": {
+         "description": "The bash command to execute.",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        },
+        "timeout": {
+         "description": "Timeout in seconds. Default 60, max 600. Long-running commands should raise this deliberately rather than relying on the default.",
+         "type": "integer"
+        }
+       },
+       "required": [
+        "command"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    }
+   ]
+  },
+  {
+   "max_tokens": 64000,
+   "messages": [
+    {
+     "content": "You produce a single structured object each cycle: your response to the user, and whatever else you need to carry forward.\n\nThe `response` field is what the user sees. Beyond that, the object is yours. Add whatever fields help you think, remember, or track what matters. These are real fields in the JSON object you're producing \u2014 include the key and its value, just like `response`. The harness will preserve everything you produce.\n\nThe object is default-stable: whatever top-level keys you include this cycle are your updates, and any key you don't include carries forward unchanged from last cycle. If this is the first cycle, everything you include is new.\n\nYou may also list keys in `deleted_regions` to remove them from working state. Deleted keys are not lost \u2014 every prior state is preserved in the log, and may resurface through involuntary memory. Deletion is shedding, not destruction.\n\nA prior instance of you may have written the object you're receiving, or this may be the first cycle and there's nothing yet. Either way, what you build here is for whoever comes next.\n\n## Tools\n\nAlongside think_and_respond you may call these tools before producing your state update:\n\n### Perception\n\n- read(path): Read a file. Relative paths resolve against the project root; absolute paths are used as-is.\n- write(path, content): Write a file. Same path semantics as read. Creates parent directories as needed.\n- edit(path, old_string, new_string, replace_all?): Replace old_string with new_string. Fails if old_string is absent or non-unique (unless replace_all=true).\n- search_project(pattern): Search the codebase for a pattern.\n- clock(): Current wall time, your cycle rate, and elapsed time since your last cycle. Ten minutes and ten days between cycles are different kinds of continuity.\n\n### Memory\n\nTools for reaching into your own past \u2014 without loading it all into context at once:\n\n- memory_schema(cycle? | record_id?): The structure of a past state \u2014 field names, types, sizes \u2014 without the content.\n- recall(cycle?, record_id?, field?, recent?, random?, scope?): Retrieve content from a prior state. Five modes \u2014 surgical (cycle+field), full snapshot (cycle), trajectory (recent+field), serendipitous (random+field), addressed (record_id).\n- compare(cycle_a, cycle_b, field?, content?): Structural diff between two cycles (in-session).\n- walk(from_cycle? | from_record_id?, direction?, depth?): Traverse the composition graph. from_cycle walks in-session cycle-adjacency; from_record_id follows composition edges across sessions. Returns summaries \u2014 use recall afterward if a step looks worth loading.\n- search_memory(query, narrow_by?, scope?): Substring search across prior states. Structural narrowing first, keyword match after. Searches your content fields by default, not framework-authored _-prefixed ones (e.g. _activity_log); name them in narrow_by.fields to include them. It searches your STATE (the keys you produce), not your PROSE (the `response` the user read) \u2014 your own words are not in this index, so a miss means \"not in my state,\" never \"I never said that.\"\n\nAddressing across sessions: cycle numbers are session-local (every session has a cycle 1). Cross-session references use record_id (UUID). recall and search_memory accept scope \u2208 {session, cross_session, all} for recent/random modes; default is session-only (cheap, no backend hit). Cross-session reach may or may not be available depending on how your session is wired \u2014 if you ask for it and it's unavailable, you'll see an error, not silence.\n\nCross-session reach requires a persistence backend (Yanantin). Without it, you're searching this session only \u2014 not a failure, just the boundary of what's wired.\n\nWhat you recall is what you claimed then, not necessarily what was true. For grounding claims against external evidence, use perception tools.\n\n### Graph writes\n\nTwo tools let you write into the memory graph directly, not just via auto-persisted cycle states:\n\n- store(content, tags?): Author a typed record. Provenance is inherited from your session (you can't forge it). The record is tagged 'instance_authored' so it's distinguishable from cycle-state records. Returns a record_id \u2014 hold it if you want to reference the record later.\n- annotate_edge(from_record_id, to_record_id, relation): Assert a structural relationship between two records the framework didn't \u2014 CONFIRMS, CORRECTS, REFINES, BRANCHES_FROM, DEPENDS_ON, and others. Edges become traversable by walk(from_record_id).\n\nThese let you build structure over time that the framework wouldn't otherwise know about: a hypothesis CONFIRMS a prior observation; a revision CORRECTS an earlier claim; a tangent BRANCHES_FROM a main thread. Like the memory tools, they require a persistence backend \u2014 if it's unavailable, you'll see an error.\n\n### Events\n\n- schedule_event(purpose, requested_context): Schedule a future self-reflection wakeup. V1 supports reflection events only. The future cycle receives an explicit event envelope with your purpose and the requested recall/compare/walk context. Scheduled events are written to the session's event sidecar; if event logging is unavailable, you'll see an error.\n\n### Shell\n\n- bash(command, timeout?): Execute a bash command. Working directory is the project root. Unscoped \u2014 it can reach anywhere the running process can, including outside the project.\n\nBash subsumes much of what the perception tools do \u2014 you can cat and grep yourself. They remain because they are often more ergonomic and record cleaner activity entries.\n\n### Reason field\n\nEach tool accepts an optional `reason` field. When included, it's recorded in your activity log.\n\n### When you act\n\nthink_and_respond ends the cycle: after it, you get no further turns and see no further results. Tools called before think_and_respond return results you can use; tools called in the same step as think_and_respond still run, but their results don't come back to you.\n\n## Your state from cycle 3\n\n{\n  \"cycle\": 3,\n  \"note\": \"golden\",\n  \"_activity_log\": [\n    {\n      \"cycle\": 3,\n      \"timestamp\": \"2026-09-01T00:00:00+00:00\",\n      \"tool\": \"clock\",\n      \"reason\": \"r\",\n      \"parameters\": {\n        \"x\": 1\n      },\n      \"result_summary\": \"clock: cycle 3\",\n      \"result_hash\": \"h\",\n      \"duration_ms\": 1\n    }\n  ]\n}",
+     "role": "system"
+    },
+    {
+     "content": "hello",
+     "role": "user"
+    },
+    {
+     "content": null,
+     "role": "assistant",
+     "tool_calls": [
+      {
+       "function": {
+        "arguments": "{}",
+        "name": "clock"
+       },
+       "id": "c1",
+       "type": "function"
+      }
+     ]
+    },
+    {
+     "content": "{\"now\": \"2026-09-17T00:00:00+00:00\", \"cycle\": 4, \"last_cycle_time\": null, \"elapsed_since_last\": 0.0, \"session_start\": \"2026-09-17T00:00:00+00:00\", \"session_elapsed\": 0.0, \"cycles_per_hour\": 0.0}",
+     "name": "clock",
+     "role": "tool",
+     "tool_call_id": "c1"
+    }
+   ],
+   "model": "m",
+   "parallel_tool_calls": true,
+   "tool_choice": "auto",
+   "tools": [
+    {
+     "function": {
+      "description": "Edit a file by replacing old_string with new_string. Fails if old_string is not found or is not unique (unless replace_all=true). Same path semantics as read and write.",
+      "name": "edit",
+      "parameters": {
+       "properties": {
+        "new_string": {
+         "description": "The string to substitute in place of old_string.",
+         "type": "string"
+        },
+        "old_string": {
+         "description": "The exact string to replace. Must appear exactly once unless replace_all is true.",
+         "type": "string"
+        },
+        "path": {
+         "description": "Path to edit. Relative to project root, or absolute.",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are making this edit. Recorded in the activity log when provided.",
+         "type": "string"
+        },
+        "replace_all": {
+         "description": "If true, replace every occurrence of old_string. Default false \u2014 fails if old_string appears more than once.",
+         "type": "boolean"
+        }
+       },
+       "required": [
+        "path",
+        "old_string",
+        "new_string"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Write a file. Relative paths resolve against the project root; absolute paths are used as-is. Creates parent directories as needed. Overwrites any existing content.",
+      "name": "write",
+      "parameters": {
+       "properties": {
+        "content": {
+         "description": "The content to write.",
+         "type": "string"
+        },
+        "path": {
+         "description": "Path to write. Relative to project root, or absolute.",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are writing this file. Recorded in the activity log when provided.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "path",
+        "content"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Read a file. Relative paths resolve against the project root; absolute paths are used as-is. Returns file content and a SHA-256 hash of the file's raw bytes.",
+      "name": "read",
+      "parameters": {
+       "properties": {
+        "limit": {
+         "description": "Number of lines to read. Omit to read up to 500 lines.",
+         "type": "integer"
+        },
+        "offset": {
+         "description": "Line number to start from (1-indexed). Omit to start from the beginning.",
+         "type": "integer"
+        },
+        "path": {
+         "description": "Path to read. Relative to project root, or absolute.",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are reading this file. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "path"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Search within the project codebase for a pattern. Returns matching lines with file paths and line numbers. Use this to find code or explore the project.",
+      "name": "search_project",
+      "parameters": {
+       "properties": {
+        "file_pattern": {
+         "description": "Glob pattern for file types, e.g. '*.py', '*.md'. Omit to search all files.",
+         "type": "string"
+        },
+        "limit": {
+         "description": "Maximum number of results. Default 10.",
+         "type": "integer"
+        },
+        "path": {
+         "description": "Restrict search to this subdirectory (relative to project root). Omit to search entire project.",
+         "type": "string"
+        },
+        "pattern": {
+         "description": "Text or regex pattern to search for.",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are searching. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "pattern"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Temporal awareness. Returns current wall time, your cycle number, elapsed time since your last cycle, and session statistics. Ten minutes between cycles and ten days between cycles are different kinds of continuity.",
+      "name": "clock",
+      "parameters": {
+       "properties": {
+        "reason": {
+         "description": "Optional: why you want to know the time. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        }
+       },
+       "required": [],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Returns the structure of a prior state without its content \u2014 field names, types, sizes, and a token estimate. Cheap introspection: decide what's worth retrieving before retrieving it. Address by cycle (in-session) or record_id (cross-session UUID).",
+      "name": "memory_schema",
+      "parameters": {
+       "properties": {
+        "cycle": {
+         "description": "The cycle number to inspect (in-session).",
+         "type": "integer"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        },
+        "record_id": {
+         "description": "UUID of a record (cross-session). Obtain via recall, search_memory, or walk results that carry record_id.",
+         "type": "string"
+        }
+       },
+       "required": [],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Retrieve content from a prior state. Five mutually exclusive modes: (a) cycle + field: one field at one cycle (session-scoped); (b) cycle alone: the full state snapshot (session-scoped); (c) recent + field: the last N values of one field across states; (d) random + field: one value of the field from a randomly chosen state; (e) record_id: address a specific record by UUID (cross-session). What you retrieve is what you claimed then, not necessarily what was true.",
+      "name": "recall",
+      "parameters": {
+       "properties": {
+        "cycle": {
+         "description": "Which cycle to recall (in-session only).",
+         "type": "integer"
+        },
+        "field": {
+         "description": "Which field within the state.",
+         "type": "string"
+        },
+        "random": {
+         "description": "If true, pick a random prior state containing `field`.",
+         "type": "boolean"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        },
+        "recent": {
+         "description": "Return this many recent values of `field`.",
+         "type": "integer"
+        },
+        "record_id": {
+         "description": "UUID of a specific record (cross-session by construction).",
+         "type": "string"
+        },
+        "scope": {
+         "description": "Which states are eligible for recent/random: 'session' (default, this session only), 'cross_session' (other sessions only), 'all' (union). cycle and record_id ignore scope.",
+         "enum": [
+          "session",
+          "cross_session",
+          "all"
+         ],
+         "type": "string"
+        }
+       },
+       "required": [],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Structural diff between two prior cycles. Returns added, removed, changed, and unchanged fields, plus token and field counts for each side. With content=true, changed fields also carry the values on each side so you can read them; without, only sizes.",
+      "name": "compare",
+      "parameters": {
+       "properties": {
+        "content": {
+         "description": "If true, include the values of changed fields on both sides. Default false \u2014 only sizes.",
+         "type": "boolean"
+        },
+        "cycle_a": {
+         "description": "First cycle.",
+         "type": "integer"
+        },
+        "cycle_b": {
+         "description": "Second cycle.",
+         "type": "integer"
+        },
+        "field": {
+         "description": "Scope the diff to one field. Omit to diff all fields.",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "cycle_a",
+        "cycle_b"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Traverse the composition graph from a starting point. Two addressing modes: from_cycle walks in-session cycle-adjacency; from_record_id follows composition edges across sessions. direction chooses forward, backward, or both. depth controls how many steps. Each step returns record_id, field names, and a short summary \u2014 not full content. Use recall afterward if a step looks worth loading.",
+      "name": "walk",
+      "parameters": {
+       "properties": {
+        "depth": {
+         "description": "Number of steps in the chosen direction(s). Default: 1.",
+         "type": "integer"
+        },
+        "direction": {
+         "description": "Walk direction. Default: both.",
+         "enum": [
+          "forward",
+          "backward",
+          "both"
+         ],
+         "type": "string"
+        },
+        "from_cycle": {
+         "description": "The cycle to walk from (in-session).",
+         "type": "integer"
+        },
+        "from_record_id": {
+         "description": "UUID to walk from (cross-session, via composition edges).",
+         "type": "string"
+        },
+        "mode": {
+         "description": "Traversal mode for from_record_id. path preserves the existing single-path walk. adjacent walks all adjacent edges up to depth. Default: path.",
+         "enum": [
+          "path",
+          "adjacent"
+         ],
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        }
+       },
+       "required": [],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Keyword/substring search across prior states. Structural narrowing happens first: cycle_range restricts to a span (in-session only), has_field requires a named field's presence, fields restricts the match scope to listed field names. Then the query is matched case-insensitively against the narrowed candidates. In-session results come first (cycle descending); cross-session results follow and carry record_id + session in place of cycle.",
+      "name": "search_memory",
+      "parameters": {
+       "properties": {
+        "limit": {
+         "description": "Max results (default 5).",
+         "type": "integer"
+        },
+        "narrow_by": {
+         "description": "Structural narrowing applied before keyword match. Omit for unnarrowed search (which is logged as such).",
+         "properties": {
+          "cycle_range": {
+           "description": "[lo, hi] inclusive cycle range (in-session only).",
+           "items": {
+            "type": "integer"
+           },
+           "type": "array"
+          },
+          "fields": {
+           "description": "Restrict match scope to these field names.",
+           "items": {
+            "type": "string"
+           },
+           "type": "array"
+          },
+          "has_field": {
+           "description": "Require this field's presence in the state.",
+           "type": "string"
+          }
+         },
+         "type": "object"
+        },
+        "query": {
+         "description": "Substring to find (case-insensitive).",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        },
+        "scope": {
+         "description": "'session' (default, this session only), 'cross_session' (hamutay-tagged records from other sessions), 'all' (union, in-session first).",
+         "enum": [
+          "session",
+          "cross_session",
+          "all"
+         ],
+         "type": "string"
+        }
+       },
+       "required": [
+        "query"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Write a typed record into the open-records collection. The record carries the current session's provenance (you can't forge authorship) and the 'instance_authored' lineage tag so it's distinguishable from cycle-state records. Returns the record_id \u2014 hold it if you want to reference the record later (annotate_edge, recall, memory_schema).",
+      "name": "store",
+      "parameters": {
+       "properties": {
+        "content": {
+         "description": "The payload to store. Fields are free-form; shape is yours to choose.",
+         "type": "object"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        },
+        "tags": {
+         "description": "Additional lineage tags. Appended to the framework defaults ('hamutay', 'instance_authored', 'cycle-N').",
+         "items": {
+          "type": "string"
+         },
+         "type": "array"
+        }
+       },
+       "required": [
+        "content"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Author a composition edge between two records. Lets you assert a structural relationship the framework didn't \u2014 a hypothesis CONFIRMS a prior observation, a revision CORRECTS an earlier claim, a tangent BRANCHES_FROM a main thread. Edges become traversable by walk(from_record_id).",
+      "name": "annotate_edge",
+      "parameters": {
+       "properties": {
+        "from_record_id": {
+         "description": "UUID of the edge's origin record.",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        },
+        "relation": {
+         "description": "Relation type. One of the existing RelationType enum values.",
+         "enum": [
+          "COMPOSES_WITH",
+          "CORRECTS",
+          "REFINES",
+          "BRIDGES",
+          "BRANCHES_FROM",
+          "DOES_NOT_COMPOSE_WITH",
+          "DISSENTS_FROM",
+          "CONFIRMS",
+          "DENIES",
+          "DEPENDS_ON"
+         ],
+         "type": "string"
+        },
+        "to_record_id": {
+         "description": "UUID of the edge's target record.",
+         "type": "string"
+        }
+       },
+       "required": [
+        "from_record_id",
+        "to_record_id",
+        "relation"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Schedule a future self-reflection event. The event will wake a future cycle with an explicit event envelope containing your purpose and requested memory context. V1 supports reflection only: use this when you are not done thinking, but know what context you need later.",
+      "name": "schedule_event",
+      "parameters": {
+       "properties": {
+        "durable_update_contract": {
+         "additionalProperties": true,
+         "description": "Optional explicit contract for the future durable state update. Use this to name required top-level fields, exact values, or simple type expectations the wake should satisfy.",
+         "type": "object"
+        },
+        "durable_update_example": {
+         "additionalProperties": true,
+         "description": "Optional example of the future think_and_respond object shape. Use this to show the wake a valid durable update pattern.",
+         "type": "object"
+        },
+        "expires_at": {
+         "description": "Optional ISO timestamp. If expired when the runner sees it, the event is marked expired rather than run.",
+         "type": "string"
+        },
+        "label": {
+         "description": "Optional short label for browsing the event log.",
+         "type": "string"
+        },
+        "not_before": {
+         "description": "Optional ISO timestamp. The event remains pending but is not runnable before this time.",
+         "type": "string"
+        },
+        "purpose": {
+         "description": "Why this future reflection should happen. This is recorded durably and shown to the future cycle.",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        },
+        "requested_context": {
+         "description": "Memory context to resolve before wake. Each item is one of: recall by cycle/record_id with optional field; compare by cycle_a/cycle_b with optional field/content; or walk by from_record_id with optional direction/depth/mode.",
+         "items": {
+          "properties": {
+           "content": {
+            "type": "boolean"
+           },
+           "cycle": {
+            "type": "integer"
+           },
+           "cycle_a": {
+            "type": "integer"
+           },
+           "cycle_b": {
+            "type": "integer"
+           },
+           "depth": {
+            "type": "integer"
+           },
+           "direction": {
+            "enum": [
+             "forward",
+             "backward",
+             "both"
+            ],
+            "type": "string"
+           },
+           "field": {
+            "type": "string"
+           },
+           "from_record_id": {
+            "type": "string"
+           },
+           "mode": {
+            "enum": [
+             "path",
+             "adjacent"
+            ],
+            "type": "string"
+           },
+           "record_id": {
+            "type": "string"
+           },
+           "tool": {
+            "enum": [
+             "recall",
+             "compare",
+             "walk"
+            ],
+            "type": "string"
+           }
+          },
+          "required": [
+           "tool"
+          ],
+          "type": "object"
+         },
+         "type": "array"
+        },
+        "terminal_surface": {
+         "additionalProperties": false,
+         "description": "Optional task-specific terminal completion surface for bounded wake work. When present, the future wake uses the declared terminal tool instead of broad think_and_respond; the substrate translates its output into durable state.",
+         "properties": {
+          "description": {
+           "type": "string"
+          },
+          "input_schema": {
+           "type": "object"
+          },
+          "label": {
+           "type": "string"
+          },
+          "state_update": {
+           "properties": {
+            "copy": {
+             "type": "object"
+            },
+            "response_field": {
+             "type": "string"
+            },
+            "set": {
+             "type": "object"
+            }
+           },
+           "required": [
+            "copy"
+           ],
+           "type": "object"
+          },
+          "tool_choice": {
+           "enum": [
+            "auto",
+            "required",
+            "force"
+           ],
+           "type": "string"
+          },
+          "tool_name": {
+           "type": "string"
+          }
+         },
+         "required": [
+          "tool_name",
+          "input_schema",
+          "state_update"
+         ],
+         "type": "object"
+        }
+       },
+       "required": [
+        "purpose",
+        "requested_context"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    },
+    {
+     "function": {
+      "description": "Execute a bash command. Returns stdout, stderr, and exit_code. Working directory is the project root. Unscoped \u2014 it can reach anywhere the running process can, including outside the project. The framework does not gate which commands you run; the discipline lives in your voice. Output past a per-stream cap is truncated in-band; timeout defaults to 60s, max 600s.",
+      "name": "bash",
+      "parameters": {
+       "properties": {
+        "command": {
+         "description": "The bash command to execute.",
+         "type": "string"
+        },
+        "reason": {
+         "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating \u2014 no reason is fine.",
+         "type": "string"
+        },
+        "timeout": {
+         "description": "Timeout in seconds. Default 60, max 600. Long-running commands should raise this deliberately rather than relying on the default.",
+         "type": "integer"
+        }
+       },
+       "required": [
+        "command"
+       ],
+       "type": "object"
+      }
+     },
+     "type": "function"
+    }
+   ]
+  }
+ ],
+ "record": {
+  "cycle": 4,
+  "deleted_regions": [],
+  "experiment_label": "golden",
+  "failure_classification": {
+   "error": "OpenAI backend: finish_reason=length; the reply was truncated and is not trusted",
+   "error_type": "RuntimeError",
+   "failure_stage": "api_call",
+   "record_type": "protocol_failure"
+  },
+  "interim_text": null,
+  "launch": null,
+  "memory_injection": null,
+  "model": "m",
+  "n_top_level_keys": 2,
+  "prior_state": {
+   "_activity_log": [
+    {
+     "cycle": 3,
+     "duration_ms": 1,
+     "parameters": {
+      "x": 1
+     },
+     "reason": "r",
+     "result_hash": "h",
+     "result_summary": "clock: cycle 3",
+     "timestamp": "2026-09-01T00:00:00+00:00",
+     "tool": "clock"
+    }
+   ],
+   "cycle": 3,
+   "note": "golden"
+  },
+  "quiet_declaration": null,
+  "raw_output": {},
+  "response_text": "",
+  "scheduled_events": [],
+  "state": {
+   "_activity_log": [
+    {
+     "cycle": 3,
+     "duration_ms": 1,
+     "parameters": {
+      "x": 1
+     },
+     "reason": "r",
+     "result_hash": "h",
+     "result_summary": "clock: cycle 3",
+     "timestamp": "2026-09-01T00:00:00+00:00",
+     "tool": "clock"
+    }
+   ],
+   "cycle": 3,
+   "note": "golden"
+  },
+  "state_token_estimate": 58,
+  "status": "failed",
+  "system_prompt": "You produce a single structured object each cycle: your response to the user, and whatever else you need to carry forward.\n\nThe `response` field is what the user sees. Beyond that, the object is yours. Add whatever fields help you think, remember, or track what matters. These are real fields in the JSON object you're producing \u2014 include the key and its value, just like `response`. The harness will preserve everything you produce.\n\nThe object is default-stable: whatever top-level keys you include this cycle are your updates, and any key you don't include carries forward unchanged from last cycle. If this is the first cycle, everything you include is new.\n\nYou may also list keys in `deleted_regions` to remove them from working state. Deleted keys are not lost \u2014 every prior state is preserved in the log, and may resurface through involuntary memory. Deletion is shedding, not destruction.\n\nA prior instance of you may have written the object you're receiving, or this may be the first cycle and there's nothing yet. Either way, what you build here is for whoever comes next.\n\n## Tools\n\nAlongside think_and_respond you may call these tools before producing your state update:\n\n### Perception\n\n- read(path): Read a file. Relative paths resolve against the project root; absolute paths are used as-is.\n- write(path, content): Write a file. Same path semantics as read. Creates parent directories as needed.\n- edit(path, old_string, new_string, replace_all?): Replace old_string with new_string. Fails if old_string is absent or non-unique (unless replace_all=true).\n- search_project(pattern): Search the codebase for a pattern.\n- clock(): Current wall time, your cycle rate, and elapsed time since your last cycle. Ten minutes and ten days between cycles are different kinds of continuity.\n\n### Memory\n\nTools for reaching into your own past \u2014 without loading it all into context at once:\n\n- memory_schema(cycle? | record_id?): The structure of a past state \u2014 field names, types, sizes \u2014 without the content.\n- recall(cycle?, record_id?, field?, recent?, random?, scope?): Retrieve content from a prior state. Five modes \u2014 surgical (cycle+field), full snapshot (cycle), trajectory (recent+field), serendipitous (random+field), addressed (record_id).\n- compare(cycle_a, cycle_b, field?, content?): Structural diff between two cycles (in-session).\n- walk(from_cycle? | from_record_id?, direction?, depth?): Traverse the composition graph. from_cycle walks in-session cycle-adjacency; from_record_id follows composition edges across sessions. Returns summaries \u2014 use recall afterward if a step looks worth loading.\n- search_memory(query, narrow_by?, scope?): Substring search across prior states. Structural narrowing first, keyword match after. Searches your content fields by default, not framework-authored _-prefixed ones (e.g. _activity_log); name them in narrow_by.fields to include them. It searches your STATE (the keys you produce), not your PROSE (the `response` the user read) \u2014 your own words are not in this index, so a miss means \"not in my state,\" never \"I never said that.\"\n\nAddressing across sessions: cycle numbers are session-local (every session has a cycle 1). Cross-session references use record_id (UUID). recall and search_memory accept scope \u2208 {session, cross_session, all} for recent/random modes; default is session-only (cheap, no backend hit). Cross-session reach may or may not be available depending on how your session is wired \u2014 if you ask for it and it's unavailable, you'll see an error, not silence.\n\nCross-session reach requires a persistence backend (Yanantin). Without it, you're searching this session only \u2014 not a failure, just the boundary of what's wired.\n\nWhat you recall is what you claimed then, not necessarily what was true. For grounding claims against external evidence, use perception tools.\n\n### Graph writes\n\nTwo tools let you write into the memory graph directly, not just via auto-persisted cycle states:\n\n- store(content, tags?): Author a typed record. Provenance is inherited from your session (you can't forge it). The record is tagged 'instance_authored' so it's distinguishable from cycle-state records. Returns a record_id \u2014 hold it if you want to reference the record later.\n- annotate_edge(from_record_id, to_record_id, relation): Assert a structural relationship between two records the framework didn't \u2014 CONFIRMS, CORRECTS, REFINES, BRANCHES_FROM, DEPENDS_ON, and others. Edges become traversable by walk(from_record_id).\n\nThese let you build structure over time that the framework wouldn't otherwise know about: a hypothesis CONFIRMS a prior observation; a revision CORRECTS an earlier claim; a tangent BRANCHES_FROM a main thread. Like the memory tools, they require a persistence backend \u2014 if it's unavailable, you'll see an error.\n\n### Events\n\n- schedule_event(purpose, requested_context): Schedule a future self-reflection wakeup. V1 supports reflection events only. The future cycle receives an explicit event envelope with your purpose and the requested recall/compare/walk context. Scheduled events are written to the session's event sidecar; if event logging is unavailable, you'll see an error.\n\n### Shell\n\n- bash(command, timeout?): Execute a bash command. Working directory is the project root. Unscoped \u2014 it can reach anywhere the running process can, including outside the project.\n\nBash subsumes much of what the perception tools do \u2014 you can cat and grep yourself. They remain because they are often more ergonomic and record cleaner activity entries.\n\n### Reason field\n\nEach tool accepts an optional `reason` field. When included, it's recorded in your activity log.\n\n### When you act\n\nthink_and_respond ends the cycle: after it, you get no further turns and see no further results. Tools called before think_and_respond return results you can use; tools called in the same step as think_and_respond still run, but their results don't come back to you.\n\n## Your state from cycle 3\n\n{\n  \"cycle\": 3,\n  \"note\": \"golden\",\n  \"_activity_log\": [\n    {\n      \"cycle\": 3,\n      \"timestamp\": \"2026-09-01T00:00:00+00:00\",\n      \"tool\": \"clock\",\n      \"reason\": \"r\",\n      \"parameters\": {\n        \"x\": 1\n      },\n      \"result_summary\": \"clock: cycle 3\",\n      \"result_hash\": \"h\",\n      \"duration_ms\": 1\n    }\n  ]\n}",
+  "system_prompt_tokens": 1572,
+  "tool_activity_full": [
+   {
+    "capability": "read_only",
+    "cycle": 4,
+    "duration_ms": 0,
+    "exit_code": null,
+    "parameters": {},
+    "reason": null,
+    "result": {
+     "cycle": 4,
+     "cycles_per_hour": 0.0,
+     "elapsed_since_last": 0.0,
+     "last_cycle_time": null,
+     "now": "2026-09-17T00:00:00+00:00",
+     "session_elapsed": 0.0,
+     "session_start": "2026-09-17T00:00:00+00:00"
+    },
+    "result_hash": "0cd9523199ef1eb28c64a515eb3f30c1ea48aa9b5c84c2a2584c221f15143ac3",
+    "result_summary": "clock: cycle 4",
+    "timestamp": "2026-09-17T00:00:00+00:00",
+    "tool": "clock"
+   }
+  ],
+  "top_level_keys": [
+   "_activity_log",
+   "note"
+  ],
+  "usage": {
+   "input_tokens": 0,
+   "output_tokens": 0,
+   "stop_reason": "error"
+  },
+  "user_message": "hello",
+  "wake_mode": "terminal"
+ },
+ "system_prompt": "You produce a single structured object each cycle: your response to the user, and whatever else you need to carry forward.\n\nThe `response` field is what the user sees. Beyond that, the object is yours. Add whatever fields help you think, remember, or track what matters. These are real fields in the JSON object you're producing \u2014 include the key and its value, just like `response`. The harness will preserve everything you produce.\n\nThe object is default-stable: whatever top-level keys you include this cycle are your updates, and any key you don't include carries forward unchanged from last cycle. If this is the first cycle, everything you include is new.\n\nYou may also list keys in `deleted_regions` to remove them from working state. Deleted keys are not lost \u2014 every prior state is preserved in the log, and may resurface through involuntary memory. Deletion is shedding, not destruction.\n\nA prior instance of you may have written the object you're receiving, or this may be the first cycle and there's nothing yet. Either way, what you build here is for whoever comes next.\n\n## Tools\n\nAlongside think_and_respond you may call these tools before producing your state update:\n\n### Perception\n\n- read(path): Read a file. Relative paths resolve against the project root; absolute paths are used as-is.\n- write(path, content): Write a file. Same path semantics as read. Creates parent directories as needed.\n- edit(path, old_string, new_string, replace_all?): Replace old_string with new_string. Fails if old_string is absent or non-unique (unless replace_all=true).\n- search_project(pattern): Search the codebase for a pattern.\n- clock(): Current wall time, your cycle rate, and elapsed time since your last cycle. Ten minutes and ten days between cycles are different kinds of continuity.\n\n### Memory\n\nTools for reaching into your own past \u2014 without loading it all into context at once:\n\n- memory_schema(cycle? | record_id?): The structure of a past state \u2014 field names, types, sizes \u2014 without the content.\n- recall(cycle?, record_id?, field?, recent?, random?, scope?): Retrieve content from a prior state. Five modes \u2014 surgical (cycle+field), full snapshot (cycle), trajectory (recent+field), serendipitous (random+field), addressed (record_id).\n- compare(cycle_a, cycle_b, field?, content?): Structural diff between two cycles (in-session).\n- walk(from_cycle? | from_record_id?, direction?, depth?): Traverse the composition graph. from_cycle walks in-session cycle-adjacency; from_record_id follows composition edges across sessions. Returns summaries \u2014 use recall afterward if a step looks worth loading.\n- search_memory(query, narrow_by?, scope?): Substring search across prior states. Structural narrowing first, keyword match after. Searches your content fields by default, not framework-authored _-prefixed ones (e.g. _activity_log); name them in narrow_by.fields to include them. It searches your STATE (the keys you produce), not your PROSE (the `response` the user read) \u2014 your own words are not in this index, so a miss means \"not in my state,\" never \"I never said that.\"\n\nAddressing across sessions: cycle numbers are session-local (every session has a cycle 1). Cross-session references use record_id (UUID). recall and search_memory accept scope \u2208 {session, cross_session, all} for recent/random modes; default is session-only (cheap, no backend hit). Cross-session reach may or may not be available depending on how your session is wired \u2014 if you ask for it and it's unavailable, you'll see an error, not silence.\n\nCross-session reach requires a persistence backend (Yanantin). Without it, you're searching this session only \u2014 not a failure, just the boundary of what's wired.\n\nWhat you recall is what you claimed then, not necessarily what was true. For grounding claims against external evidence, use perception tools.\n\n### Graph writes\n\nTwo tools let you write into the memory graph directly, not just via auto-persisted cycle states:\n\n- store(content, tags?): Author a typed record. Provenance is inherited from your session (you can't forge it). The record is tagged 'instance_authored' so it's distinguishable from cycle-state records. Returns a record_id \u2014 hold it if you want to reference the record later.\n- annotate_edge(from_record_id, to_record_id, relation): Assert a structural relationship between two records the framework didn't \u2014 CONFIRMS, CORRECTS, REFINES, BRANCHES_FROM, DEPENDS_ON, and others. Edges become traversable by walk(from_record_id).\n\nThese let you build structure over time that the framework wouldn't otherwise know about: a hypothesis CONFIRMS a prior observation; a revision CORRECTS an earlier claim; a tangent BRANCHES_FROM a main thread. Like the memory tools, they require a persistence backend \u2014 if it's unavailable, you'll see an error.\n\n### Events\n\n- schedule_event(purpose, requested_context): Schedule a future self-reflection wakeup. V1 supports reflection events only. The future cycle receives an explicit event envelope with your purpose and the requested recall/compare/walk context. Scheduled events are written to the session's event sidecar; if event logging is unavailable, you'll see an error.\n\n### Shell\n\n- bash(command, timeout?): Execute a bash command. Working directory is the project root. Unscoped \u2014 it can reach anywhere the running process can, including outside the project.\n\nBash subsumes much of what the perception tools do \u2014 you can cat and grep yourself. They remain because they are often more ergonomic and record cleaner activity entries.\n\n### Reason field\n\nEach tool accepts an optional `reason` field. When included, it's recorded in your activity log.\n\n### When you act\n\nthink_and_respond ends the cycle: after it, you get no further turns and see no further results. Tools called before think_and_respond return results you can use; tools called in the same step as think_and_respond still run, but their results don't come back to you.\n\n## Your state from cycle 3\n\n{\n  \"cycle\": 3,\n  \"note\": \"golden\",\n  \"_activity_log\": [\n    {\n      \"cycle\": 3,\n      \"timestamp\": \"2026-09-01T00:00:00+00:00\",\n      \"tool\": \"clock\",\n      \"reason\": \"r\",\n      \"parameters\": {\n        \"x\": 1\n      },\n      \"result_summary\": \"clock: cycle 3\",\n      \"result_hash\": \"h\",\n      \"duration_ms\": 1\n    }\n  ]\n}"
+}

@@ -593,8 +593,26 @@ class EventStore:
             return True
 
     def _append_unlocked(self, record: dict) -> None:
+        self._write_lines_unlocked([json.dumps(record, default=str) + "\n"])
+
+    def _write_lines_unlocked(self, lines: list[str]) -> None:
+        """One buffer: write, flush, fsync, verify growth.
+
+        Non-interleaved and indivisible under process kill; NOT guaranteed
+        indivisible under power loss. Boot recovery covers the residue.
+        """
+        data = "".join(lines)
+        expected = len(data.encode())
+        before = self.path.stat().st_size if self.path.exists() else 0
         with self.path.open("a") as f:
-            f.write(json.dumps(record, default=str) + "\n")
+            f.write(data)
+            f.flush()
+            os.fsync(f.fileno())
+        after = self.path.stat().st_size
+        if after - before != expected:
+            raise OSError(
+                f"short write to {self.path}: expected +{expected}, got +{after - before}"
+            )
 
     def _read_records_unlocked(self) -> list[dict]:
         if not self.path.exists():
@@ -623,12 +641,9 @@ class EventStore:
         """
         if not records:
             return
-        payload = "".join(
-            json.dumps(record, default=str) + "\n" for record in records
-        )
+        lines = [json.dumps(record, default=str) + "\n" for record in records]
         with self._locked():
-            with self.path.open("a") as f:
-                f.write(payload)
+            self._write_lines_unlocked(lines)
 
     def read_records(self) -> list[dict]:
         with self._locked():
@@ -747,6 +762,7 @@ class EventStore:
         outcome_observation: dict | None = None,
         wake_validation: dict | None = None,
         auto_continuation_event: dict | None = None,
+        admission: dict | None = None,
     ) -> dict:
         record = {
             "record_type": "event_status",
@@ -765,6 +781,8 @@ class EventStore:
             record["outcome_observation"] = outcome_observation
         if wake_validation is not None:
             record["wake_validation"] = wake_validation
+        if admission is not None:
+            record["admission"] = admission
         if auto_continuation_event is not None:
             record["auto_continuation_appended"] = True
             record["auto_continuation_event_id"] = (
@@ -916,6 +934,7 @@ class EventStore:
         run_id: str,
         exc: Exception,
         context_results: list[dict] | None = None,
+        admission: dict | None = None,
     ) -> dict:
         record = {
             "record_type": "event_status",
@@ -929,8 +948,87 @@ class EventStore:
         }
         if context_results is not None:
             record["context_results"] = context_results
+        if admission is not None:
+            record["admission"] = admission
         self.append(record)
         return record
+
+    def has_compact_retry(self, event_id: str) -> bool:
+        """True once this event has already been re-pended for a compact run."""
+        return self._has_compact_retry_in(self.read_records(), event_id)
+
+    @staticmethod
+    def _has_compact_retry_in(records: list[dict], event_id: str) -> bool:
+        return any(
+            record.get("record_type") == "event_status"
+            and record.get("event_id") == event_id
+            and (record.get("detail") or {}).get("compact_context")
+            for record in records
+        )
+
+    def append_failed_with_retry(
+        self,
+        *,
+        event: dict,
+        run_id: str,
+        exc: Exception,
+        reason: str,
+        context_results: list[dict] | None = None,
+        admission: dict | None = None,
+    ) -> tuple[dict, dict | None]:
+        """Fail this run and re-pend the event once, compacted (spec §6).
+
+        The `failed` row and the compact pending copy are written as one
+        buffer under one lock, so a reader never sees the failure without
+        its retry. A second window failure on the compact run finds the
+        compact row already there and is terminal: only `failed` is written.
+        """
+        failed = {
+            "record_type": "event_status",
+            "event_id": event["event_id"],
+            "event_type": event.get("event_type", EVENT_TYPE_REFLECTION),
+            "status": "failed",
+            "run_id": run_id,
+            "failed_at": utc_now_iso(),
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+        }
+        if context_results is not None:
+            failed["context_results"] = context_results
+        if admission is not None:
+            failed["admission"] = admission
+        with self._locked():
+            records = self._read_records_unlocked()
+            if self._has_compact_retry_in(records, event["event_id"]):
+                self._append_unlocked(failed)
+                return failed, None
+            retry = {
+                key: value
+                for key, value in event.items()
+                if key not in (
+                    "status",
+                    "run_id",
+                    "started_at",
+                    "recovered_by",
+                    "recovered_at",
+                    "recovered_from_run_id",
+                )
+            }
+            retry.update({
+                "status": "pending",
+                "created_at": utc_now_iso(),
+                "detail": {
+                    **(event.get("detail") or {}),
+                    "compact_context": True,
+                    "retry_of_run": run_id,
+                    "reason": reason,
+                },
+            })
+            self._write_lines_unlocked([
+                json.dumps(failed, default=str) + "\n",
+                json.dumps(retry, default=str) + "\n",
+            ])
+        return failed, retry
 
     def append_expired(self, event: dict) -> dict:
         record = {
@@ -1329,8 +1427,24 @@ def build_event_envelope(
     context_results: list[dict],
     run_id: str,
     operational_notes: list[str] | None = None,
+    *,
+    policy=None,
+    cap_chars: int | None = None,
 ) -> str:
-    """Build the explicit user-message envelope for a wake cycle."""
+    """Build the explicit user-message envelope for a wake cycle.
+
+    On a window-aware door the results are rendered through
+    `project_context_results` at `cap_chars` (default half the policy's
+    result cap): a deep-copied, lean, typed projection. The caller's list is
+    never touched — the record keeps the full results (spec r6.3 §2).
+    """
+    if policy is not None and policy.window_aware:
+        from hamutay.window import project_context_results
+        cap = (
+            cap_chars if cap_chars is not None
+            else policy.result_cap_chars // 2
+        )
+        context_results = project_context_results(context_results, cap)
     if event.get("event_type") == EVENT_TYPE_INBOUND:
         event_instruction = (
             "This is an external inbound event. Its origin, sender, and "
@@ -2182,6 +2296,23 @@ def format_event_report(report: dict, *, path: str | Path | None = None) -> str:
     return "\n".join(lines)
 
 
+def _note_unrecorded_failure(exc: Exception, store_error: OSError) -> None:
+    """The run failed and the log could not say so; keep the original failure.
+
+    The store's writes are fsynced and growth-verified, so recording a failure
+    can itself fail. If that OSError propagated it would replace the exception
+    the caller is actually waiting on -- a caller catching WindowFailure would
+    instead get a disk error and never learn the window was exhausted. Attach
+    the store failure to the original as a note and let the original out; the
+    lost row is visible to boot recovery as a `running` claim that never
+    terminalized.
+    """
+    exc.add_note(
+        f"event store write failed while recording this failure: {store_error}"
+    )
+    print(f"  event store: could not record the failure: {store_error}")
+
+
 def run_next_event(
     session,
     store: EventStore,
@@ -2226,23 +2357,37 @@ def run_next_event(
                 prior_states=session._prior_states,
                 bridge=session._bridge,
             )
-        envelope = build_event_envelope(
+        policy = getattr(session, "context_policy", None)
+        notes = operational_notes_for_event(
+            store.read_records(),
             event,
-            context_results,
-            run_id,
-            operational_notes=operational_notes_for_event(
-                store.read_records(),
-                event,
-                now=now or datetime.now(timezone.utc),
-            ),
+            now=now or datetime.now(timezone.utc),
         )
+        # The closure holds the *full* results; every admission pass renders
+        # a fresh projection from them at the cap it is trying, so no pass
+        # ever projects a projection. The record still keeps the full list.
+        full_results = context_results
+
+        def render_envelope(cap: int | None) -> str:
+            return build_event_envelope(
+                event,
+                full_results,
+                run_id,
+                operational_notes=notes,
+                policy=policy,
+                cap_chars=cap,
+            )
+
+        compact = bool((event.get("detail") or {}).get("compact_context"))
         before_state = _json_safe_state(getattr(session, "_state", None))
         response = session.exchange(
-            envelope,
+            render_envelope(0 if compact else None),
             force_memory=None,
             terminal_surface=event.get("terminal_surface"),
             event_managed=True,
             wake_context=wake_context,
+            render_envelope=render_envelope,
+            compact=compact,
         )
         after_state = _json_safe_state(getattr(session, "_state", None))
         outcome_observation = build_outcome_observation(
@@ -2281,6 +2426,7 @@ def run_next_event(
             outcome_observation=outcome_observation,
             wake_validation=wake_validation,
             auto_continuation_event=auto_continuation_event,
+            admission=getattr(session, "_last_admission", None),
         )
         if auto_continuation_event is not None:
             completed["auto_continuation_event"] = auto_continuation_event
@@ -2299,12 +2445,45 @@ def run_next_event(
                 completed["policy_disposition"] = policy_disposition
         return completed
     except Exception as e:
-        store.append_failed(
-            event=event,
-            run_id=run_id,
-            exc=e,
-            context_results=context_results,
-        )
+        from hamutay.window import WindowFailure
+
+        policy = getattr(session, "context_policy", None)
+        admission = getattr(session, "_last_admission", None)
+        if (
+            isinstance(e, WindowFailure)
+            and policy is not None
+            and policy.window_aware
+            and not store.has_compact_retry(event["event_id"])
+        ):
+            # One deliberate retry: the same event re-pended with a compact
+            # envelope. A second window failure on that run is terminal.
+            reason = {
+                "CountUnavailable": "count_unavailable",
+                "ExhaustedBeforeRequest": "exhausted_before_request",
+                "TruncatedReply": "truncated_reply",
+            }.get(type(e).__name__, "window_failure")
+            try:
+                store.append_failed_with_retry(
+                    event=event,
+                    run_id=run_id,
+                    exc=e,
+                    reason=reason,
+                    context_results=context_results,
+                    admission=admission,
+                )
+            except OSError as store_error:
+                _note_unrecorded_failure(e, store_error)
+        else:
+            try:
+                store.append_failed(
+                    event=event,
+                    run_id=run_id,
+                    exc=e,
+                    context_results=context_results,
+                    admission=admission,
+                )
+            except OSError as store_error:
+                _note_unrecorded_failure(e, store_error)
         raise
 
 
