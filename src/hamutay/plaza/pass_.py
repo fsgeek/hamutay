@@ -1,0 +1,82 @@
+"""The bounded repair pass: one plaza-lock scope per unit (spec §6)."""
+from __future__ import annotations
+
+import time
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+
+from hamutay.assembly.binding import AssemblyBinding
+from hamutay.assembly.ledger import Ledger, LedgerMalformed, LedgerUnavailable, iso
+from hamutay.events import StoreUnavailable
+
+from . import store as _store
+from .event import inbound_event_for
+from .records import build_delivery, reduce, validate_plaza
+from .send import PLAZA_LOCK_WINDOW_S
+
+PASS_UNITS = 4
+PASS_BUDGET_S = 6.0
+STORE_LOCK_WINDOW_S = 2.0
+UNIT_NEEDS_S = PLAZA_LOCK_WINDOW_S + STORE_LOCK_WINDOW_S
+
+
+@dataclass(frozen=True)
+class PlazaMemo:
+    signature: tuple
+    cursor: int          # seq after which the next pass resumes
+    undelivered: int     # what the last pass left
+
+
+def run_plaza_pass(binding: AssemblyBinding, *, now: datetime, memo: PlazaMemo | None = None,
+                   land=_store.land, clock=time.monotonic) -> tuple[dict, PlazaMemo]:
+    cfg = binding.members
+    if cfg.plaza is None:
+        return {"skipped": True, "units": 0, "landed": [], "unreadable": []}, (memo or PlazaMemo((0, 0.0), 0, 0))
+    ledger = Ledger(cfg.plaza)
+    sig = ledger.signature()
+    if memo is not None and memo.signature == sig and memo.undelivered == 0:
+        return {"skipped": True, "units": 0, "landed": [], "unreadable": []}, memo
+    start = clock()
+    cursor = memo.cursor if memo is not None else 0
+    examined: set[str] = set()
+    landed: list[str] = []
+    unreadable: list[str] = []
+    units = 0
+    remaining_after = 0
+    while units < PASS_UNITS and (PASS_BUDGET_S - (clock() - start)) >= UNIT_NEEDS_S:
+        try:
+            with ledger.try_locked(PLAZA_LOCK_WINDOW_S):
+                records = ledger.read_unlocked()
+                validate_plaza(records, ledger.line_numbers)
+                view = reduce(records)
+                pending = view.undelivered()
+                remaining_after = len(pending)
+                if not pending:
+                    break
+                after = [m for m in pending if m["seq"] > cursor] or pending      # wrap once
+                target = after[0]
+                if target["message_id"] in examined:
+                    break                                                         # one full circuit
+                examined.add(target["message_id"])
+                cursor = target["seq"]
+                units += 1
+                truth = view.delivery_truth(target["message_id"])
+                try:
+                    land(Path(target["delivery"]["events_path"]), inbound_event_for(target), timeout_s=STORE_LOCK_WINDOW_S)
+                    ledger.append_unlocked(build_delivery(message=target, state="landed", landed_at=iso(now), detail=None))
+                    landed.append(target["message_id"]); remaining_after -= 1
+                except (StoreUnavailable, OSError) as e:
+                    err = str(e)
+                    if not (truth["state"] == "store_unreadable" and (truth.get("detail") or {}).get("error") == err):
+                        ledger.append_unlocked(build_delivery(message=target, state="store_unreadable",
+                                                              landed_at=None, detail={"error": err}))
+                    unreadable.append(target["message_id"])
+        except LedgerUnavailable:
+            return {"skipped": "lock", "units": units, "landed": landed, "unreadable": unreadable}, \
+                (memo or PlazaMemo(sig, cursor, 1))
+        except LedgerMalformed as e:
+            return {"skipped": False, "error": str(e), "units": units, "landed": landed, "unreadable": unreadable}, \
+                PlazaMemo(sig, cursor, 1)
+    return {"skipped": False, "units": units, "landed": landed, "unreadable": unreadable}, \
+        PlazaMemo(ledger.signature(), cursor, remaining_after)
