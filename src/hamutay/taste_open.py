@@ -39,6 +39,7 @@ from hamutay.terminal_surface import (
 if TYPE_CHECKING:
     from anthropic.types import MessageParam
     from hamutay.assembly.binding import AssemblyBinding
+    from hamutay.context_policy import ContextPolicyHolder
 
 
 OPEN_SCHEMA = {
@@ -1208,6 +1209,37 @@ class AnthropicTasteBackend:
         )
 
 
+class _FixedCount:
+    """A counter that answers with a count already taken for these exact bytes."""
+
+    def __init__(self, n: int):
+        self._n = n
+
+    def count(self, payload: dict) -> int:
+        return self._n
+
+
+@dataclass
+class Prepared:
+    """One counted, un-sent first payload: what admission decides on.
+
+    `payload` is the exact bytes the path would send before bounding, so the
+    session can count what it is about to admit rather than an approximation
+    of it (spec §2 "Admission")."""
+
+    payload: dict
+    prompt_tokens: int | None
+    path: str
+    sendable: bool
+    reason: str | None
+    inputs: dict          # model, system, messages, extra_tools, terminal_surface, tool_executor
+
+
+def _default_http(method: str, url: str, body: dict | None):
+    """The window machinery's transport: one JSON round trip, no retries."""
+    return httpx.request(method, url, json=body, timeout=30.0).json()
+
+
 class OpenAITasteBackend:
     """OpenAI-compatible chat completions (OpenRouter, LM Studio, vLLM, etc.)."""
 
@@ -1232,12 +1264,33 @@ class OpenAITasteBackend:
         openrouter_cache: bool = True,
         openrouter_cache_ttl: str = "5m",
         context_limit: int | None = None,
+        context_policy: "ContextPolicyHolder | None" = None,
+        http=None,
     ):
         # The substrate's context ceiling in tokens, if known (a local
         # llama-server's n_ctx). None means "no ceiling the loop should
         # manage" — OpenRouter's substrates today. Spec
-        # 2026-09-06-local-substrate-door §5.
-        self._context_limit = context_limit
+        # 2026-09-06-local-substrate-door §5. It now lives in the policy;
+        # `_context_limit` is a property over it (old name, same meaning).
+        # The window policy the session owns (spec 2026-09-17-window-aware-wakes
+        # "The context policy"). Dereferenced at use, never snapshotted: a
+        # ceiling learned mid-life must reach the next send. Without one, a
+        # ceiling-only policy keeps today's estimate-based loop exactly.
+        from hamutay.context_policy import ContextPolicy, ContextPolicyHolder
+        from hamutay.window import TokenCounter
+        if context_policy is None:
+            context_policy = ContextPolicyHolder(
+                ContextPolicy.for_limit(
+                    context_limit, "explicit" if context_limit else "provider default"
+                )
+            )
+        self._policy_holder = context_policy
+        self._http = http or _default_http
+        root = self._policy_holder.current.tokenizer
+        self._counter = TokenCounter(root, self._http) if root else None
+        self._counter_root = root
+        # The exact prompt count of the last bounded send, for the near-wall rule.
+        self._last_counted_prompt_tokens: int | None = None
         # OpenRouter automatic prompt caching: a top-level cache_control puts
         # the breakpoint on the last cacheable block and advances it as the
         # conversation grows — which is exactly the intra-wake repetition a
@@ -1333,6 +1386,171 @@ class OpenAITasteBackend:
             return mode
         return self._tool_choice
 
+    # --- the window: the policy, the counter, the one send ------------------
+
+    @property
+    def policy(self):
+        """The live policy value; never snapshotted (the session replaces it)."""
+        return self._policy_holder.current
+
+    @property
+    def counter(self):
+        return self._counter
+
+    @property
+    def _context_limit(self) -> int | None:
+        """The old name, kept for the tests and the session."""
+        return self.policy.limit
+
+    @_context_limit.setter
+    def _context_limit(self, value):
+        """apply_context_limit's legacy path: a ceiling with no tokenizer."""
+        from hamutay.context_policy import ContextPolicy
+        self._policy_holder.current = ContextPolicy.for_limit(value, "explicit")
+
+    def _refresh_counter(self) -> None:
+        """Follow the holder: a policy replaced mid-life may change tokenizers.
+
+        The root the counter was built for is remembered here rather than read
+        off the counter, so a counter installed from outside (a test double, a
+        shared counter) is kept rather than silently replaced."""
+        from hamutay.window import TokenCounter
+        root = self.policy.tokenizer
+        if root and (self._counter is None or self._counter_root != root):
+            self._counter = TokenCounter(root, self._http)
+            self._counter_root = root
+        elif not root:
+            self._counter = None
+            self._counter_root = None
+
+    def _take_response(self, data: dict, acct, *, turn_index: int) -> dict:
+        """Account first, then judge the stop. One helper for all four paths.
+
+        The accounting happens before the `finish_reason` check so a truncated
+        reply still carries what it cost and what came before it (spec §4)."""
+        from hamutay.window import TruncatedReply
+        acct.responses.append(data)
+        usage = data.get("usage") or {}
+        acct.input_tokens += usage.get("prompt_tokens", 0) or 0
+        acct.output_tokens += usage.get("completion_tokens", 0) or 0
+        cr, cw = self._usage_cache(usage)
+        acct.cache_read += cr
+        acct.cache_write += cw
+        choice = data["choices"][0]
+        if (choice.get("finish_reason") or "unknown") == "length":
+            message = choice.get("message", {}) or {}
+            text = self._content_text(message.get("content")) + (message.get("reasoning_content") or "")
+            raise TruncatedReply(
+                text=text, message=message, turn_index=turn_index,
+                prompt_tokens=int(usage.get("prompt_tokens", 0) or 0),
+                completion_tokens=int(usage.get("completion_tokens", 0) or 0),
+                account=acct,
+            )
+        return data
+
+    def _send(self, payload: dict, acct, *, turn_index: int, tool_choice_none: bool,
+              tool_executor=None, precounted: int | None = None) -> dict:
+        """Bound (window-aware doors), post, take. Every send goes through here.
+
+        Without a window-aware policy the payload is posted exactly as the path
+        built it — including `max_tokens`, which the paths still set themselves
+        so the no-ceiling bytes are unchanged. `precounted` is the exact count
+        of *this* payload already taken by the caller (the natural loop's
+        turn-0 look-ahead): counting the same bytes twice would be two round
+        trips to the tokenizer for one answer."""
+        self._refresh_counter()
+        policy = self.policy
+        if policy.window_aware:
+            from hamutay.window import CountUnavailable, ExhaustedBeforeRequest, bound_payload
+            counter = self._counter if precounted is None else _FixedCount(precounted)
+            try:
+                b = bound_payload(payload, policy, counter,
+                                  configured_max_tokens=self._max_tokens,
+                                  tool_choice_none=tool_choice_none)
+            except CountUnavailable as e:
+                self._log_pressure(tool_executor, "count_unavailable", error=e.error)
+                raise
+            except ExhaustedBeforeRequest as e:
+                self._log_pressure(tool_executor, "exhausted_before_request",
+                                   prompt_tokens=e.prompt_tokens, room=e.room,
+                                   max_tokens=e.max_tokens, limit=e.limit)
+                raise
+            self._last_counted_prompt_tokens = b.prompt_tokens
+            if b.budget_fields:
+                self._log_pressure(tool_executor, "generation_budgeted",
+                                   prompt_tokens=b.prompt_tokens, room=b.room,
+                                   max_tokens=b.max_tokens, limit=policy.limit,
+                                   forced_sequence_tokens=policy.forced_sequence_tokens,
+                                   **b.budget_fields)
+        data = self._post_chat(payload)
+        return self._take_response(data, acct, turn_index=turn_index)
+
+    @staticmethod
+    def _log_pressure(tool_executor, action: str, **detail) -> None:
+        if tool_executor is not None:
+            tool_executor.log_event({"tool": "_framework", "event": "budget_pressure",
+                                     "action": action, **detail})
+
+    def _path_for(self, extra_tools, terminal_surface) -> str:
+        if terminal_surface is not None:
+            return "terminal_surface"
+        if self.wake_mode == "natural":
+            return "natural"
+        return "multi_turn" if extra_tools else "single_tool"
+
+    def _first_payload(self, path: str, model: str, system: str, messages: list[dict],
+                       extra_tools: list[dict], terminal_surface: dict | None) -> dict:
+        """The exact first payload `path` would send, built by the path's own code."""
+        if path == "terminal_surface":
+            return self._first_payload_terminal_surface(model, system, messages, terminal_surface)
+        if path == "natural":
+            return self._first_payload_natural(model, system, messages, extra_tools)
+        if path == "multi_turn":
+            return self._first_payload_multi_turn(model, system, messages, extra_tools)
+        return self._first_payload_single_tool(model, system, messages)
+
+    def prepare(self, model, system, messages, extra_tools, terminal_surface, tool_executor,
+                *, candidate: bool = False) -> "Prepared":
+        """Count the first payload without sending it.
+
+        A count failure always raises — a door that cannot count cannot decide.
+        Exhaustion is reported (not raised) for a candidate, so admission can
+        try a smaller envelope instead of losing the wake."""
+        from hamutay.window import bound_payload
+        path = self._path_for(extra_tools, terminal_surface)
+        payload = self._first_payload(path, model, system, messages, extra_tools or [],
+                                      terminal_surface)
+        inputs = dict(model=model, system=system, messages=messages, extra_tools=extra_tools,
+                      terminal_surface=terminal_surface, tool_executor=tool_executor)
+        self._refresh_counter()
+        if not self.policy.window_aware:
+            return Prepared(payload, None, path, True, None, inputs)
+        # A candidate carries no generation bound: the path's `_send` sets
+        # `max_tokens` from the count at the moment it actually sends, and a
+        # stale bound in the admission payload would only be a lie about it.
+        payload.pop("max_tokens", None)
+        b = bound_payload(json.loads(json.dumps(payload)), self.policy, self._counter,
+                          configured_max_tokens=self._max_tokens,
+                          tool_choice_none=payload.get("tool_choice") == "none",
+                          candidate=True)
+        if not b.sendable and not candidate:
+            from hamutay.window import ExhaustedBeforeRequest
+            raise ExhaustedBeforeRequest(prompt_tokens=b.prompt_tokens, limit=self.policy.limit,
+                                         room=b.room, max_tokens=b.max_tokens)
+        return Prepared(payload, b.prompt_tokens, path, b.sendable, b.reason, inputs)
+
+    def call_prepared(self, prepared: "Prepared") -> ExchangeResult:
+        """Send what `prepare` counted, through the path that built it."""
+        i = prepared.inputs
+        if prepared.path == "terminal_surface":
+            return self.call_terminal_surface(
+                model=i["model"], system=i["system"], messages=i["messages"],
+                experiment_label="prepared", terminal_surface=i["terminal_surface"],
+            )
+        return self.call(model=i["model"], system=i["system"], messages=i["messages"],
+                         experiment_label="prepared", extra_tools=i["extra_tools"],
+                         tool_executor=i["tool_executor"])
+
     def call(
         self,
         model: str,
@@ -1361,47 +1579,49 @@ class OpenAITasteBackend:
             )
         return self._call_single_tool(model=model, system=system, messages=messages)
 
+    def _first_payload_single_tool(self, model: str, system: str, messages: list[dict]) -> dict:
+        """The exact first payload `_call_single_tool` sends."""
+        # OpenAI format: system prompt is a message, not a parameter
+        payload: dict = {
+            "model": model,
+            "max_tokens": self._max_tokens,
+            "messages": [{"role": "system", "content": system}] + messages,
+            "tools": [self._think_tool_def()],
+            "tool_choice": self._resolved_tool_choice(),
+        }
+        self._apply_openai_payload_options(payload)
+        return payload
+
     def _call_single_tool(
         self,
         model: str,
         system: str,
         messages: list[dict],
     ) -> ExchangeResult:
-        # OpenAI format: system prompt is a message, not a parameter
-        oai_messages = [{"role": "system", "content": system}] + messages
+        from hamutay.window import WakeAccount
 
-        payload: dict = {
-            "model": model,
-            "max_tokens": self._max_tokens,
-            "messages": oai_messages,
-            "tools": [self._think_tool_def()],
-            "tool_choice": self._resolved_tool_choice(),
-        }
-        self._apply_openai_payload_options(payload)
+        payload = self._first_payload_single_tool(model, system, messages)
+        oai_messages = payload["messages"]
 
         # A malformed think_and_respond is fed back as a tool error and the
         # model is asked again (up to _MAX_MALFORMED_PER_WAKE times) — the
         # reply's JSON breaking is not a reason to lose the wake.
         malformed = 0
-        responses: list[dict] = []
+        acct = WakeAccount()
+        turn_index = 0
         while True:
-            data = self._post_chat(payload)
-            responses.append(data)
+            data = self._send(payload, acct, turn_index=turn_index,
+                              tool_choice_none=payload.get("tool_choice") == "none")
+            turn_index += 1
 
             choice = data["choices"][0]
             raw_stop: str = choice.get("finish_reason") or "unknown"
-            if raw_stop == "length":
-                raise RuntimeError(
-                    "OpenAI backend: finish_reason=length; refusing to parse "
-                    "possibly truncated structured output"
-                )
             stop_reason: str = {
                 "stop": "end_turn",
                 "length": "max_tokens",
                 "tool_calls": "tool_use",
             }.get(raw_stop, raw_stop)
 
-            usage = data.get("usage") or {}
             message = choice.get("message", {})
             tool_calls = message.get("tool_calls") or []
             retry_after_malformed = False
@@ -1457,11 +1677,11 @@ class OpenAITasteBackend:
                 return ExchangeResult(
                     raw_output=raw_output,
                     stop_reason=stop_reason,
-                    input_tokens=usage.get("prompt_tokens", 0),
-                    output_tokens=usage.get("completion_tokens", 0),
-                    cache_read_tokens=self._usage_cache(usage)[0],
-                    cache_creation_tokens=self._usage_cache(usage)[1],
-                    **self._cost_kwargs(responses),
+                    input_tokens=acct.input_tokens,
+                    output_tokens=acct.output_tokens,
+                    cache_read_tokens=acct.cache_read,
+                    cache_creation_tokens=acct.cache_write,
+                    **self._cost_kwargs(acct.responses),
                 )
 
         # If there were tool calls but not our target function, fail explicitly.
@@ -1481,26 +1701,19 @@ class OpenAITasteBackend:
                 return ExchangeResult(
                     raw_output=raw_output,
                     stop_reason=stop_reason,
-                    input_tokens=usage.get("prompt_tokens", 0),
-                    output_tokens=usage.get("completion_tokens", 0),
-                    cache_read_tokens=self._usage_cache(usage)[0],
-                    cache_creation_tokens=self._usage_cache(usage)[1],
-                    **self._cost_kwargs(responses),
+                    input_tokens=acct.input_tokens,
+                    output_tokens=acct.output_tokens,
+                    cache_read_tokens=acct.cache_read,
+                    cache_creation_tokens=acct.cache_write,
+                    **self._cost_kwargs(acct.responses),
                 )
 
         raise RuntimeError("OpenAI backend: no think_and_respond output in response")
 
-    def call_terminal_surface(
-        self,
-        model: str,
-        system: str,
-        messages: list[dict],
-        experiment_label: str,
-        terminal_surface: dict,
-    ) -> ExchangeResult:
-        del experiment_label
+    def _first_payload_terminal_surface(self, model: str, system: str, messages: list[dict],
+                                        terminal_surface: dict) -> dict:
+        """The exact payload `call_terminal_surface` sends."""
         tool = terminal_tool_schema(terminal_surface)
-        oai_messages = [{"role": "system", "content": system}] + messages
         tool_choice_value = terminal_surface.get("tool_choice", "auto")
         if tool_choice_value == "force":
             tool_choice: str | dict = {
@@ -1514,7 +1727,7 @@ class OpenAITasteBackend:
         payload: dict = {
             "model": model,
             "max_tokens": self._max_tokens,
-            "messages": oai_messages,
+            "messages": [{"role": "system", "content": system}] + messages,
             "tools": [
                 {
                     "type": "function",
@@ -1528,21 +1741,32 @@ class OpenAITasteBackend:
             "tool_choice": tool_choice,
         }
         self._apply_openai_payload_options(payload)
+        return payload
 
-        data = self._post_chat(payload)
+    def call_terminal_surface(
+        self,
+        model: str,
+        system: str,
+        messages: list[dict],
+        experiment_label: str,
+        terminal_surface: dict,
+    ) -> ExchangeResult:
+        del experiment_label
+        from hamutay.window import WakeAccount
+
+        tool = terminal_tool_schema(terminal_surface)
+        payload = self._first_payload_terminal_surface(model, system, messages, terminal_surface)
+
+        acct = WakeAccount()
+        data = self._send(payload, acct, turn_index=0,
+                          tool_choice_none=payload.get("tool_choice") == "none")
         choice = data["choices"][0]
         raw_stop: str = choice.get("finish_reason") or "unknown"
-        if raw_stop == "length":
-            raise RuntimeError(
-                "OpenAI backend: finish_reason=length; refusing to parse "
-                "possibly truncated terminal surface output"
-            )
         stop_reason: str = {
             "stop": "end_turn",
             "length": "max_tokens",
             "tool_calls": "tool_use",
         }.get(raw_stop, raw_stop)
-        usage = data.get("usage") or {}
         message = choice.get("message", {})
         tool_calls = message.get("tool_calls") or []
         for tc in tool_calls:
@@ -1559,9 +1783,11 @@ class OpenAITasteBackend:
                     terminal_output,
                 ),
                 stop_reason=stop_reason,
-                input_tokens=usage.get("prompt_tokens", 0),
-                output_tokens=usage.get("completion_tokens", 0),
-                **self._cost_kwargs([data]),
+                input_tokens=acct.input_tokens,
+                output_tokens=acct.output_tokens,
+                cache_read_tokens=acct.cache_read,
+                cache_creation_tokens=acct.cache_write,
+                **self._cost_kwargs(acct.responses),
             )
         if tool_calls:
             names = [tc.get("function", {}).get("name", "") for tc in tool_calls]
@@ -1586,13 +1812,36 @@ class OpenAITasteBackend:
                         terminal_output,
                     ),
                     stop_reason=stop_reason,
-                    input_tokens=usage.get("prompt_tokens", 0),
-                    output_tokens=usage.get("completion_tokens", 0),
-                    **self._cost_kwargs([data]),
+                    input_tokens=acct.input_tokens,
+                    output_tokens=acct.output_tokens,
+                    cache_read_tokens=acct.cache_read,
+                    cache_creation_tokens=acct.cache_write,
+                    **self._cost_kwargs(acct.responses),
                 )
 
         raise RuntimeError(
             f"OpenAI backend: no {tool['name']} terminal surface output"
+        )
+
+    def _multi_turn_payload(self, model: str, conversation: list[dict], tools: list[dict]) -> dict:
+        """One turn's payload in the multi-turn loop (the first turn included)."""
+        payload: dict = {
+            "model": model,
+            "max_tokens": self._max_tokens,
+            "messages": conversation,
+            "tools": tools,
+            "tool_choice": self._resolved_tool_choice(),
+        }
+        self._apply_openai_payload_options(payload)
+        return payload
+
+    def _first_payload_multi_turn(self, model: str, system: str, messages: list[dict],
+                                  extra_tools: list[dict]) -> dict:
+        """The exact first payload `_call_multi_turn` sends."""
+        return self._multi_turn_payload(
+            model,
+            [{"role": "system", "content": system}] + list(messages),
+            [self._think_tool_def(), *[self._openai_tool_def(t) for t in extra_tools]],
         )
 
     def _call_multi_turn(
@@ -1609,50 +1858,30 @@ class OpenAITasteBackend:
         as role=tool messages keyed by tool_call_id. The cycle completes only
         when the model calls think_and_respond.
         """
+        from hamutay.window import WakeAccount
+
         conversation = [{"role": "system", "content": system}] + list(messages)
         tools = [
             self._think_tool_def(),
             *[self._openai_tool_def(tool) for tool in extra_tools],
         ]
-        total_input = 0
-        total_output = 0
-        total_cache_read = 0
-        total_cache_write = 0
-        responses: list[dict] = []
+        acct = WakeAccount()
         malformed = 0
         max_turns = 20
 
         for _turn_index in range(max_turns):
-            payload: dict = {
-                "model": model,
-                "max_tokens": self._max_tokens,
-                "messages": conversation,
-                "tools": tools,
-                "tool_choice": self._resolved_tool_choice(),
-            }
-            self._apply_openai_payload_options(payload)
+            payload = self._multi_turn_payload(model, conversation, tools)
 
-            data = self._post_chat(payload)
-            responses.append(data)
+            data = self._send(payload, acct, turn_index=_turn_index,
+                              tool_choice_none=payload.get("tool_choice") == "none",
+                              tool_executor=tool_executor)
             choice = data["choices"][0]
             raw_stop: str = choice.get("finish_reason") or "unknown"
-            if raw_stop == "length":
-                raise RuntimeError(
-                    "OpenAI backend: finish_reason=length; refusing to parse "
-                    "possibly truncated structured output"
-                )
             stop_reason: str = {
                 "stop": "end_turn",
                 "length": "max_tokens",
                 "tool_calls": "tool_use",
             }.get(raw_stop, raw_stop)
-
-            usage = data.get("usage") or {}
-            total_input += usage.get("prompt_tokens", 0) or 0
-            total_output += usage.get("completion_tokens", 0) or 0
-            cache_read, cache_write = self._usage_cache(usage)
-            total_cache_read += cache_read
-            total_cache_write += cache_write
 
             message = choice.get("message", {})
             tool_calls = message.get("tool_calls") or []
@@ -1736,14 +1965,14 @@ class OpenAITasteBackend:
                 return ExchangeResult(
                     raw_output=terminal_output,
                     stop_reason=stop_reason,
-                    input_tokens=total_input,
-                    output_tokens=total_output,
+                    input_tokens=acct.input_tokens,
+                    output_tokens=acct.output_tokens,
                     tool_activity=(
                         tool_executor.activity_log if tool_executor else None
                     ),
-                    cache_read_tokens=total_cache_read,
-                    cache_creation_tokens=total_cache_write,
-                    **self._cost_kwargs(responses),
+                    cache_read_tokens=acct.cache_read,
+                    cache_creation_tokens=acct.cache_write,
+                    **self._cost_kwargs(acct.responses),
                 )
 
             if tool_executor is None:
@@ -1782,6 +2011,34 @@ class OpenAITasteBackend:
             f"within {max_turns} turns"
         )
 
+    def _natural_payload(self, model: str, conversation: list[dict], active_tools: list[dict],
+                         *, all_withdrawn: bool) -> dict:
+        """One turn's payload in the natural loop (the first turn included).
+
+        `max_tokens` is set here, in today's position, so a door with no
+        window-aware policy sends exactly the bytes it always did; `_send`
+        only overwrites the value when a window-aware policy bounds it."""
+        built: dict = {
+            "model": model,
+            "max_tokens": self._max_tokens,
+            "messages": conversation,
+            "tool_choice": "none" if all_withdrawn else "auto",
+        }
+        if active_tools:
+            built["tools"] = active_tools
+        self._apply_openai_payload_options(built)
+        return built
+
+    def _first_payload_natural(self, model: str, system: str, messages: list[dict],
+                               extra_tools: list[dict]) -> dict:
+        """The exact first payload `_call_natural` sends (nothing withdrawn yet)."""
+        return self._natural_payload(
+            model,
+            [{"role": "system", "content": system}] + list(messages),
+            [self._openai_tool_def(t) for t in extra_tools],
+            all_withdrawn=False,
+        )
+
     def _call_natural(
         self,
         model: str,
@@ -1798,15 +2055,13 @@ class OpenAITasteBackend:
         update_state tool, buffered in the executor and merged into
         raw_output here, so the session's state path is unchanged.
         """
+        from hamutay.window import (SOFT_THRESHOLD_FRACTION, THINK_UNRESTRICTED_ROOM_TOKENS,
+                                    WITHDRAWN_TOOL_TURNS_NEAR_WALL, WakeAccount, bound_payload)
+
         conversation = [{"role": "system", "content": system}] + list(messages)
         tools = [self._openai_tool_def(tool) for tool in extra_tools]
-        total_input = 0
-        total_output = 0
-        total_cache_read = 0
-        total_cache_write = 0
-        responses: list[dict] = []
+        acct = WakeAccount()
         malformed = 0
-        interim_text: list[str] = []
         max_turns = 20
 
         # Context ceiling (spec 2026-09-06-local-substrate-door §5). With a
@@ -1815,10 +2070,13 @@ class OpenAITasteBackend:
         # result may not exceed a quarter of the window; an over-limit error
         # truncates the largest results and retries with tools withdrawn.
         context_limit = self._context_limit
-        soft_threshold = int(context_limit * 0.8) if context_limit else None
+        soft_threshold = int(context_limit * SOFT_THRESHOLD_FRACTION) if context_limit else None
         result_cap = _result_cap_for_context_limit(context_limit)
         estimated_next_input_tokens = 0
         last_reported_prompt_tokens = 0
+        # Window-aware doors count instead of estimating: the last exact count
+        # of a sent prompt, which decides how near the wall the wake is.
+        last_counted_prompt_tokens: int | None = None
         perception_withdrawn = False
         withdrawn_tool_turns = 0
         all_withdrawn = False
@@ -1830,7 +2088,7 @@ class OpenAITasteBackend:
             ]
 
         def _withdraw_perception(
-            reason: str, measured: int | None = None, **detail
+            reason: str, measured: int | None = None, count_source: str | None = None, **detail
         ) -> None:
             nonlocal perception_withdrawn
             if perception_withdrawn:
@@ -1851,13 +2109,24 @@ class OpenAITasteBackend:
             # found live 2026-09-16 on community/qwen c8) reject a system
             # message anywhere but first, and the note is not the substrate's
             # voice anyway; it is the harness speaking in the resident's ear.
+            # A window-aware door knows the number exactly: it says what the
+            # next request counts, not what the last one estimated (spec §1).
+            if count_source is not None:
+                sizing = (
+                    f"the next request counts {measured_tokens} tokens "
+                    f"({count_source}); the last measured request was "
+                    f"{last_reported_prompt_tokens}"
+                )
+            else:
+                sizing = (
+                    f"the last request measured {measured_tokens} tokens against "
+                    f"a ceiling of {context_limit}; the threshold is {soft_threshold}"
+                )
             conversation.append({
                 "role": "user",
                 "content": (
                     "Operational note from the harness: this wake's context "
-                    f"is at its budget ({reason}: the last request measured "
-                    f"{measured_tokens} tokens against a ceiling "
-                    f"of {context_limit}; the threshold is {soft_threshold}). "
+                    f"is at its budget ({reason}: {sizing}). "
                     "Reading, searching, shell, and memory tools are "
                     "withdrawn for the rest of this wake; "
                     + (", ".join(kept) if kept else "no tools")
@@ -1875,17 +2144,81 @@ class OpenAITasteBackend:
                     "soft_threshold": soft_threshold,
                     "context_limit": context_limit,
                     "kept_tools": kept,
+                    **({"prompt_tokens": measured_tokens, "count_source": count_source}
+                       if count_source is not None else {}),
                     **detail,
                 })
 
+        def _build_payload() -> dict:
+            active = [] if all_withdrawn else (
+                _state_tools() if perception_withdrawn else tools
+            )
+            return self._natural_payload(model, conversation, active,
+                                         all_withdrawn=all_withdrawn)
+
         for turn_index in range(max_turns):
+            policy = self.policy
+            window_aware = policy.window_aware
             if (
                 soft_threshold is not None
                 and not perception_withdrawn
                 and estimated_next_input_tokens >= soft_threshold
             ):
                 _withdraw_perception("soft threshold reached")
-            if perception_withdrawn and not all_withdrawn and withdrawn_tool_turns >= 3:
+            precounted: int | None = None
+            # A turn that withdraws perception is the first turn under the
+            # smaller tool set, not one of the turns allowed after it.
+            withdrew_this_turn = False
+            if window_aware and turn_index == 0:
+                # Turn 0 has no server report to estimate from: count the exact
+                # payload about to be sent and decide the withdrawal on the
+                # number rather than on zero (spec §1). A rebuild after
+                # withdrawal is different bytes, so the count is not reused.
+                self._refresh_counter()
+                from hamutay.window import CountUnavailable
+                try:
+                    counted = self._counter.count(_build_payload())
+                except CountUnavailable as e:
+                    self._log_pressure(tool_executor, "count_unavailable", error=e.error)
+                    raise
+                last_counted_prompt_tokens = counted
+                precounted = counted
+                # Exhaustion is decided on the count before the withdrawal is:
+                # a request that cannot be sent is not made sendable by a
+                # smaller tool set, and rebuilding it would only cost a second
+                # count on the way to the same failure. The same bound decides
+                # it, asked as a candidate so it reports instead of raising.
+                probe = bound_payload({}, policy, _FixedCount(counted),
+                                      configured_max_tokens=self._max_tokens,
+                                      tool_choice_none=False, candidate=True)
+                if not probe.sendable:
+                    from hamutay.window import ExhaustedBeforeRequest
+                    self._log_pressure(tool_executor, "exhausted_before_request",
+                                       prompt_tokens=probe.prompt_tokens, room=probe.room,
+                                       max_tokens=probe.max_tokens, limit=policy.limit)
+                    raise ExhaustedBeforeRequest(prompt_tokens=probe.prompt_tokens,
+                                                 limit=policy.limit, room=probe.room,
+                                                 max_tokens=probe.max_tokens)
+                if (soft_threshold is not None and not perception_withdrawn
+                        and counted >= soft_threshold):
+                    _withdraw_perception("soft threshold reached", measured=counted,
+                                         count_source="server")
+                    precounted = None
+                    withdrew_this_turn = True
+            # Near the wall the wake has one tool turn left, not three: with
+            # less room than an unrestricted think needs, three more turns
+            # cannot fit (spec §1, the near-wall rule).
+            last_room = (
+                policy.limit - 1 - last_counted_prompt_tokens
+                if window_aware and last_counted_prompt_tokens is not None
+                else None
+            )
+            limit_turns = (
+                WITHDRAWN_TOOL_TURNS_NEAR_WALL
+                if last_room is not None and last_room < THINK_UNRESTRICTED_ROOM_TOKENS
+                else 3
+            )
+            if perception_withdrawn and not all_withdrawn and withdrawn_tool_turns >= limit_turns:
                 all_withdrawn = True
                 if tool_executor is not None:
                     tool_executor.log_event({
@@ -1896,26 +2229,13 @@ class OpenAITasteBackend:
                         "context_limit": context_limit,
                     })
 
-            def _build_payload() -> dict:
-                active = [] if all_withdrawn else (
-                    _state_tools() if perception_withdrawn else tools
-                )
-                built: dict = {
-                    "model": model,
-                    "max_tokens": self._max_tokens,
-                    "messages": conversation,
-                    "tool_choice": "none" if all_withdrawn else "auto",
-                }
-                if active:
-                    built["tools"] = active
-                self._apply_openai_payload_options(built)
-                return built
-
             data = None
             for recovery_attempt in range(3):
                 payload = _build_payload()
                 try:
-                    data = self._post_chat(payload)
+                    data = self._send(payload, acct, turn_index=turn_index,
+                                      tool_choice_none=payload.get("tool_choice") == "none",
+                                      tool_executor=tool_executor, precounted=precounted)
                     break
                 except RuntimeError as e:
                     if not _is_context_limit_error(e) or turn_index == 0:
@@ -1948,20 +2268,11 @@ class OpenAITasteBackend:
                         raise
             if data is None:
                 raise RuntimeError("No response after budget recovery attempts")
-            responses.append(data)
+            if window_aware:
+                last_counted_prompt_tokens = self._last_counted_prompt_tokens
             choice = data["choices"][0]
             raw_stop: str = choice.get("finish_reason") or "unknown"
-            if raw_stop == "length":
-                raise RuntimeError(
-                    "OpenAI backend: finish_reason=length; the reply was "
-                    "truncated and is not trusted"
-                )
             usage = data.get("usage") or {}
-            total_input += usage.get("prompt_tokens", 0) or 0
-            total_output += usage.get("completion_tokens", 0) or 0
-            cache_read, cache_write = self._usage_cache(usage)
-            total_cache_read += cache_read
-            total_cache_write += cache_write
             # Ground truth for the next estimate: what the server counted,
             # plus what it generated (which the next request re-sends).
             last_reported_prompt_tokens = int(usage.get("prompt_tokens", 0) or 0)
@@ -1992,15 +2303,15 @@ class OpenAITasteBackend:
                 return ExchangeResult(
                     raw_output=raw_output,
                     stop_reason="end_turn" if raw_stop == "stop" else raw_stop,
-                    input_tokens=total_input,
-                    output_tokens=total_output,
+                    input_tokens=acct.input_tokens,
+                    output_tokens=acct.output_tokens,
                     tool_activity=(
                         tool_executor.activity_log if tool_executor else None
                     ),
-                    interim_text=interim_text or None,
-                    cache_read_tokens=total_cache_read,
-                    cache_creation_tokens=total_cache_write,
-                    **self._cost_kwargs(responses),
+                    interim_text=acct.interim_text or None,
+                    cache_read_tokens=acct.cache_read,
+                    cache_creation_tokens=acct.cache_write,
+                    **self._cost_kwargs(acct.responses),
                 )
 
             if tool_executor is None:
@@ -2009,7 +2320,7 @@ class OpenAITasteBackend:
                     "to resolve them"
                 )
             if content_text.strip():
-                interim_text.append(content_text)
+                acct.interim_text.append(content_text)
             conversation.append(
                 {"role": "assistant", "content": _strip_think(content), "tool_calls": tool_calls}
             )
@@ -2047,7 +2358,7 @@ class OpenAITasteBackend:
                     }
                 )
                 estimated_next_input_tokens += len(bounded) // _TOKEN_PER_CHAR_ESTIMATE
-            if perception_withdrawn:
+            if perception_withdrawn and not withdrew_this_turn:
                 withdrawn_tool_turns += 1
 
         raise RuntimeError(
