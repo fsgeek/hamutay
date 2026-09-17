@@ -1,7 +1,7 @@
 import json
 import subprocess
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from hamutay.assembly.ledger import Ledger, iso
 from hamutay.plaza.send import send
@@ -30,8 +30,12 @@ def test_send_read_status_and_key(house):
     assert again["duplicate_of_seq"] == 1
     assert _cli(root, "send", "--by", "someone", "--to", "qwen", "--text-file", "t.txt").returncode == 2
     assert _cli(root, "send", "--by", "tony", "--to", "nobody", "--text-file", "t.txt").returncode == 2
-    send(cfg, actor="door:elder", via="tool", to="plaza", text="post", now=T0 + timedelta(minutes=1), wake=_wake("11111111-1111-4111-8111-111111111111"))
-    send(cfg, actor="door:elder", via="tool", to="fable", text="e→f", now=T0 + timedelta(minutes=2), wake=_wake("22222222-1111-4111-8111-111111111111"))
+    # The CLI's own "hello door" send above stamped sent_at with the real wall clock (cmd_send
+    # has no --now of its own), so these direct send() calls use the real wall clock too --
+    # otherwise status's --now could never land on the same UTC day as both actors' sends.
+    now = datetime.now(UTC)
+    send(cfg, actor="door:elder", via="tool", to="plaza", text="post", now=now, wake=_wake("11111111-1111-4111-8111-111111111111"))
+    send(cfg, actor="door:elder", via="tool", to="fable", text="e→f", now=now, wake=_wake("22222222-1111-4111-8111-111111111111"))
     rows = [json.loads(l) for l in _cli(root, "read").stdout.splitlines()]
     assert [r["text"] for r in rows] == ["hello door", "post", "e→f"] and rows[0]["truth"]["state"] == "landed"
     rows = [json.loads(l) for l in _cli(root, "read", "--since-seq", "3", "--through-seq", "4", "--for", "qwen").stdout.splitlines()]
@@ -40,8 +44,13 @@ def test_send_read_status_and_key(house):
     assert [r["text"] for r in rows] == ["hello door", "post"]           # e→f is mail to fable: excluded
     rows = [json.loads(l) for l in _cli(root, "read", "--posts").stdout.splitlines()]
     assert [r["text"] for r in rows] == ["post"]
-    st = json.loads(_cli(root, "status").stdout)
+    st = json.loads(_cli(root, "status", "--now", iso(now)).stdout)
     assert st["valid"] is True and st["sent_today"] == {"tony": 1, "door:elder": 1} and st["undelivered"] == []
+    # Without --now, status still runs against the real clock (deterministic: it must always
+    # exit 0 and report a sent_today key, whatever it contains on whatever day the suite runs).
+    out_default = _cli(root, "status")
+    assert out_default.returncode == 0
+    assert "sent_today" in json.loads(out_default.stdout)
 
 
 def test_status_reports_invalid_and_pass_runs(house):

@@ -66,22 +66,17 @@ def cmd_read(root, cfg, a) -> int:
 
 def cmd_status(root, cfg, a) -> int:
     try:
+        now = parse_instant(a.now) if a.now else _now()
+    except (ValueError, TypeError) as e:
+        print(f"status: --now {a.now!r} is not a timezone-bearing instant ({e})", file=sys.stderr); return 2
+    try:
         records, led = _read(cfg); valid = True
     except LedgerMalformed as e:
         records, valid = [], str(e)
     v = reduce(records)
-    # Each actor's cap day is the day of their own latest directed send (the day send()'s
-    # cap check is currently keyed to for them) — not the host's wall-clock "today", which
-    # would be wrong the instant a message's sent_at lands on a different UTC day than the
-    # moment this command happens to run.
+    today = now.astimezone(timezone.utc).date()
     actors = sorted({m["from"] for m in v.messages if m["to"] != "plaza"})
-    sent_today = {}
-    for act in actors:
-        days = [parse_instant(m["sent_at"]).astimezone(timezone.utc).date()
-                for m in v.messages if m["from"] == act and m["to"] != "plaza"]
-        n = v.sent_today(act, max(days))
-        if n:
-            sent_today[act] = n
+    sent_today = {act: v.sent_today(act, today) for act in actors if v.sent_today(act, today)}
     out = {"undelivered": [m["message_id"] for m in v.undelivered()],
            "sent_today": sent_today,
            "seq": (records[-1]["seq"] if records else 0),
@@ -103,7 +98,8 @@ def main(argv=None) -> int:
     s.add_argument("--to", required=True); s.add_argument("--text-file", required=True); s.add_argument("--key")
     r = sub.add_parser("read"); r.add_argument("--since-seq", type=int); r.add_argument("--through-seq", type=int)
     r.add_argument("--for", dest="for_door"); r.add_argument("--door"); r.add_argument("--posts", action="store_true")
-    sub.add_parser("status"); sub.add_parser("pass")
+    st = sub.add_parser("status"); st.add_argument("--now")
+    sub.add_parser("pass")
     a = p.parse_args(argv)
     root = Path(a.project_root).resolve()
     cfg = _load(root)
