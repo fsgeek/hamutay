@@ -702,3 +702,92 @@ def test_the_note_is_not_emitted_for_a_section_with_no_activity_log():
 def test_lean_and_omit_together_are_refused():
     with pytest.raises(ValueError):
         _build_messages({"cycle": 2}, "u", 3, lean_activity_log=True, omit_activity_log=True)
+
+
+def test_admission_halves_the_cap_from_the_full_results_until_under_target(tmp_path):
+    b = _aware([_turn(content="done", prompt_tokens=100)], counts=[40000, 33000, 30000, 30000])   # 3 candidate counts + 1 send
+    log = tmp_path / "s.jsonl"
+    s = OpenTasteSession(model="m", backend=b, log_path=str(log), experiment_label="t", enable_tools=True, project_root=tmp_path)
+    s.seed_state({"cycle": 1}, 1)
+    caps = []
+
+    def envelope(cap):
+        caps.append(cap)
+        return json.dumps({"purpose": "p", "context_results": [{"result": "x" * (cap or 100000)}]})
+    s.exchange("ignored", render_envelope=envelope)
+    assert caps == [32768, 16384, 8192] and s._last_admission == {
+        "passes": 3, "final_cap": 8192, "prompt_tokens": 30000, "over_target": False, "envelope_exhausted": False}
+    rec = json.loads(log.read_text().splitlines()[-1])
+    assert rec["admission"]["passes"] == 3 and rec["user_message"] == envelope(8192)
+    assert b.payloads[0]["messages"][-1]["content"] == envelope(8192)
+
+
+def test_admission_stops_at_the_pass_bound_and_reports_over_target(tmp_path):
+    """The pass bound is an independent stop (spec r6.3 §2).
+
+    On a 65,536 window the cap starts at 32,768 and halves while the floor
+    allows it: 32768, 16384, 8192, 4096, 2048, 1024, 512, 256. Reaching the
+    all-stubs cap of 0 would take a ninth pass, which ADMISSION_MAX_PASSES
+    forbids, so this wake terminates still over target with a real (not
+    metadata-only) cap. `envelope_exhausted` is False precisely because the
+    envelope was never exhausted — the passes ran out first.
+    """
+    from hamutay.window import ADMISSION_MAX_PASSES, MIN_STUB_CHARS
+    b = _aware([_turn(content="done", prompt_tokens=100)], counts=[40000] * 9 + [40000])
+    s = OpenTasteSession(model="m", backend=b, log_path=str(tmp_path / "s.jsonl"), experiment_label="t",
+                         enable_tools=True, project_root=tmp_path)
+    s.seed_state({"cycle": 1}, 1)
+    caps = []
+    s.exchange("ignored", render_envelope=lambda cap: caps.append(cap) or json.dumps({"cap": cap}))
+    a = s._last_admission
+    assert a["passes"] == ADMISSION_MAX_PASSES and a["over_target"] is True
+    assert a["final_cap"] == MIN_STUB_CHARS and a["envelope_exhausted"] is False
+    assert caps == [32768, 16384, 8192, 4096, 2048, 1024, 512, 256]
+    assert caps[-1] == MIN_STUB_CHARS and len(caps) == ADMISSION_MAX_PASSES
+
+
+def test_a_compact_wake_over_target_is_exhausted_in_one_pass(tmp_path):
+    """The other way admission ends: the envelope really is spent.
+
+    A compact wake starts at cap 0 — every result already a metadata-only
+    stub — so there is nothing left to halve. One pass, and if the count is
+    still over target the wake proceeds over target with `envelope_exhausted`
+    true: the harness has cut everything it is allowed to cut.
+    """
+    b = _aware([_turn(content="done", prompt_tokens=100)], counts=[40000, 40000])
+    s = OpenTasteSession(model="m", backend=b, log_path=str(tmp_path / "s.jsonl"), experiment_label="t",
+                         enable_tools=True, project_root=tmp_path)
+    s.seed_state({"cycle": 1}, 1)
+    caps = []
+    s.exchange("ignored", render_envelope=lambda cap: caps.append(cap) or json.dumps({"cap": cap}),
+               compact=True)
+    a = s._last_admission
+    assert caps == [0] and a["passes"] == 1
+    assert a["envelope_exhausted"] is True and a["over_target"] is True and a["final_cap"] == 0
+
+
+def test_admission_first_candidate_below_the_floor_is_not_an_error(tmp_path):
+    b = _aware([_turn(content="done", prompt_tokens=100)], counts=[65000, 30000, 30000])
+    s = OpenTasteSession(model="m", backend=b, log_path=str(tmp_path / "s.jsonl"), experiment_label="t",
+                         enable_tools=True, project_root=tmp_path)
+    s.seed_state({"cycle": 1}, 1)
+    s.exchange("ignored", render_envelope=lambda cap: json.dumps({"cap": cap}))
+    assert s._last_admission["passes"] == 2 and b.payloads
+
+
+def test_compact_wake_omits_the_activity_log_and_starts_at_stubs(tmp_path):
+    b = _aware([_turn(content="done", prompt_tokens=100)], counts=[100, 100])
+    s = OpenTasteSession(model="m", backend=b, log_path=str(tmp_path / "s.jsonl"), experiment_label="t",
+                         enable_tools=True, project_root=tmp_path)
+    s.seed_state(_state_with_log(), 2)
+    caps = []
+    s.exchange("ignored", render_envelope=lambda cap: caps.append(cap) or json.dumps({"cap": cap}), compact=True)
+    assert caps == [0] and "_activity_log" not in _state_section(b.payloads[0]["messages"][0]["content"])
+    assert "(_activity_log is omitted" in b.payloads[0]["messages"][0]["content"]
+
+
+def test_no_envelope_or_no_window_means_no_admission(tmp_path):
+    b = _backend([_turn(content="done")])
+    s = OpenTasteSession(model="m", backend=b, log_path=str(tmp_path / "s.jsonl"), experiment_label="t")
+    s.exchange("plain")
+    assert s._last_admission is None

@@ -747,6 +747,7 @@ class EventStore:
         outcome_observation: dict | None = None,
         wake_validation: dict | None = None,
         auto_continuation_event: dict | None = None,
+        admission: dict | None = None,
     ) -> dict:
         record = {
             "record_type": "event_status",
@@ -765,6 +766,8 @@ class EventStore:
             record["outcome_observation"] = outcome_observation
         if wake_validation is not None:
             record["wake_validation"] = wake_validation
+        if admission is not None:
+            record["admission"] = admission
         if auto_continuation_event is not None:
             record["auto_continuation_appended"] = True
             record["auto_continuation_event_id"] = (
@@ -916,6 +919,7 @@ class EventStore:
         run_id: str,
         exc: Exception,
         context_results: list[dict] | None = None,
+        admission: dict | None = None,
     ) -> dict:
         record = {
             "record_type": "event_status",
@@ -929,6 +933,8 @@ class EventStore:
         }
         if context_results is not None:
             record["context_results"] = context_results
+        if admission is not None:
+            record["admission"] = admission
         self.append(record)
         return record
 
@@ -1329,8 +1335,24 @@ def build_event_envelope(
     context_results: list[dict],
     run_id: str,
     operational_notes: list[str] | None = None,
+    *,
+    policy=None,
+    cap_chars: int | None = None,
 ) -> str:
-    """Build the explicit user-message envelope for a wake cycle."""
+    """Build the explicit user-message envelope for a wake cycle.
+
+    On a window-aware door the results are rendered through
+    `project_context_results` at `cap_chars` (default half the policy's
+    result cap): a deep-copied, lean, typed projection. The caller's list is
+    never touched — the record keeps the full results (spec r6.3 §2).
+    """
+    if policy is not None and policy.window_aware:
+        from hamutay.window import project_context_results
+        cap = (
+            cap_chars if cap_chars is not None
+            else policy.result_cap_chars // 2
+        )
+        context_results = project_context_results(context_results, cap)
     if event.get("event_type") == EVENT_TYPE_INBOUND:
         event_instruction = (
             "This is an external inbound event. Its origin, sender, and "
@@ -2226,23 +2248,37 @@ def run_next_event(
                 prior_states=session._prior_states,
                 bridge=session._bridge,
             )
-        envelope = build_event_envelope(
+        policy = getattr(session, "context_policy", None)
+        notes = operational_notes_for_event(
+            store.read_records(),
             event,
-            context_results,
-            run_id,
-            operational_notes=operational_notes_for_event(
-                store.read_records(),
-                event,
-                now=now or datetime.now(timezone.utc),
-            ),
+            now=now or datetime.now(timezone.utc),
         )
+        # The closure holds the *full* results; every admission pass renders
+        # a fresh projection from them at the cap it is trying, so no pass
+        # ever projects a projection. The record still keeps the full list.
+        full_results = context_results
+
+        def render_envelope(cap: int | None) -> str:
+            return build_event_envelope(
+                event,
+                full_results,
+                run_id,
+                operational_notes=notes,
+                policy=policy,
+                cap_chars=cap,
+            )
+
+        compact = bool((event.get("detail") or {}).get("compact_context"))
         before_state = _json_safe_state(getattr(session, "_state", None))
         response = session.exchange(
-            envelope,
+            render_envelope(0 if compact else None),
             force_memory=None,
             terminal_surface=event.get("terminal_surface"),
             event_managed=True,
             wake_context=wake_context,
+            render_envelope=render_envelope,
+            compact=compact,
         )
         after_state = _json_safe_state(getattr(session, "_state", None))
         outcome_observation = build_outcome_observation(
@@ -2281,6 +2317,7 @@ def run_next_event(
             outcome_observation=outcome_observation,
             wake_validation=wake_validation,
             auto_continuation_event=auto_continuation_event,
+            admission=getattr(session, "_last_admission", None),
         )
         if auto_continuation_event is not None:
             completed["auto_continuation_event"] = auto_continuation_event
@@ -2304,6 +2341,7 @@ def run_next_event(
             run_id=run_id,
             exc=e,
             context_results=context_results,
+            admission=getattr(session, "_last_admission", None),
         )
         raise
 

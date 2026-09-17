@@ -24,7 +24,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Iterable, Protocol, cast
+from typing import TYPE_CHECKING, Any, Callable, Iterable, Protocol, cast
 from uuid import UUID, uuid4
 
 import anthropic
@@ -3110,6 +3110,10 @@ class OpenTasteSession:
         self._prior_states: list[tuple[int, UUID, dict, str]] = []
         # Last injected memory cycle (for logging)
         self._last_injected_memory: tuple[int, dict] | None = None
+        # The outcome of the last envelope admission, or None when admission
+        # did not run (no envelope, or a door that is not window-aware).
+        # The event runner reads it to stamp the completed/failed record.
+        self._last_admission: dict | None = None
 
         if log_path:
             Path(log_path).parent.mkdir(parents=True, exist_ok=True)
@@ -3251,6 +3255,8 @@ class OpenTasteSession:
         terminal_surface: dict | None = None,
         event_managed: bool = False,
         wake_context=None,
+        render_envelope: "Callable[[int | None], str] | None" = None,
+        compact: bool = False,
     ) -> str:
         """One cycle: user speaks, model responds + updates state.
 
@@ -3265,6 +3271,9 @@ class OpenTasteSession:
         Ablation forks use it to replay the live run's exact injection rather
         than draw a fresh random one. Left at _UNSET, normal _pick_memory runs.
         """
+        # Admission is a per-wake fact: it must never leak from the wake
+        # that ran it into one that did not.
+        self._last_admission = None
         self._cycle += 1
         try:
             return self._exchange_impl(
@@ -3273,6 +3282,8 @@ class OpenTasteSession:
                 terminal_surface=terminal_surface,
                 event_managed=event_managed,
                 wake_context=wake_context,
+                render_envelope=render_envelope,
+                compact=compact,
             )
         except Exception:
             self._cycle -= 1
@@ -3284,6 +3295,8 @@ class OpenTasteSession:
         terminal_surface: dict | None = None,
         event_managed: bool = False,
         wake_context=None,  # carried for the assembly tools; wired in Task 7
+        render_envelope: "Callable[[int | None], str] | None" = None,
+        compact: bool = False,
     ) -> str:
         """Body of exchange(). Separated so exchange() can roll back the
         cycle counter on any exception without an inline try/finally
@@ -3321,20 +3334,31 @@ class OpenTasteSession:
         curator_context = self._continuity_curator_context
         self._last_continuity_curator_context = curator_context
 
-        messages, system = _build_messages(
-            self._state, user_message, self._cycle,
-            system_prefix=self._system_prompt_prefix,
-            memory=memory,
-            tools_enabled=self._enable_tools and terminal_surface is None,
-            curator_context=curator_context,
-            wake_mode=self._wake_mode,
-            declare_quiet=offer_declare_quiet,
-            assembly=offer_assembly,
+        # Every admission pass rebuilds the prompt around a differently
+        # capped envelope. The involuntary memory above is picked ONCE per
+        # exchange and reused by every pass: a fresh draw per pass would make
+        # the wake's injected self depend on how hard the envelope had to be
+        # cut, and the record would name a memory the model never saw.
+        def build(user_message: str):
             # A window-aware door renders the activity log lean: the record
-            # keeps every parameter, the prompt spends no window on them.
-            # (Task 6 adds omit_activity_log for the compact wake.)
-            lean_activity_log=self.context_policy.window_aware,
-        )
+            # keeps every parameter, the prompt spends no window on them. The
+            # compact retry drops the log from the prompt entirely.
+            return _build_messages(
+                self._state, user_message, self._cycle,
+                system_prefix=self._system_prompt_prefix,
+                memory=memory,
+                tools_enabled=self._enable_tools and terminal_surface is None,
+                curator_context=curator_context,
+                wake_mode=self._wake_mode,
+                declare_quiet=offer_declare_quiet,
+                assembly=offer_assembly,
+                lean_activity_log=(
+                    self.context_policy.window_aware and not compact
+                ),
+                omit_activity_log=compact,
+            )
+
+        messages, system = build(user_message)
 
         # Pre-mint the cycle record_id so schedule_event tool calls can
         # link future events to the exact cycle that authored them. The
@@ -3389,14 +3413,72 @@ class OpenTasteSession:
             )
         else:
             try:
-                result = self._backend.call(
-                    model=self._model,
-                    system=system,
-                    messages=messages,
-                    experiment_label=self._experiment_label,
-                    extra_tools=extra_tools,
-                    tool_executor=tool_executor,
-                )
+                if render_envelope is not None and self.context_policy.window_aware:
+                    # Admission (spec r6.3 §2). Each pass renders the envelope
+                    # at a cap, rebuilds the prompt around it, and counts the
+                    # exact payload the door would send. Over the target, the
+                    # cap halves and the pass repeats; the loop stops under
+                    # the target, at all-stubs (cap 0), or at the pass bound.
+                    from hamutay.window import (
+                        ADMISSION_MAX_PASSES,
+                        ADMISSION_TARGET_FRACTION,
+                        MIN_STUB_CHARS,
+                    )
+                    policy = self.context_policy
+                    cap = 0 if compact else policy.result_cap_chars // 2
+                    target = int(ADMISSION_TARGET_FRACTION * policy.limit)
+                    passes = 0
+                    while True:
+                        passes += 1
+                        user_message = render_envelope(cap)
+                        messages, system = build(user_message)
+                        prep = self._backend.prepare(
+                            self._model, system, messages, extra_tools,
+                            terminal_surface, tool_executor, candidate=True,
+                        )
+                        if tool_executor is not None:
+                            tool_executor.log_event({
+                                "tool": "_framework",
+                                "event": "budget_pressure",
+                                "action": "envelope_admission",
+                                "pass": passes,
+                                "cap_chars": cap,
+                                "prompt_tokens": prep.prompt_tokens,
+                                "target": target,
+                            })
+                        if (
+                            prep.prompt_tokens <= target
+                            or cap == 0
+                            or passes >= ADMISSION_MAX_PASSES
+                        ):
+                            break
+                        cap = cap // 2 if cap // 2 >= MIN_STUB_CHARS else 0
+                    self._last_admission = {
+                        "passes": passes,
+                        "final_cap": cap,
+                        "prompt_tokens": prep.prompt_tokens,
+                        "over_target": prep.prompt_tokens > target,
+                        "envelope_exhausted": cap == 0,
+                    }
+                    if not prep.sendable:
+                        # The smallest envelope still does not fit. Ask for
+                        # the real thing: `candidate=False` raises
+                        # ExhaustedBeforeRequest, which the branch below
+                        # records as this wake's failure.
+                        prep = self._backend.prepare(
+                            self._model, system, messages, extra_tools,
+                            terminal_surface, tool_executor,
+                        )
+                    result = self._backend.call_prepared(prep)
+                else:
+                    result = self._backend.call(
+                        model=self._model,
+                        system=system,
+                        messages=messages,
+                        experiment_label=self._experiment_label,
+                        extra_tools=extra_tools,
+                        tool_executor=tool_executor,
+                    )
             except Exception as e:
                 self._last_cycle_time = datetime.now(timezone.utc)
                 self._last_tool_activity = (
@@ -3453,6 +3535,7 @@ class OpenTasteSession:
                     scheduled_events=[],
                     failure_classification=failure_classification,
                     interim_text=interim,
+                    admission=self._last_admission,
                     context_policy_invocation=self.context_policy.invocation_id,
                 )
                 raise
@@ -3673,6 +3756,7 @@ class OpenTasteSession:
             state_validation=state_validation,
             state_merge_diagnostics=state_merge_diagnostics,
             interim_text=result.interim_text,
+            admission=self._last_admission,
         )
 
         if self._event_store is not None and tool_executor is not None:

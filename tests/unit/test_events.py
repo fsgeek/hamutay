@@ -2450,3 +2450,24 @@ def test_event_store_claim_stamps_started_at_with_the_caller_clock(tmp_path):
     assert claim is not None
     _event, running = claim
     assert running["started_at"] == at.isoformat()
+
+
+def test_build_event_envelope_projects_without_mutating_and_records_keep_full_results(tmp_path):
+    from hamutay.context_policy import ContextPolicy
+    from hamutay.events import build_event_envelope
+    big = {"request": {"tool": "recall", "cycle": 1},
+           "result": {"cycle": 1, "content": {"x": "y" * 4000, "_activity_log": [{"tool": "t", "parameters": {"p": 1}}]}}}
+    results = [big]
+    before = json.dumps(results)
+    policy = ContextPolicy(65536, "discovered", 65536, "http://127.0.0.1:8081", "probed", {}, 20)
+    env = build_event_envelope(_event_record(), results, "run", policy=policy, cap_chars=1000)
+    assert json.dumps(results) == before
+    body = json.loads(env)
+    assert body["context_results"][0]["result"]["truncated"] is True and "parameters" not in env
+    plain = build_event_envelope(_event_record(), results, "run")
+    assert "parameters" in plain
+    store = EventStore(tmp_path / "e.jsonl")
+    rec = store.append_completed(event=_event_record(), run_id="run", wake_cycle=1, result_record_id=UUID(int=1),
+                                 response_text="ok", context_results=results, admission={"passes": 2})
+    assert rec["context_results"][0]["result"]["content"]["_activity_log"][0]["parameters"] == {"p": 1}
+    assert rec["admission"] == {"passes": 2}
