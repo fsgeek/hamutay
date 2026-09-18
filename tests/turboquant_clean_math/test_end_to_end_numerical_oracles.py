@@ -85,14 +85,35 @@ class TestEndToEndNumericalOracles:
         assert not np.any(np.isnan(rec_prod))
         assert not np.any(np.isinf(rec_prod))
 
-        # 2. Huge and tiny magnitude vectors
+        # 2. Huge and tiny magnitude vectors: validate declared norm recording and scale homogeneity
+        unit_codes = prod_quant.quantize(e0)
+        rec_unit = prod_quant.dequantize(unit_codes)
+
         huge_v = e0 * 1e15
         tiny_v = e0 * 1e-15
 
-        rec_huge = prod_quant.dequantize(prod_quant.quantize(huge_v))
-        rec_tiny = prod_quant.dequantize(prod_quant.quantize(tiny_v))
-        assert math.isclose(np.linalg.norm(rec_huge), 1e15, rel_tol=0.2)
-        assert math.isclose(np.linalg.norm(rec_tiny), 1e-15, rel_tol=0.2)
+        codes_huge = prod_quant.quantize(huge_v)
+        codes_tiny = prod_quant.quantize(tiny_v)
+
+        # Stored norms must record input vector norms to FP32 precision
+        assert math.isclose(float(codes_huge.mse.norms), 1e15, rel_tol=1e-6)
+        assert math.isclose(float(codes_tiny.mse.norms), 1e-15, rel_tol=1e-6)
+
+        # Stored residual norms must scale with input norm
+        assert math.isclose(float(codes_huge.residual_norms), 1e15 * float(unit_codes.residual_norms), rel_tol=1e-6)
+        assert math.isclose(float(codes_tiny.residual_norms), 1e-15 * float(unit_codes.residual_norms), rel_tol=1e-6)
+
+        # Discrete codes must be scale-invariant
+        np.testing.assert_array_equal(codes_huge.mse.indices, unit_codes.mse.indices)
+        np.testing.assert_array_equal(codes_tiny.mse.indices, unit_codes.mse.indices)
+        np.testing.assert_array_equal(codes_huge.packed_signs, unit_codes.packed_signs)
+        np.testing.assert_array_equal(codes_tiny.packed_signs, unit_codes.packed_signs)
+
+        # Reconstruction must satisfy exact scale homogeneity
+        rec_huge = prod_quant.dequantize(codes_huge)
+        rec_tiny = prod_quant.dequantize(codes_tiny)
+        np.testing.assert_allclose(rec_huge / 1e15, rec_unit, rtol=1e-6, atol=1e-6)
+        np.testing.assert_allclose(rec_tiny / 1e-15, rec_unit, rtol=1e-6, atol=1e-6)
 
     def test_inner_product_variance_matches_lemma4_bound(self) -> None:
         """Validates Lemma 4 QJL variance bound: Var(<y, QJL(r)>) <= pi / (2d) * ||y||^2 * ||r||^2."""

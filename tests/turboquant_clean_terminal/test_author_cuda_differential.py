@@ -103,8 +103,8 @@ def test_author_cuda_differential_live_execution_and_independent_math(
     assert result["schema"] == "hamutay.turboquant.author-qjl.v1"
     assert result["status"] == "passed"
     assert result["study_seed_hex"] == "0b311d5d4eceaf773efde389305a1b5a"
-    assert result["conventions"]["transparent_exact_zero_sign"] == "+1"
-    assert result["conventions"]["author_exact_zero_sign"] == "-1"
+    assert result["conventions"]["transparent_exact_zero_sign"] == "positive"
+    assert result["conventions"]["author_exact_zero_sign"] == "negative"
     
     # 2. Check physical artifact existence
     json_path = output_dir / "author_qjl_differential.json"
@@ -148,8 +148,8 @@ def test_author_cuda_differential_live_execution_and_independent_math(
     assert independent_max_abs <= FROZEN_ATOL + FROZEN_RTOL * float(np.max(np.abs(trans_scores)))
     
     # Check D: Declared Exact-Zero Projection Convention Difference
-    # Transparent maps zero to +1 (all 1 bits in packed byte = 0xFF = 255)
-    # Author maps zero to -1 (all 0 bits in packed byte = 0x00 = 0)
+    # Transparent maps zero to positive sign (all 1 bits in packed byte = 0xFF = 255)
+    # Author maps zero to negative sign (all 0 bits in packed byte = 0x00 = 0)
     zero_trans = npz["zero_transparent_inlier_sign_bytes"]
     zero_auth = npz["zero_author_inlier_sign_bytes"]
     assert np.all(zero_trans == 255), "Transparent quantizer did not encode exact zero as +1 (all bits set)"

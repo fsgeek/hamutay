@@ -198,19 +198,24 @@ def test_gate2_mse_distortion_distinguishes_analytic_failure_alone():
 def test_gate2_mse_distortion_distinguishes_paper_failure_alone():
     """Gate 2 fails when empirical MSE breaches paper tolerance (>15%) even if analytic target passes."""
     metrics_list = list(_build_acceptable_metrics_tuple())
-    # Corrupt bit 3: analytic target passes (0.1% error), but paper error breaches 15%
-    target_an = FROZEN_MSE_ANALYTIC_TARGETS[3]  # ~0.03396593
-    # Target paper is 0.03. If obs is 0.0346, rel_paper = (0.0346 - 0.03)/0.03 = 15.33% (>15%)
-    corrupted_obs = 0.0346
-    rel_an = abs(corrupted_obs - target_an) / target_an  # ~1.8%
-    rel_pap = abs(corrupted_obs - FROZEN_MSE_PAPER_TARGETS[3]) / FROZEN_MSE_PAPER_TARGETS[3]
+    target_an = FROZEN_MSE_ANALYTIC_TARGETS[3]
+    # Set observed MSE within 0.1% of analytic target (well within 0.5% tolerance)
+    obs = target_an * 1.001
+    # Independently chosen paper target under public constructor that produces >15% relative error
+    target_pap = 0.028
+
+    rel_an = abs(obs - target_an) / target_an
+    rel_pap = abs(obs - target_pap) / target_pap
+
+    # Explicitly demonstrate the intended premise: analytic passes, paper fails
+    assert rel_an <= FROZEN_MSE_ANALYTIC_TOLERANCE
     assert rel_pap > FROZEN_MSE_PAPER_TOLERANCE
 
     metrics_list[2] = _build_metrics(
         bits=3,
-        mse_observed=corrupted_obs,
+        mse_observed=obs,
         mse_analytic=target_an,
-        mse_paper=FROZEN_MSE_PAPER_TARGETS[3],
+        mse_paper=target_pap,
         product_observed=metrics_list[2].product_observed,
         product_paper=metrics_list[2].product_paper_target,
         bias_mean=0.0,

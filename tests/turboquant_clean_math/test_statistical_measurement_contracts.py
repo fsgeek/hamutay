@@ -79,18 +79,22 @@ class TestBootstrapMeanInterval:
     """Validates block-bootstrap percentile interval calculation."""
 
     def test_bootstrap_interval_properties(self) -> None:
-        rng = np.random.default_rng(1212)
         # Block means drawn from N(0, 1)
-        block_means = rng.standard_normal(1000)
+        rng_init = np.random.default_rng(1212)
+        block_means = rng_init.standard_normal(1000)
 
-        ci_95 = bootstrap_mean_interval(block_means, rng=rng, resamples=5000, confidence=0.95)
-        ci_9875 = bootstrap_mean_interval(block_means, rng=rng, resamples=5000, confidence=0.9875)
+        # Evaluate on the same resampled distribution using identical generator state
+        rng_95 = np.random.default_rng(1212)
+        rng_9875 = np.random.default_rng(1212)
+        ci_95 = bootstrap_mean_interval(block_means, rng=rng_95, resamples=5000, confidence=0.95)
+        ci_9875 = bootstrap_mean_interval(block_means, rng=rng_9875, resamples=5000, confidence=0.9875)
 
         assert isinstance(ci_95, tuple) and len(ci_95) == 2
         assert isinstance(ci_95[0], float) and isinstance(ci_95[1], float)
         assert ci_95[0] < ci_95[1]
 
-        # 98.75% CI must be strictly wider than 95% CI
+        # On the same resampled distribution, the 98.75% interval (alpha=0.0125)
+        # must nest the 95% interval (alpha=0.05) by quantile monotonicity.
         assert ci_9875[0] <= ci_95[0]
         assert ci_9875[1] >= ci_95[1]
 

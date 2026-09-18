@@ -26,12 +26,12 @@ class TestBitPackingContract:
     """
 
     def test_pack_signs_type_rejection(self) -> None:
-        """pack_signs accepts ONLY boolean arrays."""
+        """pack_signs accepts ONLY boolean arrays; rejects other dtypes."""
         float_signs = np.ones((8,), dtype=np.float32)
         int_signs = np.ones((8,), dtype=np.int32)
-        with pytest.raises(TypeError):
+        with pytest.raises((TypeError, ValueError)):
             pack_signs(float_signs)  # type: ignore
-        with pytest.raises(TypeError):
+        with pytest.raises((TypeError, ValueError)):
             pack_signs(int_signs)  # type: ignore
 
     def test_little_endian_byte_packing_oracle(self) -> None:
@@ -203,16 +203,18 @@ class TestAlgorithm2StatisticalContracts:
             f"Product quantizer exhibited statistically significant bias: {prod_mean_bias} +/- {prod_std_err}"
         )
 
-        # 2. MSE quantizer at b=1 has bias factor 2/pi
+        # 2. MSE quantizer at b=1 has multiplicative attenuation slope 2/pi
         cb_1 = lloyd_max_codebook(d, 1)
         mse_quant_1 = MSEQuantizer(rot, cb_1)
         mse_codes = mse_quant_1.quantize(keys)
         mse_rec = mse_quant_1.dequantize(mse_codes)
         mse_est = np.sum(queries * mse_rec, axis=-1)
 
-        # Check empirical bias factor ~ 2/pi
-        ratio = float(np.mean(mse_est) / np.mean(true_dots))
-        assert math.isclose(ratio, 2.0 / math.pi, rel_tol=0.10)
+        # Estimate multiplicative bias factor via least-squares projection (regression through origin):
+        # E[<y, x_tilde>] = alpha * <y, x> where alpha = 2 / pi
+        # Denominator sum(true_dots^2) has positive expectation (n / d), avoiding 0/0 ratio of zero-mean variables.
+        slope = float(np.dot(mse_est, true_dots) / np.dot(true_dots, true_dots))
+        assert math.isclose(slope, 2.0 / math.pi, rel_tol=0.10)
 
     @pytest.mark.parametrize(
         ("total_b", "paper_numerator"),
@@ -247,6 +249,6 @@ class TestAlgorithm2StatisticalContracts:
         d_prod_observed = float(np.mean((est_dots - true_dots) ** 2))
         paper_target = paper_numerator / d
 
-        # Check published scale (15% tolerance)
+        # Check published scale (registered 15% tolerance)
         rel_err = abs(d_prod_observed - paper_target) / paper_target
-        assert rel_err < 0.18, f"Total bit {total_b}: Observed {d_prod_observed} vs target {paper_target} (err: {rel_err:.2%})"
+        assert rel_err < 0.15, f"Total bit {total_b}: Observed {d_prod_observed} vs target {paper_target} (err: {rel_err:.2%})"

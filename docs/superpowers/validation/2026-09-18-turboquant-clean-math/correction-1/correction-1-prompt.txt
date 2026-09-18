@@ -1,0 +1,93 @@
+Your contribution was frozen unchanged in signed commit e4a46162ae81a0536ebc2e260516d5333521e145, timestamp commit3e58c1b, before any replay. The first collective replay completed with159passes,3failures,no skips; complete output and artifacts are preserved separately. The pre-access authoring phase is over. This is an attributable post-freeze correction of invalid tests by their original author, as the protocol permits. Do not claim corrected or new assertions were unchanged in the original seal. Do not change implementation, specifications, scientific thresholds, or other authors' tests.
+
+Diagnose and correct your OWN invalid existing tests, including the listed static findings, while preserving substantive valid assertions. Use evidence and declared mathematics, not changes chosen merely to match observed results. Return complete contents of ONLY files you change, plus a precise coverage/disposition account and limitations. Do not delete coverage silently. If a finding instead indicates an implementation defect, explain it rather than hiding it. Do not add new test cases or broaden the suite in this correction; any genuinely new coverage would need separate post-feedback attribution. Use ONLY the finish structured-submission tool, no filesystem, commands, source reads, searches, or delegation. This avoids the CLI's automatic no-tool completion nudge. Never claim execution or passing tests yourself.
+
+Accepted candidate-test findings for your mathematical contribution:
+1. The Boolean-only pack_signs contract specifies rejection, not a mandated TypeError class. The implementation raises ValueError for the forbidden dtype, correctly rejecting it. Your asserted exception type was unsupported.
+2. The bias-factor comparison divides two sample means whose population means are zero for these independent centered queries/keys. This ratio does not consistently estimate the multiplicative attenuation and returned1.361786. Correct the statistical method of this existing intended comparison; do not tune its expected answer to this observed ratio or loosen a bound until it passes.
+3. test_product_distortion_scaling claims15% but asserts18%. This is a weakened claimed criterion and cannot count as registered-threshold coverage. Correct the mismatch without weakening the registered15% rule. Distinguish a finite validation sample from the required registered scientific measurement; explain your disposition precisely.
+4. The bootstrap interval nesting check advances the same RNG between calls, hence uses different resampled distributions. Nesting is not guaranteed across different random draws. Correct the existing comparison so its mathematical premise is valid.
+5. The extreme-norm end-to-end test assumes arbitrary lossy reconstruction preserves the original vector norm within20%; no such guarantee was declared. Correct this existing norm-restoration test against the actual mathematical contract rather than an invented approximation guarantee.
+
+Your two first-run failure excerpts follow. Static findings may be invalid even though their current seeded observations passed. No other contributor's tests/outcomes are supplied beyond the aggregate count.
+____________ TestBitPackingContract.test_pack_signs_type_rejection _____________
+
+self = <turboquant_clean_math.test_algorithm2_product.TestBitPackingContract object at 0x70470fce2850>
+
+    def test_pack_signs_type_rejection(self) -> None:
+        """pack_signs accepts ONLY boolean arrays."""
+        float_signs = np.ones((8,), dtype=np.float32)
+        int_signs = np.ones((8,), dtype=np.int32)
+        with pytest.raises(TypeError):
+>           pack_signs(float_signs)  # type: ignore
+            ^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/turboquant_clean_math/test_algorithm2_product.py:33: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+signs = array([1., 1., 1., 1., 1., 1., 1., 1.], dtype=float32)
+
+    def pack_signs(signs: np.ndarray) -> np.ndarray:
+        """Pack boolean signs little-endian within each byte."""
+        resolved = np.asarray(signs)
+        if resolved.dtype != np.bool_:
+>           raise ValueError("signs must have boolean dtype")
+E           ValueError: signs must have boolean dtype
+
+src/hamutay/turboquant/product.py:53: ValueError
+_ TestAlgorithm2StatisticalContracts.test_inner_product_unbiasedness_contrasted_with_mse_bias _
+
+self = <turboquant_clean_math.test_algorithm2_product.TestAlgorithm2StatisticalContracts object at 0x70470fce2e90>
+
+    def test_inner_product_unbiasedness_contrasted_with_mse_bias(self) -> None:
+        """Theorem 2: E[<y, x_tilde_prod>] = <y, x>.
+        Contrast with TurboQuant_mse which has severe multiplicative bias 2/pi (~0.6366) at b=1.
+        """
+        d = 128
+        rot = gaussian_rotation(d, "unbiased_test_rot")
+        # b=1 total product quantizer uses b-1=0 bit MSE quantizer
+        cb_0 = lloyd_max_codebook(d, 0)
+        mse_quant_0 = MSEQuantizer(rot, cb_0)
+    
+        rng = np.random.default_rng(909)
+        proj = rng.standard_normal((d, d)).astype(np.float32)
+        prod_quant = ProductQuantizer(mse_quant_0, proj)
+    
+        # Evaluate over 5000 independent query/key pairs
+        n = 5000
+        keys = rng.standard_normal((n, d)).astype(np.float32)
+        queries = rng.standard_normal((n, d)).astype(np.float32)
+        # Unit norm keys and queries
+        keys /= np.linalg.norm(keys, axis=-1, keepdims=True)
+        queries /= np.linalg.norm(queries, axis=-1, keepdims=True)
+    
+        true_dots = np.sum(queries * keys, axis=-1)
+    
+        # 1. Product quantizer estimates
+        prod_codes = prod_quant.quantize(keys)
+        prod_est = prod_quant.estimate_inner_products(queries, prod_codes)
+        prod_errors = prod_est - true_dots
+        prod_mean_bias = float(np.mean(prod_errors))
+        prod_std_err = float(np.std(prod_errors) / math.sqrt(n))
+    
+        # Unbiasedness: mean error is within 3 standard errors of 0
+        assert abs(prod_mean_bias) < 3.0 * prod_std_err, (
+            f"Product quantizer exhibited statistically significant bias: {prod_mean_bias} +/- {prod_std_err}"
+        )
+    
+        # 2. MSE quantizer at b=1 has bias factor 2/pi
+        cb_1 = lloyd_max_codebook(d, 1)
+        mse_quant_1 = MSEQuantizer(rot, cb_1)
+        mse_codes = mse_quant_1.quantize(keys)
+        mse_rec = mse_quant_1.dequantize(mse_codes)
+        mse_est = np.sum(queries * mse_rec, axis=-1)
+    
+        # Check empirical bias factor ~ 2/pi
+        ratio = float(np.mean(mse_est) / np.mean(true_dots))
+>       assert math.isclose(ratio, 2.0 / math.pi, rel_tol=0.10)
+E       assert False
+E        +  where False = <built-in function isclose>(1.3617863655090332, (2.0 / 3.141592653589793), rel_tol=0.1)
+E        +    where <built-in function isclose> = math.isclose
+E        +    and   3.141592653589793 = math.pi
+
+tests/turboquant_clean_math/test_algorithm2_product.py:215: AssertionError

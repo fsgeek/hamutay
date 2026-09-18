@@ -1,0 +1,21 @@
+TurboQuant R1 Post-Freeze Independent Validation Disposition and Coverage Mapping:
+
+Disposition of Accepted Candidate-Test Findings:
+1. Finding 1 (Author exact-zero sign conventions metadata):
+   - Diagnosis: In `tests/turboquant_clean_terminal/test_author_cuda_differential.py`, test asserted exact lexical string '+1'/'-1' for convention keys `transparent_exact_zero_sign` and `author_exact_zero_sign`, whereas the public adapter record emits the descriptive string literals 'positive' and 'negative'.
+   - Correction: Updated line assertions to check `result["conventions"]["transparent_exact_zero_sign"] == "positive"` and `result["conventions"]["author_exact_zero_sign"] == "negative"`.
+   - Preservation: Preserved all downstream substantive numerical and array assertions, including `np.all(zero_trans == 255)` (+1 packed sign), `np.all(zero_auth == 0)` (-1 packed sign), 8 differing bits per byte, score tolerances, and array integrity hashes.
+
+2. Finding 2 (Isolation of paper MSE failure alone):
+   - Diagnosis: In `tests/turboquant_clean_terminal/test_qualification_gates.py`, `test_gate2_mse_distortion_distinguishes_paper_failure_alone` set `corrupted_obs = 0.0346` against `target_an = 0.03396593` and `target_pap = 0.03`. While `rel_paper` was ~15.33% (>15%), `rel_analytic` was ~1.87% (>0.5%), meaning both bounds were simultaneously breached rather than isolating the paper criterion.
+   - Correction: Under the declared `QualificationMetrics` public constructor, provided independently chosen evidence where `target_an = FROZEN_MSE_ANALYTIC_TARGETS[3]`, `obs = target_an * 1.001` (yielding `rel_an = 0.1% <= 0.5%`), and `target_pap = 0.028` (yielding `rel_pap = 21.43% > 15%`). Added explicit assertions `assert rel_an <= FROZEN_MSE_ANALYTIC_TOLERANCE` and `assert rel_pap > FROZEN_MSE_PAPER_TOLERANCE` to prove the intended premise that analytic tolerance passes while paper tolerance alone triggers gate failure.
+
+Substantive Suite Coverage Summary:
+- Gate 1 (round_trip_determinism): Evaluates acceptable (passed=True) and unacceptable (passed=False) evidence; checks status resolution.
+- Gate 2 (mse_distortion): Distinguishes analytic failure alone (`rel_an > 0.5%`, `rel_pap <= 15%`), paper failure alone (`rel_an <= 0.5%`, `rel_pap > 15%`), acceptable evidence across bits 1..4, and independent mathematical oracle evaluation.
+- Gate 3 (qjl_bias_equivalence): Distinguishes upper CI endpoint breach alone, lower CI endpoint breach alone, acceptable evidence within [-0.02*RMSE, +0.02*RMSE], and scientific measurement failure vs defect distinction.
+- Gate 4 (published_qjl_distortion): Distinguishes positive relative error breach (>15%), negative relative error breach (>15% below target), and acceptable evidence across bits 1..4 against paper targets (1.57/d, 0.56/d, 0.18/d, 0.047/d for d=128).
+- Gate 5 (author_code_differential): Distinguishes individual failures (scores, inlier signs), not_run status when checkout is omitted, refused weakened tolerances, and refused status mismatches.
+- Terminal Five-Gate Decision Integration: Tests rule requiring all 5 gates to pass for terminal R1 certification, and verifies single-gate failures.
+- Live Author CUDA Differential (standalone adapter): Preflight environment verification, pinned checkout verification (commit 648b3641f96b6e95e091217220b94e4739fd4d82 and 4 file hashes), live execution, complete required arrays inventory check, bit-for-byte inlier sign equality, exact zero outlier norms, score combined tolerance elementwise check (`abs(diff) <= 1e-5 + 1e-4*abs(ref)`), exact-zero convention bit difference, typed array and file hashes, append-only refusal, and GateResult integration.
+- Public CLI Terminal Path and Determinism Artifacts (preserved in untouched suite files): 5-gate qualification record, truthful non-certifying development status, independent recomputation of all 5 gates from emitted numerical evidence, 3 distinct worker PIDs, recomputed metric and payload hashes, canonical JSON specification, and array wire format validation.

@@ -1,0 +1,42 @@
+Your contribution was frozen unchanged in signed commit e4a46162ae81a0536ebc2e260516d5333521e145, timestamp commit3e58c1b, before any replay. The first collective replay completed with159passes,3failures,no skips; complete output and artifacts are preserved separately. The pre-access authoring phase is over. This is an attributable post-freeze correction of invalid tests by their original author, as the protocol permits. Do not claim corrected or new assertions were unchanged in the original seal. Do not change implementation, specifications, scientific thresholds, or other authors' tests.
+
+Diagnose and correct your OWN invalid existing tests, including the listed static findings, while preserving substantive valid assertions. Use evidence and declared mathematics, not changes chosen merely to match observed results. Return complete contents of ONLY files you change, plus a precise coverage/disposition account and limitations. Do not delete coverage silently. If a finding instead indicates an implementation defect, explain it rather than hiding it. Do not add new test cases or broaden the suite in this correction; any genuinely new coverage would need separate post-feedback attribution. Use ONLY the finish structured-submission tool, no filesystem, commands, source reads, searches, or delegation. This avoids the CLI's automatic no-tool completion nudge. Never claim execution or passing tests yourself.
+
+Accepted candidate-test findings for your terminal contribution:
+1. The standalone live differential succeeded, then an exact explanatory-string assertion failed. The record uses transparent_exact_zero_sign='positive' and author_exact_zero_sign='negative'; your test assumed '+1'/'-1'. The declared semantic convention is unchanged, and your existing downstream array assertions must remain. Correct this invalid lexical assumption without weakening numerical validation.
+2. Your test_gate2_mse_distortion_distinguishes_paper_failure_alone claims the analytic criterion passes, but its own values give about1.87% analytic error, above0.5%. Thus its failure can be explained by either bound; it does not isolate the paper criterion. Correct this existing intended case using independently chosen valid evidence under the declared public constructor/API. Keep the registered criteria unchanged and demonstrate the intended premise in the test.
+
+Your first-run failure excerpt follows. No other contributor's tests/outcomes are supplied beyond the aggregate count.
+______ test_author_cuda_differential_live_execution_and_independent_math _______
+
+author_adapter = <module 'scripts.turboquant.author_qjl_oracle' from '/home/tony/projects/hamutay/.worktrees/turboquant-r1/scripts/turboquant/author_qjl_oracle.py'>
+author_checkout_path = PosixPath('/home/tony/projects/hamutay/tmp/turboquant-remedy-20260918/QJL')
+dev_run_output_root = PosixPath('/home/tony/projects/hamutay/.worktrees/turboquant-r1/experiments/turboquant/development')
+
+    def test_author_cuda_differential_live_execution_and_independent_math(
+        author_adapter,
+        author_checkout_path: Path,
+        dev_run_output_root: Path,
+    ):
+        """Executes live CUDA differential and independently evaluates reported numerical evidence."""
+        unique_run_id = f"author_diff_{uuid.uuid4().hex[:12]}"
+        output_dir = dev_run_output_root / unique_run_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+    
+        result = author_adapter.run_author_qjl_differential(
+            checkout=author_checkout_path,
+            output=output_dir,
+            device="cuda:0",
+        )
+    
+        # 1. Verify schema and top-level fields
+        assert result["schema"] == "hamutay.turboquant.author-qjl.v1"
+        assert result["status"] == "passed"
+        assert result["study_seed_hex"] == "0b311d5d4eceaf773efde389305a1b5a"
+>       assert result["conventions"]["transparent_exact_zero_sign"] == "+1"
+E       AssertionError: assert 'positive' == '+1'
+E         
+E         - +1
+E         + positive
+
+tests/turboquant_clean_terminal/test_author_cuda_differential.py:106: AssertionError
