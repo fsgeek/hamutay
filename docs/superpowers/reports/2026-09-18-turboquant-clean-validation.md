@@ -155,3 +155,24 @@ tests themselves executed. Lease: `76d80951-cfa9-455c-b668-1791b2122919`.
   silently alter a frozen test or scientific gate.
 - Produce a replacement Task 8 terminal report. Registered Task 9 and the
   later model/cache-path experiment remain gated on the required evidence.
+
+### Third clean attempt and revised handoff
+
+The Gemini 3.8 session `09e5150c-e7b2-4a1d-bf79-ee693eb93437` emitted no
+tool steps. Its unchanged suite was signed at `7b73ee2`, timestamped at
+`84a0dde`, before replay: **30 passed, 9 failed in 21.60 s**, no skips.
+The full original output and generated development evidence are archived
+in `2026-09-18-turboquant-clean-r3`. It has meaningful scientific core gate
+checks but lacks successful fifth-gate incorporation; its standalone CUDA
+case fails before actual execution. This attempt does not establish Task 8.
+
+The coordinator's incomplete handoff and the author's guesses both
+contributed. An independent review documented the complete observable
+public evidence schemas and constructor constraints, including the public
+author gate-conversion function. The declarative supplement is separately
+reviewed and hashed; it contains no source bodies or worked test cases.
+The next clean author receives no previous suite/outcome/review, and will
+review its own draft against only the approved materials before final
+pre-execution freeze. This changes the handoff process; it does not
+retroactively improve the three sealed attempts. Numerical implementation
+remains unchanged.

@@ -331,7 +331,8 @@ def extract_interfaces(plan_text: str) -> tuple[str, list[str]]:
         "(finding F5). No prescribed test case, implementation-guidance step,\n"
         "or command from the plan appears here.\n"
     )
-    return header + "\n".join(kept).rstrip() + "\n", dropped
+    supplement = Path(__file__).with_name("public-evidence-contract.md").read_text(encoding="utf-8")
+    return header + "\n".join(kept).rstrip() + "\n\n" + supplement, dropped
 
 
 def build(
@@ -384,6 +385,9 @@ def build(
         "implementation_under_review": implementation_commit
         or "(not supplied -- condition 3 requires this explicitly)",
         "builder_script_sha256": sha256_file(Path(__file__)),
+        "public_evidence_contract_sha256": sha256_file(
+            Path(__file__).with_name("public-evidence-contract.md")
+        ),
         "paper_artifact": "arXiv 2504.19874v1, supplied locally and hashed below",
         "source_plan_sha256": sha256_file(plan),
         "source_spec_sha256": sha256_file(spec),
