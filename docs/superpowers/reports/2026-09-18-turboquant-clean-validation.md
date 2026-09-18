@@ -75,6 +75,51 @@ rerun with the prescribed environment is recorded separately.
 
 ## Remaining work
 
+### First clean attempt: retained, insufficient
+
+Suite freeze: signed `11b06936b2834954923307a3fbcb6a570c0b8e5a`,
+OTS receipt commit `fa32d68`. The event stream records no author tool calls.
+The first CPU replay returned **13 passed, 3 failed, 2 deselected** in 90.39 s.
+The two excluded tests were the dedicated CUDA check and the test that would
+attempt registered execution before the Task 8 gate. They are not passes.
+The unchanged suite is retained under the first session archive's
+`frozen-tests/`; its original paths and bytes remain in the freeze commit.
+
+Failures: arbitrary temporary output roots violate the repository-relative
+namespace rule; a single synthetic run cannot establish three-process
+determinism; and the sign-packing function accepts Boolean input, which the
+public contract had omitted. Independent review also found vacuous refusal
+assertions and missing verification of gate decisions and CUDA artifact
+contents. Therefore passing only corrected versions of the three failing
+cases would not establish Task 8.
+
+Decision: retain this whole attempt and start a fresh authoring session with
+the clarified public contract and a more explicit administrative coverage
+remit. Supply no previous tests, replay output, or review-designed cases.
+This is a new authored suite, not a claim that post-feedback additions were
+present in the original sealed suite. Original implementation remains intact.
+
+### First GPU customer
+
+Lease `929aa26f-2c32-4dca-992a-ced812f87b09` failed to start pytest because
+the coordinator passed an unquoted PATH containing spaces as an `env`
+argument. This is a launch-command error, not a CUDA or orchestrator defect.
+The scope exited before registration was confirmed; the supervisor returned
+6, cleared its lease, and the heartbeat restarted Qwen's server.
+
+Retry lease `0d1c0f0e-ed9b-4140-9419-ab15c42569d0` used an explicit Linux
+PATH and a 15-minute workload timeout inside a renewing 30-minute lease.
+The implementer's author-CUDA module returned **11 passed in 132.41 s**.
+After release the lease was absent and Qwen's server was active, invocation
+`e23b37a3f3a24a5a8b61f8db9489aab1`. No manual service stop/start or forced
+release was needed. This verifies this bounded handoff, not all orchestration
+failure cases. Logs are retained under the first session archive.
+
+The earlier environment-only implementer failure passed its focused rerun
+with CUDA_HOME/PATH selected: **1 passed in 3.19 s**.
+
+### Still required
+
 - Receive and retain the complete author output and check its access trace.
 - Freeze the unchanged authored suite and complete provenance before replay.
 - Run the frozen suite and preserve its first outcome before any repairs.

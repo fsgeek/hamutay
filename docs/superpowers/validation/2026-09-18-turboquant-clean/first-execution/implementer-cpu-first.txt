@@ -1,0 +1,54 @@
+........................................................................ [ 42%]
+........................................................................ [ 84%]
+.........F.s...............                                              [100%]
+=================================== FAILURES ===================================
+__ test_real_cli_missing_author_checkout_is_nonzero_with_terminal_error_pair ___
+
+development_output_root = PosixPath('/home/tony/projects/hamutay/.worktrees/turboquant-r1/experiments/turboquant/development/pytest-test_real_cli_missing_author_c0')
+tmp_path = PosixPath('/tmp/pytest-of-tony/pytest-671/test_real_cli_missing_author_c0')
+
+    def test_real_cli_missing_author_checkout_is_nonzero_with_terminal_error_pair(
+        development_output_root, tmp_path
+    ):
+        run_id = "real-missing-author-checkout"
+        missing_checkout = tmp_path / "missing-QJL"
+        completed = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "hamutay.turboquant.qualify",
+                "--profile",
+                "development",
+                "--output-root",
+                str(development_output_root),
+                "--run-id",
+                run_id,
+                "--dimension",
+                "8",
+                "--sample-count",
+                "24",
+                "--batch-size",
+                "12",
+                "--bootstrap-blocks",
+                "6",
+                "--bootstrap-resamples",
+                "11",
+                "--bits",
+                "1",
+                "--author-qjl-checkout",
+                str(missing_checkout),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+    
+        assert completed.returncode != 0
+>       assert "FileNotFoundError" in completed.stderr
+E       assert 'FileNotFoundError' in 'Traceback (most recent call last):\n  File "<frozen runpy>", line 198, in _run_module_as_main\n  File "<frozen runpy>...RuntimeError("CUDA_HOME must select /usr/local/cuda-12.8")\nRuntimeError: CUDA_HOME must select /usr/local/cuda-12.8\n'
+E        +  where 'Traceback (most recent call last):\n  File "<frozen runpy>", line 198, in _run_module_as_main\n  File "<frozen runpy>...RuntimeError("CUDA_HOME must select /usr/local/cuda-12.8")\nRuntimeError: CUDA_HOME must select /usr/local/cuda-12.8\n' = CompletedProcess(args=['/home/tony/projects/hamutay/.worktrees/turboquant-r1/.venv/bin/python', '-m', 'hamutay.turboqu...untimeError("CUDA_HOME must select /usr/local/cuda-12.8")\nRuntimeError: CUDA_HOME must select /usr/local/cuda-12.8\n').stderr
+
+tests/turboquant/test_qualify_cli.py:893: AssertionError
+=========================== short test summary info ============================
+FAILED tests/turboquant/test_qualify_cli.py::test_real_cli_missing_author_checkout_is_nonzero_with_terminal_error_pair
+1 failed, 169 passed, 1 skipped in 73.81s (0:01:13)
