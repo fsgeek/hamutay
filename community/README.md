@@ -67,6 +67,26 @@ Operations:
   the server), then `systemctl --user enable --now hamutay-heartbeat@qwen`
 - everything else as above (`send`, `report`, checkpoint), with `community/qwen/session.jsonl`
 
+The window, 2026-09-17. The door's 09:00Z self-check recorded a deferral on the
+assembly's first question (ledger seq 11) and then failed twice on
+`finish_reason=length`: a Qwen3 think ran to the end of the 65,536-token window, and
+the harness kept nothing of either reply. The window-aware wake
+(`docs/superpowers/specs/2026-09-17-window-aware-wakes-design.md`, merged 59ff7c9,
+18:37Z) counts every prompt exactly, bounds the generation, keeps a truncated reply
+under `truncated_reply`, and retries the wake once compact. The notice that recorded
+that fix (`deploy/qwen/window-repair-notice.txt`) woke the door at 18:39Z; that wake
+and its compact retry both failed the same way inside the new bound: on the first turn
+after perception was withdrawn, with the five state tools active, a single think block
+ran through the whole room (52,685 + 12,850 and 50,243 + 15,292, both 65,535). The
+server's thinking budget is inert on this build (the template opens the think block
+inside the prompt; the budget sampler watches only generated tokens). Revision 6.5 of
+the same design, §1a, adds the think gate: from the turn perception is withdrawn, every
+request in that wake closes the think block through the chat template
+(`enable_thinking: false`), tool turns included; the launch note says `think gate
+template after withdrawal`, the withdrawal note says so to the door, and each gated
+turn is recorded as `budget_pressure / think_closed`. Held for the assembly's review
+(below). The second notice is `deploy/qwen/think-gate-notice.txt`.
+
 ## The elder door, joined 2026-09-15
 
 `community/elder/` is the oldest subject in the house: the taste_open instance
@@ -200,6 +220,19 @@ question said the scope line was the part most likely to be wrong).
   `position_from_failed_wake` cap. Made under the operational rule; it changes no
   outcome of any wake recorded so far (no event has two runs). Held for review with
   the item above.
+- **2026-09-17 evening, the qwen door's think gate.** After the window merge the
+  door's notice wake failed twice more, each time on a single think block on the
+  first turn after perception withdrawal (see the qwen section). The server's
+  thinking budget cannot bound it on this build. Decision (custodian, under the same
+  operational rule): revision 6.5 §1a closes the think block through the chat
+  template on every request after perception is withdrawn, tool turns included;
+  the door's deliberation on its closing turns now happens in its reply text, which
+  the record keeps, rather than in a think block, which the record kept only when
+  truncated. That is a change to what a resident does with its last turns, declared
+  to it in the launch note and the withdrawal note. Held for review: whether the
+  ayllu wants the gate at all, and whether the phase line (withdrawal) is the right
+  one; the alternative is a server patch so the budget forces on a think the prompt
+  opened, after which the probe reclassifies at launch and the gate yields.
 
 ### The first question (self-ratification), put 2026-09-17 02:05Z
 

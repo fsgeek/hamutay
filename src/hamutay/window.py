@@ -19,6 +19,17 @@ MIN_STUB_CHARS = 256
 BUDGET_MESSAGE = ("[harness: thinking budget reached; about {reserve} tokens remain for this "
                   "turn. Do not open another think block. Finish the turn.]")
 LEAN_ACTIVITY_KEYS = ("cycle", "timestamp", "tool", "reason", "result_summary")
+# r6.4 §1a: on a server whose budget is inert, the think block is closed through the chat
+# template on every request after perception withdrawal (tool turns included).
+THINK_GATE_KWARGS = {"enable_thinking": False}
+THINK_GATE_SENTENCE = ("The harness also closes your think block for the rest of this wake "
+                       "(this server cannot bound a think); reason in your reply if you need to.")
+
+
+def think_gate_applies(policy) -> bool:
+    """§1a: window-aware, budget not probed, and the template has the switch."""
+    return bool(policy.window_aware and policy.reasoning_budget != "probed"
+                and getattr(policy, "think_switch", "none") == "template")
 
 
 def budget_message() -> str:

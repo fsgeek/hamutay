@@ -90,6 +90,26 @@ def probe_reasoning_budget(root: str, model: str, http, *, template: str, props:
     return out
 
 
+def probe_think_switch(root: str, model: str, http, *, template: str) -> str:
+    """r6.4 §1a: "template" when the switch is present AND effective: the generation
+    prompt rendered by /apply-template under `chat_template_kwargs: {enable_thinking: false}`
+    ends with the closed block (THINK_END) and the plain render does not. One render each,
+    no generation. Any failure classifies "none" (the gate is then absent and declared)."""
+    if "enable_thinking" not in template:
+        return "none"
+    body = {"model": model, "messages": [{"role": "user", "content": PROBE_PROMPT}]}
+    try:
+        plain = http("POST", f"{root}/apply-template", dict(body))["prompt"]
+        closed = http("POST", f"{root}/apply-template",
+                      dict(body, chat_template_kwargs={"enable_thinking": False}))["prompt"]
+    except Exception:
+        return "none"
+    if not isinstance(plain, str) or not isinstance(closed, str):
+        return "none"   # a render that returns no string is no evidence of a switch
+    effective = closed.rstrip().endswith(THINK_END) and not plain.rstrip().endswith(THINK_END)
+    return "template" if effective else "none"
+
+
 def _classify(probe: dict | None) -> str:
     if probe is None:
         return "not_probed"
@@ -110,6 +130,9 @@ class ContextPolicy:
     probe: dict | None
     forced_sequence_tokens: int
     invocation_id: str | None = None
+    # r6.4 §1a: "template" when the chat template carries `enable_thinking`, so the
+    # harness can close the think block through `chat_template_kwargs`; "none" otherwise.
+    think_switch: str = "none"
 
     @property
     def window_aware(self) -> bool:
@@ -118,6 +141,9 @@ class ContextPolicy:
     def as_dict(self) -> dict:
         d = asdict(self)
         d["window_aware"] = self.window_aware
+        if not self.window_aware:
+            # r6.4 §1a: a door without a window keeps its launch-record bytes (§5).
+            d.pop("think_switch", None)
         return d
 
     @classmethod
@@ -154,7 +180,10 @@ class ContextPolicy:
             forced = FORCED_SEQUENCE_FALLBACK_TOKENS
             print(f"  context policy: /tokenize did not answer ({e}); "
                   f"forced_sequence_tokens falls back to {forced}")
-        return cls(limit, source, _result_cap_chars(limit), root, _classify(probe), probe, forced, invocation_id)
+        # §1a: the switch is a window-aware fact; without a limit there is no gate to classify for.
+        switch = probe_think_switch(root, model, http, template=template) if limit is not None else "none"
+        return cls(limit, source, _result_cap_chars(limit), root, _classify(probe), probe, forced, invocation_id,
+                   think_switch=switch)
 
 
 @dataclass
