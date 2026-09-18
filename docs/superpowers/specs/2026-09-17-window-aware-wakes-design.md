@@ -1,6 +1,8 @@
 # Window-aware wakes on a local door
 
-Date: 2026-09-17. Author: the custodian session. Status: revision 6.3 (five lines corrected during implementation, see §1 and §2), after
+Date: 2026-09-17. Author: the custodian session. Status: revision 6.4 (§1a, the
+think gate after withdrawal, added the evening of 2026-09-17 from the qwen
+door's cycle-13 evidence; revision 6.3 corrected five lines during implementation, see §1 and §2), after
 Codex rounds five and six (`-review-5.md`: 1 Blocking, 2 Significant on
 revision 5; `-review-6.md` found that the revision-6 commit had carried no
 design text, so this is that text; rounds one to four had 4/5/2, 5/4/1,
@@ -283,6 +285,85 @@ constants, never duplicated): `REPLY_RESERVE_TOKENS = 2048`,
 `THINK_FLOOR_TOKENS = 512`, `THINK_UNRESTRICTED_ROOM_TOKENS = 32768`,
 `WITHDRAWN_TOOL_TURNS_NEAR_WALL = 1`, `SOFT_THRESHOLD_FRACTION = 0.8`.
 
+### 1a. The think gate after withdrawal (revision 6.4)
+
+**The evidence (2026-09-17, `community/qwen` cycle 13, the repair-notice
+wake and its §6 compact retry, on the merged revision 6.3).**
+
+| attempt | turns | last turn | prompt | generated | prompt + generated |
+|---|---|---|---|---|---|
+| first (19:03Z) | 7 | index 6, first after withdrawal, five state tools active | 52,685 | 12,850 | 65,535 |
+| compact (19:18Z) | 7 | index 6, first after withdrawal, five state tools active | 50,243 | 15,292 | 65,535 |
+
+The §1 property held (the sum is `limit - 1` both times), §4 kept both
+replies (47,153 and 52,428 characters, untrusted), §6 ran once. Both
+overruns are a single think block on the **first turn after perception
+withdrawal**, a tool turn: perception was withdrawn at counts of 55,833
+and 53,391 (the soft threshold is 52,428), the note was appended, and the
+door thought through the whole room before calling any of the five tools
+it still had. §1's budget fields never apply to a tool turn, so a working
+budget would not have bounded either turn; and this server's budget is
+inert regardless (probe: accepted, template has the tags, the control
+thinks, forcing not observed). The inertness was confirmed on a CPU-only
+scratch instance of the same build (`b1-73a43d1`, port 8082, same GGUF): a
+zero budget returns the completion the control returns, token for token.
+Its cause, read in `common/sampling.cpp` and the template and not fixed
+here: the Qwen template opens `<think>\n` inside the generation prompt, and
+the budget sampler is armed idle, watching *generated* tokens for the
+opening tag it will never see; upstream master (202 commits ahead) has no
+handling for a think opened by the prompt.
+
+**The rule.** On a window-aware door whose policy says `reasoning_budget !=
+"probed"` and whose template carries the switch (`think_switch ==
+"template"`: the template source contains `enable_thinking`), every request
+built **after perception is withdrawn** carries `chat_template_kwargs:
+{"enable_thinking": false}`. Tool turns included: the failure is on the
+tool turn, and the switch acts in the template (the assistant turn opens
+as `<think>\n\n</think>\n\n`, so the model's next token is its reply or its
+tool call), not in the sampler, so it has none of the grammar interaction
+that keeps §1's budget fields off tool turns (verified on the scratch
+instance: under the switch a `take_position` tool call parses, 57 tokens,
+`finish_reason: tool_calls`). The builder puts the kwargs in the payload
+**before** the count, so §1's exact count renders the template the
+completion renders (the closed block costs tokens; they are counted, and
+the integration test's equality holds). On a probed server the §1 budget
+path stands unchanged and the gate does not apply (declared gap 1). A door
+that is not window-aware is byte-identical. A template without the switch
+classifies `think_switch == "none"`: no gate, and the launch note says so.
+
+**Why withdrawal is the line, not the room.** Withdrawal fires at
+`SOFT_THRESHOLD_FRACTION` of the limit, so at that moment the room is under
+a fifth of the window (13,107 on 65,536); the two overruns had 12,850 and
+15,292. Before withdrawal the room is at least that, and the observed
+reading-turn generations were 2,600 to 5,800 tokens a turn; a think there
+can still overrun (declared gap 2) and is captured under §4 and retried
+under §6 as today. Gating on room alone (`room <
+THINK_UNRESTRICTED_ROOM_TOKENS`) would close the think on reading turns
+with 30,000 tokens of room; gating on the phase closes it exactly where the
+harness already changes the door's world and tells it so.
+
+**What the door is told.** The withdrawal note (§1, the user-role note)
+gains one sentence when the gate applies, after "remain.": `"The harness
+also closes your think block for the rest of this wake (this server cannot
+bound a think); reason in your reply if you need to."` The launch note's
+clause (§5) gains `think gate {template after withdrawal|budget|none}`:
+"template after withdrawal" when the gate applies, "budget" when probed,
+"none" otherwise. Each gated request logs `budget_pressure / think_closed`
+with `turn_index`, `prompt_tokens` and `max_tokens`, so the record shows
+which turns ran without a think block. The policy dict gains
+`think_switch`.
+
+**Declared gaps.** (1) A probed server's withdrawn tool turn carries no
+budget (§1, round one finding 2) and no gate; a server whose budget forces
+does not exist in this house today, so the gap is resolved with evidence
+when one does. (2) A think on a perception-open turn is unbounded, as
+before. (3) The door's deliberation on its closing turns now happens in
+the reply text, which the record keeps, instead of in a think block, which
+the record kept only when truncated. That is a change to what the resident
+does with its last turns; it is declared to the resident in the launch note
+and the withdrawal note, and held for the assembly's review with the 9-17
+items in `community/README.md`.
+
 ### 2. Context results: a typed projection, deep-copied, admitted at the prepared wake
 
 `build_event_envelope(event, context_results, run_id, operational_notes,
@@ -432,8 +513,9 @@ With a limit, the launch note adds one clause formatted from the
 constants: `"; window: limit {limit} ({source}), count {server|estimate},
 reserve reply {REPLY_RESERVE_TOKENS} floor {THINK_FLOOR_TOKENS}, think
 unrestricted above {THINK_UNRESTRICTED_ROOM_TOKENS} of room, reasoning
-budget {probed|unsupported|inconclusive|not_probed}, compact retry once"`.
-The launch record carries `context_policy` as a dict. Without a limit,
+budget {probed|unsupported|inconclusive|not_probed}, think gate {template after
+withdrawal|budget|none}, compact retry once"` (the think-gate term is §1a,
+revision 6.4). The launch record carries `context_policy` as a dict. Without a limit,
 note and record are unchanged.
 
 ### 6. One compact retry (completion recovery)
@@ -639,6 +721,21 @@ that returns a count the test chooses):
     completed/failed records.
 12. Launch note and record: the clause is formatted from the constants and
     absent without a limit.
+18. (r6.4, §1a) `think_switch`: "template" when the template source contains
+    `enable_thinking` and the door is window-aware, "none" otherwise (a
+    template without the string; a cached probe; no llama-server); `as_dict`
+    carries it.
+19. (r6.4, §1a) The gate: a scripted two-turn wake that withdraws perception on
+    turn 1 sends turn 0 without `chat_template_kwargs` and turn 1 (state tools
+    active, `tool_choice: "auto"`) and turn 2 (`tool_choice: "none"`) with
+    `{"enable_thinking": false}`; the counter receives the payload with the
+    kwargs already in it; the withdrawal note carries the gate sentence exactly;
+    one `budget_pressure / think_closed` event per gated turn with
+    `turn_index`, `prompt_tokens`, `max_tokens`. Three negatives, each
+    asserting no kwargs and no sentence and no event: `reasoning_budget ==
+    "probed"`; `think_switch == "none"`; a door that is not window-aware (the
+    golden of item 9 is the byte-identity proof). The launch clause names the
+    gate in each of its three forms.
 
 Integration (`tests/integration/test_local_window.py`, skipped unless
 `http://127.0.0.1:8081/props` answers; run by the custodian, outside any
@@ -660,6 +757,13 @@ door's wake, with the output pasted into the review record before merge):
   the `completion_tokens` difference between a zero-budget reply and its
   control on the probe prompt; recorded as observational if the two
   replies produce other text.
+- (e) (r6.4, §1a) with `chat_template_kwargs: {"enable_thinking": false}`
+  on the tools payload: the count of (a) **equals** `usage.prompt_tokens`;
+  the reply's content opens with the closed block (`<think>\n\n</think>`);
+  a tool-inviting prompt with `tool_choice: "auto"` returns
+  `finish_reason: tool_calls` with a parsed call. May run against a scratch
+  instance of the same build on another port (`HAMUTAY_LOCAL_SERVER`), so
+  the door's server is not touched.
 
 Codex authors an independent validation suite from the invariants above
 (`tests/window_validation/`), frozen before its first run.
@@ -706,6 +810,12 @@ door's.
   three, finding 30). A shared-session threading model would need a
   session lock around publication; none exists today.
 - Any change to the Anthropic backend.
+- Fixing llama.cpp's budget sampler for a think opened by the prompt (the
+  cause of `unsupported` on this template, §1a). A server patch; when it
+  lands the probe reclassifies at launch, §1's budget path takes over on
+  the turns it covers, and §1a's gate yields (`reasoning_budget ==
+  "probed"`).
+- Bounding a think on a perception-open turn (§1a, gap 2).
 
 ## Cost
 
