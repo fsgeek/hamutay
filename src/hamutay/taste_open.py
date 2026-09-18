@@ -247,14 +247,15 @@ def _strip_think(content):
     return content
 
 
-def _natural_tool_guidance(*, declare_quiet: bool = False, assembly: bool = False) -> str:
+def _natural_tool_guidance(*, declare_quiet: bool = False, assembly: bool = False, plaza: bool = False) -> str:
     """Derive the natural-mode tool text from the terminal text.
 
     Derived, not copied, so the two modes cannot drift apart in the parts
-    they share. Every replacement is asserted to have matched. declare_quiet
-    and the assembly tools are described only when actually offered
-    (event-managed wakes, with a binding), so the prompt never names a tool
-    the resident does not have.
+    they share. Every replacement is asserted to have matched. declare_quiet,
+    the assembly tools, and send_message are described only when actually
+    offered (event-managed wakes, with a binding, and — for send_message —
+    the plaza set), so the prompt never names a tool the resident does not
+    have.
     """
     text = _TOOL_GUIDANCE
     declare_quiet_line = (
@@ -270,6 +271,12 @@ def _natural_tool_guidance(*, declare_quiet: bool = False, assembly: bool = Fals
         "ledger, now; optional reasons are carried verbatim. convene(text, "
         "closes_in): put a question to every door.\n"
     ) if assembly else ""
+    plaza_line = (
+        "- send_message(to, text): Carry a message to one door (a name from "
+        'members.json) or to the plaza (to="plaza", wakes no one). Written to '
+        "the shared plaza record at the call; at most 8000 characters; at most "
+        "48 to doors per UTC day.\n"
+    ) if plaza else ""
     replacements = [
         (
             "Alongside think_and_respond you may call these tools before "
@@ -286,6 +293,7 @@ def _natural_tool_guidance(*, declare_quiet: bool = False, assembly: bool = Fals
             "forward.\n"
             + declare_quiet_line
             + assembly_line
+            + plaza_line
             + "\n### Shell",
         ),
         (
@@ -311,6 +319,9 @@ def _natural_tool_guidance(*, declare_quiet: bool = False, assembly: bool = Fals
 _TOOL_GUIDANCE_NATURAL = _natural_tool_guidance()
 _TOOL_GUIDANCE_NATURAL_EVENT = _natural_tool_guidance(declare_quiet=True)
 _TOOL_GUIDANCE_NATURAL_EVENT_ASSEMBLY = _natural_tool_guidance(declare_quiet=True, assembly=True)
+_TOOL_GUIDANCE_NATURAL_EVENT_ASSEMBLY_PLAZA = _natural_tool_guidance(
+    declare_quiet=True, assembly=True, plaza=True
+)
 
 
 # Multi-turn budget accounting. The model limit is the hard API ceiling
@@ -2718,6 +2729,7 @@ def _build_messages(
     wake_mode: str = "terminal",
     declare_quiet: bool = False,
     assembly: bool = False,
+    plaza: bool = False,
     lean_activity_log: bool = False,
     omit_activity_log: bool = False,
 ) -> tuple[list[dict], str]:
@@ -2773,12 +2785,19 @@ def _build_messages(
             # it has them (no binding, or no wake context this wake).
             from hamutay.tools.schemas import ASSEMBLY_CONSTITUTION_CLAUSE
             system_prefix = system_prefix.replace(ASSEMBLY_CONSTITUTION_CLAUSE, "")
+        if not plaza:
+            # A wake that is not offered send_message must not be told it has
+            # it (no plaza, no binding, or no wake context this wake).
+            from hamutay.tools.schemas import PLAZA_CONSTITUTION_CLAUSE
+            system_prefix = system_prefix.replace(PLAZA_CONSTITUTION_CLAUSE, "")
         system_parts.append(system_prefix)
     system_parts.extend([_SYSTEM_PROMPT_NATURAL if natural else _SYSTEM_PROMPT, ""])
 
     if tools_enabled:
         if natural:
-            if assembly:
+            if assembly and plaza:
+                guidance = _TOOL_GUIDANCE_NATURAL_EVENT_ASSEMBLY_PLAZA
+            elif assembly:
                 guidance = _TOOL_GUIDANCE_NATURAL_EVENT_ASSEMBLY
             elif declare_quiet:
                 guidance = _TOOL_GUIDANCE_NATURAL_EVENT
@@ -3357,6 +3376,9 @@ class OpenTasteSession:
             and self._assembly is not None
             and wake_context is not None
         )
+        # send_message is offered only under exactly the assembly tools'
+        # conditions AND the plaza is enabled for this house (spec §3, §8).
+        offer_plaza = offer_assembly and self._assembly.members.plaza is not None
         # Involuntary memory — maybe surface a prior self, unless the caller
         # forced a specific injection (or forced None) for a faithful fork.
         if isinstance(force_memory, _Unset):
@@ -3386,6 +3408,7 @@ class OpenTasteSession:
                 wake_mode=self._wake_mode,
                 declare_quiet=offer_declare_quiet,
                 assembly=offer_assembly,
+                plaza=offer_plaza,
                 lean_activity_log=(
                     self.context_policy.window_aware and not compact
                 ),
@@ -3423,6 +3446,7 @@ class OpenTasteSession:
                 from hamutay.tools.schemas import (
                     CONVENE_SCHEMA,
                     DECLARE_QUIET_SCHEMA,
+                    SEND_MESSAGE_SCHEMA,
                     TAKE_POSITION_SCHEMA,
                     UPDATE_STATE_SCHEMA,
                 )
@@ -3432,6 +3456,8 @@ class OpenTasteSession:
                 if offer_assembly:
                     extra_tools.append(TAKE_POSITION_SCHEMA)
                     extra_tools.append(CONVENE_SCHEMA)
+                if offer_plaza:
+                    extra_tools.append(SEND_MESSAGE_SCHEMA)
 
         if terminal_surface is not None:
             if extra_tools:

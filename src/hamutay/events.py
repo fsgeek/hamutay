@@ -299,6 +299,7 @@ def build_inbound_event(
     requested_context: list[dict] | None = None,
     event_id: str | None = None,
     assembly: dict | None = None,
+    origin: str = "external",
 ) -> dict:
     """Create an externally-originated pending event. Does not write it.
 
@@ -318,7 +319,7 @@ def build_inbound_event(
         "event_type": EVENT_TYPE_INBOUND,
         "status": "pending",
         "created_at": utc_now_iso(),
-        "origin": "external",
+        "origin": origin,
         "sender": sender,
         "purpose": purpose,
     }
@@ -1446,10 +1447,17 @@ def build_event_envelope(
         )
         context_results = project_context_results(context_results, cap)
     if event.get("event_type") == EVENT_TYPE_INBOUND:
-        event_instruction = (
-            "This is an external inbound event. Its origin, sender, and "
-            "purpose fields describe where it came from and what was sent. "
-        )
+        if event.get("origin") == "member":
+            who = "another resident" if str(event.get("sender", "")).startswith("door:") else "a human"
+            event_instruction = (
+                f"This is a message from {who}, carried by the plaza. Its sender and "
+                "purpose fields say who wrote it and what they wrote. "
+            )
+        else:
+            event_instruction = (
+                "This is an external inbound event. Its origin, sender, and "
+                "purpose fields describe where it came from and what was sent. "
+            )
     else:
         event_instruction = (
             "This is a self-scheduled reflection event. Use the provided "
@@ -2321,6 +2329,7 @@ def run_next_event(
     auto_continuations: bool = False,
     policy_dispositions: bool = False,
     claim_gate=None,
+    extra_notes=None,
 ) -> dict:
     """Run the oldest pending event once using an OpenTasteSession."""
     if claim_gate is not None:
@@ -2358,11 +2367,16 @@ def run_next_event(
                 bridge=session._bridge,
             )
         policy = getattr(session, "context_policy", None)
+        store_records = store.read_records()
         notes = operational_notes_for_event(
-            store.read_records(),
+            store_records,
             event,
             now=now or datetime.now(timezone.utc),
         )
+        if extra_notes is not None:
+            # the records this wake already read, so an extra-note producer never
+            # takes a second (and, on EventStore, unbounded) lock on the same store
+            notes = list(notes) + list(extra_notes(event, store_records))
         # The closure holds the *full* results; every admission pass renders
         # a fresh projection from them at the cap it is trying, so no pass
         # ever projects a projection. The record still keeps the full list.
@@ -2498,6 +2512,7 @@ def run_pending_events(
     policy_dispositions: bool = False,
     max_auto_continuations: int | None = None,
     claim_gate=None,
+    extra_notes=None,
 ) -> dict:
     """Run up to limit pending events and return a batch summary."""
     if (
@@ -2521,6 +2536,7 @@ def run_pending_events(
                 auto_continuations=auto_continuations,
                 policy_dispositions=policy_dispositions,
                 claim_gate=claim_gate,
+                extra_notes=extra_notes,
             )
         except LeaseGateRequired:
             # A door bound to the GPU lease may only be claimed through the

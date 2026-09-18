@@ -2,6 +2,7 @@
 Spec §1: identity and paths come from members.json, never from model input."""
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -29,8 +30,10 @@ class Member:
 class MembersConfig:
     ledger: Path
     members: dict[str, Member]
+    plaza: Path | None = None       # the plaza record; None means the plaza is not enabled
+    digest: str = ""                # sha256 of members.json's bytes, for the plaza's records
 
-    def snapshot(self) -> dict:
+    def snapshot(self) -> dict:      # member-only, on purpose: the assembly's freeze
         return {name: m.snapshot() for name, m in self.members.items()}
 
 
@@ -52,6 +55,12 @@ def load_members(project_root: Path) -> MembersConfig | None:
     if not isinstance(raw, dict) or not isinstance(raw.get("ledger"), str) \
             or not isinstance(raw.get("members"), dict) or not raw["members"]:
         raise MembersMalformed(f"{path}: expected {{ledger: str, members: {{...}}}}")
+    plaza: Path | None = None
+    if "plaza" in raw:
+        if not isinstance(raw["plaza"], str) or not raw["plaza"]:
+            raise MembersMalformed(f"{path}: plaza must be a non-empty string path")
+        plaza = _inside(project_root, raw["plaza"])
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
     members: dict[str, Member] = {}
     for name, spec in raw["members"].items():
         if not isinstance(spec, dict) or not isinstance(spec.get("session"), str) \
@@ -75,7 +84,8 @@ def load_members(project_root: Path) -> MembersConfig | None:
             )
         events_paths[member.events] = name
 
-    return MembersConfig(ledger=_inside(project_root, raw["ledger"]), members=members)
+    return MembersConfig(ledger=_inside(project_root, raw["ledger"]), members=members,
+                        plaza=plaza, digest=digest)
 
 
 @dataclass(frozen=True)
@@ -124,5 +134,7 @@ def bind(project_root: Path, log_path: Path, event_store_path: Path, *,
         if mine and mine != cfg.members[door].snapshot():
             return None, (f"assembly: member {door} paths are frozen while a lineage is open and "
                           f"differ from the open question's snapshot; no binding")
-    return AssemblyBinding(door, cfg.ledger, cfg, Path(project_root).resolve()), \
-        f"assembly: member {door} bound; ledger {cfg.ledger}"
+    note = f"assembly: member {door} bound; ledger {cfg.ledger}"
+    if cfg.plaza is not None:
+        note += f"; plaza: door {door} may send; log {cfg.plaza}"
+    return AssemblyBinding(door, cfg.ledger, cfg, Path(project_root).resolve()), note

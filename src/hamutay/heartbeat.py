@@ -5,9 +5,11 @@ The log is the life; the process is weather. Boot always runs recovery.
 """
 from __future__ import annotations
 
+import functools
 import json
 import math
 import os
+import subprocess
 import time
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
@@ -15,9 +17,12 @@ from uuid import uuid4
 from hamutay.tools.schemas import (
     ASSEMBLY_CONSTITUTION_CLAUSE,
     DECLARE_QUIET_CONSTITUTION_CLAUSE,
+    PLAZA_CONSTITUTION_CLAUSE,
 )
 from hamutay.assembly.binding import bind
 from hamutay.assembly.pass_ import run_pass
+from hamutay.plaza.note import note_producer
+from hamutay.plaza.pass_ import run_plaza_pass
 from hamutay.events import (
     EVENT_TYPE_REFLECTION,
     EventStore,
@@ -336,6 +341,20 @@ class WakeBudget:
         return None
 
 
+def source_note(project_root) -> str:
+    """'source: commit <sha> clean|dirty' from git at process start; 'source: unknown' if git cannot say."""
+    try:
+        sha = subprocess.run(["git", "-C", str(project_root), "rev-parse", "HEAD"], capture_output=True,
+                             text=True, timeout=10)
+        st = subprocess.run(["git", "-C", str(project_root), "status", "--porcelain"], capture_output=True,
+                            text=True, timeout=10)
+    except (OSError, subprocess.SubprocessError):
+        return "source: unknown"
+    if sha.returncode != 0 or st.returncode != 0 or not sha.stdout.strip():
+        return "source: unknown"
+    return f"source: commit {sha.stdout.strip()} {'dirty' if st.stdout.strip() else 'clean'}"
+
+
 class HeartbeatLoop:
     """Wall-clock life for the event loop. Crash-only: boot always recovers."""
 
@@ -355,6 +374,7 @@ class HeartbeatLoop:
         guard=None,
         assembly=None,
         assembly_pass=run_pass,
+        plaza_pass=run_plaza_pass,
     ):
         self._session = session
         self._guard = guard
@@ -374,6 +394,8 @@ class HeartbeatLoop:
         self._assembly = assembly
         self._assembly_pass = assembly_pass
         self._assembly_memo = None
+        self._plaza_pass = plaza_pass
+        self._plaza_memo = None
 
     @staticmethod
     def _emit(payload: dict) -> None:
@@ -417,6 +439,18 @@ class HeartbeatLoop:
                     "at": now.isoformat(),
                 }
             )
+
+    def _plaza_step(self, now) -> None:
+        """After the assembly pass; same guard: an error is emitted, never raised."""
+        if self._assembly is None or self._assembly.members.plaza is None:
+            return
+        try:
+            result, self._plaza_memo = self._plaza_pass(self._assembly, now=now, memo=self._plaza_memo)
+        except Exception as e:
+            self._emit({"heartbeat": "plaza", "error": f"{type(e).__name__}: {e}", "at": now.isoformat()})
+            return
+        if result.get("error") or result.get("landed") or result.get("unreadable") or result.get("skipped") == "lock":
+            self._emit({"heartbeat": "plaza", **result, "at": now.isoformat()})
 
     def _transition(
         self,
@@ -600,6 +634,7 @@ class HeartbeatLoop:
     def step(self) -> dict:
         now = self._now()
         self._assembly_step(now)
+        self._plaza_step(now)
         # The substrate guard runs before the budget: a door whose GPU is lent
         # has nothing to spend the budget on.
         if self._guard is not None:
@@ -722,7 +757,7 @@ GPU_LEASE_SENTENCE = (
 
 
 def build_constitution(
-    budget: "WakeBudget | None", gpu_lease: bool = False, assembly: bool = False
+    budget: "WakeBudget | None", gpu_lease: bool = False, assembly: bool = False, plaza: bool = False
 ) -> str:
     """The operational prefix as configured: true under either setting."""
     base = _CONSTITUTION_BASE
@@ -732,6 +767,12 @@ def build_constitution(
             DECLARE_QUIET_CONSTITUTION_CLAUSE + ASSEMBLY_CONSTITUTION_CLAUSE,
             1,
         )
+        if plaza:
+            base = base.replace(
+                ASSEMBLY_CONSTITUTION_CLAUSE,
+                ASSEMBLY_CONSTITUTION_CLAUSE + PLAZA_CONSTITUTION_CLAUSE,
+                1,
+            )
     if budget is None:
         text = base + UNBUDGETED_SENTENCE
     else:
@@ -857,6 +898,24 @@ def _summarize_for(binding):
             return summarize_event_log(records, now=now)
 
     return _summarize
+
+
+def _run_pending_for(binding, store, on_error):
+    """A `run_pending=` callable for HeartbeatLoop: plain unless plaza is set.
+
+    An unbound loop, or a bound one whose members lack the `plaza` key, runs
+    `run_pending_events` itself untouched. A plaza-set binding gets the same
+    function with `extra_notes` bound to this door's note producer, so every
+    wake sees what appeared on the plaza since its last wake began. The producer
+    is called `(event, store_records)` with the records run_next_event has already
+    read, so the note never takes a second lock on this door's own store.
+    """
+    if binding is None or binding.members.plaza is None:
+        return run_pending_events
+    return functools.partial(
+        run_pending_events,
+        extra_notes=note_producer(binding.members, binding.door, store, on_error),
+    )
 
 
 def _positive_context_limit(value) -> int | None:
@@ -1310,6 +1369,8 @@ def build_session(args):
     # constitution sentence and whether this door runs behind a lease gate.
     store = EventStore(event_log_path)
 
+    HeartbeatLoop._emit({"heartbeat": "launch", "note": source_note(args.project_root)})
+
     launch, launch_notes = resolve_heartbeat_launch(args)
     args.model, args.provider = launch["model"], launch["provider"]
     args.base_url = launch["base_url"]
@@ -1445,7 +1506,8 @@ def build_session(args):
         enable_tools=True,
         project_root=Path(args.project_root),
         system_prompt_prefix=build_constitution(
-            budget, gpu_lease=bool(store.lease_binding), assembly=bool(assembly_binding)
+            budget, gpu_lease=bool(store.lease_binding), assembly=bool(assembly_binding),
+            plaza=bool(assembly_binding and assembly_binding.members.plaza),
         ),
         wake_mode=wake_mode,
         assembly=assembly_binding,
@@ -1526,6 +1588,10 @@ def main() -> None:
         guard=guard,
         assembly=assembly_binding,
         summarize=_summarize_for(assembly_binding),
+        run_pending=_run_pending_for(
+            assembly_binding, store,
+            lambda s: HeartbeatLoop._emit({"heartbeat": "plaza", "error": s}),
+        ),
     )
     try:
         loop.run_forever()
