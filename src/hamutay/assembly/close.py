@@ -34,6 +34,34 @@ def _latest_by_event_id(records: list[dict]) -> dict[str, dict]:
     return latest
 
 
+def _runs_by_event(records: list[dict]) -> dict[str, dict[str, dict]]:
+    """event_id -> run_id -> {status, started_at, superseded}.
+
+    A position belongs to one *run*, not to an event: the event's latest status can be a
+    later attempt's. A run is superseded when a later pending row for the same event names
+    it — boot recovery's top-level `recovered_from_run_id`, or the same key under `detail`,
+    or a compact retry's `detail.retry_of_run`. A superseded run never holds a close open.
+    """
+    runs: dict[str, dict[str, dict]] = {}
+    for r in records:
+        if r.get("record_type") != "event_status":
+            continue
+        eid, rid = str(r.get("event_id")), r.get("run_id")
+        if rid:
+            entry = runs.setdefault(eid, {}).setdefault(
+                rid, {"status": None, "started_at": None, "superseded": False})
+            entry["status"] = r.get("status")
+            if r.get("status") == "running":
+                entry["started_at"] = r.get("started_at")
+        if r.get("status") == "pending":
+            detail = r.get("detail") or {}
+            for old in (r.get("recovered_from_run_id"), detail.get("recovered_from_run_id"),
+                        detail.get("retry_of_run")):
+                if old and old in runs.get(eid, {}):
+                    runs[eid][old]["superseded"] = True
+    return runs
+
+
 def _completed_index(records: list[dict]) -> dict[str, dict]:
     """result_record_id -> completed row (with its running row's started_at joined)."""
     started = {}
@@ -49,10 +77,11 @@ def _completed_index(records: list[dict]) -> dict[str, dict]:
 
 
 def eligible_positions(view: View, lineage_id: str, stores: dict[str, list[dict] | None],
-                       members: list[str], latest: dict[str, dict[str, dict]] | None = None) -> list[dict]:
+                       members: list[str],
+                       runs: dict[str, dict[str, dict[str, dict]]] | None = None) -> list[dict]:
     out = []
     completed: dict[str, dict[str, dict]] = {}
-    latest = dict(latest or {})
+    runs = dict(runs or {})
     for p in view.positions_for_lineage(lineage_id):
         door = p["member"].removeprefix("door:")
         if door not in members:
@@ -66,13 +95,15 @@ def eligible_positions(view: View, lineage_id: str, stores: dict[str, list[dict]
         ok = bool(c) and c.get("event_id") == p["event_id"] and c.get("run_id") == p["run_id"] \
             and c.get("_started_at") == p["wake_started_at"]
         if not ok and not c:
-            # C1: the join never completed. A wake that terminated `failed` is never
-            # re-pended (boot recovery re-pends `running` orphans only), so this stance
-            # can neither be counted nor discarded: unknown, and a cap in §7 step 5.
-            if door not in latest:
-                latest[door] = _latest_by_event_id(recs)
-            st = latest[door].get(p["event_id"])
-            if st is not None and st.get("status") == "failed":
+            # C1: the join never completed. A wake that terminated `failed` leaves a stance
+            # that can neither be counted nor discarded: unknown, and a cap in §7 step 5.
+            # The verdict is on the position's *own* run: a compact retry or a recovered
+            # orphan makes the event's latest status a later attempt's, and that later
+            # attempt must not absolve — nor invent — this attempt's failure.
+            if door not in runs:
+                runs[door] = _runs_by_event(recs)
+            run = runs[door].get(p["event_id"], {}).get(p["run_id"])
+            if run is not None and run["status"] == "failed":
                 out.append({"record": p, "eligible": None, "reason": "wake_failed"}); continue
         out.append({"record": p, "eligible": ok})
     return out
@@ -141,6 +172,7 @@ def try_close(ledger: Ledger, view: View, q: dict, *, now: datetime, actor: str,
     # step 2: running or unknown
     stores: dict[str, list[dict] | None] = {}
     latest: dict[str, dict[str, dict]] = {}
+    runs: dict[str, dict[str, dict[str, dict]]] = {}
     running_at_cutoff, unknown_at_cutoff = [], []
     for d in members:
         recs = _read_store(q["members"][d]["events"], open_store)
@@ -150,18 +182,28 @@ def try_close(ledger: Ledger, view: View, q: dict, *, now: datetime, actor: str,
                 return None
             unknown_at_cutoff.append(d); continue
         latest[d] = _latest_by_event_id(recs)
-        for r in latest[d].values():
-            if r.get("status") == "running" and r.get("started_at") \
-                    and parse_instant(r["started_at"]) < closes_at:
-                if not past_grace and not withdrawn:
-                    return None
-                if d not in running_at_cutoff:
-                    running_at_cutoff.append(d)
+        runs[d] = _runs_by_event(recs)
+        for by_run in runs[d].values():
+            for r in by_run.values():
+                if r["status"] == "running" and not r["superseded"] and r["started_at"] \
+                        and parse_instant(r["started_at"]) < closes_at:
+                    if not past_grace and not withdrawn:
+                        return None
+                    if d not in running_at_cutoff:
+                        running_at_cutoff.append(d)
     # step 3: tally
-    elig = eligible_positions(view, q["lineage_id"], stores, members, latest)
-    failed_positions = sorted({e["record"]["member"].removeprefix("door:")
-                               for e in elig if e.get("reason") == "wake_failed"})
+    elig = eligible_positions(view, q["lineage_id"], stores, members, runs)
     active = active_positions(elig, members)
+    # A stance stranded by a failed wake caps the outcome — unless the same door spoke
+    # again afterwards. A compact retry that records its own position and completes has
+    # resolved the stranding: the later stance is the door's, and nothing is unheard.
+    failed_positions = sorted({
+        d for d in {e["record"]["member"].removeprefix("door:")
+                    for e in elig if e.get("reason") == "wake_failed"}
+        if active[d] is None or active[d]["seq"] < max(
+            e["record"]["seq"] for e in elig
+            if e.get("reason") == "wake_failed" and e["record"]["member"] == f"door:{d}")
+    })
     stances = {d: (p["stance"] if p else None) for d, p in active.items()}
     quorum = quorum_for(q["members"], q["governing"])
     max_rounds = int(q["governing"].get("max_rounds", 3))

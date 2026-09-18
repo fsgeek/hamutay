@@ -976,6 +976,58 @@ def latest_context_observation(
     return limit, invocation_id
 
 
+def latest_context_probe(log_path) -> dict | None:
+    """The last state-bearing record's `launch.context_policy.probe` dict, if any.
+
+    Feeds `ContextPolicy.for_launch(cached=...)`: a launch whose build_info,
+    model_alias and template hash match the cached probe skips re-probing the
+    reasoning-budget capability. Scans like `latest_context_observation` —
+    whichever record appears later in the file wins.
+    """
+    probe = None
+    try:
+        with open(log_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    rec = json.loads(line)
+                except (json.JSONDecodeError, ValueError):
+                    continue
+                if not isinstance(rec, dict) or rec.get("state") is None:
+                    continue
+                launch = rec.get("launch")
+                if not isinstance(launch, dict):
+                    continue
+                context_policy = launch.get("context_policy")
+                if not isinstance(context_policy, dict):
+                    continue
+                found = context_policy.get("probe")
+                if isinstance(found, dict):
+                    probe = found
+    except (OSError, UnicodeDecodeError):
+        return None
+    return probe
+
+
+def window_clause(policy) -> str:
+    """The launch note's window clause (spec §5), formatted from `hamutay.window`."""
+    from hamutay.window import (
+        REPLY_RESERVE_TOKENS,
+        THINK_FLOOR_TOKENS,
+        THINK_UNRESTRICTED_ROOM_TOKENS,
+    )
+
+    count = "server" if policy.window_aware else "estimate"
+    return (
+        f"; window: limit {policy.limit} ({policy.source}), count {count}, "
+        f"reserve reply {REPLY_RESERVE_TOKENS} floor {THINK_FLOOR_TOKENS}, "
+        f"think unrestricted above {THINK_UNRESTRICTED_ROOM_TOKENS} of room, "
+        f"reasoning budget {policy.reasoning_budget}, compact retry once"
+    )
+
+
 LOCAL_TRANSPORT_TIMEOUT_S = 2700.0   # 64,000 tokens at ~25 tok/s is ~43 min; one turn rarely needs half
 HOSTED_TRANSPORT_TIMEOUT_S = 300.0
 
@@ -1283,35 +1335,35 @@ def acquire_lock(lock_path: str):
     return handle
 
 
-def main() -> None:
+def build_session(args):
+    """(session, backend, launch_config) for `args`, without starting the loop.
+
+    Everything `main()` needs to decide the substrate and construct the
+    session lives here so it can be exercised without a lock, a running
+    loop, or the network (an OpenAI-provider door still calls out to
+    `ContextPolicy.for_launch`, which a test monkeypatches). `main()` calls
+    this and is otherwise unchanged.
+    """
     import os
     from pathlib import Path
 
+    from hamutay.context_policy import ContextPolicy, ContextPolicyHolder
     from hamutay.events import default_event_log_path
     from hamutay.taste_open import (
         AnthropicTasteBackend,
         OpenAITasteBackend,
         OpenTasteSession,
+        _default_http,
     )
 
-    args = build_parser().parse_args()
     event_log_path = args.event_log_path or str(
         default_event_log_path(args.log_path)
     )
-    # Directories must exist before the lock file can be opened.
     Path(args.log_path).parent.mkdir(parents=True, exist_ok=True)
     Path(event_log_path).parent.mkdir(parents=True, exist_ok=True)
-    lock_path = args.lock_path or (event_log_path + ".heartbeat.lock")
     # The store must exist before the session: its door binding decides the
     # constitution sentence and whether this door runs behind a lease gate.
     store = EventStore(event_log_path)
-    if store.lease_binding:
-        # The door is the log's directory — the same directory 4090.door names
-        # and the one gpu_lease/cli.py computes the heartbeat lock inside.
-        assert_canonical_lock_path(
-            lock_path, event_log_path, door=str(Path(args.log_path).parent)
-        )
-    lock_handle = acquire_lock(lock_path)  # held for process lifetime
 
     HeartbeatLoop._emit({"heartbeat": "launch", "note": source_note(args.project_root)})
 
@@ -1335,12 +1387,14 @@ def main() -> None:
 
     context_limit, context_limit_source = None, "provider default"
     base_url = None
+    context_policy = None
     if args.provider == "anthropic":
         # A bound door needs an OpenAI-compatible base_url to probe readiness;
         # the anthropic-direct backend resolves none, so refuse here rather than
         # warm forever in silence.
         assert_lease_door_has_base_url(store.lease_binding, base_url)
         backend = AnthropicTasteBackend(max_tokens=args.max_tokens)
+        context_policy = ContextPolicy.none()
     else:
         if args.provider == "openrouter":
             base_url = args.base_url or "https://openrouter.ai/api/v1"
@@ -1382,6 +1436,18 @@ def main() -> None:
             "heartbeat": "launch",
             "note": f"transport timeout: {transport_timeout:g}s ({transport_timeout_source}); a read timeout is not retried",
         })
+        # The window policy (spec §5): a frozen ceiling/tokenizer/reasoning-
+        # budget value, built once per launch (or rediscovery). No
+        # invocation id is available here — `resolve_context_limit` and
+        # `discover_llama_server_context` return only (limit, source); an
+        # invocation id is known only once a lease rediscovery names one.
+        context_policy = ContextPolicy.for_launch(
+            context_limit, context_limit_source, base_url,
+            http=_default_http, model=args.model,
+            cached=latest_context_probe(args.log_path),
+        )
+        if context_policy.limit:
+            HeartbeatLoop._emit({"heartbeat": "launch", "note": window_clause(context_policy)})
         backend = OpenAITasteBackend(
             base_url=base_url,
             api_key=api_key,
@@ -1398,6 +1464,7 @@ def main() -> None:
             openrouter_cache=not args.no_openrouter_cache,
             openrouter_cache_ttl=args.openrouter_cache_ttl,
             context_limit=context_limit,
+            context_policy=ContextPolicyHolder(context_policy),
         )
 
     assembly_binding, assembly_note = resolve_assembly_binding(
@@ -1405,6 +1472,24 @@ def main() -> None:
     )
     HeartbeatLoop._emit({"heartbeat": "launch", "note": assembly_note})
 
+    launch_config = {
+        "model": args.model,
+        "provider": args.provider,
+        "tools": True,
+        "capabilities_file": (
+            args.capabilities_file
+            or (DEFAULT_CAPABILITIES_FILE if args.provider != "anthropic" else None)
+        ),
+        "openrouter_require_parameters": (
+            args.provider == "openrouter"
+            and not args.no_openrouter_require_parameters
+        ),
+        "wake_mode": wake_mode,
+        "base_url": args.base_url,
+        "context_limit": context_limit,
+        "context_limit_source": context_limit_source,
+        "context_policy": context_policy.as_dict(),
+    }
     session = OpenTasteSession(
         model=args.model,
         backend=backend,
@@ -1422,24 +1507,47 @@ def main() -> None:
         ),
         wake_mode=wake_mode,
         assembly=assembly_binding,
-        launch_config={
-            "model": args.model,
-            "provider": args.provider,
-            "tools": True,
-            "capabilities_file": (
-                args.capabilities_file
-                or (DEFAULT_CAPABILITIES_FILE if args.provider != "anthropic" else None)
-            ),
-            "openrouter_require_parameters": (
-                args.provider == "openrouter"
-                and not args.no_openrouter_require_parameters
-            ),
-            "wake_mode": wake_mode,
-            "base_url": args.base_url,
-            "context_limit": context_limit,
-            "context_limit_source": context_limit_source,
-        },
+        launch_config=launch_config,
     )
+    # `main()` needs these two to construct the HeartbeatLoop, but they are
+    # not part of this function's (session, backend, launch_config) contract
+    # (a test double stands in for `args` and must not grow new required
+    # fields); stash them the way `_policy_holder` and `_assembly` already
+    # ride on the session.
+    session._heartbeat_budget = budget
+    session._heartbeat_base_url = base_url
+    return session, backend, launch_config
+
+
+def main() -> None:
+    from pathlib import Path
+
+    args = build_parser().parse_args()
+    from hamutay.events import default_event_log_path
+
+    event_log_path = args.event_log_path or str(
+        default_event_log_path(args.log_path)
+    )
+    # Directories must exist before the lock file can be opened.
+    Path(args.log_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(event_log_path).parent.mkdir(parents=True, exist_ok=True)
+    lock_path = args.lock_path or (event_log_path + ".heartbeat.lock")
+    # The store must exist before the lock: its door binding decides whether
+    # the canonical lock path is enforced.
+    store = EventStore(event_log_path)
+    if store.lease_binding:
+        # The door is the log's directory — the same directory 4090.door names
+        # and the one gpu_lease/cli.py computes the heartbeat lock inside.
+        assert_canonical_lock_path(
+            lock_path, event_log_path, door=str(Path(args.log_path).parent)
+        )
+    lock_handle = acquire_lock(lock_path)  # held for process lifetime
+
+    session, backend, launch_config = build_session(args)
+    base_url = session._heartbeat_base_url
+    budget = session._heartbeat_budget
+    assembly_binding = session._assembly
+
     guard = None
     if store.lease_binding:
         # Belt and braces: whichever provider branch ran, a bound door without a

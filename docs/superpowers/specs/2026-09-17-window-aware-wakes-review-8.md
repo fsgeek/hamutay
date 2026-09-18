@@ -1,0 +1,43 @@
+# Codex round eight — revision 6.4 (§1a, the think gate after withdrawal)
+
+## Findings
+
+40. **Blocking — cached launches disable the gate.** Testing item 18 requires `think_switch == "none"` for “a cached probe” ([design.md:724](/home/tony/projects/hamutay/docs/superpowers/specs/2026-09-17-window-aware-wakes-design.md:724)), contradicting §1a’s rule that classification comes from the current template source ([design.md:316](/home/tony/projects/hamutay/docs/superpowers/specs/2026-09-17-window-aware-wakes-design.md:316)). `for_launch` still has the current `/props` template on a cache hit ([context_policy.py:144](/home/tony/projects/hamutay/src/hamutay/context_policy.py:144)); only the reasoning-budget probe is cached. As written, the ordinary second launch could classify the Qwen switch as `none`, suppressing the exact fix this amendment introduces. **Fix:** derive `think_switch` from the current template independently of probe reuse; item 18 must expect `"template"` on a matching cache hit when that template contains `enable_thinking`. Reserve `"none"` for no tokenizer/window awareness or a current template without the switch.
+
+41. **Significant — the policy-field addition breaks the promised non-window golden.** The amendment says `as_dict` carries `think_switch` ([design.md:724](/home/tony/projects/hamutay/docs/superpowers/specs/2026-09-17-window-aware-wakes-design.md:724)), while §5 says a no-limit launch record is unchanged ([design.md:518](/home/tony/projects/hamutay/docs/superpowers/specs/2026-09-17-window-aware-wakes-design.md:518)) and item 9 requires byte identity for the completed record ([design.md:674](/home/tony/projects/hamutay/docs/superpowers/specs/2026-09-17-window-aware-wakes-design.md:674)). Every launch serializes `context_policy.as_dict()` ([heartbeat.py:1430](/home/tony/projects/hamutay/src/hamutay/heartbeat.py:1430)), so adding the field unconditionally changes completed non-window records even though request bytes remain unchanged. **Fix:** specify that serialized `think_switch` is present only for window-aware policies, or explicitly declare and golden-test the record migration. Preserving item 9 requires the former.
+
+42. **Significant — the declared gaps omit withdrawn turns on templates without a functional switch.** Section 1a acknowledges that `think_switch == "none"` receives no gate ([design.md:331](/home/tony/projects/hamutay/docs/superpowers/specs/2026-09-17-window-aware-wakes-design.md:331)), but the three-gap list omits the resulting unbounded withdrawn turn ([design.md:356](/home/tony/projects/hamutay/docs/superpowers/specs/2026-09-17-window-aware-wakes-design.md:356)), and neither new “Not in this change” bullet names it ([design.md:813](/home/tony/projects/hamutay/docs/superpowers/specs/2026-09-17-window-aware-wakes-design.md:813)). Substring detection can also produce a false capability claim when the variable is present but ineffective. **Fix:** add a declared gap and “Not in this change” bullet for templates lacking a verified, effective `enable_thinking` switch; describe `think_switch` as syntactic unless integration-tested.
+
+43. **Minor — phase gating can close thinking after the rebuilt payload has ample room, and that consequence is not declared.** Withdrawal is decided from the payload containing all perception tools ([taste_open.py:2220](/home/tony/projects/hamutay/src/hamutay/taste_open.py:2220)); withdrawal then removes those definitions before `_send` recounts the rebuilt payload ([taste_open.py:2259](/home/tony/projects/hamutay/src/hamutay/taste_open.py:2259), [taste_open.py:2290](/home/tony/projects/hamutay/src/hamutay/taste_open.py:2290)). A sufficiently large removed tool set can restore more than `THINK_UNRESTRICTED_ROOM_TOKENS`, yet the phase gate remains active for the wake. The rationale only states the pre-rebuild room ([design.md:334](/home/tony/projects/hamutay/docs/superpowers/specs/2026-09-17-window-aware-wakes-design.md:334)). **Fix:** explicitly declare that this is intentional phase stickiness, including when the post-withdrawal recount has ample room, and add a test with a large removed tool schema. The opposite case—little room while perception remains open—is already gap 2.
+
+44. **Minor — integration (e) depends on an unstated response-parser setting.** Its assertion that `message.content` begins with `<think>\n\n</think>` ([design.md:760](/home/tony/projects/hamutay/docs/superpowers/specs/2026-09-17-window-aware-wakes-design.md:760)) holds for the deployed `--reasoning-format none` configuration ([hamutay-llama-server.service:26](/home/tony/projects/hamutay/deploy/hamutay-llama-server.service:26)), but not necessarily for an arbitrary scratch server of the same build: another reasoning format may parse or relocate the block. Server default template kwargs themselves are not a count defect—request kwargs override them, and `/apply-template` and chat completion use the same parser. **Fix:** send `reasoning_format: "none"` in both the counted and completed integration payloads, or require the scratch instance to use the deployed service flags.
+
+45. **Minor — item 19 is not executable literally and leaves the event shape implicit.** It calls the scenario a “two-turn wake” while asserting turns 0, 1, and 2 ([design.md:728](/home/tony/projects/hamutay/docs/superpowers/specs/2026-09-17-window-aware-wakes-design.md:728)). It also writes `budget_pressure / think_closed`, whereas the implementation convention is separate `event` and `action` fields ([taste_open.py:1506](/home/tony/projects/hamutay/src/hamutay/taste_open.py:1506)). **Fix:** call it a three-turn script and specify the exact event object: `tool="_framework"`, `event="budget_pressure"`, `action="think_closed"`, plus `turn_index`, `prompt_tokens`, and `max_tokens`.
+
+## Verdict
+
+No. Revision 6.4 is not safe to implement literally.
+
+The gate’s placement is otherwise sound: prepared turn 0 cannot yet be gated; withdrawal invalidates `precounted`; normal tool-result, malformed-argument, all-tools-withdrawn, and context-recovery resends rebuild before `_send`; and `_send` counts before posting. Generation-only fields added after counting do not alter template tokens.
+
+The minimum required changes are:
+
+1. Preserve `think_switch == "template"` across cached-probe launches.
+2. Resolve the `as_dict` versus non-window record-byte contradiction.
+3. Declare the no-switch gap and phase-stickiness-with-ample-room behavior.
+4. Pin `reasoning_format: "none"` in integration (e).
+5. Correct item 19’s turn count and exact framework-event schema.
+
+
+---
+
+## Dispositions (custodian, 2026-09-18 ~01:30Z) → revision 6.5
+
+- **40 — ACCEPTED, text defect.** Item 18's parenthetical listed "a cached probe" among the `"none"` cases; the rule and the implementation derive the switch from the current template on every launch, cache hit or not (`tests/test_context_policy.py::test_think_switch_is_read_from_the_template_even_when_the_probe_is_cached`, written before the review and passing). Item 18 corrected.
+- **41 — ACCEPTED.** `as_dict` omits `think_switch` when the policy is not window-aware, so a no-limit launch record keeps its bytes (§5). Tested on `ContextPolicy.none()` and `for_limit`.
+- **42 — ACCEPTED, and the classification is now verified rather than syntactic.** `probe_think_switch` renders the generation prompt twice through `/apply-template` (plain, and under the kwargs) and classifies `"template"` only when the rendered prompt under the kwargs ends with `THINK_END` and the plain one does not. No generation. Gap 4 declared (no effective switch → the withdrawn turn is unbounded, as before r6.4) with a "Not in this change" bullet; a test with a template that mentions the variable but renders identically classifies `"none"`.
+- **43 — ACCEPTED, declared as intentional phase stickiness** with the test the finding asks for (candidate 53,000 with the perception schemas, rebuilt 20,500, gate on).
+- **44 — ACCEPTED.** Integration (e) sends `reasoning_format: "none"` in both the counted and the completed payload (the server accepts it per request, `server-common.cpp:1296`).
+- **45 — ACCEPTED.** Item 19 now describes the four-send script the near-wall rule actually produces (the withdrawing turn is not one of the turns allowed after withdrawal, so one state-tool turn follows it before tools-none) and names the event object exactly.
+
+Verdict after 6.5: implemented test-first in `.worktrees/think-gate` (branch `think-gate`); Codex's independent validation follows; merge, restart of the qwen unit, and the notice after that.
