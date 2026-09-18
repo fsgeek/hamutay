@@ -167,3 +167,38 @@ def test_a_tokenize_failure_falls_back_to_the_named_constant_and_says_so(capsys)
     assert p.window_aware and p.reasoning_budget == "probed"
     out = capsys.readouterr().out
     assert "/tokenize did not answer" in out and "96" in out
+
+
+# --- r6.4 §1a: the think switch ------------------------------------------------
+
+
+def test_think_switch_is_template_when_the_template_has_enable_thinking():
+    http = FakeHTTP(props=PROPS, tokens_per_call=[7],
+                    chat=[_chat("<think>\nt\n</think>x"), _chat("<think>\nt\n</think>x")])
+    p = ContextPolicy.for_launch(65536, "discovered", "http://127.0.0.1:8081/v1", http=http, model="qwen")
+    assert p.reasoning_budget == "unsupported" and p.think_switch == "template"
+    assert p.as_dict()["think_switch"] == "template"
+
+
+def test_think_switch_is_none_without_the_string_or_without_a_server():
+    plain = dict(PROPS, chat_template="{% for m in messages %}{{m.content}}{% endfor %}<think>\n")
+    http = FakeHTTP(props=plain, tokens_per_call=[7],
+                    chat=[_chat("<think>\nt\n</think>x"), _chat("<think>\nt\n</think>x")])
+    p = ContextPolicy.for_launch(65536, "discovered", "http://127.0.0.1:8081/v1", http=http, model="qwen")
+    assert p.window_aware and p.think_switch == "none"
+    assert ContextPolicy.none().think_switch == "none"
+    assert ContextPolicy.for_limit(65536, "flag").think_switch == "none"
+    off = FakeHTTP(props={"object": "list"})
+    assert ContextPolicy.for_launch(65536, "flag", "http://127.0.0.1:8081/v1", http=off, model="qwen").think_switch == "none"
+
+
+def test_think_switch_is_read_from_the_template_even_when_the_probe_is_cached():
+    http = FakeHTTP(props=PROPS, tokens_per_call=[7],
+                    chat=[_chat("<think>\nt\n</think>x"), _chat("<think>\nt\n</think>x")])
+    p = ContextPolicy.for_launch(65536, "discovered", "http://127.0.0.1:8081/v1", http=http, model="qwen")
+    cached = {k: v for k, v in p.probe.items()}          # a probe dict from before r6.4 carries no switch fact
+    http2 = FakeHTTP(props=PROPS, tokens_per_call=[7])
+    p2 = ContextPolicy.for_launch(65536, "discovered", "http://127.0.0.1:8081/v1", http=http2, model="qwen",
+                                  cached=cached)
+    assert not any(u.endswith("/chat/completions") for _, u, _ in http2.calls)
+    assert p2.think_switch == "template"

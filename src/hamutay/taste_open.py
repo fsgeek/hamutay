@@ -1479,7 +1479,8 @@ class OpenAITasteBackend:
         self._refresh_counter()
         policy = self.policy
         if policy.window_aware:
-            from hamutay.window import CountUnavailable, ExhaustedBeforeRequest, bound_payload
+            from hamutay.window import (THINK_GATE_KWARGS, CountUnavailable, ExhaustedBeforeRequest,
+                                        bound_payload)
             counter = self._counter if precounted is None else _FixedCount(precounted)
             try:
                 b = bound_payload(payload, policy, counter,
@@ -1494,6 +1495,9 @@ class OpenAITasteBackend:
                                    max_tokens=e.max_tokens, limit=e.limit)
                 raise
             self._last_counted_prompt_tokens = b.prompt_tokens
+            if payload.get("chat_template_kwargs") == THINK_GATE_KWARGS:
+                self._log_pressure(tool_executor, "think_closed", turn_index=turn_index,
+                                   prompt_tokens=b.prompt_tokens, max_tokens=b.max_tokens)
             if b.budget_fields:
                 self._log_pressure(tool_executor, "generation_budgeted",
                                    prompt_tokens=b.prompt_tokens, room=b.room,
@@ -2051,7 +2055,7 @@ class OpenAITasteBackend:
         )
 
     def _natural_payload(self, model: str, conversation: list[dict], active_tools: list[dict],
-                         *, all_withdrawn: bool) -> dict:
+                         *, all_withdrawn: bool, think_closed: bool = False) -> dict:
         """One turn's payload in the natural loop (the first turn included).
 
         `max_tokens` is set here, in today's position, so a door with no
@@ -2066,6 +2070,11 @@ class OpenAITasteBackend:
         if active_tools:
             built["tools"] = active_tools
         self._apply_openai_payload_options(built)
+        if think_closed:
+            # r6.4 §1a: in the payload before it is counted, so the exact count
+            # renders the template the completion renders.
+            from hamutay.window import THINK_GATE_KWARGS
+            built["chat_template_kwargs"] = dict(THINK_GATE_KWARGS)
         return built
 
     def _first_payload_natural(self, model: str, system: str, messages: list[dict],
@@ -2095,7 +2104,8 @@ class OpenAITasteBackend:
         update_state tool, buffered in the executor and merged into
         raw_output here, so the session's state path is unchanged.
         """
-        from hamutay.window import (SOFT_THRESHOLD_FRACTION, THINK_UNRESTRICTED_ROOM_TOKENS,
+        from hamutay.window import (SOFT_THRESHOLD_FRACTION, THINK_GATE_SENTENCE, THINK_UNRESTRICTED_ROOM_TOKENS,
+                                    think_gate_applies,
                                     WITHDRAWN_TOOL_TURNS_NEAR_WALL, WakeAccount, WindowFailure,
                                     bound_payload)
 
@@ -2174,7 +2184,9 @@ class OpenAITasteBackend:
                     "Reading, searching, shell, and memory tools are "
                     "withdrawn for the rest of this wake; "
                     + (", ".join(kept) if kept else "no tools")
-                    + " remain. Your reply ends the wake; anything you still "
+                    + " remain. "
+                    + (THINK_GATE_SENTENCE + " " if think_gate_applies(self.policy) else "")
+                    + "Your reply ends the wake; anything you still "
                     "want done later belongs in schedule_event."
                 ),
             })
@@ -2197,8 +2209,10 @@ class OpenAITasteBackend:
             active = [] if all_withdrawn else (
                 _state_tools() if perception_withdrawn else tools
             )
+            from hamutay.window import think_gate_applies
             return self._natural_payload(model, conversation, active,
-                                         all_withdrawn=all_withdrawn)
+                                         all_withdrawn=all_withdrawn,
+                                         think_closed=perception_withdrawn and think_gate_applies(self.policy))
 
         for turn_index in range(max_turns):
             policy = self.policy

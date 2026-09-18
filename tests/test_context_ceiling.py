@@ -924,3 +924,113 @@ def test_a_completed_window_aware_wake_records_the_invocation_id(tmp_path):
     s.exchange("hi")
     rec = json.loads(log.read_text().splitlines()[-1])
     assert rec["context_policy_invocation"] == "inv-live"
+
+
+# --- r6.4 §1a: the think gate after withdrawal -------------------------------
+
+
+def _gated(script, counts, *, budget="unsupported", switch="template", limit=65536):
+    holder = ContextPolicyHolder(ContextPolicy(limit, "discovered", limit, "http://127.0.0.1:8081",
+                                               budget, {}, 20, think_switch=switch))
+    backend = OpenAITasteBackend(api_key="k", wake_mode="natural", context_policy=holder, max_tokens=64000)
+    backend.payloads = []
+    backend._counter = _Counter(counts)
+
+    def fake_post(payload):
+        backend.payloads.append(json.loads(json.dumps(payload)))
+        nxt = script.pop(0)
+        if isinstance(nxt, Exception):
+            raise nxt
+        return nxt
+    backend._post_chat = fake_post
+    return backend
+
+
+def _gate_script():
+    # turn 0 reads (20,000, under the threshold); turn 1 counts 53,000, withdraws,
+    # is rebuilt and recounted at 52,500 with the state tools (the withdrawing turn
+    # is not one of the turns allowed after withdrawal); turn 2 is the one tool
+    # turn the near-wall rule allows; turn 3 is tools-none and ends the wake.
+    return ([_turn(tool_calls=[_tool_call("clock", {})], prompt_tokens=20000),
+             _turn(tool_calls=[_tool_call("update_state", {"updates": {"n": 1}}, "u1")], prompt_tokens=52500),
+             _turn(tool_calls=[_tool_call("update_state", {"updates": {"n": 2}}, "u2")], prompt_tokens=53500),
+             _turn(content="done", prompt_tokens=54000)],
+            [20000, 53000, 52500, 53500, 54000])
+
+
+def _run(b, tmp_path):
+    executor = ToolExecutor(project_root=tmp_path, cycle=1)
+    b.call(model="m", system="s", messages=[{"role": "user", "content": "hi"}], experiment_label="t",
+           extra_tools=_tools(), tool_executor=executor)
+    return executor
+
+
+def test_think_gate_closes_the_think_on_every_request_after_withdrawal(tmp_path):
+    from hamutay.window import THINK_GATE_KWARGS, THINK_GATE_SENTENCE
+    script, counts = _gate_script()
+    b = _gated(script, counts)
+    executor = _run(b, tmp_path)
+    assert len(b.payloads) == 4 and len(b._counter.seen) == 5
+    p0, p1, p2, p3 = b.payloads
+    assert "chat_template_kwargs" not in p0
+    state = sorted(["update_state", "schedule_event", "declare_quiet"])
+    assert p1["tool_choice"] == "auto" and _names(p1) == state
+    assert p1["chat_template_kwargs"] == THINK_GATE_KWARGS == {"enable_thinking": False}
+    assert p2["tool_choice"] == "auto" and _names(p2) == state and p2["chat_template_kwargs"] == THINK_GATE_KWARGS
+    assert p3["tool_choice"] == "none" and "tools" not in p3 and p3["chat_template_kwargs"] == THINK_GATE_KWARGS
+    # The counter saw the kwargs on every counted payload that was sent gated:
+    # the candidate count at 53,000 precedes the withdrawal and carries none.
+    seen = b._counter.seen
+    assert "chat_template_kwargs" not in seen[0] and "chat_template_kwargs" not in seen[1]
+    assert all(seen[i]["chat_template_kwargs"] == THINK_GATE_KWARGS for i in (2, 3, 4))
+    # The bound still holds on the gated turns.
+    assert [p["max_tokens"] for p in (p1, p2, p3)] == [65536 - 1 - n for n in (52500, 53500, 54000)]
+    # No budget fields: the server's budget is unsupported.
+    assert "reasoning_budget_tokens" not in p3
+    # The withdrawal note carries the gate sentence, once, exactly.
+    notes = [m for m in p1["messages"] if m["role"] == "user" and "withdrawn" in (m["content"] or "")]
+    assert len(notes) == 1 and THINK_GATE_SENTENCE in notes[0]["content"]
+    assert THINK_GATE_SENTENCE == ("The harness also closes your think block for the rest of this wake "
+                                   "(this server cannot bound a think); reason in your reply if you need to.")
+    assert notes[0]["content"].count("think block") == 1
+    closed = [e for e in _events(executor, "budget_pressure") if e["action"] == "think_closed"]
+    assert [(e["turn_index"], e["prompt_tokens"], e["max_tokens"]) for e in closed] == [
+        (1, 52500, 65536 - 1 - 52500), (2, 53500, 65536 - 1 - 53500), (3, 54000, 65536 - 1 - 54000)]
+
+
+def test_think_gate_is_off_on_a_probed_server_and_the_budget_path_stands(tmp_path):
+    from hamutay.window import THINK_GATE_SENTENCE
+    script, counts = _gate_script()
+    b = _gated(script, counts, budget="probed")
+    executor = _run(b, tmp_path)
+    assert all("chat_template_kwargs" not in p for p in b.payloads)
+    assert all("chat_template_kwargs" not in c for c in b._counter.seen)
+    assert "reasoning_budget_tokens" in b.payloads[3]
+    assert all("reasoning_budget_tokens" not in b.payloads[i] for i in (0, 1, 2))
+    notes = [m for m in b.payloads[1]["messages"] if m["role"] == "user" and "withdrawn" in (m["content"] or "")]
+    assert len(notes) == 1 and THINK_GATE_SENTENCE not in notes[0]["content"]
+    assert not [e for e in _events(executor, "budget_pressure") if e["action"] == "think_closed"]
+
+
+def test_think_gate_is_off_when_the_template_has_no_switch(tmp_path):
+    from hamutay.window import THINK_GATE_SENTENCE
+    script, counts = _gate_script()
+    b = _gated(script, counts, switch="none")
+    executor = _run(b, tmp_path)
+    assert all("chat_template_kwargs" not in p for p in b.payloads)
+    notes = [m for m in b.payloads[1]["messages"] if m["role"] == "user" and "withdrawn" in (m["content"] or "")]
+    assert len(notes) == 1 and THINK_GATE_SENTENCE not in notes[0]["content"]
+    assert not [e for e in _events(executor, "budget_pressure") if e["action"] == "think_closed"]
+
+
+def test_think_gate_never_touches_a_door_that_is_not_window_aware(tmp_path):
+    executor = ToolExecutor(project_root=tmp_path, cycle=1)
+    backend = _backend([
+        _turn(tool_calls=[_tool_call("clock", {})], prompt_tokens=850),
+        _turn(content="closing", prompt_tokens=870),
+    ], context_limit=1000)
+    backend.call(model="m", system="s", messages=[{"role": "user", "content": "hi"}],
+                 experiment_label="t", extra_tools=_tools(), tool_executor=executor)
+    assert all("chat_template_kwargs" not in p for p in backend.payloads)
+    note = [m for m in backend.payloads[1]["messages"] if m["role"] == "user" and "withdrawn" in m["content"]]
+    assert note and "think block" not in note[0]["content"]

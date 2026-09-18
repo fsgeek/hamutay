@@ -79,3 +79,27 @@ def test_d_forced_sequence_tokens_versus_completion_difference():
     forced = ContextPolicy.for_launch(65536, "discovered", BASE, http=_default_http, model=m).forced_sequence_tokens
     print("forced:", forced, "control:", control["usage"]["completion_tokens"], "zero:", zero["usage"]["completion_tokens"])
     assert forced > 0
+
+
+def test_e_the_think_gate_counts_exactly_closes_the_block_and_tools_still_parse():
+    """r6.4 §1a (e): the closed think block is in the counted prompt and the reply."""
+    from hamutay.window import THINK_GATE_KWARGS
+    body = {"model": _model(), "messages": [{"role": "system", "content": "You are terse."},
+                                            {"role": "user", "content": "What time is it? Use a tool if you like."}],
+            "tools": TOOLS, "tool_choice": "auto", "chat_template_kwargs": dict(THINK_GATE_KWARGS)}
+    counted = TokenCounter(ROOT, _default_http).count(body)
+    reported = _chat(dict(body, max_tokens=1))["usage"]["prompt_tokens"]
+    assert counted == reported, (counted, reported)
+    # The block is closed in the rendered prompt itself, so the model's first token is its reply.
+    rendered = _default_http("POST", f"{ROOT}/apply-template", body)["prompt"]
+    assert rendered.rstrip().endswith("<think>\n\n</think>")
+    call = {"model": _model(), "messages": [{"role": "user", "content": "Call the clock tool now."}], "tools": TOOLS,
+            "tool_choice": "auto", "max_tokens": 256, "seed": PROBE_SEED, "temperature": 0,
+            "chat_template_kwargs": dict(THINK_GATE_KWARGS)}
+    data = _chat(call)
+    choice = data["choices"][0]
+    print("gate (e) raw reply:", json.dumps(choice, indent=1)[:1500])
+    assert choice["finish_reason"] == "tool_calls"
+    assert choice["message"]["tool_calls"][0]["function"]["name"] == "clock"
+    content = choice["message"].get("content") or ""
+    assert "</think>" not in content.replace("<think>\n\n</think>", "", 1)

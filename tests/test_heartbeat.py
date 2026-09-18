@@ -482,3 +482,16 @@ def test_latest_context_probe_reads_the_last_launch_record(tmp_path):
         + json.dumps({"state": {}, "launch": {"context_policy": {"probe": {"build_info": "b2"}}}}) + "\n"
     )
     assert latest_context_probe(str(log)) == {"build_info": "b2"}
+
+
+def test_window_clause_names_the_think_gate_in_its_three_forms():
+    from hamutay.context_policy import ContextPolicy
+    from hamutay.heartbeat import window_clause
+    gated = ContextPolicy(65536, "discovered", 65536, "http://127.0.0.1:8081", "unsupported", {}, 31,
+                          think_switch="template")
+    assert "reasoning budget unsupported, think gate template after withdrawal, compact retry once" in window_clause(gated)
+    probed = ContextPolicy(65536, "discovered", 65536, "http://127.0.0.1:8081", "probed", {}, 31,
+                           think_switch="template")
+    assert "reasoning budget probed, think gate budget, compact retry once" in window_clause(probed)
+    plain = ContextPolicy(65536, "discovered", 65536, "http://127.0.0.1:8081", "unsupported", {}, 31)
+    assert "think gate none, compact retry once" in window_clause(plain)

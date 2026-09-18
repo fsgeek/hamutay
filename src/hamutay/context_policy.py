@@ -110,6 +110,9 @@ class ContextPolicy:
     probe: dict | None
     forced_sequence_tokens: int
     invocation_id: str | None = None
+    # r6.4 §1a: "template" when the chat template carries `enable_thinking`, so the
+    # harness can close the think block through `chat_template_kwargs`; "none" otherwise.
+    think_switch: str = "none"
 
     @property
     def window_aware(self) -> bool:
@@ -154,7 +157,9 @@ class ContextPolicy:
             forced = FORCED_SEQUENCE_FALLBACK_TOKENS
             print(f"  context policy: /tokenize did not answer ({e}); "
                   f"forced_sequence_tokens falls back to {forced}")
-        return cls(limit, source, _result_cap_chars(limit), root, _classify(probe), probe, forced, invocation_id)
+        switch = "template" if "enable_thinking" in template else "none"
+        return cls(limit, source, _result_cap_chars(limit), root, _classify(probe), probe, forced, invocation_id,
+                   think_switch=switch)
 
 
 @dataclass

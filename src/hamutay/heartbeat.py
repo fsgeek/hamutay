@@ -961,11 +961,15 @@ def window_clause(policy) -> str:
     )
 
     count = "server" if policy.window_aware else "estimate"
+    # r6.4 §1a: which mechanism bounds the think after withdrawal, if any.
+    gate = ("budget" if policy.reasoning_budget == "probed"
+            else "template after withdrawal" if getattr(policy, "think_switch", "none") == "template"
+            else "none")
     return (
         f"; window: limit {policy.limit} ({policy.source}), count {count}, "
         f"reserve reply {REPLY_RESERVE_TOKENS} floor {THINK_FLOOR_TOKENS}, "
         f"think unrestricted above {THINK_UNRESTRICTED_ROOM_TOKENS} of room, "
-        f"reasoning budget {policy.reasoning_budget}, compact retry once"
+        f"reasoning budget {policy.reasoning_budget}, think gate {gate}, compact retry once"
     )
 
 
