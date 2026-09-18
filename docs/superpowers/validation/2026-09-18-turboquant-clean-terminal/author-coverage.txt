@@ -1,0 +1,66 @@
+TurboQuant R1 Pre-Freeze Independent Validation Coverage Mapping:
+
+1. ALL FIVE Qualification Gate Criteria (tests/turboquant_clean_terminal/test_qualification_gates.py):
+   - Gate 1 (round_trip_determinism): Tests acceptable (determinism_passed=True) and unacceptable (determinism_passed=False) evidence; verifies GateResult structure, observed/threshold values, and status resolution ('passed'/'failed').
+   - Gate 2 (mse_distortion): Distinguishes independent criteria:
+     * Criterion A (Analytic tolerance <=0.5%): Tests analytic failure alone (rel error >0.5% while paper rel error <=15%).
+     * Criterion B (Paper tolerance <=15%): Tests paper failure alone (rel error >15% while analytic rel error <=0.5%).
+     * Multi-bit combined acceptable evidence across bits 1..4 verified by independent mathematical oracle against frozen analytic (0.36088859, 0.11600007, 0.03396593, 0.00931479) and paper targets (0.36, 0.117, 0.03, 0.009).
+   - Gate 3 (qjl_bias_equivalence): Distinguishes independent criteria:
+     * Criterion A (Lower bound >= -0.02*RMSE): Tests lower CI endpoint breach alone.
+     * Criterion B (Upper bound <= +0.02*RMSE): Tests upper CI endpoint breach alone.
+     * Scientific outcome vs decision correctness: Demonstrates that empirical evidence exhibiting small true bias outside the equivalence margin faithfully triggers gate failure without implementation defect.
+   - Gate 4 (published_qjl_distortion): Distinguishes positive relative error breach (>15%) and negative relative error breach (>15% below target); acceptable evidence verified across bits 1..4 against paper targets (1.57/d, 0.56/d, 0.18/d, 0.047/d for d=128).
+   - Gate 5 (author_code_differential): Distinguishes all individual failure criteria:
+     * Inlier sign bytes mismatch alone.
+     * Dummy outlier norms nonzero alone.
+     * Scores exceeding combined tolerance abs(diff) <= 1e-5 + 1e-4*abs(ref) alone.
+     * Declared exact-zero projection convention failure alone.
+     * Missing checkout / None input producing status='not_run', passed=False.
+     * Refusal of weakened numerical tolerances (atol=1e-4, rtol=1e-3) raising ValueError without checking undeclared exception strings.
+     * Refusal of contradictory status records raising ValueError.
+   - Terminal 5-Gate Rule: Verifies terminal certification requires all 5 gates present and passing; verifies that failure of any individual gate produces terminal failure.
+
+2. Actual Successful Author CUDA Differential Observation (tests/turboquant_clean_terminal/test_author_cuda_differential.py):
+   - Preflight & Environment: Validates declared CUDA 12.8 environment prerequisites (CUDA_HOME=/usr/local/cuda-12.8, default /usr/local/cuda-13.2, nvcc 12.8, torch CUDA 12.8, GPU compute capability).
+   - Pinned Checkout: Verifies commit 648b3641f96b6e95e091217220b94e4739fd4d82, cleanliness, origin URL, and disk file hashes for LICENSE, qjl_quant_kernel.cu, qjl_score_kernel.cu, and llama3_utils_qjl.py.
+   - Execution: Executes live CUDA differential into a unique repository-relative development directory.
+   - Independent Numerical Validation: Independently recomputes comparisons directly from NPZ arrays:
+     * Inventory check: verifies all 12 required array members are present.
+     * Inlier sign bytes byte-for-byte match between transparent and author kernel.
+     * Dummy outlier norms exact zero.
+     * Scores: finite, satisfying elementwise combined tolerance abs(author - ref) <= 1e-5 + 1e-4*abs(ref).
+     * Exact-zero convention: transparent maps 0->+1 (0xFF), author maps 0->-1 (0x00), exactly 8 differing bits/byte.
+     * Typed array hashes and NPZ file hash verified against JSON metadata.
+   - Append-Only Refusal: Verifies refusal to overwrite existing evidence.
+   - Gate Integration: Verifies conversion to public GateResult.
+
+3. Public Terminal Path & Recomputation of Emitted Decisions (tests/turboquant_clean_terminal/test_public_cli_terminal.py):
+   - Terminal Five-Gate Record: Verifies qualification.json contains all 5 gates in declared order with individual status values.
+   - Truthful Non-Certifying Status: Verifies scope='development', certifying=False in manifest.json and qualification.json.
+   - Independent Decision Re-evaluation from Emitted Numerical Evidence:
+     * Gate 1 recomputed from emitted process_determinism evidence.
+     * Gate 2 recomputed from emitted metrics array (analytic <=0.005, paper <=0.15).
+     * Gate 3 recomputed from emitted metrics array (98.75% CI within [-0.02*rmse, +0.02*rmse]).
+     * Gate 4 recomputed from emitted metrics array (paper <=0.15).
+     * Gate 5 recomputed from embedded author differential array values in qualification.json (inlier signs, outlier norms, combined score tolerance, zero projection convention).
+     * Terminal status verified to equal 'passed' if and only if all 5 recomputed gates pass.
+   - Development Run without Checkout: Verifies author gate reports status='not_run', exit code 0, non-certifying.
+   - Namespace Enforcement: Rejects output roots outside declared development/qualification namespaces.
+   - Append-Only Refusal: Rejects existing run directory IDs.
+   - Registered Profile Protections: Rejects sample count overrides; rejects registered mode without checkout.
+
+4. Process Determinism & Artifact Integrity (tests/turboquant_clean_terminal/test_process_determinism_artifacts.py):
+   - Required Inventories: Verifies complete presence of all required run files (manifest.json, resolved_inputs.npz, execution-0.json, execution-1.json, execution-2.json, qualification.json, run.log) and required resolved input arrays.
+   - Worker Provenance: Verifies 3 distinct PIDs sharing identical parent PID; sequential execution indices (0, 1, 2); identical worker configuration and resolved input hashes.
+   - Recomputation of Declared Hashes:
+     * Recomputes metric_sha256 from canonical JSON of execution payload metrics.
+     * Recomputes determinism_payload_sha256 from canonical JSON of execution payload.
+     * Verifies required stream keys inventory across workers.
+     * Verifies worker content comparison rule (removing execution_index and pid yields bit-identical records).
+     * Recomputes configuration_sha256 and resolved_inputs file hash.
+     * Recomputes all array hashes in manifest.json.
+     * Verifies manifest and qualification artifact hash maps (manifest excludes manifest/qualification; qualification includes manifest, excludes qualification).
+   - Canonical JSON Specification: Validates compact formatting, sorted keys, newline termination, unicode preservation, and rejection of non-finite floats.
+   - Immutable Input Geometry: Validates FP32 orthogonal rotation matrix, projections, and strictly increasing codebooks.
+   - Typed Array Wire Format: Independently implements and validates array-stream wire format against sha256_array; validates rejection of object dtypes.
