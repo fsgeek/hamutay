@@ -176,3 +176,8 @@ review its own draft against only the approved materials before final
 pre-execution freeze. This changes the handoff process; it does not
 retroactively improve the three sealed attempts. Numerical implementation
 remains unchanged.
+
+The corrected CUDA-active existing-suite run returned **380 passed in 234.13 s**,
+with no skips. Its full command/output and lease-release/Qwen-restoration records
+are retained in the third-attempt archive. This supersedes the earlier
+379-pass/one-skip verification for the implementer and corroborating suites.
