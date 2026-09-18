@@ -1,0 +1,19 @@
+## Empirical Checks
+- `test_scientific_gates_pass`: Evaluates all 4 synthetic R1 qualification gates (determinism, MSE distortion scale, QJL bias equivalence, published QJL distortion scale) at the exact registered dimension and scientific scale (1,000,000 vectors) using the core statistical test harness.
+- `test_cli_registered_mode_success`: Runs the full end-to-end R1 protocol across three fresh processes to validate that the terminal qualification accurately bundles all gates when provided an author checkout.
+- `test_author_qjl_differential_oracle_script`: Validates physical generation of the exact Author QJL differences against the reference implementation utilizing the standalone CUDA oracle script (`author_qjl_oracle.py`).
+- `test_round_trip_determinism`: Validates process determinism guarantees manually to ensure structural equivalency between isolated runs of identically initialized structures.
+
+## Mathematical Checks
+- `test_sphere_coordinate_density_integration`: Numerically integrates the 128-dimensional spherical Beta distribution density PDF mathematically over `[-1, 1]` to ensure the distribution evaluates optimally to exactly `1.0`.
+- `test_analytic_codebook_distortion_frozen_values`: Compares calculations from the reference integration formula (`analytic_codebook_distortion`) with the strict 4 frozen float regression constants established in the core design paper.
+- `test_derive_seed_determinism`: Tests the 128-bit seeded generator interface structurally across distinct namespaces to ensure fixed sub-seed independence and repetition behaviors.
+- `test_pack_unpack_signs_general`: Exercises the little-endian packed signs encoding of residual estimations ensuring deterministic conversion back and forth between states.
+- `test_zero_vector_behavior`: Validates edge cases for zero vectors enforcing an exact zero residual reconstruction accompanied specifically by a filled padded byte-array (`0xFF`) as dictated by the representation convention.
+
+## Failure/Refusal Checks
+- `test_cli_registered_mode_refusal_missing_checkout`: Asserts that initiating the registered run namespace rigorously aborts if the required pinned author CUDA implementation is omitted.
+- `test_cli_namespace_refusal`: Validates safety boundaries preventing any cross-contamination of execution outputs between `development` and strictly governed `qualification` paths.
+- `test_cli_refuse_existing_directory`: Prevents overriding outputs by deliberately refusing to proceed whenever a pre-existing output run UUID directory structure is requested.
+- `test_estimate_inner_products_shape_mismatch`: Validates array dimension structural contracts preventing accidental dimension broadcast during queries matrix generation.
+- `test_canonical_json_rejects_nonfinite`: Rejects generation of unverifiable `NaN` or `Infinity` signatures within the terminal cryptographic hashing boundaries.

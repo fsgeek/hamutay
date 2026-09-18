@@ -1,0 +1,88 @@
+# TurboQuant R1 clean validation remedy
+
+Date: 2026-09-18. Status: in progress; **does not authorize registered R1 execution**.
+
+This continues the remedy recorded in the blocked 2026-08-27 independent
+validation report. Tony asked to finish that remedy on the way to qualifying
+R1 and requested the newer Antigravity CLI (`agy`) for the third-family author.
+
+## Materials and independence boundary
+
+Implementation under review: `b9227ce4b94374fc26167fc1357e0e9cc145af66`.
+At preparation, the numerical implementation and author CUDA adapter still
+match that commit. Existing tests and earlier review findings are available
+to the coordinating Codex session, **not** to the clean validation author.
+
+The prior bundle audit had unresolved public-contract omissions. A separate
+Codex reviewer checked the rebuilt bundle, then rechecked the additions:
+constructor types/defaults, import locations, CUDA adapter public boundary,
+and the distinction between complete and terminal-error artifact sets.
+The re-review caught an incorrect output-path declaration in the coordinator's
+first amendment; the adapter accepts a directory and writes fixed JSON/NPZ
+filenames. That declaration was corrected before delivery.
+
+Builder amendment: signed commit `3eaf0fb788558d6ea4c58d1e811be07c4ef29426`,
+with OTS receipt committed at `828201a`. This is an OTS calendar submission,
+not a claim of an already confirmed Bitcoin anchor.
+
+The separate reader `/root/bundle_audit` approved the final materials and
+transport. It checked all material hashes, the actual arXiv version inside
+the PDF, exact correspondence of extracted paper text, and the absence of
+implementer test names, worked cases, or mock constructs in the delivery.
+Its report is verifier-only and is not supplied to the author.
+
+| Artifact | SHA-256 |
+| --- | --- |
+| Public contract | `019459f97094f8ea72181045b1fc1bdb32e651f1457cec842a13ce283d8a13d0` |
+| Final material manifest | `6148e5eaa9e21054a737168fb50ee2e8dd1db126840c7a36c64573407194333b` |
+| Exact author prompt | `11877a62ba350133263d58e2dd1c05beb2c3d7b734cc9e0849177ceb3334a00b` |
+| arXiv 2504.19874v1 PDF | `431eb13926e10491f5fbd0bebd0813c51bd6c1e884426a1500c5db640b2997ab` |
+
+## Authoring transport
+
+Fresh `agy --new-project` session, from an empty directory outside the
+repository, with slash-command expansion disabled and sandbox enabled.
+All permitted subject-matter input is inline: specification, public contract,
+manifest, and the exact `pdftotext -layout` paper extraction. The original PDF
+is retained. The complete prompt, NDJSON input, output schema, and hashes are
+retained, not reconstructed from recollection.
+
+The author is instructed to use no tools and return complete pytest file
+contents as structured output. No implementation imports or executions are
+allowed before the signed and timestamped suite freeze. The emitted event
+stream will be checked for compliance, rather than taking the instruction as
+proof that it was followed.
+
+Requested CLI model: `gemini-3.1-pro-high`, effort high, present in the
+live `agy models` catalog. The CLI initialization event reports that model
+and conversation ID `6a8754d4-3d8f-421c-9d60-dfec89d7788a`. These are
+transport metadata, not the author's self-identification; no stronger claim
+about underlying model weights is made. The earlier transport-only probe
+was a different conversation and is not resumed.
+
+Working evidence directory (not yet the final archive):
+`/home/tony/projects/hamutay/tmp/turboquant-remedy-20260918/`.
+
+## Preliminary execution, not clean validation
+
+The coordinator ran the implementer suite excluding the dedicated author-CUDA
+module while clean authorship was pending. Result: 169 passed, 1 skipped,
+1 failed in 73.81 seconds. That command omitted the declared CUDA_HOME/PATH
+selection: a test expecting the missing-checkout error instead encountered
+the earlier compiler-environment refusal. The output is preserved as
+`implementer-cpu-first.txt`; it is not supplied to the author. A focused
+rerun with the prescribed environment is recorded separately.
+
+## Remaining work
+
+- Receive and retain the complete author output and check its access trace.
+- Freeze the unchanged authored suite and complete provenance before replay.
+- Run the frozen suite and preserve its first outcome before any repairs.
+- Acquire the shared 4090 through the current main checkout's lease tool;
+  verify acquisition, bounded workload, release, and return of Qwen's server.
+- Complete CUDA-active implementer and independent validation with no
+  unexpected skips; retain the old independent suite as corroboration.
+- Resolve failures with attribution and separate signed amendments; never
+  silently alter a frozen test or scientific gate.
+- Produce a replacement Task 8 terminal report. Registered Task 9 and the
+  later model/cache-path experiment remain gated on the required evidence.
