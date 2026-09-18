@@ -41,3 +41,5 @@ The minimum required changes are:
 - **45 — ACCEPTED.** Item 19 now describes the four-send script the near-wall rule actually produces (the withdrawing turn is not one of the turns allowed after withdrawal, so one state-tool turn follows it before tools-none) and names the event object exactly.
 
 Verdict after 6.5: implemented test-first in `.worktrees/think-gate` (branch `think-gate`); Codex's independent validation follows; merge, restart of the qwen unit, and the notice after that.
+
+**Correction (custodian, same session).** The r6.5 implementation commit's message (`39f12fe` on `think-gate`) says "138 unit passed"; the run it was chained on printed `135 passed in 1.28s` (six suites: `test_context_ceiling`, `test_window`, `test_window_golden`, `test_context_policy`, `test_heartbeat`, `window_validation`). The number in the message was typed, not read from the run; the commit is signed and stamped, so it stands and this note corrects it. The same slip family as the 9-17 lesson (never write a count you have not read).
