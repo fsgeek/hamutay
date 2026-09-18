@@ -86,7 +86,8 @@ def test_e_the_think_gate_counts_exactly_closes_the_block_and_tools_still_parse(
     from hamutay.window import THINK_GATE_KWARGS
     body = {"model": _model(), "messages": [{"role": "system", "content": "You are terse."},
                                             {"role": "user", "content": "What time is it? Use a tool if you like."}],
-            "tools": TOOLS, "tool_choice": "auto", "chat_template_kwargs": dict(THINK_GATE_KWARGS)}
+            "tools": TOOLS, "tool_choice": "auto", "chat_template_kwargs": dict(THINK_GATE_KWARGS),
+            "reasoning_format": "none"}   # pinned per request (round eight, finding 44)
     counted = TokenCounter(ROOT, _default_http).count(body)
     reported = _chat(dict(body, max_tokens=1))["usage"]["prompt_tokens"]
     assert counted == reported, (counted, reported)
@@ -95,7 +96,7 @@ def test_e_the_think_gate_counts_exactly_closes_the_block_and_tools_still_parse(
     assert rendered.rstrip().endswith("<think>\n\n</think>")
     call = {"model": _model(), "messages": [{"role": "user", "content": "Call the clock tool now."}], "tools": TOOLS,
             "tool_choice": "auto", "max_tokens": 256, "seed": PROBE_SEED, "temperature": 0,
-            "chat_template_kwargs": dict(THINK_GATE_KWARGS)}
+            "chat_template_kwargs": dict(THINK_GATE_KWARGS), "reasoning_format": "none"}
     data = _chat(call)
     choice = data["choices"][0]
     print("gate (e) raw reply:", json.dumps(choice, indent=1)[:1500])

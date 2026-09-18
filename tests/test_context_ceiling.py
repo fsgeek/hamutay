@@ -1034,3 +1034,20 @@ def test_think_gate_never_touches_a_door_that_is_not_window_aware(tmp_path):
     assert all("chat_template_kwargs" not in p for p in backend.payloads)
     note = [m for m in backend.payloads[1]["messages"] if m["role"] == "user" and "withdrawn" in m["content"]]
     assert note and "think block" not in note[0]["content"]
+
+
+def test_think_gate_sticks_to_the_phase_even_when_the_rebuild_leaves_ample_room(tmp_path):
+    """Withdrawal is decided on the payload that still carries every perception tool;
+    the rebuilt payload may count far less. The gate follows the phase, not the room
+    (r6.5 §1a, declared; round eight, finding 43)."""
+    from hamutay.window import THINK_GATE_KWARGS, THINK_UNRESTRICTED_ROOM_TOKENS
+    script = [_turn(tool_calls=[_tool_call("clock", {})], prompt_tokens=20000),
+              _turn(content="done", prompt_tokens=20500)]
+    # turn 1's candidate counts 53,000 with the big tool schemas; rebuilt, it counts 20,500.
+    b = _gated(script, [20000, 53000, 20500])
+    executor = _run(b, tmp_path)
+    p1 = b.payloads[1]
+    assert 65536 - 1 - 20500 > THINK_UNRESTRICTED_ROOM_TOKENS
+    assert p1["chat_template_kwargs"] == THINK_GATE_KWARGS and p1["max_tokens"] == 65536 - 1 - 20500
+    closed = [e for e in _events(executor, "budget_pressure") if e["action"] == "think_closed"]
+    assert [(e["turn_index"], e["prompt_tokens"]) for e in closed] == [(1, 20500)]
