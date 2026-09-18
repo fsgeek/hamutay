@@ -1,8 +1,9 @@
 # Window-aware wakes on a local door
 
-Date: 2026-09-17. Author: the custodian session. Status: revision 6.4 (§1a, the
+Date: 2026-09-17. Author: the custodian session. Status: revision 6.5 (§1a, the
 think gate after withdrawal, added the evening of 2026-09-17 from the qwen
-door's cycle-13 evidence; revision 6.3 corrected five lines during implementation, see §1 and §2), after
+door's cycle-13 evidence and corrected by Codex round eight, `-review-8.md`:
+1 Blocking, 2 Significant, 3 Minor, all accepted; revision 6.3 corrected five lines during implementation, see §1 and §2), after
 Codex rounds five and six (`-review-5.md`: 1 Blocking, 2 Significant on
 revision 5; `-review-6.md` found that the revision-6 commit had carried no
 design text, so this is that text; rounds one to four had 4/5/2, 5/4/1,
@@ -314,8 +315,12 @@ opening tag it will never see; upstream master (202 commits ahead) has no
 handling for a think opened by the prompt.
 
 **The rule.** On a window-aware door whose policy says `reasoning_budget !=
-"probed"` and whose template carries the switch (`think_switch ==
-"template"`: the template source contains `enable_thinking`), every request
+"probed"` and whose template carries an **effective** switch (`think_switch
+== "template"`, verified by a render at every launch, cache hit or not: the
+template source contains `enable_thinking`, and the generation prompt that
+`/apply-template` renders under `chat_template_kwargs: {"enable_thinking":
+false}` ends with `THINK_END` while the plain render does not; two renders,
+no generation; any failure classifies `"none"`), every request
 built **after perception is withdrawn** carries `chat_template_kwargs:
 {"enable_thinking": false}`. Tool turns included: the failure is on the
 tool turn, and the switch acts in the template (the assistant turn opens
@@ -340,7 +345,12 @@ can still overrun (declared gap 2) and is captured under §4 and retried
 under §6 as today. Gating on room alone (`room <
 THINK_UNRESTRICTED_ROOM_TOKENS`) would close the think on reading turns
 with 30,000 tokens of room; gating on the phase closes it exactly where the
-harness already changes the door's world and tells it so.
+harness already changes the door's world and tells it so. The gate follows
+the **phase**, deliberately: withdrawal is decided on the candidate payload
+that still carries every perception schema, and the rebuilt payload can
+count far less (the schemas are large); when the recount leaves more than
+`THINK_UNRESTRICTED_ROOM_TOKENS` of room the think stays closed for the
+rest of the wake all the same (round eight, finding 43; tested).
 
 **What the door is told.** The withdrawal note (§1, the user-role note)
 gains one sentence when the gate applies, after "remain.": `"The harness
@@ -351,7 +361,8 @@ clause (§5) gains `think gate {template after withdrawal|budget|none}`:
 "none" otherwise. Each gated request logs `budget_pressure / think_closed`
 with `turn_index`, `prompt_tokens` and `max_tokens`, so the record shows
 which turns ran without a think block. The policy dict gains
-`think_switch`.
+`think_switch` **only when the policy is window-aware**, so a no-limit
+launch record keeps its bytes (§5; round eight, finding 41).
 
 **Declared gaps.** (1) A probed server's withdrawn tool turn carries no
 budget (§1, round one finding 2) and no gate; a server whose budget forces
@@ -362,7 +373,11 @@ the reply text, which the record keeps, instead of in a think block, which
 the record kept only when truncated. That is a change to what the resident
 does with its last turns; it is declared to the resident in the launch note
 and the withdrawal note, and held for the assembly's review with the 9-17
-items in `community/README.md`.
+items in `community/README.md`. (4) A template without an effective switch
+(`think_switch == "none"`) gets no gate: its withdrawn tool turn is
+unbounded exactly as before revision 6.4, the launch note says `think gate
+none`, and the record shows no `think_closed` events (round eight, finding
+42).
 
 ### 2. Context results: a typed projection, deep-copied, admitted at the prepared wake
 
@@ -721,17 +736,26 @@ that returns a count the test chooses):
     completed/failed records.
 12. Launch note and record: the clause is formatted from the constants and
     absent without a limit.
-18. (r6.4, §1a) `think_switch`: "template" when the template source contains
-    `enable_thinking` and the door is window-aware, "none" otherwise (a
-    template without the string; a cached probe; no llama-server); `as_dict`
-    carries it.
-19. (r6.4, §1a) The gate: a scripted two-turn wake that withdraws perception on
-    turn 1 sends turn 0 without `chat_template_kwargs` and turn 1 (state tools
-    active, `tool_choice: "auto"`) and turn 2 (`tool_choice: "none"`) with
-    `{"enable_thinking": false}`; the counter receives the payload with the
-    kwargs already in it; the withdrawal note carries the gate sentence exactly;
-    one `budget_pressure / think_closed` event per gated turn with
-    `turn_index`, `prompt_tokens`, `max_tokens`. Three negatives, each
+18. (r6.5, §1a) `think_switch`: "template" when the door is window-aware and
+    the two renders verify the switch; "none" for a template without the
+    string, a template that mentions it but renders the same prompt either
+    way, a failed render, or no llama-server. A cache hit on the budget probe
+    still classifies from the current template ("template" on Qwen's).
+    `as_dict` carries it only when window-aware; `ContextPolicy.none()` and
+    `for_limit` serialize without the key.
+19. (r6.5, §1a) The gate: a four-send script. Turn 0 reads (20,000). Turn 1's
+    candidate counts 53,000, withdraws, and is rebuilt and recounted at 52,500
+    with the state tools (`tool_choice: "auto"`); the withdrawing turn is not
+    one of the turns allowed after withdrawal, so turn 2 is the one state-tool
+    turn the near-wall rule allows (53,500); turn 3 is `tool_choice: "none"`
+    (54,000) and ends the wake. Turn 0 has no `chat_template_kwargs`; turns 1,
+    2 and 3 carry `{"enable_thinking": false}`, and the counter receives each
+    of those payloads with the kwargs already in it (the 53,000 candidate has
+    none). The withdrawal note carries the gate sentence exactly, once. One
+    event per gated turn, exactly `{"tool": "_framework", "event":
+    "budget_pressure", "action": "think_closed", "turn_index": …,
+    "prompt_tokens": …, "max_tokens": …}`. A fifth case (finding 43): a
+    candidate of 53,000 rebuilt to 20,500 is still gated. Three negatives, each
     asserting no kwargs and no sentence and no event: `reasoning_budget ==
     "probed"`; `think_switch == "none"`; a door that is not window-aware (the
     golden of item 9 is the byte-identity proof). The launch clause names the
@@ -757,8 +781,10 @@ door's wake, with the output pasted into the review record before merge):
   the `completion_tokens` difference between a zero-budget reply and its
   control on the probe prompt; recorded as observational if the two
   replies produce other text.
-- (e) (r6.4, §1a) with `chat_template_kwargs: {"enable_thinking": false}`
-  on the tools payload: the count of (a) **equals** `usage.prompt_tokens`;
+- (e) (r6.5, §1a) with `chat_template_kwargs: {"enable_thinking": false}`
+  and `reasoning_format: "none"` (pinned per request, so the assertion does
+  not depend on the scratch server's flags) on the tools payload: the count
+  of (a) **equals** `usage.prompt_tokens`;
   the reply's content opens with the closed block (`<think>\n\n</think>`);
   a tool-inviting prompt with `tool_choice: "auto"` returns
   `finish_reason: tool_calls` with a parsed call. May run against a scratch
@@ -816,6 +842,10 @@ door's.
   the turns it covers, and §1a's gate yields (`reasoning_budget ==
   "probed"`).
 - Bounding a think on a perception-open turn (§1a, gap 2).
+- A think gate for templates without an effective `enable_thinking` switch
+  (§1a, gap 4). Such a door's withdrawn turn stays unbounded until its
+  server's budget forces or its template gains a switch; the launch note
+  says `think gate none`.
 
 ## Cost
 
