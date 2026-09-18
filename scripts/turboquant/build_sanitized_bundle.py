@@ -180,8 +180,10 @@ def extract_interfaces(plan_text: str) -> tuple[str, list[str]]:
         "the author differential; it resolves to `passed`, `failed`, or "
         "`not_run`, the last used for the author differential when the "
         "checkout is omitted in development mode.\n"
-        "- `partition_block_ids(sample_count, block_count)` forms contiguous "
-        "equal blocks and rejects non-divisible inputs.\n"
+        "- `partition_block_ids(sample_count, block_count)` returns an int64 "
+        "array of shape `(sample_count,)`, assigning each sample its "
+        "zero-based block ID in contiguous equal blocks; it rejects "
+        "non-divisible inputs.\n"
     )
 
     kept.append(
@@ -193,6 +195,13 @@ def extract_interfaces(plan_text: str) -> tuple[str, list[str]]:
         "Task 6 artifact functions are in `hamutay.turboquant.artifacts`; "
         "`run_registered_workers` and `main` are in "
         "`hamutay.turboquant.qualify`.\n"
+        "- `main(argv: Sequence[str] | None = None) -> int` returns an exit "
+        "code on completed execution. Argument parsing errors may raise "
+        "SystemExit; the installed console command turns a returned code "
+        "into a process exit. `create_run_directory` enforces unique "
+        "run-directory creation; the CLI, not this helper, enforces the "
+        "repository-relative evidence namespaces. `GateResult.name` and "
+        "`GateResult.detail` must be nonempty strings.\n"
         "- `pack_signs` accepts Boolean arrays, with true encoding the "
         "positive sign and false the negative sign; it rejects other dtypes. "
         "`unpack_signs` accepts uint8 packed arrays and returns FP32 values "

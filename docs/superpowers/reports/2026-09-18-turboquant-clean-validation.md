@@ -120,6 +120,30 @@ with CUDA_HOME/PATH selected: **1 passed in 3.19 s**.
 
 ### Still required
 
+Second fresh Gemini 3.1 session: `b61645f0-622b-4bf5-9dd6-e8c135d46be4`.
+Its prompt was independently audited and contained no first-attempt tests,
+outcomes, or review text. The only emitted tool event was `finish`, carrying
+structured output; there was no file access or command execution. The suite
+was signed at `b5df0ae13f260137b01b5fd917eb7d5b0e270aba`, OTS `1ead2da`,
+before replay: **20 passed, 4 failed in 3.54 s**. It too is archived unchanged.
+Review found no real successful CUDA call and insufficient terminal gate
+coverage. Its coverage prose was stronger than its assertions. It does not
+satisfy Task 8 even independently of the four failures.
+
+Remaining public-boundary ambiguities were clarified before another fresh
+author: per-sample block-ID return shape, direct main return vs process exit,
+CLI namespace enforcement vs the generic directory helper, and required
+nonempty gate text fields. These are declarations, not worked cases.
+The next author uses the live-catalog Gemini 3.8 Flash High model through
+agy, with no previous attempt's tests or outcomes supplied.
+
+The CUDA-active implementer plus old corroborating suites completed with
+**379 passed, 1 skipped in 232.53 s**. The skip was the read-only nvidia-smi
+availability check: the coordinator's explicit Linux PATH omitted
+`/usr/lib/wsl/lib`. The next full run will include that directory; this run
+alone is not the required no-unexpected-skips record. The CUDA differential
+tests themselves executed. Lease: `76d80951-cfa9-455c-b668-1791b2122919`.
+
 - Receive and retain the complete author output and check its access trace.
 - Freeze the unchanged authored suite and complete provenance before replay.
 - Run the frozen suite and preserve its first outcome before any repairs.
