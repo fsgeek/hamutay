@@ -104,6 +104,8 @@ def probe_think_switch(root: str, model: str, http, *, template: str) -> str:
                       dict(body, chat_template_kwargs={"enable_thinking": False}))["prompt"]
     except Exception:
         return "none"
+    if not isinstance(plain, str) or not isinstance(closed, str):
+        return "none"   # a render that returns no string is no evidence of a switch
     effective = closed.rstrip().endswith(THINK_END) and not plain.rstrip().endswith(THINK_END)
     return "template" if effective else "none"
 
@@ -178,7 +180,8 @@ class ContextPolicy:
             forced = FORCED_SEQUENCE_FALLBACK_TOKENS
             print(f"  context policy: /tokenize did not answer ({e}); "
                   f"forced_sequence_tokens falls back to {forced}")
-        switch = probe_think_switch(root, model, http, template=template)
+        # §1a: the switch is a window-aware fact; without a limit there is no gate to classify for.
+        switch = probe_think_switch(root, model, http, template=template) if limit is not None else "none"
         return cls(limit, source, _result_cap_chars(limit), root, _classify(probe), probe, forced, invocation_id,
                    think_switch=switch)
 
