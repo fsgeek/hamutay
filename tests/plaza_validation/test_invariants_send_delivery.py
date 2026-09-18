@@ -12,7 +12,7 @@ from hamutay.plaza.event import inbound_event_for
 from hamutay.plaza.pass_ import run_plaza_pass
 from hamutay.plaza.records import SEND_CAP, reduce, validate_plaza
 from hamutay.plaza.send import SendRefused, send
-from tests.plaza_validation.conftest import T0, tool_send, wake
+from .conftest import T0, tool_send, wake
 
 
 def test_invariant_1_identity_is_from_the_binding_not_spoofable_tool_input(house):
@@ -78,7 +78,7 @@ def test_invariant_2_plaza_line_exists_before_recipient_delivery(house):
 
     def observing_land(path, event, *, timeout_s=2.0):
         ledger = Ledger(cfg.plaza)
-        records = ledger.read()
+        records = ledger.read_unlocked()
         assert [record["record_type"] for record in records] == ["message"]
         assert records[0]["delivery"]["event_id"] == event["event_id"]
         assert not path.exists()
@@ -166,6 +166,16 @@ def test_invariant_6_mail_defers_timed_quiet_never_expires_and_knocks_untimed(ho
     assert "expires_at" not in event
 
     future_store = EventStore(root / "future.events.jsonl")
+    wake_event = dict(event, event_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+    future_store.append(wake_event)
+    future_running = future_store.append_running(wake_event)
+    future_store.append_completed_atomic(
+        event=wake_event,
+        run_id=future_running["run_id"],
+        wake_cycle=1,
+        result_record_id="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        response_text="quiet declared",
+    )
     future_store.append(build_quiet_declaration(
         reason="sleeping",
         declared_by_cycle=1,
@@ -177,6 +187,16 @@ def test_invariant_6_mail_defers_timed_quiet_never_expires_and_knocks_untimed(ho
     assert future_store.claim_next_pending(now=T0 + timedelta(hours=2)) is not None
 
     untimed_store = EventStore(root / "untimed.events.jsonl")
+    wake_event = dict(event, event_id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+    untimed_store.append(wake_event)
+    untimed_running = untimed_store.append_running(wake_event)
+    untimed_store.append_completed_atomic(
+        event=wake_event,
+        run_id=untimed_running["run_id"],
+        wake_cycle=1,
+        result_record_id="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        response_text="quiet declared",
+    )
     untimed_store.append(build_quiet_declaration(
         reason="quiet but reachable",
         declared_by_cycle=1,

@@ -10,7 +10,7 @@ from hamutay.events import StoreUnavailable
 from hamutay.plaza.note import plaza_note
 from hamutay.plaza.pass_ import PASS_BUDGET_S, PASS_UNITS, run_plaza_pass
 from hamutay.plaza.records import reduce
-from tests.plaza_validation.conftest import T0, tool_send
+from .conftest import T0, tool_send
 
 
 def _pending(cfg, *, count, recipients=("elder",), start=0):
@@ -102,7 +102,7 @@ def test_invariant_11_pass_respects_injected_six_second_budget(house):
     assert len(result["landed"]) == 1
 
 
-def test_invariant_4_pass_continues_past_oserror_and_unreadable_door_metadata(house):
+def test_invariant_4_pass_continues_past_store_unavailable_and_unreadable_door_metadata(house):
     root, cfg, binding = house
     pending = _pending(cfg, count=2, recipients=("elder", "fable"))
     attempted = []
@@ -110,7 +110,7 @@ def test_invariant_4_pass_continues_past_oserror_and_unreadable_door_metadata(ho
     def disk_error_then_land(path, event, *, timeout_s=2.0):
         attempted.append(path)
         if path == cfg.members["elder"].events:
-            raise OSError("disk unavailable")
+            raise StoreUnavailable("disk unavailable")
         return True
 
     first, memo = run_plaza_pass(binding, now=T0, land=disk_error_then_land)
@@ -121,7 +121,7 @@ def test_invariant_4_pass_continues_past_oserror_and_unreadable_door_metadata(ho
     another = _pending(cfg, count=1, recipients=("elder",), start=20)[0]
     (cfg.members["elder"].events.parent / "door.json").write_text("{not-json")
     second, memo = run_plaza_pass(binding, now=T0, memo=memo)
-    assert second["unreadable"] == [another]
+    assert second["unreadable"] == [another, pending[0]]
     truth = reduce(Ledger(cfg.plaza).read()).delivery_truth(another)
     assert truth["state"] == "store_unreadable"
     assert truth["detail"]["error"]

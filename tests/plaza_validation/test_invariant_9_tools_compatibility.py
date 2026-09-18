@@ -13,7 +13,7 @@ from hamutay.taste_open import (
     _natural_tool_guidance,
 )
 from hamutay.tools.schemas import PLAZA_CONSTITUTION_CLAUSE
-from tests.plaza_validation.conftest import T0, make_house
+from .conftest import T0, make_house
 
 
 class _CaptureBackend(TasteBackend):
@@ -28,12 +28,14 @@ class _CaptureBackend(TasteBackend):
         return ExchangeResult(raw_output={"state": {}, "response": "ok"})
 
 
-def _offered(root, binding, *, event_managed, wake_context):
+def _offered(root, cfg, binding, *, event_managed, wake_context):
     backend = _CaptureBackend()
     session = OpenTasteSession(
         backend=backend,
         enable_tools=True,
         project_root=root,
+        log_path=str(cfg.members["qwen"].session),
+        event_log_path=str(cfg.members["qwen"].events),
         wake_mode="natural",
         assembly=binding,
     )
@@ -52,19 +54,19 @@ def test_invariant_9_send_message_offered_only_for_assembly_wake_and_plaza_key(t
     )
 
     assert "send_message" in _offered(
-        enabled_root, enabled_binding, event_managed=True, wake_context=context
+        enabled_root, enabled_cfg, enabled_binding, event_managed=True, wake_context=context
     )
     assert "send_message" not in _offered(
-        disabled_root, disabled_binding, event_managed=True, wake_context=context
+        disabled_root, disabled_cfg, disabled_binding, event_managed=True, wake_context=context
     )
     assert "send_message" not in _offered(
-        enabled_root, enabled_binding, event_managed=False, wake_context=context
+        enabled_root, enabled_cfg, enabled_binding, event_managed=False, wake_context=context
     )
     assert "send_message" not in _offered(
-        enabled_root, enabled_binding, event_managed=True, wake_context=None
+        enabled_root, enabled_cfg, enabled_binding, event_managed=True, wake_context=None
     )
     assert "send_message" not in _offered(
-        enabled_root, None, event_managed=True, wake_context=context
+        enabled_root, enabled_cfg, None, event_managed=True, wake_context=context
     )
 
 
@@ -113,9 +115,10 @@ def test_invariant_9_build_inbound_external_and_run_next_none_match_unplaza_base
     after_store.append(dict(event))
 
     class Session:
-        _prior_states = []
+        _prior_states = [(1, uuid.uuid4(), {}, T0.isoformat())]
         _bridge = None
         _state = {}
+        cycle = 1
 
         def __init__(self):
             self.envelopes = []
@@ -150,9 +153,10 @@ def test_invariant_9_enabled_wake_differs_only_by_supplied_plaza_note(tmp_path, 
     noted_store.append(dict(event))
 
     class Session:
-        _prior_states = []
+        _prior_states = [(1, uuid.uuid4(), {}, T0.isoformat())]
         _bridge = None
         _state = {}
+        cycle = 1
 
         def __init__(self):
             self.envelope = None
@@ -168,7 +172,7 @@ def test_invariant_9_enabled_wake_differs_only_by_supplied_plaza_note(tmp_path, 
         noted_session,
         noted_store,
         now=T0,
-        extra_notes=lambda event: ["plaza: the only added operational note"],
+        extra_notes=lambda event, store_records: ["plaza: the only added operational note"],
     )
     note = noted_session.envelope.pop("operational_notes")
     assert note == ["plaza: the only added operational note"]
@@ -177,7 +181,7 @@ def test_invariant_9_enabled_wake_differs_only_by_supplied_plaza_note(tmp_path, 
 
 def test_invariant_6_member_event_shape_is_public_and_quiet_aware(house):
     from hamutay.assembly.ledger import Ledger
-    from tests.plaza_validation.conftest import tool_send
+    from .conftest import tool_send
 
     root, cfg, binding = house
     tool_send(cfg, text="quiet-aware")

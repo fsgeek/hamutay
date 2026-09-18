@@ -8,7 +8,7 @@ from hamutay.plaza.ids import PLAZA_NS, cli_key, delivery_event_id, resident_key
 from hamutay.plaza.pass_ import run_plaza_pass
 from hamutay.plaza.records import build_delivery, build_message, validate_plaza
 from hamutay.plaza.send import send
-from tests.plaza_validation.conftest import T0, wake
+from .conftest import T0, wake
 
 
 def _message(*, actor="door:qwen", via="tool", to="door:elder", text="valid text"):

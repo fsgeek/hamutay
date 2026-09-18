@@ -5,7 +5,7 @@ import subprocess
 from pathlib import Path
 
 from hamutay.heartbeat import source_note
-from tests.plaza_validation.conftest import write_members
+from .conftest import write_members
 
 
 REPOSITORY = Path(__file__).resolve().parents[2]
