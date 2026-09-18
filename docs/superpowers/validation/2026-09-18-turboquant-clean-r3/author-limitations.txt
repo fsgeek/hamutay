@@ -1,0 +1,13 @@
+Disclosed Ambiguities, Technical Constraints, and Scope Boundaries:
+
+1. Zero-Sign Convention Difference:
+   In the transparent reference implementation, an exact zero projected coordinate sign maps to +1. In the author's CUDA kernel (qjl_kernel/csrc/qjl_quant_kernel.cu), exact zero coordinates map to -1. The interface contract explicitly declares this as an approved convention difference rather than a defect. Validation tests accommodate this distinction when asserting raw signs versus kernel outputs.
+
+2. Hardware Environment and Pinned CUDA Panning:
+   Author kernel compilation and execution require PyTorch with CUDA 12.8, CUDA_HOME set to /usr/local/cuda-12.8, nvcc 12.8, and system /usr/local/cuda resolving to 13.2, with device pinned strictly to 'cuda:0'. External GPU acquisition and checkout leasing are maintained outside this suite. The suite tests all preflight, verification, and schema boundaries unconditionally, and gates live GPU execution behind availability of QJL_AUTHOR_CHECKOUT and torch.cuda.
+
+3. Published vs. Analytic Scalar Distortions:
+   The paper's reported values (0.36, 0.117, 0.03, 0.009) and (1.57/d, 0.56/d, 0.18/d, 0.047/d) are rounded values from low-precision table reporting. The specification replaces rounding-sensitive table comparisons with a dual analytic/published-scale gate (0.5% relative error on analytic FP64 integration, 15% on paper targets). Both boundaries are tested on both acceptable and unacceptable synthetic evidence.
+
+4. Authorship Boundary (Pre-Implementation Access):
+   Authored in accordance with Task 8 clean-room conditions prior to inspecting implementation sources or runtime outcomes. The authoring agent does not execute tests during authorship and does not certify R1; certification remains gated on Task 9 registered execution.
