@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 
@@ -199,3 +199,59 @@ def test_graph_write_activity_is_flagged(tmp_path):
     summary = migrate_log(log, bridge=bridge)
 
     assert summary["graph_write_cycles"] == [2]
+
+
+# --- the community doors: `community/<door>/session.jsonl` is session `<door>` ---
+
+
+def test_session_id_from_a_door_log_is_the_door():
+    from pathlib import Path
+
+    assert _session_id_from_path(Path("community/elder/session.jsonl")) == "elder"
+    assert _session_id_from_path(Path("/abs/community/qwen/session.jsonl")) == "qwen"
+
+
+def test_skip_existing_completes_a_partial_destination(tmp_path):
+    from datetime import datetime, timezone
+
+    ids = [uuid4() for _ in range(3)]
+    log = _write_log(tmp_path / "session.jsonl", [
+        _cycle_record(i + 1, {"k": i}, record_id=ids[i]) for i in range(3)
+    ])
+    bridge = ApachetaBridge.from_memory(session_id="session", model="m")
+    # the destination already holds the first record (the Elder's by-hand cycles)
+    bridge.store_open_state({"k": 0, "cycle": 1}, 1, ids[0], datetime.now(timezone.utc))
+    with pytest.raises(AlreadyMigratedError):
+        migrate_log(log, bridge=bridge)
+    summary = migrate_log(log, bridge=bridge, skip_existing=True)
+    assert summary["records_written"] == 2
+    assert summary["skipped_existing"] == 1
+    assert bridge.count == 3
+
+
+def test_skip_existing_keeps_the_chain_through_skipped_records(tmp_path):
+    from datetime import datetime, timezone
+
+    ids = [uuid4() for _ in range(2)]
+    log = _write_log(tmp_path / "session.jsonl", [
+        _cycle_record(i + 1, {"k": i}, record_id=ids[i]) for i in range(2)
+    ])
+    bridge = ApachetaBridge.from_memory(session_id="session", model="m")
+    bridge.store_open_state({"k": 0, "cycle": 1}, 1, ids[0], datetime.now(timezone.utc))
+    fresh = ApachetaBridge(bridge._backend, session_id="session", model="m")  # no prior in hand
+    migrate_log(log, bridge=fresh, skip_existing=True)
+    edges = fresh.query_edges_by_endpoint(ids[1], direction="backward")
+    assert [(e["from_record"], e["to_record"]) for e in edges] == [(ids[0], ids[1])]
+
+
+def test_from_cycle_leaves_earlier_cycles_alone(tmp_path):
+    ids = [uuid4() for _ in range(3)]
+    log = _write_log(tmp_path / "session.jsonl", [
+        _cycle_record(i + 1, {"k": i}, record_id=ids[i]) for i in range(3)
+    ])
+    bridge = ApachetaBridge.from_memory(session_id="session", model="m")
+    summary = migrate_log(log, bridge=bridge, from_cycle=2)
+    assert summary["records_written"] == 2
+    assert summary["first_cycle"] == 2
+    assert summary["skipped_before_from_cycle"] == 1
+    assert bridge.count == 2

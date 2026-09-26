@@ -95,8 +95,10 @@ def test_recipient_quiet_until_reads_only_completed_declarations(tmp_path):
     st.append(e); running = st.append_running(e)
     assert recipient_quiet_until(path) is None                    # a wake is running
 
+    from datetime import datetime, timezone
+
     result_record_id = uuid4()
-    until = iso(T0 + timedelta(hours=1))
+    until = iso(datetime.now(timezone.utc) + timedelta(hours=1))  # a future quiet stays future
     completed = st.append_completed_atomic(
         event=e, run_id=running["run_id"], wake_cycle=1,
         result_record_id=result_record_id, response_text="done",

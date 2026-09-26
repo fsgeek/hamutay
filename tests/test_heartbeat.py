@@ -420,6 +420,7 @@ def _launch_args(tmp_path, *, provider, base_url=None, context_limit=None, model
         "--provider", provider,
         "--model", model,
         "--api-key", "test-key",
+        "--no-persist",  # these tests exercise the window policy, not the database
     ]
     if base_url is not None:
         argv += ["--base-url", base_url]

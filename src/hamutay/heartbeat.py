@@ -1233,6 +1233,14 @@ def build_parser():
     )
     parser.add_argument("--lock-path", default=None)
     parser.add_argument(
+        "--persist", default="arango",
+        help="Persist every cycle to Apacheta (default: arango); a path selects DuckDB.",
+    )
+    parser.add_argument(
+        "--no-persist", action="store_true",
+        help="Run on the JSONL alone (loud in the launch note). The JSONL is the backup, not the record.",
+    )
+    parser.add_argument(
         "--capabilities-file",
         default=None,
         help="Capability registry (default: experiments/taste_open/"
@@ -1257,6 +1265,38 @@ def build_parser():
         help="Cache TTL for OpenRouter automatic prompt caching.",
     )
     return parser
+
+
+def _default_bridge_factory(persist: str, *, session_id: str, model: str):
+    from hamutay.apacheta_bridge import ApachetaBridge
+
+    if persist == "arango":
+        return ApachetaBridge.from_arango(session_id=session_id, model=model)
+    return ApachetaBridge.from_duckdb(persist, session_id=session_id, model=model)
+
+
+def resolve_persistence(args, *, bridge_factory=None):
+    """(bridge | None, launch note) for `args`.
+
+    The door's session in Apacheta is its name (community/<door>/session.jsonl
+    -> <door>). A door that cannot reach the database, or was told not to,
+    runs on the JSONL alone and says so loudly: from the founding to
+    2026-09-26 every door ran that way without a note.
+    """
+    from pathlib import Path
+
+    from hamutay.migrate_log import _session_id_from_path
+
+    if args.no_persist:
+        return None, "!!! persistence: disabled by --no-persist; JSONL only"
+    factory = bridge_factory or _default_bridge_factory
+    session_id = _session_id_from_path(Path(args.log_path))
+    try:
+        bridge = factory(args.persist, session_id=session_id, model=args.model)
+    except Exception as e:  # unreachable, unprovisioned, or not installed
+        return None, f"!!! persistence: unavailable ({type(e).__name__}: {e}); JSONL only"
+    where = "ArangoDB (via Apacheta)" if args.persist == "arango" else f"DuckDB at {args.persist}"
+    return bridge, f"persistence: {where}, session {session_id}"
 
 
 def resolve_budget(args) -> tuple[WakeBudget | None, str]:
@@ -1494,9 +1534,12 @@ def build_session(args):
         "context_limit_source": context_limit_source,
         "context_policy": context_policy.as_dict(),
     }
+    bridge, persistence_note = resolve_persistence(args)
+    HeartbeatLoop._emit({"heartbeat": "launch", "note": persistence_note})
     session = OpenTasteSession(
         model=args.model,
         backend=backend,
+        bridge=bridge,
         log_path=args.log_path,
         event_log_path=event_log_path,
         # A missing log is a genuine first boot; resume=True on a fresh path
@@ -1513,6 +1556,9 @@ def build_session(args):
         assembly=assembly_binding,
         launch_config=launch_config,
     )
+    if bridge is not None and session._prior_states:
+        # continue the database's REFINES chain from the log's last record
+        bridge.resume_after(session._prior_states[-1][1])
     # `main()` needs these two to construct the HeartbeatLoop, but they are
     # not part of this function's (session, backend, launch_config) contract
     # (a test double stands in for `args` and must not grow new required

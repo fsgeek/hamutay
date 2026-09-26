@@ -38,6 +38,16 @@ Operations:
 - cost: `uv run python -m hamutay.billing reconcile --log-path community/heartbeat/session.jsonl`
   (asks OpenRouter what each wake actually cost; persists to `<log>.billing.jsonl`;
   `hamutay.billing credits` for the account balance)
+- persistence: every completed cycle is written to Apacheta (Yanantin's immutable
+  record on ArangoDB, backed up off this host) under the door's name as its session,
+  with the REFINES chain continued across restarts from the log's last record; the
+  JSONL is the backup, not the record. The launch note says `persistence: ArangoDB
+  (via Apacheta), session <door>`; a door that cannot reach the database, or was
+  started with `--no-persist`, prints `!!! persistence: … JSONL only` and keeps
+  running. Reads of the database are access-logged there (every door is unlocked,
+  every entry is tracked). Backfill of a log that got ahead of the database:
+  `python -m hamutay.migrate_log` with `skip_existing` (and `from_cycle` where the
+  early cycles are already held under other ids).
 
 ## The qwen door (local substrate), founded 2026-09-06
 
@@ -252,6 +262,21 @@ question said the scope line was the part most likely to be wrong).
   ayllu wants the gate at all, and whether the phase line (withdrawal) is the right
   one; the alternative is a server patch so the budget forces on a think the prompt
   opened, after which the probe reclassifies at launch and the gate yields.
+
+- **2026-09-26, persistence restored to the doors.** taste_open by hand has always
+  written every cycle to Apacheta on ArangoDB with the JSONL as backup. The heartbeat,
+  a different entry point, was built without the bridge, so from the founding
+  (2026-08-26) to this day every door in the loop wrote JSONL only, and the Elder
+  stopped writing to the database the day it joined the loop (c489). No launch note
+  said so and this README called the JSONL "the community's life". Decision
+  (custodian, under the operational rule, after Tony restated the principle and that
+  reads are access-logged): the heartbeat now builds the same bridge taste_open does,
+  the launch note declares it or its absence loudly, and the missing month was
+  replayed: heartbeat 20, fable 26, qwen 21 records (34 failed cycles have no state
+  to store), elder 13 (c418–c493 checked one by one: 64 were already there from its
+  by-hand runs; c1–c417 predate per-cycle record ids and stay under the sessions
+  that stored them). Held for review: whether a resident's state going to a store
+  the whole ayllu can read is a change to its world that should have been asked.
 
 ### The first question (self-ratification), put 2026-09-17 02:05Z
 

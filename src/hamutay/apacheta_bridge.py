@@ -47,7 +47,7 @@ def _convert_tensor(
     from yanantin.apacheta.models.epistemics import (
         EpistemicMetadata, DeclaredLoss as YDeclaredLoss, LossCategory as YLossCategory,
     )
-    from yanantin.apacheta.models.provenance import ProvenanceEnvelope, SourceIdentifier
+    from yanantin.apacheta.models.provenance import ProvenanceEnvelope
 
     strands = tuple(
         StrandRecord(
@@ -166,6 +166,15 @@ class ApachetaBridge:
         self._model = model
         self._prior_id: UUID | None = None
         self._count = 0
+
+    def resume_after(self, record_id: UUID) -> None:
+        """Continue the REFINES chain from a record already stored.
+
+        A resumed session (the heartbeat restarting a door) knows its last
+        record id from the log; without this the first store after a restart
+        would begin a new chain.
+        """
+        self._prior_id = record_id
 
     def __call__(self, tensor: Tensor, usage: dict) -> None:
         """Store a prescribed-schema Tensor (Projector callback)."""

@@ -70,6 +70,9 @@ def _session_id_from_path(log_path: Path) -> str:
     started at that instant. Falls back to the bare stem otherwise.
     """
     stem = log_path.stem
+    if stem == "session" and log_path.parent.name:
+        # community/<door>/session.jsonl: the door is the session
+        return log_path.parent.name
     prefix = "taste_open_"
     if stem.startswith(prefix):
         rest = stem[len(prefix) :]
@@ -163,8 +166,17 @@ def migrate_log(
     bridge,
     *,
     dry_run: bool = False,
+    skip_existing: bool = False,
+    from_cycle: int | None = None,
 ) -> dict:
     """Replay a taste_open JSONL log into ``bridge``.
+
+    ``skip_existing`` completes a partially-populated destination: a
+    record the bridge can already retrieve is skipped (counted in
+    ``skipped_existing``) instead of refusing the whole import, and the
+    REFINES chain continues through it. ``from_cycle`` leaves every
+    earlier cycle alone (counted in ``skipped_before_from_cycle``): for a
+    log whose early cycles the destination holds under other ids.
 
     ``bridge`` is an ApachetaBridge (or anything exposing
     ``store_open_state(state, cycle, record_id, timestamp)``; for the
@@ -189,6 +201,8 @@ def migrate_log(
     records_written = 0
     minted_ids = 0
     skipped_no_state = 0
+    skipped_existing = 0
+    skipped_before_from_cycle = 0
     first_cycle: int | None = None
     last_cycle: int | None = None
     model: str | None = None
@@ -205,7 +219,18 @@ def migrate_log(
             skipped_no_state += 1
             continue
 
+        if from_cycle is not None and cycle < from_cycle:
+            skipped_before_from_cycle += 1
+            continue
+
         record_id, was_minted = _resolve_record_id(record, session_id)
+
+        if skip_existing and not dry_run and _record_exists(bridge, record_id):
+            skipped_existing += 1
+            checked_first = True
+            if hasattr(bridge, "resume_after"):
+                bridge.resume_after(record_id)  # the chain runs through it
+            continue
 
         if not checked_first:
             checked_first = True
@@ -239,6 +264,8 @@ def migrate_log(
         "records_written": records_written,
         "minted_ids": minted_ids,
         "skipped_no_state": skipped_no_state,
+        "skipped_existing": skipped_existing,
+        "skipped_before_from_cycle": skipped_before_from_cycle,
         "first_cycle": first_cycle,
         "last_cycle": last_cycle,
         "graph_write_cycles": graph_write_cycles,
