@@ -216,6 +216,9 @@ echo "source: commit {head} clean"
     assert "rolling back" in out.stdout, out.stdout
     members = json.loads((root / "community/plaza/members.json").read_text())
     assert "plaza" not in members            # restored to the pre-migration file
+    # the rollback snapshot must not outlive the rollback: left behind, it is an
+    # untracked file that makes every later launch note say `dirty` (9-28)
+    assert not (root / "community/plaza/members.json.previous").exists()
 
     calls = [c for c in log.read_text().splitlines() if c.startswith("--user stop ")
              or c.startswith("--user start ")]
@@ -248,3 +251,13 @@ def test_readme_carries_the_spec_seven_caveat_on_events_send_and_cross_reference
     assert caveat in text[ops:plaza]                   # the operations line carries it
     assert caveat in text[plaza:]                      # the plaza section cross-references it
     assert "hamutay.events send" in text[plaza:]
+
+
+def test_migration_scratch_files_are_ignored_by_git():
+    """The migration writes its snapshot and candidate beside members.json while
+    the doors restart; `source_note` runs `git status --porcelain` at each
+    launch, so an unignored scratch file makes every door report `dirty`, the
+    script fails its own verification and rolls back (observed 2026-09-28)."""
+    for name in ("members.json.previous", "members.json.candidate", "members.json.rollback"):
+        out = subprocess.run(["git", "check-ignore", "-q", f"community/plaza/{name}"], cwd=ROOT)
+        assert out.returncode == 0, f"community/plaza/{name} is not ignored"

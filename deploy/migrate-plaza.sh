@@ -145,6 +145,7 @@ with tmp.open("rb+") as f: os.fsync(f.fileno())
 os.replace(tmp, p); fd = os.open(p.parent, os.O_RDONLY); os.fsync(fd); os.close(fd)
 PY
   fi
+  rm -f "$MEMBERS.previous"   # the snapshot must not outlive the rollback
   for d in "${STOPPED[@]:-}"; do [ -n "$d" ] && systemctl --user start "hamutay-heartbeat@$d" 2>/dev/null || true; done
   exit 1
 }
