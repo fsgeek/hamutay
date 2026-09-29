@@ -84,6 +84,11 @@ def test_readme_states_the_cli_by_is_a_claimed_unauthenticated_label():
     assert "unauthenticated" in text and "via: cli" in text
 
 
+def test_readme_names_guests_the_mcp_and_the_activation():
+    text = (ROOT / "community/README.md").read_text()
+    assert "guest:" in text and "hamutay.plaza.mcp" in text and "--guests-ready" in text and "migrate-plaza.sh --guests" in text
+
+
 def test_dry_run_previews_the_real_decision_for_a_non_ancestor_merge(tmp_path):
     _init_repo_with_members(tmp_path)
     out = subprocess.run(["bash", str(ROOT / "deploy/migrate-plaza.sh"), "--phase-two", "--dry-run",
