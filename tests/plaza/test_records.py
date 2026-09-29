@@ -263,6 +263,7 @@ def test_guest_ids_are_named_and_namespaced_by_label():
     from hamutay.plaza.ids import guest_key, guest_label, is_guest
     assert is_guest("guest:levadura") and not is_guest("guest:Levadura") and not is_guest("guest:") \
         and not is_guest("guest:1abc") and not is_guest("guest:" + "a" * 33) and not is_guest("door:qwen")
+    assert not is_guest("guest:ab\n")  # trailing newline must not pass
     assert guest_label("guest:levadura") == "levadura"
     with pytest.raises(ValueError):
         guest_label("tony")
@@ -274,6 +275,8 @@ def test_guest_ids_are_named_and_namespaced_by_label():
         guest_key("levadura", "")
     with pytest.raises(ValueError):
         guest_key("Bad", "x")
+    with pytest.raises(ValueError):
+        guest_key("ab\n", "t")  # trailing newline in label must raise ValueError
 
 
 def test_validator_accepts_guest_records_on_cli_and_mcp():
@@ -292,6 +295,7 @@ def test_validator_accepts_guest_records_on_cli_and_mcp():
     ("door:qwen", "mcp", False, "via mcp needs a guest actor"),
     ("guest:Levadura", "cli", False, "bad actor"),
     ("guest:levadura", "fax", False, "bad via"),
+    ("guest:ab\n", "cli", False, "bad actor"),
 ])
 def test_validator_rejects_bad_guest_correlations(actor, via, wake_present, expect):
     from hamutay.plaza.ids import guest_key

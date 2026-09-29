@@ -51,16 +51,16 @@ def cli_key(key: str) -> str:
     return str(uuid.uuid5(PLAZA_NS, f"cli\0{key}"))
 
 
-GUEST_LABEL_RE = re.compile(r"^[a-z][a-z0-9-]{1,31}$")
-GUEST_RE = re.compile(r"^guest:([a-z][a-z0-9-]{1,31})$")
+GUEST_LABEL_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
+GUEST_RE = re.compile(r"guest:(" + GUEST_LABEL_RE.pattern + r")")
 
 
 def is_guest(actor: str) -> bool:
-    return bool(GUEST_RE.match(str(actor)))
+    return bool(GUEST_RE.fullmatch(str(actor)))
 
 
 def guest_label(actor: str) -> str:
-    m = GUEST_RE.match(str(actor))
+    m = GUEST_RE.fullmatch(str(actor))
     if not m:
         raise ValueError(f"not a guest: {actor!r}")
     return m.group(1)
@@ -68,7 +68,7 @@ def guest_label(actor: str) -> str:
 
 def guest_key(label: str, token: str) -> str:
     """Invariant 3 (r7): a guest's key is namespaced by its label, never shared with the humans'."""
-    if not GUEST_LABEL_RE.match(str(label)):
+    if not GUEST_LABEL_RE.fullmatch(str(label)):
         raise ValueError(f"bad guest label {label!r}")
     if not str(token):
         raise ValueError("token must be non-empty")
