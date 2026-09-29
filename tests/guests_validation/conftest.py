@@ -1,12 +1,23 @@
+import importlib.util
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path
 
-from tests.plaza.conftest import house, house_guests, house_unplaza, write_members
-
 ROOT = Path(__file__).resolve().parents[2]
+
+_spec = importlib.util.spec_from_file_location(
+    'plaza_conftest', ROOT / 'tests' / 'plaza' / 'conftest.py',
+)
+_m = importlib.util.module_from_spec(_spec)
+sys.modules[_spec.name] = _m
+_spec.loader.exec_module(_m)
+
+write_members = _m.write_members
+house = _m.house
+house_guests = _m.house_guests
+house_unplaza = _m.house_unplaza
 
 
 def cli(root, *args):
