@@ -73,7 +73,7 @@ def test_header_and_envelope_sentences(actor, reply, kind):
     envelope = build_event_envelope(event, [], 'validation-run')
     assert (f'This is a message from {kind}, carried by the plaza. '
             'Its sender and purpose fields say who wrote it and what they wrote.') in envelope
-    assert row['text'] in envelope
+    assert __import__('json').dumps(row['text'])[1:-1] in envelope
 
 
 def test_note_calls_guest_traffic_other_directed_messages(house_guests):
