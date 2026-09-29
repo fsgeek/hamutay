@@ -11,7 +11,7 @@ from pathlib import Path
 from .ledger import Ledger
 
 MEMBERS_FILE = Path("community/plaza/members.json")
-GUEST_LABEL_RE = re.compile(r"^[a-z][a-z0-9-]{1,31}$")
+GUEST_LABEL_RE = re.compile(r"[a-z][a-z0-9-]{1,31}")
 
 
 class MembersMalformed(RuntimeError):
@@ -72,7 +72,7 @@ def load_members(project_root: Path) -> MembersConfig | None:
             raise MembersMalformed(f"{path}: guests must be a list of labels")
         seen: list[str] = []
         for item in g:
-            if not isinstance(item, str) or not GUEST_LABEL_RE.match(item):
+            if not isinstance(item, str) or not GUEST_LABEL_RE.fullmatch(item):
                 raise MembersMalformed(f"{path}: guests entry {item!r} is not a label [a-z][a-z0-9-]{{1,31}}")
             if item in seen:
                 raise MembersMalformed(f"{path}: guests entry {item!r} is listed twice")

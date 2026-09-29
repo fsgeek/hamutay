@@ -65,11 +65,13 @@ def test_guests_key_is_optional_distinguishes_absent_from_empty_and_stays_outsid
     ["a" * 33],                 # too long
     ["levadura", "levadura"],   # duplicate
     [3],                        # not a string
+    ["levadura\n"],             # trailing newline
+    ["a"],                      # too short (min is 2 chars)
 ])
 def test_guests_key_malformed_is_refused_by_name(tmp_path, bad):
     p = write_members(tmp_path, plaza=True)
     body = json.loads(p.read_text()); body["guests"] = bad; p.write_text(json.dumps(body))
-    with pytest.raises(MembersMalformed, match="guests"):
+    with pytest.raises(MembersMalformed, match=r"guests (must|entry)"):
         load_members(tmp_path)
     b, note = bind(tmp_path, tmp_path / "community/qwen/session.jsonl", tmp_path / "community/qwen/session.jsonl.events.jsonl")
     assert b is None and "malformed" in note
