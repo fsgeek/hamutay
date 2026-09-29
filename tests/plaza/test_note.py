@@ -56,7 +56,7 @@ def test_note_names_exact_seqs_and_a_bounded_command(house):
     notes = plaza_note(cfg, "fable", st.read_records())
     assert len(notes) == 1
     n = notes[0]
-    assert n.startswith("plaza: 2 message(s) since your last wake began, at seq 1, 3 (1 posts, 1 between other doors; latest from door:elder at ")
+    assert n.startswith("plaza: 2 message(s) since your last wake began, at seq 1, 3 (1 posts, 1 other directed messages; latest from door:elder at ")
     assert "read --since-seq 1 --through-seq 3 --for fable" in n
     assert plaza_note(cfg, "qwen", st.read_records()) and "at seq 3" in plaza_note(cfg, "qwen", st.read_records())[0]
     # elder is sender or recipient of every message sent above (seq 1, 4 addressed to elder;
@@ -213,3 +213,15 @@ def test_run_next_event_passes_its_records_to_extra_notes(house):
     run_next_event(Session(), st, now=T0, extra_notes=extra)
     assert len(got) == 1 and got[0][1] > 0          # the records run_next_event had read
     assert seen[-1]["operational_notes"][-1] == "x"
+
+
+def test_note_counts_a_guest_post_as_a_post_and_says_other_directed_messages(house_guests):
+    from hamutay.plaza.note import plaza_note
+    from hamutay.plaza.send import send
+    root, cfg, binding = house_guests
+    send(cfg, actor="guest:levadura", via="cli", to="plaza", text="hello all", now=T0, key="p")
+    send(cfg, actor="guest:levadura", via="cli", to="elder", text="hello elder", now=T0, key="e")
+    notes = plaza_note(cfg, "qwen", [], on_error=lambda s: (_ for _ in ()).throw(AssertionError(s)))
+    assert len(notes) == 1
+    assert "2 message(s) since your last wake began" in notes[0]
+    assert "(1 posts, 1 other directed messages; latest from guest:levadura" in notes[0]
