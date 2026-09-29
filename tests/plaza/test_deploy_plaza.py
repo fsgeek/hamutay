@@ -2,6 +2,7 @@ import json
 import os
 import stat
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -81,6 +82,13 @@ def test_readme_has_the_plaza_section():
 def test_readme_states_the_cli_by_is_a_claimed_unauthenticated_label():
     text = (ROOT / "community/README.md").read_text()
     assert "unauthenticated" in text and "via: cli" in text
+
+
+def test_readme_names_guests_the_mcp_and_the_activation():
+    text = (ROOT / "community/README.md").read_text()
+    assert "guest:" in text and "hamutay.plaza.mcp" in text and "--guests-ready" in text and "migrate-plaza.sh --guests" in text
+    assert "uv run --project" in text
+    assert "full list" in text
 
 
 def test_dry_run_previews_the_real_decision_for_a_non_ancestor_merge(tmp_path):
@@ -261,3 +269,186 @@ def test_migration_scratch_files_are_ignored_by_git():
     for name in ("members.json.previous", "members.json.candidate", "members.json.rollback"):
         out = subprocess.run(["git", "check-ignore", "-q", f"community/plaza/{name}"], cwd=ROOT)
         assert out.returncode == 0, f"community/plaza/{name} is not ignored"
+
+
+def test_check_plaza_refuses_an_unknown_flag():
+    out = subprocess.run(["bash", str(ROOT / "deploy/check-plaza.sh"), "--guests-redy"], capture_output=True, text=True)
+    assert out.returncode == 2 and "unknown flag" in out.stdout + out.stderr
+
+
+def test_migrate_guests_installs_the_list_and_verifies_the_count(tmp_path):
+    root = tmp_path / "root"; root.mkdir()
+    head = _init_repo_with_members(root)
+    # phase two already done: the plaza key is present and committed
+    members = root / "community/plaza/members.json"
+    body = json.loads(members.read_text()); body["plaza"] = "community/plaza/plaza.jsonl"; members.write_text(json.dumps(body, indent=1))
+    _git(root, "add", "-A"); _git(root, "-c", "user.email=a@b.c", "-c", "user.name=x", "commit", "-q", "--no-gpg-sign", "-m", "c2")
+    head = _git(root, "rev-parse", "HEAD").stdout.strip()
+    bin_dir = tmp_path / "bin"; bin_dir.mkdir(); log = tmp_path / "systemctl.log"
+    _write_shim(bin_dir, "systemctl", f"""#!/usr/bin/env bash
+echo "$*" >> {log}
+if [ "$1" = "--user" ] && [ "$2" = "show" ]; then echo "InvocationID=deadbeef"; exit 0; fi
+if [ "$1" = "--user" ] && [ "$2" = "is-active" ]; then exit 0; fi
+exit 0
+""")
+    # journalctl answers with whatever the CURRENT members.json says, like a real restart would
+    _write_shim(bin_dir, "journalctl", f"""#!/usr/bin/env bash
+n=$({sys.executable} -c 'import json; print(len(json.load(open("{members}")).get("guests", [])))')
+echo "source: commit {head} clean"
+d="${{3#hamutay-heartbeat@}}"   # argv: --user -u hamutay-heartbeat@<door> ...
+echo "assembly: member $d bound; ledger l; plaza: door $d may send; log p; guests $n"
+""")
+    env = dict(os.environ); env["PATH"] = f"{bin_dir}:{env['PATH']}"
+    out = subprocess.run(["bash", str(ROOT / "deploy/migrate-plaza.sh"), "--guests", "levadura,yupi", "--root", str(root), "--merge", head],
+                         capture_output=True, text=True, env=env, timeout=600)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert json.loads(members.read_text())["guests"] == ["levadura", "yupi"]
+    assert not (root / "community/plaza/members.json.previous").exists()
+    # the installed list is the one tracked change; the scratch files (.previous/.candidate/.rollback) are ignored
+    assert _git(root, "status", "--porcelain").stdout.strip() == "M community/plaza/members.json"
+
+
+def test_migrate_guests_rolls_back_and_a_guest_write_in_the_window_stands(tmp_path):
+    """§11 r7: the rename is the admission boundary; rollback is configuration-only."""
+    root = tmp_path / "root"; root.mkdir()
+    head = _init_repo_with_members(root)
+    members = root / "community/plaza/members.json"
+    body = json.loads(members.read_text()); body["plaza"] = "community/plaza/plaza.jsonl"; members.write_text(json.dumps(body, indent=1))
+    _git(root, "add", "-A"); _git(root, "-c", "user.email=a@b.c", "-c", "user.name=x", "commit", "-q", "--no-gpg-sign", "-m", "c2")
+    head = _git(root, "rev-parse", "HEAD").stdout.strip()
+    bin_dir = tmp_path / "bin"; bin_dir.mkdir(); log = tmp_path / "systemctl.log"
+    marker = tmp_path / "guest-wrote"
+    # the FIRST `systemctl --user start` after the rename plays the guest: it writes a post through the
+    # real CLI against the just-installed list, then verification fails (journalctl never says guests 1)
+    _write_shim(bin_dir, "systemctl", f"""#!/usr/bin/env bash
+echo "$*" >> {log}
+if [ "$1" = "--user" ] && [ "$2" = "show" ]; then echo "InvocationID=deadbeef"; exit 0; fi
+if [ "$1" = "--user" ] && [ "$2" = "is-active" ]; then exit 0; fi
+if [ "$1" = "--user" ] && [ "$2" = "start" ] && [ ! -f {marker} ]; then
+  touch {marker}
+  printf 'hello from the window' > {tmp_path}/g.txt
+  (cd {root} && {sys.executable} -m hamutay.plaza --project-root {root} send --by guest:levadura --to plaza --text-file {tmp_path}/g.txt --key w1) >> {log} 2>&1
+fi
+exit 0
+""")
+    _write_shim(bin_dir, "journalctl", f"""#!/usr/bin/env bash
+echo "source: commit {head} clean"
+echo "assembly: member x bound; ledger l; plaza: door x may send; log p"
+""")
+    env = dict(os.environ); env["PATH"] = f"{bin_dir}:{env['PATH']}"
+    out = subprocess.run(["bash", str(ROOT / "deploy/migrate-plaza.sh"), "--guests", "levadura", "--root", str(root), "--merge", head],
+                         capture_output=True, text=True, env=env, timeout=600)
+    assert out.returncode != 0 and "rolling back" in out.stdout
+    assert "guests" not in json.loads(members.read_text())              # configuration restored
+    assert not (root / "community/plaza/members.json.previous").exists()
+    from hamutay.assembly.binding import load_members
+    from hamutay.plaza.read import read_rows
+    rows = read_rows(load_members(root))                                  # the record kept the guest's post
+    assert [r["from"] for r in rows] == ["guest:levadura"] and rows[0]["truth"] == {"state": "post"}
+    # and after rollback the same guest is refused
+    res = subprocess.run([sys.executable, "-m", "hamutay.plaza", "--project-root", str(root), "send", "--by", "guest:levadura",
+                          "--to", "plaza", "--text-file", str(tmp_path / "g.txt"), "--key", "w2"], capture_output=True, text=True, cwd=root)
+    assert res.returncode == 2 and "not admitted" in res.stderr
+
+
+def _guests_house(tmp_path, existing=None):
+    root = tmp_path / "root"; root.mkdir()
+    _init_repo_with_members(root)
+    members = root / "community/plaza/members.json"
+    body = json.loads(members.read_text()); body["plaza"] = "community/plaza/plaza.jsonl"
+    if existing is not None:
+        body["guests"] = existing
+    members.write_text(json.dumps(body, indent=1))
+    _git(root, "add", "-A"); _git(root, "-c", "user.email=a@b.c", "-c", "user.name=x", "commit", "-q", "--no-gpg-sign", "-m", "c2")
+    head = _git(root, "rev-parse", "HEAD").stdout.strip()
+    bin_dir = tmp_path / "bin"; bin_dir.mkdir()
+    _write_shim(bin_dir, "systemctl", """#!/usr/bin/env bash
+if [ "$1" = "--user" ] && [ "$2" = "show" ]; then echo "InvocationID=deadbeef"; exit 0; fi
+exit 0
+""")
+    _write_shim(bin_dir, "journalctl", f"""#!/usr/bin/env bash
+n=$({sys.executable} -c 'import json; print(len(json.load(open("{members}")).get("guests", [])))')
+echo "source: commit {head} clean"
+d="${{3#hamutay-heartbeat@}}"
+echo "assembly: member $d bound; ledger l; plaza: door $d may send; log p; guests $n"
+""")
+    env = dict(os.environ); env["PATH"] = f"{bin_dir}:{env['PATH']}"
+    env["UV_PROJECT"] = str(ROOT)            # `uv run` from the tmp repo still resolves hamutay
+    return root, members, head, env
+
+
+def test_guests_dry_run_previews_every_precondition_and_writes_nothing(tmp_path):
+    root, members, head, env = _guests_house(tmp_path, existing=["old", "levadura"])
+    before = members.read_bytes()
+    out = subprocess.run(["bash", str(ROOT / "deploy/migrate-plaza.sh"), "--guests", "levadura", "--dry-run", "--root", str(root), "--merge", head],
+                         capture_output=True, text=True, env=env, timeout=600)
+    assert out.returncode == 0, out.stdout + out.stderr
+    for want in ("dry run", "ok: candidate valid: guests 1", "ok: working tree clean", f"ok: HEAD descends from {head}",
+                 "ok: door heartbeat idle", "dropping guests: old"):
+        assert want in out.stdout, out.stdout
+    assert members.read_bytes() == before
+    assert not (root / "community/plaza/members.json.candidate").exists()
+    assert not (root / "community/plaza/members.json.previous").exists()
+
+
+def test_guests_dry_run_names_a_dirty_tree(tmp_path):
+    root, members, head, env = _guests_house(tmp_path)
+    (root / "stray.txt").write_text("x")
+    out = subprocess.run(["bash", str(ROOT / "deploy/migrate-plaza.sh"), "--guests", "levadura", "--dry-run", "--root", str(root), "--merge", head],
+                         capture_output=True, text=True, env=env, timeout=600)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "would refuse: working tree is dirty" in out.stdout
+
+
+def test_guests_dry_run_refuses_a_list_with_no_labels(tmp_path):
+    root, members, head, env = _guests_house(tmp_path)
+    for dry in (["--dry-run"], []):
+        out = subprocess.run(["bash", str(ROOT / "deploy/migrate-plaza.sh"), "--guests", ",", *dry, "--root", str(root), "--merge", head],
+                             capture_output=True, text=True, env=env, timeout=600)
+        assert out.returncode == 2 and "at least one label" in out.stdout
+    assert not (root / "community/plaza/members.json.previous").exists()
+
+
+def test_guests_live_run_says_what_it_drops(tmp_path):
+    root, members, head, env = _guests_house(tmp_path, existing=["old", "levadura"])
+    out = subprocess.run(["bash", str(ROOT / "deploy/migrate-plaza.sh"), "--guests", "levadura", "--root", str(root), "--merge", head],
+                         capture_output=True, text=True, env=env, timeout=600)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "dropping guests: old" in out.stdout
+
+
+def test_guests_refused_when_the_plaza_key_is_absent(tmp_path):
+    root = tmp_path / "root"; root.mkdir()
+    head = _init_repo_with_members(root)
+    bin_dir = tmp_path / "bin"; bin_dir.mkdir()
+    _write_shim(bin_dir, "systemctl", "#!/usr/bin/env bash\necho InvocationID=x\nexit 0\n")
+    _write_shim(bin_dir, "journalctl", f"#!/usr/bin/env bash\necho 'source: commit {head} clean'\n")
+    env = dict(os.environ); env["PATH"] = f"{bin_dir}:{env['PATH']}"
+    out = subprocess.run(["bash", str(ROOT / "deploy/migrate-plaza.sh"), "--guests", "levadura", "--root", str(root), "--merge", head],
+                         capture_output=True, text=True, env=env, timeout=600)
+    assert out.returncode != 0 and "run --phase-two first" in out.stdout
+    assert not (root / "community/plaza/members.json.previous").exists()
+
+
+def test_check_plaza_default_mode_verifies_guests_per_unit(tmp_path):
+    root, members, head, env = _guests_house(tmp_path, existing=["levadura", "yupi"])
+    (root / "deploy").mkdir(); (root / ".gitignore").write_text("")
+    for f in ("check-plaza.sh",):
+        (root / "deploy" / f).write_bytes((ROOT / "deploy" / f).read_bytes())
+    out = subprocess.run(["bash", str(root / "deploy/check-plaza.sh"), "--merge", head],
+                         capture_output=True, text=True, env=env, cwd=root, timeout=600)
+    assert "ok   unit heartbeat guests 2" in out.stdout, out.stdout + out.stderr
+    assert "FAIL unit" not in out.stdout
+    assert "ok   unit qwen plaza bound" in out.stdout
+
+
+def test_check_plaza_guests_ready_keeps_the_plaza_checks(tmp_path):
+    root, members, head, env = _guests_house(tmp_path)
+    (root / "deploy").mkdir(); (root / ".gitignore").write_text("")
+    (root / "deploy/check-plaza.sh").write_bytes((ROOT / "deploy/check-plaza.sh").read_bytes())
+    out = subprocess.run(["bash", str(root / "deploy/check-plaza.sh"), "--guests-ready", "--merge", head],
+                         capture_output=True, text=True, env=env, cwd=root, timeout=600)
+    assert "ok   unit fable plaza bound" in out.stdout, out.stdout + out.stderr
+    assert "members.json has the plaza key" in out.stdout
+    assert "plaza status valid" in out.stdout
+    assert "info guests key: absent" in out.stdout

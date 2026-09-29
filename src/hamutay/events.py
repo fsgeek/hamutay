@@ -1448,7 +1448,9 @@ def build_event_envelope(
         context_results = project_context_results(context_results, cap)
     if event.get("event_type") == EVENT_TYPE_INBOUND:
         if event.get("origin") == "member":
-            who = "another resident" if str(event.get("sender", "")).startswith("door:") else "a human"
+            s = str(event.get("sender", ""))
+            who = ("another resident" if s.startswith("door:")
+                   else "a guest of the ayllu" if s.startswith("guest:") else "a human")
             event_instruction = (
                 f"This is a message from {who}, carried by the plaza. Its sender and "
                 "purpose fields say who wrote it and what they wrote. "

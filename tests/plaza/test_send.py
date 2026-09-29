@@ -162,3 +162,103 @@ def test_send_and_the_validator_agree_that_whitespace_only_text_is_empty(house):
                         delivery=None, wake=_wake(ev))
     with pytest.raises(LedgerMalformed):
         validate_plaza([{**msg, "seq": 1, "created_at": iso(T0)}], [1])
+
+
+from hamutay.plaza.ids import guest_key
+
+
+def _guest_send(cfg, **kw):
+    args = dict(actor="guest:levadura", via="cli", to="elder", text="hello from outside", now=T0)
+    args.update(kw)
+    return send(cfg, **args)
+
+
+def test_guest_is_refused_when_the_key_is_absent_or_the_label_is_not_listed(house):
+    root, cfg, binding = house                                   # plaza on, no guests key
+    with pytest.raises(SendRefused, match="not admitted"):
+        _guest_send(cfg)
+    from .conftest import write_members
+    from hamutay.assembly.binding import load_members
+    write_members(root, plaza=True, guests=["yupi"])
+    with pytest.raises(SendRefused, match="not admitted"):
+        _guest_send(load_members(root))
+    assert not cfg.plaza.exists()                               # nothing was written
+
+
+def test_guest_send_lands_on_cli_and_on_mcp_with_null_wake(house_guests):
+    root, cfg, binding = house_guests
+    a = _guest_send(cfg, key="t1")
+    b = _guest_send(cfg, via="mcp", to="plaza", text="a post", key="t2")
+    assert a["delivery"] == "landed" and b["delivery"] == "post"
+    recs = Ledger(cfg.plaza).read()
+    assert recs[0]["from"] == "guest:levadura" and recs[0]["via"] == "cli" and recs[0]["wake"] is None
+    assert recs[0]["idempotency_key"] == guest_key("levadura", "t1")
+    assert recs[0]["delivery"]["members_digest"] == cfg.digest
+    assert recs[2]["via"] == "mcp" and recs[2]["delivery"] is None
+    store = EventStore(cfg.members["elder"].events).read_records()
+    assert store[0]["sender"] == "guest:levadura" and store[0]["origin"] == "member"
+
+
+def test_guest_token_retry_is_one_message_across_transports_and_a_conflict_is_refused(house_guests):
+    root, cfg, binding = house_guests
+    a = _guest_send(cfg, key="t1")
+    b = _guest_send(cfg, via="mcp", key="t1")                      # same token, other transport (a restarted server)
+    c = _guest_send(cfg, key="t1", to="door:elder")                 # same token, recipient spelled canonically
+    assert b["duplicate_of_seq"] == a["seq"] == c["duplicate_of_seq"]
+    with pytest.raises(SendRefused, match="token reused for different content"):
+        _guest_send(cfg, key="t1", text="different words")
+    with pytest.raises(SendRefused, match="token reused for different content"):
+        _guest_send(cfg, key="t1", to="fable")
+    assert len([r for r in Ledger(cfg.plaza).read() if r["record_type"] == "message"]) == 1
+
+
+def test_guest_without_a_token_sends_a_new_message_each_time(house_guests):
+    root, cfg, binding = house_guests
+    a = _guest_send(cfg); b = _guest_send(cfg)
+    assert a["seq"] != b["seq"] and "duplicate_of_seq" not in b
+
+
+def test_guest_cap_is_per_label_across_transports_and_posts_are_free(house_guests):
+    root, cfg, binding = house_guests
+    for i in range(SEND_CAP):
+        via = "cli" if i % 2 else "mcp"
+        _guest_send(cfg, via=via, key=f"k{i}", now=T0 + timedelta(minutes=i))
+    with pytest.raises(SendRefused, match=f"send cap of {SEND_CAP}"):
+        _guest_send(cfg, key="one-more", now=T0 + timedelta(hours=1))
+    _guest_send(cfg, to="plaza", text="still free", key="post", now=T0 + timedelta(hours=1))     # posts uncapped
+    r = _guest_send(cfg, key="k3", now=T0 + timedelta(hours=1))                                   # a retry is not a 49th
+    assert "duplicate_of_seq" in r
+    _guest_send(cfg, key="tomorrow", now=T0 + timedelta(days=1))                                  # UTC rollover
+
+
+def test_two_guest_labels_have_separate_counts_and_keys(tmp_path):
+    from .conftest import write_members
+    from hamutay.assembly.binding import load_members
+    write_members(tmp_path, plaza=True, guests=["levadura", "yupi"])
+    cfg = load_members(tmp_path)
+    a = send(cfg, actor="guest:levadura", via="cli", to="elder", text="same", now=T0, key="first")
+    b = send(cfg, actor="guest:yupi", via="cli", to="elder", text="same", now=T0, key="first")
+    assert a["seq"] != b["seq"]
+    from hamutay.plaza.records import reduce
+    v = reduce(Ledger(cfg.plaza).read())
+    assert v.sent_today("guest:levadura", T0.date()) == 1 and v.sent_today("guest:yupi", T0.date()) == 1
+
+
+def test_humans_remain_exempt_from_the_cap(house):
+    root, cfg, binding = house
+    for i in range(SEND_CAP + 1):
+        send(cfg, actor="tony", via="cli", to="elder", text=f"m{i}", now=T0 + timedelta(minutes=i))
+
+
+def test_guest_retry_after_removal_is_refused_and_earlier_records_stay_valid(house_guests):
+    root, cfg, binding = house_guests
+    _guest_send(cfg, key="t1")
+    from .conftest import write_members
+    from hamutay.assembly.binding import load_members
+    write_members(root, plaza=True, guests=[])
+    cfg2 = load_members(root)
+    with pytest.raises(SendRefused, match="not admitted"):
+        _guest_send(cfg2, key="t1")
+    led = Ledger(cfg2.plaza); recs = led.read()
+    validate_plaza(recs, led.line_numbers)                          # the old guest line is still valid
+    send(cfg2, actor="tony", via="cli", to="elder", text="after", now=T0)   # and the plaza still writes

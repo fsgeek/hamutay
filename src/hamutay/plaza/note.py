@@ -52,7 +52,7 @@ def plaza_note(cfg: MembersConfig, door: str, store_records: list[dict],
     posts = sum(1 for m in seen if m["to"] == "plaza")
     latest = seen[-1]
     return [(f"plaza: {len(seen)} message(s) since your last wake began, at seq {_seq_list(seqs)} "
-             f"({posts} posts, {len(seen) - posts} between other doors; latest from {latest['from']} at "
+             f"({posts} posts, {len(seen) - posts} other directed messages; latest from {latest['from']} at "
              f"{latest['sent_at']}). Each is one line of community/plaza/plaza.jsonl (seq equals line number); "
              f"lines {seqs[0]}..{seqs[-1]} contain them among delivery records and your own mail; "
              f"`deploy/ayllu-plaza read --since-seq {seqs[0]} --through-seq {seqs[-1]} --for {door}` prints "

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from hamutay.events import build_inbound_event
 
-from .ids import door_name, is_door
+from .ids import door_name, guest_label, is_door, is_guest
 
 
 def purpose_for(message: dict) -> str:
@@ -12,6 +12,11 @@ def purpose_for(message: dict) -> str:
     if is_door(sender):
         answer = (f'If you wish to answer, send_message(to="{door_name(sender)}", text=...) reaches that '
                   "door; nothing obliges you to.")
+    elif is_guest(sender):
+        # §11 r7: the header explains a guest on its own, without relying on the constitution sentence
+        answer = (f"The sender is a guest: a session instance from the {guest_label(sender)} project of the "
+                  'ayllu, which has no door and reads the plaza when it visits; a post (to="plaza") is how to '
+                  "answer, and nothing obliges you to.")
     else:
         answer = 'The sender is a human who reads the plaza; a post (to="plaza") is how to answer.'
     header = (f"A message from {sender}, carried by the plaza (message {message['message_id']}, plaza seq {n}, "

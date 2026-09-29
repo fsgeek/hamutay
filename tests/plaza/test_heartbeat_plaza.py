@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from hamutay.events import EventStore, run_pending_events
-from hamutay.heartbeat import HeartbeatLoop, _run_pending_for, build_constitution, source_note
+from hamutay.heartbeat import HeartbeatLoop, _run_pending_for, build_constitution, guests_flag, source_note
 from hamutay.plaza.pass_ import PlazaMemo
 from hamutay.tools.schemas import ASSEMBLY_CONSTITUTION_CLAUSE, PLAZA_CONSTITUTION_CLAUSE
 
@@ -87,3 +87,84 @@ def test_run_pending_for_wires_extra_notes_only_when_plaza_is_set(house, house_u
     assert isinstance(wired, functools.partial)
     assert wired.func is run_pending_events
     assert "extra_notes" in wired.keywords
+
+
+def test_constitution_guest_sentence_is_separate_and_only_under_its_flag():
+    from hamutay.tools.schemas import GUESTS_CONSTITUTION_SENTENCE
+    assert GUESTS_CONSTITUTION_SENTENCE == (
+        "Guests — session instances from other projects of the ayllu, named under guests in "
+        "community/plaza/members.json — may write to the plaza and to your door under a guest: label; "
+        "a guest has no door, so a post is how to answer one. ")
+    assert GUESTS_CONSTITUTION_SENTENCE not in PLAZA_CONSTITUTION_CLAUSE
+    plain = build_constitution(None, assembly=True, plaza=True)
+    assert GUESTS_CONSTITUTION_SENTENCE not in plain
+    assert plain == build_constitution(None, assembly=True, plaza=True, guests=False)     # golden: bytes unchanged
+    with_guests = build_constitution(None, assembly=True, plaza=True, guests=True)
+    assert with_guests == plain.replace(PLAZA_CONSTITUTION_CLAUSE, PLAZA_CONSTITUTION_CLAUSE + GUESTS_CONSTITUTION_SENTENCE, 1)
+    assert build_constitution(None, assembly=True, guests=True) == build_constitution(None, assembly=True)   # no plaza, no sentence
+    assert build_constitution(None, guests=True) == build_constitution(None)
+
+
+def test_guests_flag_reads_the_binding(house, house_guests, house_unplaza):
+    """guests_flag returns True only when the key is present on a plaza-enabled binding."""
+    # house_guests: plaza=True, guests=["levadura"]
+    _, _, binding_guests = house_guests
+    assert guests_flag(binding_guests) is True
+
+    # house: plaza=True, guests key absent
+    _, _, binding_no_guests = house
+    assert guests_flag(binding_no_guests) is False
+
+    # house_unplaza: plaza=False, guests key absent
+    _, _, binding_unplaza = house_unplaza
+    assert guests_flag(binding_unplaza) is False
+
+    # No binding at all
+    assert guests_flag(None) is False
+
+
+def test_build_session_passes_guests_flag_to_the_constitution(tmp_path, monkeypatch):
+    """build_session passes the result of guests_flag(assembly_binding) to build_constitution."""
+    from hamutay import heartbeat as hb
+    from .conftest import write_members
+    from hamutay.assembly.binding import bind, load_members
+
+    write_members(tmp_path, plaza=True, guests=["levadura"])
+    cfg = load_members(tmp_path)
+    real_binding, _ = bind(tmp_path, cfg.members["qwen"].session, cfg.members["qwen"].events)
+
+    guests_flag_calls = []
+    build_constitution_kwargs = {}
+
+    original_guests_flag = hb.guests_flag
+    original_build_constitution = hb.build_constitution
+
+    def mock_guests_flag(binding):
+        guests_flag_calls.append(binding)
+        return original_guests_flag(binding)
+
+    def mock_build_constitution(*args, **kwargs):
+        build_constitution_kwargs.update(kwargs)
+        return original_build_constitution(*args, **kwargs)
+
+    monkeypatch.setattr(hb, "guests_flag", mock_guests_flag)
+    monkeypatch.setattr(hb, "build_constitution", mock_build_constitution)
+    monkeypatch.setattr(hb, "bind", lambda *a, **k: (real_binding, "mocked"))
+    monkeypatch.setattr(hb.HeartbeatLoop, "_emit", lambda *a, **k: None)
+
+    # Build launch args similar to test_heartbeat.py::_launch_args
+    from hamutay.heartbeat import build_parser
+    argv = [
+        "--log-path", str(tmp_path / "session.jsonl"),
+        "--provider", "openrouter",
+        "--model", "m",
+        "--api-key", "test-key",
+        "--no-persist",
+    ]
+    args = build_parser().parse_args(argv)
+    args.project_root = str(tmp_path)
+
+    hb.build_session(args)
+
+    assert len(guests_flag_calls) == 1
+    assert build_constitution_kwargs.get("guests") is True

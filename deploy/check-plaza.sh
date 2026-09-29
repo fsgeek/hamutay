@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -uo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"; rc=0; PHASE_ONE=0; MERGE="${PLAZA_MERGE:-}"
-while [ $# -gt 0 ]; do case "$1" in --phase-one) PHASE_ONE=1; shift;; --merge) MERGE="$2"; shift 2;; *) shift;; esac; done
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"; rc=0; PHASE_ONE=0; GUESTS_READY=0; MERGE="${PLAZA_MERGE:-}"
+while [ $# -gt 0 ]; do case "$1" in --phase-one) PHASE_ONE=1; shift;; --guests-ready) GUESTS_READY=1; shift;;
+  --merge) MERGE="$2"; shift 2;; *) echo "check-plaza: unknown flag $1"; exit 2;; esac; done
 chk() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; rc=1; fi; }
 inv_note() { local inv; inv=$(systemctl --user show -p InvocationID --value "hamutay-heartbeat@$1"); [ -n "$inv" ] && journalctl --user -u "hamutay-heartbeat@$1" _SYSTEMD_INVOCATION_ID="$inv" --no-pager 2>/dev/null | grep -o "$2" | tail -1; }
 for d in heartbeat fable elder qwen; do
@@ -12,6 +13,16 @@ done
 if [ "$PHASE_ONE" -eq 0 ]; then
   chk "members.json has the plaza key" "uv run python -c 'from hamutay.assembly.binding import load_members; import pathlib, sys; sys.exit(0 if load_members(pathlib.Path(\".\")).plaza else 1)'"
   chk "plaza status valid" "deploy/ayllu-plaza status >/dev/null"
+  n=$(uv run python -c 'from hamutay.assembly.binding import load_members; import pathlib; g=load_members(pathlib.Path(".")).guests; print("absent" if g is None else len(g))' 2>/dev/null)
+  if [ -z "$n" ]; then
+    echo "FAIL guests key unreadable"; rc=1
+  elif [ "$GUESTS_READY" -eq 1 ]; then
+    echo "info guests key: $n"
+  elif [ "$n" = absent ]; then
+    echo "info guests key absent (no guest may write)"
+  else
+    for d in heartbeat fable elder qwen; do chk "unit $d guests $n" "[ -n \"\$(inv_note $d 'guests $n\\b')\" ]"; done
+  fi
 fi
 chk "gitignore rules" "grep -q '^community/plaza/plaza.jsonl$' .gitignore && grep -q 'community/plaza/plaza.jsonl.lock' .gitignore"
 chk "checkpoint names both plaza locks" "grep -q assembly.jsonl.lock deploy/checkpoint-community-log.sh && grep -q plaza.jsonl.lock deploy/checkpoint-community-log.sh"

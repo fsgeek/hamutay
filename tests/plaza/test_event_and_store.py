@@ -115,3 +115,32 @@ def test_recipient_quiet_until_reads_only_completed_declarations(tmp_path):
     e2 = build_inbound_event(purpose="p2", sender="tony")
     st.append(e2); st.append_running(e2)
     assert recipient_quiet_until(path) is None                    # a later wake is running again
+
+
+def test_guest_header_explains_the_sender_on_its_own(tmp_path):
+    from hamutay.plaza.ids import guest_key
+    m = build_message(actor="guest:levadura", via="mcp", to="door:elder", text="hello elder", sent_at=iso(T0),
+                      idempotency_key=guest_key("levadura", "t"),
+                      delivery={"door": "elder", "events_path": str(tmp_path / "e.jsonl"), "event_id": None,
+                                "members_digest": "a" * 64}, wake=None)
+    m["seq"] = 3; m["created_at"] = iso(T0)
+    p = purpose_for(m)
+    assert p.startswith("A message from guest:levadura, carried by the plaza (message ")
+    assert ("The sender is a guest: a session instance from the levadura project of the ayllu, which has no "
+            'door and reads the plaza when it visits; a post (to="plaza") is how to answer, and nothing obliges '
+            "you to.") in p
+    assert p.endswith("\n\nhello elder")
+    # door and human headers are byte-identical to before
+    assert 'send_message(to="qwen", text=...)' in purpose_for(_msg(tmp_path))
+    assert "The sender is a human who reads the plaza" in purpose_for(_msg(tmp_path, actor="tony", via="cli"))
+
+
+def test_guest_envelope_sentence_and_the_two_older_ones_unchanged():
+    g = build_inbound_event(purpose="p", sender="guest:levadura", origin="member")
+    env = json.loads(build_event_envelope(g, [], "run"))
+    assert env["instruction"].startswith("This is a message from a guest of the ayllu, carried by the plaza. "
+                                         "Its sender and purpose fields say who wrote it and what they wrote.")
+    env_door = json.loads(build_event_envelope(build_inbound_event(purpose="p", sender="door:qwen", origin="member"), [], "run"))
+    assert env_door["instruction"].startswith("This is a message from another resident, carried by the plaza.")
+    env_hum = json.loads(build_event_envelope(build_inbound_event(purpose="p", sender="tony", origin="member"), [], "run"))
+    assert env_hum["instruction"].startswith("This is a message from a human, carried by the plaza.")

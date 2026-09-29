@@ -9,7 +9,7 @@ T0 = datetime(2026, 9, 20, 12, 0, tzinfo=UTC)
 DOORS = ("qwen", "elder", "fable")
 
 
-def write_members(root: Path, *, plaza: bool) -> Path:
+def write_members(root: Path, *, plaza: bool, guests: list[str] | None = None) -> Path:
     plaza_dir = root / "community" / "plaza"
     plaza_dir.mkdir(parents=True, exist_ok=True)
     body = {"ledger": "community/plaza/assembly.jsonl",
@@ -17,6 +17,8 @@ def write_members(root: Path, *, plaza: bool) -> Path:
                             "events": f"community/{d}/session.jsonl.events.jsonl"} for d in DOORS}}
     if plaza:
         body["plaza"] = "community/plaza/plaza.jsonl"
+    if guests is not None:
+        body["guests"] = list(guests)
     p = plaza_dir / "members.json"
     p.write_text(json.dumps(body, indent=1))
     for d in DOORS:
@@ -39,6 +41,17 @@ def house(tmp_path):
 def house_unplaza(tmp_path):
     from hamutay.assembly.binding import bind, load_members
     write_members(tmp_path, plaza=False)
+    cfg = load_members(tmp_path)
+    binding, note = bind(tmp_path, cfg.members["qwen"].session, cfg.members["qwen"].events)
+    assert binding is not None, note
+    return tmp_path, cfg, binding
+
+
+@pytest.fixture
+def house_guests(tmp_path):
+    """Plaza on, guests list ["levadura"]; returns (root, cfg, binding for qwen)."""
+    from hamutay.assembly.binding import bind, load_members
+    write_members(tmp_path, plaza=True, guests=["levadura"])
     cfg = load_members(tmp_path)
     binding, note = bind(tmp_path, cfg.members["qwen"].session, cfg.members["qwen"].events)
     assert binding is not None, note

@@ -112,3 +112,18 @@ def test_status_reports_the_cap_actors_at_zero_and_a_physical_line_count(house):
     physical = len([ln for ln in cfg.plaza.read_text().splitlines() if ln.strip()])
     assert body["seq"] in (physical, None) and body["seq"] != 0
     assert body["seq"] == physical
+
+
+def test_cli_accepts_a_guest_label_and_refuses_a_bad_one(tmp_path):
+    from .conftest import write_members
+    write_members(tmp_path, plaza=True, guests=["levadura"])
+    (tmp_path / "t.txt").write_text("from outside")
+    out = _cli(tmp_path, "send", "--by", "guest:levadura", "--to", "qwen", "--text-file", "t.txt", "--key", "k1")
+    assert out.returncode == 0, out.stderr
+    r = json.loads(out.stdout); assert r["delivery"] == "landed"
+    rows = [json.loads(l) for l in _cli(tmp_path, "read").stdout.splitlines()]
+    assert rows[0]["from"] == "guest:levadura" and rows[0]["via"] == "cli" and rows[0]["truth"]["state"] == "landed"
+    bad = _cli(tmp_path, "send", "--by", "guest:Levadura", "--to", "qwen", "--text-file", "t.txt")
+    assert bad.returncode == 2 and "guest:" in bad.stderr
+    unlisted = _cli(tmp_path, "send", "--by", "guest:yupi", "--to", "qwen", "--text-file", "t.txt")
+    assert unlisted.returncode == 2 and "not admitted" in unlisted.stderr

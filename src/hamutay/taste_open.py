@@ -2787,8 +2787,10 @@ def _build_messages(
             system_prefix = system_prefix.replace(ASSEMBLY_CONSTITUTION_CLAUSE, "")
         if not plaza:
             # A wake that is not offered send_message must not be told it has
-            # it (no plaza, no binding, or no wake context this wake).
-            from hamutay.tools.schemas import PLAZA_CONSTITUTION_CLAUSE
+            # it (no plaza, no binding, or no wake context this wake); the guest
+            # sentence rides on the clause and goes with it.
+            from hamutay.tools.schemas import GUESTS_CONSTITUTION_SENTENCE, PLAZA_CONSTITUTION_CLAUSE
+            system_prefix = system_prefix.replace(GUESTS_CONSTITUTION_SENTENCE, "")
             system_prefix = system_prefix.replace(PLAZA_CONSTITUTION_CLAUSE, "")
         system_parts.append(system_prefix)
     system_parts.extend([_SYSTEM_PROMPT_NATURAL if natural else _SYSTEM_PROMPT, ""])

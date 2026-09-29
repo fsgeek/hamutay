@@ -8,11 +8,11 @@ from datetime import date, datetime, timezone
 
 from hamutay.assembly.ledger import LedgerMalformed, iso, parse_instant
 
-from .ids import HUMANS, canonical_to, delivery_event_id, door_name, is_door, resident_key
+from .ids import HUMANS, canonical_to, delivery_event_id, door_name, is_door, is_guest, resident_key
 
 SEND_CAP = 48
 MAX_TEXT_CHARS = 8000
-ACTOR_RE = re.compile(r"^(door:[a-z0-9_-]+|tony|custodian)$")
+VIAS = ("tool", "cli", "mcp")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
 MESSAGE_FIELDS = {"record_type", "seq", "created_at", "message_id", "idempotency_key", "from", "via",
@@ -111,19 +111,21 @@ def validate_plaza(records: list[dict], line_numbers: list[int]) -> None:
             _uuid(r["message_id"], 4, f"line {line} message_id")
             _uuid(r["idempotency_key"], 5, f"line {line} idempotency_key")
             actor, via, to = r["from"], r["via"], r["to"]
-            if not (is_door(actor) or actor in HUMANS):
+            if not (is_door(actor) or actor in HUMANS or is_guest(actor)):
                 raise _bad(f"line {line}: bad actor {actor!r}")
             if to != "plaza" and not is_door(to):
                 raise _bad(f"line {line}: bad to {to!r}")
             if to == actor:
                 raise _bad(f"line {line}: a door cannot address itself")
-            if via not in ("tool", "cli"):
+            if via not in VIAS:
                 raise _bad(f"line {line}: bad via {via!r}")
             wake = r["wake"]
             if via == "tool" and not (is_door(actor) and isinstance(wake, dict)):
                 raise _bad(f"line {line}: via tool needs a door actor and a wake")
-            if via == "cli" and not (actor in HUMANS and wake is None):
-                raise _bad(f"line {line}: via cli needs a human actor and no wake")
+            if via == "cli" and not ((actor in HUMANS or is_guest(actor)) and wake is None):
+                raise _bad(f"line {line}: via cli needs a human or guest actor and no wake")
+            if via == "mcp" and not (is_guest(actor) and wake is None):
+                raise _bad(f"line {line}: via mcp needs a guest actor and no wake")
             if wake is not None:
                 if set(wake) != WAKE_SUB or not isinstance(wake["cycle"], int):
                     raise _bad(f"line {line}: bad wake")
