@@ -757,6 +757,12 @@ GPU_LEASE_SENTENCE = (
 )
 
 
+def guests_flag(assembly_binding) -> bool:
+    """The constitution's fourth flag: the guests key is present (even empty) on a plaza-enabled binding."""
+    return bool(assembly_binding and assembly_binding.members.plaza
+                and assembly_binding.members.guests is not None)
+
+
 def build_constitution(
     budget: "WakeBudget | None", gpu_lease: bool = False, assembly: bool = False, plaza: bool = False,
     guests: bool = False,
@@ -1554,8 +1560,7 @@ def build_session(args):
         system_prompt_prefix=build_constitution(
             budget, gpu_lease=bool(store.lease_binding), assembly=bool(assembly_binding),
             plaza=bool(assembly_binding and assembly_binding.members.plaza),
-            guests=bool(assembly_binding and assembly_binding.members.plaza
-                        and assembly_binding.members.guests is not None),
+            guests=guests_flag(assembly_binding),
         ),
         wake_mode=wake_mode,
         assembly=assembly_binding,

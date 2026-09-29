@@ -2730,7 +2730,6 @@ def _build_messages(
     declare_quiet: bool = False,
     assembly: bool = False,
     plaza: bool = False,
-    guests: bool = False,
     lean_activity_log: bool = False,
     omit_activity_log: bool = False,
 ) -> tuple[list[dict], str]:

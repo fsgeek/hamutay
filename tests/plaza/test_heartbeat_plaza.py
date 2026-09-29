@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from hamutay.events import EventStore, run_pending_events
-from hamutay.heartbeat import HeartbeatLoop, _run_pending_for, build_constitution, source_note
+from hamutay.heartbeat import HeartbeatLoop, _run_pending_for, build_constitution, guests_flag, source_note
 from hamutay.plaza.pass_ import PlazaMemo
 from hamutay.tools.schemas import ASSEMBLY_CONSTITUTION_CLAUSE, PLAZA_CONSTITUTION_CLAUSE
 
@@ -105,17 +105,66 @@ def test_constitution_guest_sentence_is_separate_and_only_under_its_flag():
     assert build_constitution(None, guests=True) == build_constitution(None)
 
 
-def test_heartbeat_passes_the_guests_flag_from_the_binding(house_guests, monkeypatch):
-    """The caller keys the flag on `members.guests is not None` (key present, even empty)."""
+def test_guests_flag_reads_the_binding(house, house_guests, house_unplaza):
+    """guests_flag returns True only when the key is present on a plaza-enabled binding."""
+    # house_guests: plaza=True, guests=["levadura"]
+    _, _, binding_guests = house_guests
+    assert guests_flag(binding_guests) is True
+
+    # house: plaza=True, guests key absent
+    _, _, binding_no_guests = house
+    assert guests_flag(binding_no_guests) is False
+
+    # house_unplaza: plaza=False, guests key absent
+    _, _, binding_unplaza = house_unplaza
+    assert guests_flag(binding_unplaza) is False
+
+    # No binding at all
+    assert guests_flag(None) is False
+
+
+def test_build_session_passes_guests_flag_to_the_constitution(tmp_path, monkeypatch):
+    """build_session passes the result of guests_flag(assembly_binding) to build_constitution."""
     from hamutay import heartbeat as hb
-    seen = {}
-    real = hb.build_constitution
-    monkeypatch.setattr(hb, "build_constitution", lambda *a, **k: seen.update(k) or real(*a, **k))
-    root, cfg, binding = house_guests
-    # exercise the same expression the caller uses, against both shapes of the config
-    assert bool(binding and binding.members.plaza and binding.members.guests is not None) is True
     from .conftest import write_members
     from hamutay.assembly.binding import bind, load_members
-    write_members(root, plaza=True)
-    cfg2 = load_members(root); b2, _ = bind(root, cfg2.members["qwen"].session, cfg2.members["qwen"].events)
-    assert bool(b2 and b2.members.plaza and b2.members.guests is not None) is False
+
+    write_members(tmp_path, plaza=True, guests=["levadura"])
+    cfg = load_members(tmp_path)
+    real_binding, _ = bind(tmp_path, cfg.members["qwen"].session, cfg.members["qwen"].events)
+
+    guests_flag_calls = []
+    build_constitution_kwargs = {}
+
+    original_guests_flag = hb.guests_flag
+    original_build_constitution = hb.build_constitution
+
+    def mock_guests_flag(binding):
+        guests_flag_calls.append(binding)
+        return original_guests_flag(binding)
+
+    def mock_build_constitution(*args, **kwargs):
+        build_constitution_kwargs.update(kwargs)
+        return original_build_constitution(*args, **kwargs)
+
+    monkeypatch.setattr(hb, "guests_flag", mock_guests_flag)
+    monkeypatch.setattr(hb, "build_constitution", mock_build_constitution)
+    monkeypatch.setattr(hb, "bind", lambda *a, **k: (real_binding, "mocked"))
+    monkeypatch.setattr(hb.HeartbeatLoop, "_emit", lambda *a, **k: None)
+
+    # Build launch args similar to test_heartbeat.py::_launch_args
+    from hamutay.heartbeat import build_parser
+    argv = [
+        "--log-path", str(tmp_path / "session.jsonl"),
+        "--provider", "openrouter",
+        "--model", "m",
+        "--api-key", "test-key",
+        "--no-persist",
+    ]
+    args = build_parser().parse_args(argv)
+    args.project_root = str(tmp_path)
+
+    hb.build_session(args)
+
+    assert len(guests_flag_calls) == 1
+    assert build_constitution_kwargs.get("guests") is True
