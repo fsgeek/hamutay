@@ -106,10 +106,66 @@ PY
   for d in "${STOPPED[@]:-}"; do [ -n "$d" ] && systemctl --user start "hamutay-heartbeat@$d" 2>/dev/null || true; done
   exit 1
 }
+# guests: the candidate is the current file with the list replaced; validated in a scratch copy
+# ($1 = dry: nothing is written beside the file; $1 = live: the candidate is also written durably beside it).
+guests_candidate() {
+  uv run python - "$MEMBERS" "$GUESTS" "$1" <<'PY'
+import json, os, shutil, sys
+from pathlib import Path
+from hamutay.assembly.binding import load_members
+p = Path(sys.argv[1]); labels = [s for s in sys.argv[2].split(",") if s]; mode = sys.argv[3]
+cand = p.with_name("members.json.candidate"); scratch = Path("/tmp") / f"guests-{mode}-{os.getpid()}"
+def rel(snap, base):
+    return {k: {kk: os.path.relpath(vv, base) for kk, vv in v.items()} for k, v in snap.items()}
+try:
+    raw = json.loads(p.read_bytes()); raw["guests"] = labels
+    body = json.dumps(raw, indent=1) + "\n"
+    if mode == "live":
+        with cand.open("w") as f:
+            f.write(body); f.flush(); os.fsync(f.fileno())
+    root = Path(".").resolve(); before = load_members(root).snapshot()
+    tmpdir = scratch / "community" / "plaza"; tmpdir.mkdir(parents=True)
+    (tmpdir / "members.json").write_text(body)
+    cfg = load_members(scratch)                 # raises MembersMalformed on a bad list
+    if cfg.plaza is None:
+        raise SystemExit("the plaza key is absent; run --phase-two first")
+    if len(cfg.guests or []) < 1:
+        raise SystemExit("the candidate carries no guests")
+    if rel(before, root) != rel(cfg.snapshot(), scratch):
+        raise SystemExit("candidate would change the member snapshot; nothing installed")
+    print(f"guests {len(cfg.guests)}; snapshot equal")
+except SystemExit as e:
+    print(e.code if isinstance(e.code, str) else f"exit {e.code}"); cand.unlink(missing_ok=True); sys.exit(1)
+except Exception as e:
+    print(f"{type(e).__name__}: {e}"); cand.unlink(missing_ok=True); sys.exit(1)
+finally:
+    shutil.rmtree(scratch, ignore_errors=True)
+PY
+}
 if [ "$PHASE" = guests ]; then
   [ -n "$MERGE" ] || { say "--merge SHA is required for --guests"; exit 2; }
-  [ -n "$GUESTS" ] || { say "--guests needs a comma-separated list of labels"; exit 2; }
+  n=$(printf '%s' "$GUESTS" | tr ',' '\n' | grep -c . || true)
+  [ "$n" -ge 1 ] || { say "--guests needs at least one label"; exit 2; }
+  # the list REPLACES the current one: say which labels it drops
+  dropped=$(uv run python - "$MEMBERS" "$GUESTS" <<'PY' || true
+import json, sys
+cur = json.load(open(sys.argv[1])).get("guests") or []
+new = [s for s in sys.argv[2].split(",") if s]
+print(",".join(g for g in cur if g not in new))
+PY
+)
+  if [ -n "$dropped" ]; then say "dropping guests: $dropped"; else say "dropping no guests"; fi
   if [ "$DRY" -eq 1 ]; then
+    say "ok: --merge given ($MERGE)"
+    if [ -z "$(git status --porcelain)" ]; then say "ok: working tree clean"; else say "would refuse: working tree is dirty"; fi
+    if git merge-base --is-ancestor "$MERGE" HEAD 2>/dev/null; then say "ok: HEAD descends from $MERGE"
+    else say "would refuse: HEAD does not descend from $MERGE"; fi
+    for d in "${DOORS[@]}"; do
+      if source_ok "$d" >/dev/null 2>&1; then say "ok: door $d source clean and descended from $MERGE"
+      else say "would refuse: door $d is not on clean guest-aware code descended from $MERGE"; fi
+    done
+    idleness_upfront || true
+    if cout=$(guests_candidate dry 2>&1); then say "ok: candidate valid: $cout"; else say "would refuse: $cout"; fi
     say "dry run: would install guests [$GUESTS] with every door idle, restart ${DOORS[*]}, verify 'guests <n>' and a clean source on each"; exit 0
   fi
   [ -z "$(git status --porcelain)" ] || { say "working tree is dirty; refusing"; exit 1; }
@@ -117,28 +173,10 @@ if [ "$PHASE" = guests ]; then
   for d in "${DOORS[@]}"; do source_ok "$d" || { say "guest-aware rollout incomplete on $d; refusing"; exit 1; }; done
   idleness_upfront
   cp "$MEMBERS" "$MEMBERS.previous"
-  if ! uv run python - "$MEMBERS" "$GUESTS" <<'PY'
-import json, os, sys
-from pathlib import Path
-from hamutay.assembly.binding import load_members
-p = Path(sys.argv[1]); labels = [s for s in sys.argv[2].split(",") if s]
-raw = json.loads(p.read_bytes()); raw["guests"] = labels
-cand = p.with_name("members.json.candidate")
-with cand.open("w") as f:
-    json.dump(raw, f, indent=1); f.write("\n"); f.flush(); os.fsync(f.fileno())
-root = Path(".").resolve(); before = load_members(root).snapshot()
-tmpdir = Path("/tmp") / f"guests-cand-{os.getpid()}" / "community" / "plaza"; tmpdir.mkdir(parents=True)
-(tmpdir / "members.json").write_bytes(cand.read_bytes())
-cfg = load_members(tmpdir.parents[1])          # raises MembersMalformed on a bad list
-def rel(snap, base):
-    return {k: {kk: os.path.relpath(vv, base) for kk, vv in v.items()} for k, v in snap.items()}
-if rel(before, root) != rel(cfg.snapshot(), tmpdir.parents[1]):
-    cand.unlink(); print("candidate would change the member snapshot; nothing installed"); sys.exit(1)
-print(f"candidate valid: guests {len(cfg.guests)}; snapshot equal; ready")
-PY
-  then
-    rm -f "$MEMBERS.previous"; exit 1
+  if ! cout=$(guests_candidate live 2>&1); then
+    say "candidate refused: $cout"; rm -f "$MEMBERS.previous"; exit 1
   fi
+  say "candidate valid: $cout"
   trap rollback ERR
   for d in "${DOORS[@]}"; do
     if running_wake "$d"; then say "door $d started a wake since the first check; stopping here"; false; fi
@@ -150,7 +188,6 @@ from pathlib import Path
 p = Path(sys.argv[1]); cand = p.with_name("members.json.candidate")
 os.replace(cand, p); fd = os.open(p.parent, os.O_RDONLY); os.fsync(fd); os.close(fd)
 PY
-  n=$(echo "$GUESTS" | tr ',' '\n' | grep -c .)
   for d in "${DOORS[@]}"; do systemctl --user start "hamutay-heartbeat@$d"; STARTED+=("$d"); done
   for d in "${DOORS[@]}"; do
     ok=0

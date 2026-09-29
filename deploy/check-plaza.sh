@@ -8,21 +8,21 @@ inv_note() { local inv; inv=$(systemctl --user show -p InvocationID --value "ham
 for d in heartbeat fable elder qwen; do
   chk "unit $d active" "systemctl --user is-active --quiet hamutay-heartbeat@$d"
   chk "unit $d source clean and descended from $MERGE" "n=\$(inv_note $d 'source: commit [0-9a-f]\{40\} clean') && [ -n \"\$n\" ] && git merge-base --is-ancestor '$MERGE' \$(echo \$n | awk '{print \$3}')"
-  [ "$PHASE_ONE" -eq 1 ] || [ "$GUESTS_READY" -eq 1 ] || chk "unit $d plaza bound" "[ -n \"\$(inv_note $d 'plaza: door $d may send')\" ]"
+  [ "$PHASE_ONE" -eq 1 ] || chk "unit $d plaza bound" "[ -n \"\$(inv_note $d 'plaza: door $d may send')\" ]"
 done
-if [ "$PHASE_ONE" -eq 0 ] && [ "$GUESTS_READY" -eq 0 ]; then
+if [ "$PHASE_ONE" -eq 0 ]; then
   chk "members.json has the plaza key" "uv run python -c 'from hamutay.assembly.binding import load_members; import pathlib, sys; sys.exit(0 if load_members(pathlib.Path(\".\")).plaza else 1)'"
   chk "plaza status valid" "deploy/ayllu-plaza status >/dev/null"
-  n=$(uv run python -c 'from hamutay.assembly.binding import load_members; import pathlib; g=load_members(pathlib.Path(".")).guests; print(-1 if g is None else len(g))')
-  if [ "$n" -ge 0 ]; then
-    for d in heartbeat fable elder qwen; do chk "unit $d guests $n" "[ -n \"\$(inv_note $d 'guests $n\\b')\" ]"; done
-  else
+  n=$(uv run python -c 'from hamutay.assembly.binding import load_members; import pathlib; g=load_members(pathlib.Path(".")).guests; print("absent" if g is None else len(g))' 2>/dev/null)
+  if [ -z "$n" ]; then
+    echo "FAIL guests key unreadable"; rc=1
+  elif [ "$GUESTS_READY" -eq 1 ]; then
+    echo "info guests key: $n"
+  elif [ "$n" = absent ]; then
     echo "info guests key absent (no guest may write)"
+  else
+    for d in heartbeat fable elder qwen; do chk "unit $d guests $n" "[ -n \"\$(inv_note $d 'guests $n\\b')\" ]"; done
   fi
-fi
-if [ "$GUESTS_READY" -eq 1 ]; then
-  g=$(uv run python -c 'from hamutay.assembly.binding import load_members; import pathlib; g=load_members(pathlib.Path(".")).guests; print("absent" if g is None else len(g))')
-  echo "info guests key: $g"
 fi
 chk "gitignore rules" "grep -q '^community/plaza/plaza.jsonl$' .gitignore && grep -q 'community/plaza/plaza.jsonl.lock' .gitignore"
 chk "checkpoint names both plaza locks" "grep -q assembly.jsonl.lock deploy/checkpoint-community-log.sh && grep -q plaza.jsonl.lock deploy/checkpoint-community-log.sh"

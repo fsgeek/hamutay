@@ -1,8 +1,11 @@
 import asyncio
+import json
 from datetime import datetime, timezone
 
 import pytest
 
+from hamutay.assembly.binding import MembersMalformed
+from hamutay.plaza.send import SendRefused
 from hamutay.plaza.mcp import build_server, plaza_post_impl, plaza_read_impl, plaza_send_impl
 
 UTC = timezone.utc
@@ -42,4 +45,15 @@ def test_impls_refuse_cleanly_when_the_plaza_is_off(house_unplaza):
     root, cfg, binding = house_unplaza
     r = plaza_send_impl(root, "levadura", "elder", "x")
     assert r["sent"] is False and "not enabled" in r["refused"]
-    assert plaza_read_impl(root, "levadura") == []
+    with pytest.raises(SendRefused):
+        plaza_read_impl(root, "levadura")
+
+
+def test_a_malformed_house_is_not_hidden_from_a_reader(house_guests):
+    root, cfg, binding = house_guests
+    mp = root / "community/plaza/members.json"
+    body = json.loads(mp.read_text()); body["guests"] = "x"; mp.write_text(json.dumps(body))
+    with pytest.raises(MembersMalformed):
+        plaza_read_impl(root, "levadura")
+    r = plaza_send_impl(root, "levadura", "elder", "x")
+    assert r["sent"] is False and "MembersMalformed" in r["refused"]

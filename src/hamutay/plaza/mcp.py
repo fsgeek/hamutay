@@ -31,10 +31,7 @@ def _refused(e: Exception) -> dict:
 
 def plaza_read_impl(root: Path, label: str, since_seq: int | None = None, through_seq: int | None = None,
                     posts_only: bool = False) -> list[dict]:
-    try:
-        cfg = _cfg(root)
-    except (SendRefused, MembersMalformed):
-        return []
+    cfg = _cfg(root)          # a house that is off or malformed raises; FastMCP reports it as an error result
     return read_rows(cfg, since_seq=since_seq, through_seq=through_seq, posts_only=posts_only)
 
 

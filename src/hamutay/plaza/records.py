@@ -8,11 +8,10 @@ from datetime import date, datetime, timezone
 
 from hamutay.assembly.ledger import LedgerMalformed, iso, parse_instant
 
-from .ids import GUEST_LABEL_RE, HUMANS, canonical_to, delivery_event_id, door_name, is_door, is_guest, resident_key
+from .ids import HUMANS, canonical_to, delivery_event_id, door_name, is_door, is_guest, resident_key
 
 SEND_CAP = 48
 MAX_TEXT_CHARS = 8000
-ACTOR_RE = re.compile(r"^(door:[a-z0-9_-]+|tony|custodian|guest:" + GUEST_LABEL_RE.pattern + r")\Z")
 VIAS = ("tool", "cli", "mcp")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 
