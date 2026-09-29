@@ -11,7 +11,8 @@ from hamutay.events import StoreUnavailable
 
 from . import store as _store
 from .event import inbound_event_for
-from .ids import HUMANS, PLAZA_LOCK_WINDOW_S, canonical_to, cli_key, door_name, is_door, resident_key
+from .ids import (HUMANS, PLAZA_LOCK_WINDOW_S, canonical_to, cli_key, door_name, guest_key, guest_label,
+                  is_door, is_guest, resident_key)
 from .records import (MAX_TEXT_CHARS, SEND_CAP, append_validated, build_delivery, build_message,
                       reduce, validate_plaza)
 
@@ -36,10 +37,18 @@ def send(cfg: MembersConfig, *, actor: str, via: str, to: str, text: str, now: d
         if not (is_door(actor) and isinstance(wake, dict)):
             raise SendRefused("a tool send needs a door actor and a wake")
     elif via == "cli":
-        if actor not in HUMANS or wake is not None:
-            raise SendRefused("a cli send needs a human actor and no wake")
+        if wake is not None or not (actor in HUMANS or is_guest(actor)):
+            raise SendRefused("a cli send needs a human or guest actor and no wake")
+    elif via == "mcp":
+        if wake is not None or not is_guest(actor):
+            raise SendRefused("an mcp send needs a guest actor and no wake")
     else:
         raise SendRefused(f"bad via {via!r}")
+    if is_guest(actor):
+        # admission is read from members.json at this call (spec §11 r6): `cfg` is
+        # what the caller just loaded; the CLI and the server load it per call.
+        if guest_label(actor) not in (cfg.guests or ()):
+            raise SendRefused(f"guest {guest_label(actor)!r} is not admitted (members.json guests)")
     try:
         to = canonical_to(to)
     except ValueError as e:
@@ -50,7 +59,12 @@ def send(cfg: MembersConfig, *, actor: str, via: str, to: str, text: str, now: d
         raise SendRefused("a door cannot address itself")
     if not isinstance(text, str) or not text.strip() or len(text) > MAX_TEXT_CHARS:
         raise SendRefused(f"text must be 1..{MAX_TEXT_CHARS} characters")
-    idem = resident_key(wake["event_id"], to, text) if via == "tool" else cli_key(key or str(uuid.uuid4()))
+    if via == "tool":
+        idem = resident_key(wake["event_id"], to, text)
+    elif is_guest(actor):
+        idem = guest_key(guest_label(actor), key) if key else guest_key(guest_label(actor), str(uuid.uuid4()))
+    else:
+        idem = cli_key(key or str(uuid.uuid4()))
 
     ledger = Ledger(cfg.plaza)
     with ledger.try_locked(PLAZA_LOCK_WINDOW_S):
@@ -62,13 +76,16 @@ def send(cfg: MembersConfig, *, actor: str, via: str, to: str, text: str, now: d
         validate_plaza(records, lines)
         view = reduce(records)
         prior = view.by_key.get(idem)
+        if prior is not None and is_guest(actor) and (prior["to"] != to or prior["text"] != text):
+            raise SendRefused("token reused for different content (Invariant 3): a retry keeps the same "
+                              "recipient and text; an intentional repeat needs a new token")
         if prior is not None:
             return {"sent": True, "message_id": prior["message_id"], "seq": prior["seq"], "to": prior["to"],
                     "delivery": ("post" if prior["to"] == "plaza"
                                  else ("landed" if view.delivery_truth(prior["message_id"])["state"] == "landed"
                                        else "pending")),
                     "duplicate_of_seq": prior["seq"]}
-        if via == "tool" and to != "plaza":
+        if (via == "tool" or is_guest(actor)) and to != "plaza":
             day = now.astimezone(timezone.utc).date()
             if view.sent_today(actor, day) >= SEND_CAP:
                 raise SendRefused(f"send cap of {SEND_CAP} directed messages reached for {day}; "
