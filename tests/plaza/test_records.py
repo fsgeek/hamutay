@@ -102,7 +102,7 @@ def _mut(fn):
     (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "to": "door:qwen"}), ln)),               # to == from
      "cannot address itself"),
     (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "via": "cli"}), ln)),                    # cli with door actor
-     "via cli needs a human actor"),
+     "via cli needs a human or guest actor"),
     (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "delivery": None}), ln)),                # directed without delivery
      "bad delivery block"),
     (_mut(lambda r, ln: (r.__setitem__(0, {**r[0], "delivery": {**r[0]["delivery"], "door": "fable"}}), ln)),
@@ -257,3 +257,48 @@ def test_append_validated_appends_and_returns_the_stamped_record(house):
         out = append_validated(led, records, led.line_numbers, msg)
     assert out["seq"] == 2 and out["record_type"] == "message"
     assert len(Ledger(cfg.plaza).read()) == 2
+
+
+def test_guest_ids_are_named_and_namespaced_by_label():
+    from hamutay.plaza.ids import guest_key, guest_label, is_guest
+    assert is_guest("guest:levadura") and not is_guest("guest:Levadura") and not is_guest("guest:") \
+        and not is_guest("guest:1abc") and not is_guest("guest:" + "a" * 33) and not is_guest("door:qwen")
+    assert guest_label("guest:levadura") == "levadura"
+    with pytest.raises(ValueError):
+        guest_label("tony")
+    k = guest_key("levadura", "first-message")
+    assert uuid.UUID(k).version == 5
+    assert k == str(uuid.uuid5(PLAZA_NS, "guest:levadura\0first-message"))
+    assert k != guest_key("yupi", "first-message") and k != cli_key("first-message")
+    with pytest.raises(ValueError):
+        guest_key("levadura", "")
+    with pytest.raises(ValueError):
+        guest_key("Bad", "x")
+
+
+def test_validator_accepts_guest_records_on_cli_and_mcp():
+    from hamutay.plaza.ids import guest_key
+    g1 = _msg(actor="guest:levadura", via="cli", to="door:qwen", text="hi", key=guest_key("levadura", "t1"))
+    g2 = _msg(actor="guest:levadura", via="mcp", to="plaza", text="a post", key=guest_key("levadura", "t2"))
+    d1 = build_delivery(message=g1, state="landed", landed_at=iso(T0), detail=None)
+    validate_plaza(_seq([g1, d1, g2]), [1, 2, 3])
+
+
+@pytest.mark.parametrize("actor, via, wake_present, expect", [
+    ("guest:levadura", "tool", True, "via tool needs a door actor"),
+    ("guest:levadura", "cli", True, "no wake"),
+    ("guest:levadura", "mcp", True, "no wake"),
+    ("tony", "mcp", False, "via mcp needs a guest actor"),
+    ("door:qwen", "mcp", False, "via mcp needs a guest actor"),
+    ("guest:Levadura", "cli", False, "bad actor"),
+    ("guest:levadura", "fax", False, "bad via"),
+])
+def test_validator_rejects_bad_guest_correlations(actor, via, wake_present, expect):
+    from hamutay.plaza.ids import guest_key
+    wake = _wake() if wake_present else None
+    key = guest_key("levadura", "t") if actor.startswith("guest:l") else cli_key("k")
+    m = _msg(actor=actor, via=via, to="door:elder", text="hi", key=key, wake=wake)
+    # _msg picks the wake by `via`; force the shape the case asks for
+    m["wake"] = wake
+    with pytest.raises(LedgerMalformed, match=re.escape(expect)):
+        validate_plaza(_seq([m]), [1])
