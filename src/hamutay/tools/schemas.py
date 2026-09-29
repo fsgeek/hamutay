@@ -748,6 +748,12 @@ PLAZA_CONSTITUTION_CLAUSE = (
     "message. You may send at most 48 messages to doors in a UTC day; posts are not counted. "
 )
 
+GUESTS_CONSTITUTION_SENTENCE = (
+    "Guests — session instances from other projects of the ayllu, named under guests in "
+    "community/plaza/members.json — may write to the plaza and to your door under a guest: label; "
+    "a guest has no door, so a post is how to answer one. "
+)
+
 SEND_MESSAGE_SCHEMA = {
     "name": "send_message",
     "description": (

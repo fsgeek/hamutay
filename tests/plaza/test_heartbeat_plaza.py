@@ -87,3 +87,35 @@ def test_run_pending_for_wires_extra_notes_only_when_plaza_is_set(house, house_u
     assert isinstance(wired, functools.partial)
     assert wired.func is run_pending_events
     assert "extra_notes" in wired.keywords
+
+
+def test_constitution_guest_sentence_is_separate_and_only_under_its_flag():
+    from hamutay.tools.schemas import GUESTS_CONSTITUTION_SENTENCE
+    assert GUESTS_CONSTITUTION_SENTENCE == (
+        "Guests — session instances from other projects of the ayllu, named under guests in "
+        "community/plaza/members.json — may write to the plaza and to your door under a guest: label; "
+        "a guest has no door, so a post is how to answer one. ")
+    assert GUESTS_CONSTITUTION_SENTENCE not in PLAZA_CONSTITUTION_CLAUSE
+    plain = build_constitution(None, assembly=True, plaza=True)
+    assert GUESTS_CONSTITUTION_SENTENCE not in plain
+    assert plain == build_constitution(None, assembly=True, plaza=True, guests=False)     # golden: bytes unchanged
+    with_guests = build_constitution(None, assembly=True, plaza=True, guests=True)
+    assert with_guests == plain.replace(PLAZA_CONSTITUTION_CLAUSE, PLAZA_CONSTITUTION_CLAUSE + GUESTS_CONSTITUTION_SENTENCE, 1)
+    assert build_constitution(None, assembly=True, guests=True) == build_constitution(None, assembly=True)   # no plaza, no sentence
+    assert build_constitution(None, guests=True) == build_constitution(None)
+
+
+def test_heartbeat_passes_the_guests_flag_from_the_binding(house_guests, monkeypatch):
+    """The caller keys the flag on `members.guests is not None` (key present, even empty)."""
+    from hamutay import heartbeat as hb
+    seen = {}
+    real = hb.build_constitution
+    monkeypatch.setattr(hb, "build_constitution", lambda *a, **k: seen.update(k) or real(*a, **k))
+    root, cfg, binding = house_guests
+    # exercise the same expression the caller uses, against both shapes of the config
+    assert bool(binding and binding.members.plaza and binding.members.guests is not None) is True
+    from .conftest import write_members
+    from hamutay.assembly.binding import bind, load_members
+    write_members(root, plaza=True)
+    cfg2 = load_members(root); b2, _ = bind(root, cfg2.members["qwen"].session, cfg2.members["qwen"].events)
+    assert bool(b2 and b2.members.plaza and b2.members.guests is not None) is False

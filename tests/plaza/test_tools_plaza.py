@@ -7,7 +7,7 @@ from hamutay.events import WakeContext
 from hamutay.taste_open import _build_messages, _natural_tool_guidance
 from hamutay.tools import ToolExecutor
 from hamutay.tools.executor import _CAPABILITY
-from hamutay.tools.schemas import PLAZA_CONSTITUTION_CLAUSE, SEND_MESSAGE_SCHEMA
+from hamutay.tools.schemas import PLAZA_CONSTITUTION_CLAUSE, GUESTS_CONSTITUTION_SENTENCE, SEND_MESSAGE_SCHEMA
 
 UTC = timezone.utc
 T0 = datetime(2026, 9, 20, 12, 0, tzinfo=UTC)
@@ -57,6 +57,16 @@ def test_guidance_and_clause_only_when_offered():
                                      declare_quiet=True, assembly=True)
     assert PLAZA_CONSTITUTION_CLAUSE in sys_with and PLAZA_CONSTITUTION_CLAUSE not in sys_without
     assert "send_message" in sys_with and "send_message" not in sys_without
+
+
+def test_guest_sentence_and_plaza_clause_stripped_together_when_plaza_not_offered():
+    prefix = "X " + PLAZA_CONSTITUTION_CLAUSE + GUESTS_CONSTITUTION_SENTENCE + "Y"
+    _, sys_with = _build_messages({}, "u", 2, system_prefix=prefix, tools_enabled=True, wake_mode="natural",
+                                  declare_quiet=True, assembly=True, plaza=True, guests=True)
+    _, sys_without = _build_messages({}, "u", 2, system_prefix=prefix, tools_enabled=True, wake_mode="natural",
+                                     declare_quiet=True, assembly=True, plaza=False, guests=True)
+    assert PLAZA_CONSTITUTION_CLAUSE in sys_with and PLAZA_CONSTITUTION_CLAUSE not in sys_without
+    assert GUESTS_CONSTITUTION_SENTENCE in sys_with and GUESTS_CONSTITUTION_SENTENCE not in sys_without
 
 
 def test_session_offers_send_message_only_with_binding_wake_context_and_plaza(house, house_unplaza):

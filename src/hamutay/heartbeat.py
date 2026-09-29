@@ -17,6 +17,7 @@ from uuid import uuid4
 from hamutay.tools.schemas import (
     ASSEMBLY_CONSTITUTION_CLAUSE,
     DECLARE_QUIET_CONSTITUTION_CLAUSE,
+    GUESTS_CONSTITUTION_SENTENCE,
     PLAZA_CONSTITUTION_CLAUSE,
 )
 from hamutay.assembly.binding import bind
@@ -757,7 +758,8 @@ GPU_LEASE_SENTENCE = (
 
 
 def build_constitution(
-    budget: "WakeBudget | None", gpu_lease: bool = False, assembly: bool = False, plaza: bool = False
+    budget: "WakeBudget | None", gpu_lease: bool = False, assembly: bool = False, plaza: bool = False,
+    guests: bool = False,
 ) -> str:
     """The operational prefix as configured: true under either setting."""
     base = _CONSTITUTION_BASE
@@ -770,7 +772,8 @@ def build_constitution(
         if plaza:
             base = base.replace(
                 ASSEMBLY_CONSTITUTION_CLAUSE,
-                ASSEMBLY_CONSTITUTION_CLAUSE + PLAZA_CONSTITUTION_CLAUSE,
+                ASSEMBLY_CONSTITUTION_CLAUSE + PLAZA_CONSTITUTION_CLAUSE
+                + (GUESTS_CONSTITUTION_SENTENCE if guests else ""),
                 1,
             )
     if budget is None:
@@ -1551,6 +1554,8 @@ def build_session(args):
         system_prompt_prefix=build_constitution(
             budget, gpu_lease=bool(store.lease_binding), assembly=bool(assembly_binding),
             plaza=bool(assembly_binding and assembly_binding.members.plaza),
+            guests=bool(assembly_binding and assembly_binding.members.plaza
+                        and assembly_binding.members.guests is not None),
         ),
         wake_mode=wake_mode,
         assembly=assembly_binding,
