@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
 from .ledger import Ledger
 
 MEMBERS_FILE = Path("community/plaza/members.json")
+GUEST_LABEL_RE = re.compile(r"^[a-z][a-z0-9-]{1,31}$")
 
 
 class MembersMalformed(RuntimeError):
@@ -32,6 +34,7 @@ class MembersConfig:
     members: dict[str, Member]
     plaza: Path | None = None       # the plaza record; None means the plaza is not enabled
     digest: str = ""                # sha256 of members.json's bytes, for the plaza's records
+    guests: tuple[str, ...] | None = None   # None: key absent; (): present and empty (spec §11)
 
     def snapshot(self) -> dict:      # member-only, on purpose: the assembly's freeze
         return {name: m.snapshot() for name, m in self.members.items()}
@@ -49,8 +52,9 @@ def load_members(project_root: Path) -> MembersConfig | None:
     if not path.exists():
         return None
     try:
-        raw = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError) as e:
+        data = path.read_bytes()
+        raw = json.loads(data.decode("utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as e:
         raise MembersMalformed(f"{path}: {e}") from e
     if not isinstance(raw, dict) or not isinstance(raw.get("ledger"), str) \
             or not isinstance(raw.get("members"), dict) or not raw["members"]:
@@ -60,7 +64,20 @@ def load_members(project_root: Path) -> MembersConfig | None:
         if not isinstance(raw["plaza"], str) or not raw["plaza"]:
             raise MembersMalformed(f"{path}: plaza must be a non-empty string path")
         plaza = _inside(project_root, raw["plaza"])
-    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    digest = hashlib.sha256(data).hexdigest()
+    guests: tuple[str, ...] | None = None
+    if "guests" in raw:
+        g = raw["guests"]
+        if not isinstance(g, list):
+            raise MembersMalformed(f"{path}: guests must be a list of labels")
+        seen: list[str] = []
+        for item in g:
+            if not isinstance(item, str) or not GUEST_LABEL_RE.match(item):
+                raise MembersMalformed(f"{path}: guests entry {item!r} is not a label [a-z][a-z0-9-]{{1,31}}")
+            if item in seen:
+                raise MembersMalformed(f"{path}: guests entry {item!r} is listed twice")
+            seen.append(item)
+        guests = tuple(seen)
     members: dict[str, Member] = {}
     for name, spec in raw["members"].items():
         if not isinstance(spec, dict) or not isinstance(spec.get("session"), str) \
@@ -85,7 +102,7 @@ def load_members(project_root: Path) -> MembersConfig | None:
         events_paths[member.events] = name
 
     return MembersConfig(ledger=_inside(project_root, raw["ledger"]), members=members,
-                        plaza=plaza, digest=digest)
+                        plaza=plaza, digest=digest, guests=guests)
 
 
 @dataclass(frozen=True)
@@ -137,4 +154,6 @@ def bind(project_root: Path, log_path: Path, event_store_path: Path, *,
     note = f"assembly: member {door} bound; ledger {cfg.ledger}"
     if cfg.plaza is not None:
         note += f"; plaza: door {door} may send; log {cfg.plaza}"
+        if cfg.guests is not None:
+            note += f"; guests {len(cfg.guests)}"
     return AssemblyBinding(door, cfg.ledger, cfg, Path(project_root).resolve()), note

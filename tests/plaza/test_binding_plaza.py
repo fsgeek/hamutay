@@ -42,3 +42,67 @@ def test_bind_note_mentions_the_plaza_only_when_set(tmp_path):
     b, note = bind(tmp_path, cfg.members["qwen"].session, cfg.members["qwen"].events)
     assert note == (f"assembly: member qwen bound; ledger {cfg.ledger}; "
                     f"plaza: door qwen may send; log {cfg.plaza}")
+
+
+def test_guests_key_is_optional_distinguishes_absent_from_empty_and_stays_outside_the_snapshot(tmp_path):
+    write_members(tmp_path, plaza=True)
+    cfg = load_members(tmp_path)
+    assert cfg.guests is None
+    snap = cfg.snapshot()
+    write_members(tmp_path, plaza=True, guests=[])
+    assert load_members(tmp_path).guests == ()
+    write_members(tmp_path, plaza=True, guests=["levadura", "yupi"])
+    cfg3 = load_members(tmp_path)
+    assert cfg3.guests == ("levadura", "yupi")
+    assert cfg3.snapshot() == snap                       # the assembly's freeze is untouched
+    assert '"guests":' not in json.dumps(cfg3.snapshot())  # guests key is not in snapshot JSON
+
+
+@pytest.mark.parametrize("bad", [
+    "levadura",                 # not a list
+    ["Levadura"],               # uppercase
+    ["1abc"],                   # leading digit
+    ["a" * 33],                 # too long
+    ["levadura", "levadura"],   # duplicate
+    [3],                        # not a string
+])
+def test_guests_key_malformed_is_refused_by_name(tmp_path, bad):
+    p = write_members(tmp_path, plaza=True)
+    body = json.loads(p.read_text()); body["guests"] = bad; p.write_text(json.dumps(body))
+    with pytest.raises(MembersMalformed, match="guests"):
+        load_members(tmp_path)
+    b, note = bind(tmp_path, tmp_path / "community/qwen/session.jsonl", tmp_path / "community/qwen/session.jsonl.events.jsonl")
+    assert b is None and "malformed" in note
+
+
+def test_digest_is_of_the_bytes_that_were_parsed(tmp_path, monkeypatch):
+    """§11 r6: one captured buffer. A file replaced between two reads must not pair config A with digest B."""
+    import hashlib
+    from pathlib import Path as _P
+    p = write_members(tmp_path, plaza=True, guests=["levadura"])
+    first = p.read_bytes()
+    calls = {"n": 0}
+    real_read_bytes = _P.read_bytes
+    def read_bytes_once_then_swap(self):
+        calls["n"] += 1
+        data = real_read_bytes(self)
+        if self == p and calls["n"] == 1:
+            # after the first read, someone installs a new file
+            body = json.loads(data); body["guests"] = ["yupi"]; p.write_text(json.dumps(body))
+        return data
+    monkeypatch.setattr(_P, "read_bytes", read_bytes_once_then_swap)
+    monkeypatch.setattr(_P, "read_text", lambda self, *a, **k: (_ for _ in ()).throw(AssertionError("read_text must not be used")))
+    cfg = load_members(tmp_path)
+    assert cfg.guests == ("levadura",)
+    assert cfg.digest == hashlib.sha256(first).hexdigest()
+
+
+def test_bind_note_counts_guests_only_when_the_key_is_present(tmp_path):
+    write_members(tmp_path, plaza=True)
+    cfg = load_members(tmp_path)
+    b, note = bind(tmp_path, cfg.members["qwen"].session, cfg.members["qwen"].events)
+    assert note.endswith(f"plaza: door qwen may send; log {cfg.plaza}")
+    write_members(tmp_path, plaza=True, guests=["levadura", "yupi"])
+    cfg = load_members(tmp_path)
+    b, note = bind(tmp_path, cfg.members["qwen"].session, cfg.members["qwen"].events)
+    assert note.endswith(f"plaza: door qwen may send; log {cfg.plaza}; guests 2")
