@@ -10,8 +10,9 @@ from pathlib import Path
 from hamutay.assembly.binding import AssemblyBinding, MembersMalformed, load_members
 from hamutay.assembly.ledger import Ledger, LedgerMalformed, LedgerUnavailable, parse_instant
 
-from .ids import PLAZA_LOCK_WINDOW_S
+from .ids import GUEST_RE, HUMANS, PLAZA_LOCK_WINDOW_S
 from .pass_ import run_plaza_pass
+from .read import read_rows
 from .records import SEND_CAP, reduce, validate_plaza
 from .send import SendRefused, send
 
@@ -46,6 +47,12 @@ def _read(cfg):
     return records, led
 
 
+def _by(value: str) -> str:
+    if value in HUMANS or GUEST_RE.fullmatch(value):
+        return value
+    raise argparse.ArgumentTypeError(f"--by must be tony, custodian, or guest:<label> ([a-z][a-z0-9-]{{1,31}}); got {value!r}")
+
+
 def cmd_send(root, cfg, a) -> int:
     try:
         r = send(cfg, actor=a.by, via="cli", to=a.to, text=Path(root / a.text_file).read_text(), now=_now(), key=a.key)
@@ -55,20 +62,8 @@ def cmd_send(root, cfg, a) -> int:
 
 
 def cmd_read(root, cfg, a) -> int:
-    records, _ = _read(cfg)
-    v = reduce(records)
-    for m in v.messages:
-        if a.since_seq is not None and m["seq"] < a.since_seq:
-            continue
-        if a.through_seq is not None and m["seq"] > a.through_seq:
-            continue
-        if a.posts and m["to"] != "plaza":
-            continue
-        if a.door and m["from"] != f"door:{a.door}" and m["to"] != f"door:{a.door}":
-            continue
-        if a.for_door and (m["from"] == f"door:{a.for_door}" or m["to"] == f"door:{a.for_door}"):
-            continue
-        row = dict(m); row["truth"] = v.delivery_truth(m["message_id"]) if m["delivery"] else {"state": "post"}
+    for row in read_rows(cfg, since_seq=a.since_seq, through_seq=a.through_seq, posts_only=a.posts,
+                         door=a.door, for_door=a.for_door):
         print(json.dumps(row, ensure_ascii=False))
     return 0
 
@@ -109,7 +104,7 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(prog="hamutay.plaza")
     p.add_argument("--project-root", default=".")
     sub = p.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("send"); s.add_argument("--by", choices=["tony", "custodian"], required=True)
+    s = sub.add_parser("send"); s.add_argument("--by", type=_by, required=True)
     s.add_argument("--to", required=True); s.add_argument("--text-file", required=True); s.add_argument("--key")
     r = sub.add_parser("read"); r.add_argument("--since-seq", type=int); r.add_argument("--through-seq", type=int)
     r.add_argument("--for", dest="for_door"); r.add_argument("--door"); r.add_argument("--posts", action="store_true")
