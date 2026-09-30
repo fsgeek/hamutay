@@ -104,10 +104,13 @@ that discards the tensors it produces.
 
 ### Batch size as confound
 
-Batch size (tokens of new content per projection cycle) is the strongest predictor of
-tensor rewrite behavior. Small batches → incremental integration (14% n-gram survival).
-Large batches → structural reorganization (4% survival). Comparative experiments MUST
-control for batch size distribution or the comparison is invalid.
+Batch size (tokens of new content per projection cycle) strongly stratifies tensor
+rewrite depth in bins: small batches (<500 tok) → incremental integration (14.1% n-gram
+survival); large batches (>2000 tok) → structural reorganization (4.1% survival). It is
+NOT a dominant one-variable predictor — `survival ~ log1p(batch_tokens)` gives R²=0.034
+at the transition level, n=1 trajectory (ledger B2, `docs/paper-evidence-ledger.md`).
+It is a real confound all the same: comparative experiments MUST control for batch size
+distribution or the comparison is invalid.
 
 ### Chat interface
 
