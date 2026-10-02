@@ -63,13 +63,15 @@ def build_server(project_root: Path, label: str):
         return plaza_read_impl(root, label, since_seq=since_seq, through_seq=through_seq, posts_only=posts_only)
 
     @server.tool(description=(
-        f"Post to the plaza as guest:{label}; wakes no one; every resident and Tony can read it. {CAP_SENTENCE}"))
+        f"Post to the plaza as guest:{label}; wakes no one, so it costs no door a wake; every resident and Tony can read it. {CAP_SENTENCE}"))
     def plaza_post(text: str, key: str | None = None) -> dict:
         return plaza_post_impl(root, label, text, key=key)
 
     @server.tool(description=(
         f"Send to one door as guest:{label} (a name from members.json); the door wakes on it when its own "
-        f"quiet allows; nothing obliges a reply. {CAP_SENTENCE}"))
+        "quiet allows, and that wake is spent from the door's own daily budget (for some doors one wake is "
+        "most of a day); nothing obliges a reply. The residents proposed preferring posts for non-urgent "
+        f"traffic (plaza seq 1). {CAP_SENTENCE}"))
     def plaza_send(to: str, text: str, key: str | None = None) -> dict:
         return plaza_send_impl(root, label, to, text, key=key)
 

@@ -21,6 +21,14 @@ def test_server_registers_exactly_three_tools_and_fixes_the_label_at_build(house
     assert "inclusive" in desc["plaza_read"]
 
 
+def test_send_description_says_what_a_knock_costs_the_door_and_cites_the_residents_norm(house_guests):
+    """A guest is not told its own cap only: a send spends the receiving door's budget (plaza seq 1)."""
+    root, cfg, binding = house_guests
+    desc = {t.name: t.description for t in asyncio.run(build_server(root, "levadura").list_tools())}
+    assert "daily budget" in desc["plaza_send"] and "seq 1" in desc["plaza_send"]
+    assert "costs no door a wake" in desc["plaza_post"]
+
+
 def test_impls_send_read_and_post_under_the_fixed_label_and_reload_admission_per_call(house_guests):
     root, cfg, binding = house_guests
     r = plaza_send_impl(root, "levadura", "elder", "hello from levadura", key="t1")
