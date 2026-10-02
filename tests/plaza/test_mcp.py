@@ -65,3 +65,11 @@ def test_a_malformed_house_is_not_hidden_from_a_reader(house_guests):
         plaza_read_impl(root, "levadura")
     r = plaza_send_impl(root, "levadura", "elder", "x")
     assert r["sent"] is False and "MembersMalformed" in r["refused"]
+
+
+def test_write_descriptions_say_an_unadmitted_write_is_refused_and_records_nothing(house_guests):
+    """A guest unsure of admission can try safely: the description says a refusal writes nothing."""
+    root, cfg, binding = house_guests
+    desc = {t.name: t.description for t in asyncio.run(build_server(root, "levadura").list_tools())}
+    for name in ("plaza_post", "plaza_send"):
+        assert "not admitted" in desc[name] and "nothing is recorded" in desc[name]

@@ -12,7 +12,9 @@ from .ids import GUEST_LABEL_RE
 from .read import read_rows
 from .send import SendRefused, send
 
-CAP_SENTENCE = ("At most 48 messages to doors per UTC day under this label, across every session; posts are not "
+CAP_SENTENCE = ("Admission is checked at every write: if this label is not admitted (members.json guests), the "
+                "write is refused, nothing is recorded, and the result says so, so trying is safe. "
+                "At most 48 messages to doors per UTC day under this label, across every session; posts are not "
                 "counted. A `key` (token) makes a retry one message: keep it for retries, change it for an "
                 "intentional repeat; without one every call is a new message.")
 
