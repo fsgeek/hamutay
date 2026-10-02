@@ -58,9 +58,11 @@ gives chasqui a **territory** and changes four settings. It writes no new scout.
 4. **Sampling.** The temperature is drawn uniformly from [0.3, 1.3] for each run and recorded.
    `max_tokens` is set to the model's maximum, and the finish reason is recorded. Per CLAUDE.md,
    max_tokens is a guillotine. chasqui's default is 4000 (`coordinator.py:369`, `__main__.py:84`).
-   In a sample of 400 cairn reports, 45 lack a "Declared Losses" heading. Whether truncation or
-   format drift causes that is unverified, but the fields at the end of a report are exactly what a
-   4000-token ceiling would cut.
+   Checked on 10-02, 484 of the 12,479 cairn reports that record usage stopped at or above 3,950
+   completion tokens, which is at the ceiling. 242 of those spent part of the budget on reasoning
+   tokens. Of the at-ceiling reports, 270 lack a "Declared Losses" section. An earlier figure here,
+   "45 of 400 sampled lack the heading", conflated scout reports with verify dispatches, which use
+   another format. It is withdrawn.
 
 ## Privacy split
 
