@@ -15,7 +15,7 @@
 # line says where it stopped.
 set -euo pipefail
 
-CONTAINER="${CONTAINER:-arango-indaleko-20240118170759}"
+CONTAINER="${CONTAINER:-arango-apacheta}"
 LOCAL_ROOT="${LOCAL_ROOT:-/home/tony/backups/arango}"
 REMOTE="${REMOTE:-wam-nuc}"
 REMOTE_ROOT="${REMOTE_ROOT:-backups/arango}"

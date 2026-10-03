@@ -26,4 +26,5 @@ if [ "$PHASE_ONE" -eq 0 ]; then
 fi
 chk "gitignore rules" "grep -q '^community/plaza/plaza.jsonl$' .gitignore && grep -q 'community/plaza/plaza.jsonl.lock' .gitignore"
 chk "checkpoint names both plaza locks" "grep -q assembly.jsonl.lock deploy/checkpoint-community-log.sh && grep -q plaza.jsonl.lock deploy/checkpoint-community-log.sh"
+chk "backup fresh and restore-tested (deploy/check-backup.sh)" "deploy/check-backup.sh >/dev/null"
 exit $rc
