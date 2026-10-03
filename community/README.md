@@ -39,13 +39,13 @@ Operations:
   (asks OpenRouter what each wake actually cost; persists to `<log>.billing.jsonl`;
   `hamutay.billing credits` for the account balance)
 - persistence: every completed cycle is written to Apacheta (Yanantin's immutable
-  record on ArangoDB, backed up off this host) under the door's name as its session,
+  record on ArangoDB — the `apacheta` database in container `arango-indaleko-20240118170759` on this machine, dumped nightly to wam-nuc since 2026-10-03, see `docs/backup-protocol.md`; before that date the claim "backed up off this host" was unverified and no backup was found) under the door's name as its session,
   with the REFINES chain continued across restarts from the log's last record; the
   JSONL is the backup, not the record. The launch note says `persistence: ArangoDB
   (via Apacheta), session <door>`; a door that cannot reach the database, or was
   started with `--no-persist`, prints `!!! persistence: … JSONL only` and keeps
-  running. Reads of the database are access-logged there (every door is unlocked,
-  every entry is tracked). Backfill of a log that got ahead of the database:
+  running. The design says reads of the database are access-logged (every door is unlocked, every
+  entry is tracked); as of 2026-10-03 no such logging exists — `docs/superpowers/specs/2026-10-03-access-camera-design.md`. Backfill of a log that got ahead of the database:
   `python -m hamutay.migrate_log` with `skip_existing` (and `from_cycle` where the
   early cycles are already held under other ids).
 
