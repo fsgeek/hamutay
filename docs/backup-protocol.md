@@ -78,7 +78,10 @@ newest dump.
 
 ## Open
 
-- **A third copy off the premises:** Azure blob storage under Tony's MSDN allowance, when it is
-  judged worth it.
+- **A third copy off the premises:** Azure blob storage under Tony's MSDN allowance (fsgeek/hamutay#7).
 - **Rotate credentials:** the root and app passwords appeared in a session transcript on 10-03.
-  Automatic rotation is future work.
+  Automatic rotation is future work (fsgeek/hamutay#8).
+- **The camera:** revise the spec and build it (fsgeek/hamutay#9).
+- **The retired container:** remove it after the rollback window (fsgeek/hamutay#10).
+
+Correction: commit 31e409b's message says the deferred items are issues "#1-#4". They are #7–#10. The number was typed, not read.
