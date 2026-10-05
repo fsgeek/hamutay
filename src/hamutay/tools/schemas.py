@@ -438,6 +438,7 @@ SEARCH_MEMORY_SCHEMA = {
 
 
 from hamutay.tools.graph import RELATION_TYPE_NAMES
+from hamutay.tools.words import CLAIM_NOTICE
 
 
 STORE_SCHEMA = {
@@ -861,7 +862,8 @@ RECALL_WORDS_SCHEMA = {
         "you get the candidates and must address by record_id or line; "
         "nothing is guessed. Anything cut to fit max_chars is "
         "reported. What comes back is a claim made then, not verified truth: "
-        "check it against other records before relying on it."
+        "check it against other records before relying on it. Every result "
+        f"carries this notice, verbatim: \"{CLAIM_NOTICE}\""
     ),
     "input_schema": {
         "type": "object",
@@ -911,7 +913,8 @@ SEARCH_WORDS_SCHEMA = {
         "where the pattern fails before trusting its count. Reads only your "
         "own log. Every match is a claim made then, not verified truth: use "
         "recall_words to read a match whole, and check it against other "
-        "records before relying on it."
+        "records before relying on it. Every result carries this notice, "
+        f"verbatim: \"{CLAIM_NOTICE}\""
     ),
     "input_schema": {
         "type": "object",
