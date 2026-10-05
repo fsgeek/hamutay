@@ -19,7 +19,7 @@ Two read-only tools over **the door's own session log** (the JSONL at the taste_
 `tool_recall_words(tool_input, *, log_path) -> dict`, an addressed read.
 
 - **Input:**
-  - exactly one of `cycle` (int) or `record_id` (str);
+  - exactly one of `cycle` (int), `record_id` (str) or `line` (int, 1-based log line; added 10-05 because the 91 oldest records have no record_id);
   - optional `fields`, a subset of `["incoming", "reply", "tool_calls"]`, default all;
   - optional `max_chars`, default 20000.
 - **Lookup:**
@@ -27,7 +27,8 @@ Two read-only tools over **the door's own session log** (the JSONL at the taste_
     count them.
   - **Several records with the same cycle** (this happens: elder has two c457s): return
     `{"status": "ambiguous", "candidates": [{record_id, timestamp, line}...]}` and ask for a
-    `record_id`. **Never pick one.**
+    `record_id` or `line`. **Never pick one.** A `line` that doesn't exist, is blank or doesn't parse
+    returns `unreachable` with the reason.
   - **None:** `{"status": "unreachable", "reason": ...}`. Never a guess.
 - **Success:** `{"status": "ok", "claim_notice": <text below>, "provenance": {...}, "words": {...},
   "truncated": {...}}`.
