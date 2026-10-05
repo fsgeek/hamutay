@@ -74,7 +74,9 @@ newest dump.
   fails, and so alerts, if the last nightly run is not `ok` within 26 h, or the last restore test is
   not `ok` within 35 days. This catches a timer that has silently stopped, which `OnFailure` cannot
   see.
-- **`deploy/check-plaza.sh` includes the same check,** so every migration also verifies the backup.
+- `deploy/check-plaza.sh` included the same check for one day (10-04/05). It was removed because it
+  broke the plaza's frozen validation test `test_invariant_9…`, which runs check-plaza in a temporary
+  house. Plaza health and backup health are separate checks; run `deploy/check-backup.sh` directly.
 
 ## Open
 
