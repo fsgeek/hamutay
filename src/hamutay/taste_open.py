@@ -249,10 +249,10 @@ def _strip_think(content):
 
 _WORDS_GUIDANCE_ANCHOR = 'miss means "not in my state," never "I never said that."\n'
 _WORDS_GUIDANCE_LINES = (
-    "- recall_words(cycle? | record_id?, fields?, max_chars?): What was said "
-    "at one past cycle (the incoming message, your reply, your tool calls), "
-    "read from your own session log. If two records share a cycle you get "
-    "the candidates; ask again by record_id.\n"
+    "- recall_words(cycle? | record_id? | line?, fields?, max_chars?): What "
+    "was said at one past cycle (the incoming message, your reply, your tool "
+    "calls), read from your own session log. If two records share a cycle you "
+    "get the candidates; address by record_id or line.\n"
     "- search_words(pattern, fields?, max_samples?, from_cycle?, to_cycle?): "
     "Count and sample where a phrase was said across your own log, with near "
     "misses. Both return claims made then, not verified truth.\n"

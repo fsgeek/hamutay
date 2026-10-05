@@ -59,6 +59,25 @@ def _scan(log_path: str, counter: dict) -> Iterator[tuple[int, bytes, dict]]:
             yield lineno, raw, record
 
 
+def _read_line(log_path: str, line: int) -> tuple[int, bytes, dict] | str:
+    """The record at a 1-based line, or the reason it cannot be read."""
+    with open(log_path, "rb") as f:
+        for lineno, raw in enumerate(f, 1):
+            if lineno < line:
+                continue
+            raw = raw.rstrip(b"\n")
+            if not raw.strip():
+                return f"line {line} of this log is blank"
+            try:
+                record = json.loads(raw)
+            except (ValueError, UnicodeDecodeError):
+                return f"line {line} of this log holds an unparseable record"
+            if not isinstance(record, dict):
+                return f"line {line} of this log holds an unparseable record (not an object)"
+            return lineno, raw, record
+    return f"line {line} does not exist in this log"
+
+
 def _text(value) -> str:
     if value is None:
         return ""
@@ -118,20 +137,28 @@ def tool_recall_words(tool_input: dict, *, log_path: str) -> dict:
     """Return the words of one cycle record, addressed by cycle or record_id."""
     cycle = tool_input.get("cycle")
     record_id = tool_input.get("record_id")
-    if (cycle is None) == (record_id is None):
-        return {"error": "recall_words: give exactly one of cycle or record_id"}
+    line = tool_input.get("line")
+    if sum(a is not None for a in (cycle, record_id, line)) != 1:
+        return {"error": "recall_words: give exactly one of cycle, record_id or line"}
     if cycle is not None and not _is_int(cycle):
         return {"error": "recall_words: cycle must be an integer"}
     if record_id is not None and not isinstance(record_id, str):
         return {"error": "recall_words: record_id must be a string"}
+    if line is not None and (not _is_int(line) or line < 1):
+        return {"error": "recall_words: line must be a positive integer (1-based)"}
     fields, err = _check_fields(tool_input.get("fields"), WORD_FIELDS)
-    if err:
+    if err or fields is None:
         return {"error": f"recall_words: {err}"}
     max_chars = tool_input.get("max_chars", _DEFAULT_MAX_CHARS)
     if not _is_int(max_chars) or max_chars <= 0:
         return {"error": "recall_words: max_chars must be a positive integer"}
 
-    address = {"cycle": cycle} if cycle is not None else {"record_id": record_id}
+    if cycle is not None:
+        address: dict = {"cycle": cycle}
+    elif record_id is not None:
+        address = {"record_id": record_id}
+    else:
+        address = {"line": line}
     if not Path(log_path).is_file():
         return {
             "status": "unreachable",
@@ -141,7 +168,12 @@ def tool_recall_words(tool_input: dict, *, log_path: str) -> dict:
 
     counter = {"unparseable_lines": 0}
     hits: list[tuple[int, bytes, dict]] = []
-    for lineno, raw, record in _scan(log_path, counter):
+    if line is not None:
+        found = _read_line(log_path, line)
+        if isinstance(found, str):
+            return {"status": "unreachable", "reason": found, "address": address}
+        hits.append(found)
+    for lineno, raw, record in (() if line is not None else _scan(log_path, counter)):
         if cycle is not None:
             if _is_int(record.get("cycle")) and record["cycle"] == cycle:
                 hits.append((lineno, raw, record))
@@ -163,7 +195,7 @@ def tool_recall_words(tool_input: dict, *, log_path: str) -> dict:
             "status": "ambiguous",
             "reason": (
                 f"{len(hits)} records share this address; none was chosen. "
-                "Call again with one candidate's record_id."
+                "Call again with one candidate's record_id or line."
             ),
             "address": address,
             "candidates": [
@@ -269,7 +301,7 @@ def tool_search_words(tool_input: dict, *, log_path: str) -> dict:
     if not isinstance(pattern, str) or not pattern.strip():
         return {"error": "search_words: pattern must be a non-empty string"}
     fields, err = _check_fields(tool_input.get("fields"), ("incoming", "reply"))
-    if err:
+    if err or fields is None:
         return {"error": f"search_words: {err}"}
     max_samples = tool_input.get("max_samples", _DEFAULT_MAX_SAMPLES)
     if not _is_int(max_samples) or max_samples <= 0:
@@ -317,7 +349,7 @@ def tool_search_words(tool_input: dict, *, log_path: str) -> dict:
                     "snippet": _snippet(text, pos, len(pattern)),
                 }
             count += n
-        if count:
+        if first is not None:
             matches_total += count
             matched.append(first)
         elif len(words) >= 2:

@@ -248,3 +248,39 @@ def test_search_counts_unparseable_and_requires_pattern(tmp_path):
     out = tool_search_words({"pattern": "x"}, log_path=str(path))
     assert out["unparseable_lines"] == 1 and out["records_scanned"] == 1
     assert "error" in tool_search_words({"pattern": ""}, log_path=str(path))
+
+
+# --- addressing by line (records without a record_id) ----------------------
+
+
+def test_recall_by_line_ok_for_records_without_record_id(tmp_path):
+    a = _rec(7, None, incoming="old one", reply="a")
+    b = _rec(7, None, incoming="old two", reply="b")
+    del a["record_id"], b["record_id"]
+    path, lines = _write(tmp_path, [a, b])
+    amb = tool_recall_words({"cycle": 7}, log_path=str(path))
+    assert amb["status"] == "ambiguous"
+    assert [c["line"] for c in amb["candidates"]] == [1, 2]
+    assert "line" in amb["reason"] and "record_id" in amb["reason"]
+    out = tool_recall_words({"line": 2}, log_path=str(path))
+    assert out["status"] == "ok"
+    assert out["words"]["incoming"] == "old two"
+    assert out["provenance"]["line"] == 2 and out["provenance"]["record_id"] is None
+    assert out["provenance"]["record_sha256"] == hashlib.sha256(lines[1].encode()).hexdigest()
+
+
+def test_recall_by_line_unreachable(tmp_path):
+    path, _ = _write(tmp_path, [_rec(1, "r1", incoming="a")], raw_lines=[(1, "{torn")])
+    out = tool_recall_words({"line": 2}, log_path=str(path))
+    assert out["status"] == "unreachable" and "unparseable" in out["reason"]
+    out = tool_recall_words({"line": 9}, log_path=str(path))
+    assert out["status"] == "unreachable" and "line 9" in out["reason"]
+    out = tool_recall_words({"line": 0}, log_path=str(path))
+    assert "error" in out
+
+
+def test_recall_needs_exactly_one_of_three_addresses(tmp_path):
+    path, _ = _write(tmp_path, [_rec(1, "r1")])
+    assert "error" in tool_recall_words({"cycle": 1, "line": 1}, log_path=str(path))
+    assert "error" in tool_recall_words({"record_id": "r1", "line": 1}, log_path=str(path))
+    assert "error" in tool_recall_words({"line": "1"}, log_path=str(path))

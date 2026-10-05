@@ -856,9 +856,10 @@ RECALL_WORDS_SCHEMA = {
         "Read what was said at one past cycle: the incoming message, your "
         "reply, and a compact list of your tool calls (name, parameters, "
         "result summary; never full results). Reads only your own session "
-        "log. Address it by exactly one of cycle or record_id. If two records "
-        "share a cycle, you get the candidates and must ask again by "
-        "record_id; nothing is guessed. Anything cut to fit max_chars is "
+        "log. Address it by exactly one of cycle, record_id or line (the "
+        "record's 1-based line in the log). If two records share a cycle, "
+        "you get the candidates and must address by record_id or line; "
+        "nothing is guessed. Anything cut to fit max_chars is "
         "reported. What comes back is a claim made then, not verified truth: "
         "check it against other records before relying on it."
     ),
@@ -867,11 +868,19 @@ RECALL_WORDS_SCHEMA = {
         "properties": {
             "cycle": {
                 "type": "integer",
-                "description": "The cycle to read (session-local). Give this or record_id.",
+                "description": "The cycle to read (session-local). Give this, record_id, or line.",
             },
             "record_id": {
                 "type": "string",
-                "description": "The cycle record's id. Give this or cycle.",
+                "description": "The cycle record's id. Give this, cycle, or line.",
+            },
+            "line": {
+                "type": "integer",
+                "description": (
+                    "The record's 1-based line number in the log, as listed "
+                    "with each candidate of an ambiguous result. Works for "
+                    "older records that have no record_id."
+                ),
             },
             "fields": {
                 **_WORDS_FIELDS,

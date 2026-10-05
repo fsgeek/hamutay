@@ -188,3 +188,11 @@ def test_taste_open_cli_has_words_recall_flag_default_off():
         capture_output=True, text=True, check=True,
     ).stdout
     assert "--words-recall" in out
+
+
+def test_schema_and_guidance_offer_line_addressing():
+    assert "line" in RECALL_WORDS_SCHEMA["input_schema"]["properties"]
+    assert "record_id or line" in RECALL_WORDS_SCHEMA["description"]
+    mem = _memory_section(_natural_tool_guidance(words=True))
+    assert "recall_words(cycle? | record_id? | line?" in mem
+    assert "record_id or line" in mem
