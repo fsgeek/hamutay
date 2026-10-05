@@ -115,3 +115,21 @@ the counts from the run.** Use `set -o pipefail`; never pipe pytest into tail ah
   post-commit hook adds an OTS stamp commit. That is expected.
 - Inspect real record shapes read-only, from `community/elder/session.jsonl` (field names only, plus
   c457's two record_ids). Don't copy resident text into tests or fixtures.
+
+## Rulings on Codex's validation (2026-10-05, the custodian)
+
+Codex's frozen suite (`tests/words_validation/`, 34 tests, 76 cases) found 7 failures on its first run.
+
+- **`record_sha256` (2 cases): implementation changed.** The plan says "the sha256 of the raw line
+  bytes as stored". Codex read that as including the line terminator; the implementation hashed
+  without it. Codex's reading is the plan's wording, and it is the one a reader can check with
+  `sed -n '<line>p' <log> | sha256sum`. The implementation now hashes the stored bytes, terminator
+  included, and `record_sha256_of` says so.
+- **`samples` (1 case): the plan was ambiguous. Ruling: one sample per matched record** (its first
+  hit), spread across the matched records. `matches_total` counts occurrences and `records_matched`
+  counts records. Several samples from one record would hide the population's shape, which is
+  what the search exists to show. Codex revises its test.
+- **`TOOL_SCHEMAS` (1 case): test error.** It is a dict of name → schema (existing code), not a
+  list. Codex revises.
+- **Heartbeat (3 cases): test error.** Codex's stand-in `StoppedLoop` lacks the `_emit` static
+  method, which `run` calls before the loop starts (that call predates this branch). Codex revises.

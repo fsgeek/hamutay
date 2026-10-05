@@ -38,14 +38,14 @@ def _is_int(value) -> bool:
 
 
 def _scan(log_path: str, counter: dict) -> Iterator[tuple[int, bytes, dict]]:
-    """Yield (1-based line, raw line bytes without newline, record).
+    """Yield (1-based line, the line's bytes exactly as stored, record).
 
     Unparseable lines (and lines that are not JSON objects) are skipped and
     counted in counter["unparseable_lines"].
     """
     with open(log_path, "rb") as f:
-        for lineno, raw in enumerate(f, 1):
-            raw = raw.rstrip(b"\n")
+        for lineno, stored in enumerate(f, 1):
+            raw = stored.rstrip(b"\r\n")
             if not raw.strip():
                 continue
             try:
@@ -56,7 +56,7 @@ def _scan(log_path: str, counter: dict) -> Iterator[tuple[int, bytes, dict]]:
             if not isinstance(record, dict):
                 counter["unparseable_lines"] += 1
                 continue
-            yield lineno, raw, record
+            yield lineno, stored, record
 
 
 def _read_line(log_path: str, line: int) -> tuple[int, bytes, dict] | str:
@@ -65,7 +65,7 @@ def _read_line(log_path: str, line: int) -> tuple[int, bytes, dict] | str:
         for lineno, raw in enumerate(f, 1):
             if lineno < line:
                 continue
-            raw = raw.rstrip(b"\n")
+            stored, raw = raw, raw.rstrip(b"\r\n")
             if not raw.strip():
                 return f"line {line} of this log is blank"
             try:
@@ -74,7 +74,7 @@ def _read_line(log_path: str, line: int) -> tuple[int, bytes, dict] | str:
                 return f"line {line} of this log holds an unparseable record"
             if not isinstance(record, dict):
                 return f"line {line} of this log holds an unparseable record (not an object)"
-            return lineno, raw, record
+            return lineno, stored, record
     return f"line {line} does not exist in this log"
 
 
@@ -217,7 +217,7 @@ def tool_recall_words(tool_input: dict, *, log_path: str) -> dict:
         log_path=log_path,
         line=lineno,
         record_sha256=hashlib.sha256(raw).hexdigest(),
-        record_sha256_of="the line's bytes as stored, without its trailing newline",
+        record_sha256_of="the line's bytes exactly as stored, including its line terminator (sed -n '<line>p' <log> | sha256sum agrees)",
     )
 
     share = max_chars // len(fields)

@@ -180,7 +180,7 @@ def test_truncation_is_declared(tmp_path):
 def test_record_sha256_is_the_line_hash(tmp_path):
     path, lines = _write(tmp_path, [_rec(1, "r1", incoming="a"), _rec(2, "r2", incoming="b")])
     out = tool_recall_words({"cycle": 2}, log_path=str(path))
-    assert out["provenance"]["record_sha256"] == hashlib.sha256(lines[1].encode()).hexdigest()
+    assert out["provenance"]["record_sha256"] == hashlib.sha256((lines[1] + "\n").encode()).hexdigest()
 
 
 # --- search_words ---------------------------------------------------------
@@ -266,7 +266,7 @@ def test_recall_by_line_ok_for_records_without_record_id(tmp_path):
     assert out["status"] == "ok"
     assert out["words"]["incoming"] == "old two"
     assert out["provenance"]["line"] == 2 and out["provenance"]["record_id"] is None
-    assert out["provenance"]["record_sha256"] == hashlib.sha256(lines[1].encode()).hexdigest()
+    assert out["provenance"]["record_sha256"] == hashlib.sha256((lines[1] + "\n").encode()).hexdigest()
 
 
 def test_recall_by_line_unreachable(tmp_path):
