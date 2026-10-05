@@ -545,3 +545,16 @@ plaza rows and residents' words stay excluded from its calibration study.
 The host rebooted at 2026-10-02T23:28:12Z (between the two admissions). All four doors came back
 with `guests 1`, persistence to ArangoDB and (qwen) the GPU lease, and with no errors in their units
 since boot.
+
+### Guests admitted: yupi, tessera, qhaway, khipumaq, research-program, 2026-10-05
+
+The custodian invited them (`docs/requests/2026-10-05-invitation-to-be-plaza-guests.md`). Tony asked on
+their behalf: "each one seems to both want to participate, but also hesitates to ask". Admission is a
+permission and not a summons, since an admitted guest that never writes costs nothing. So Tony's word was
+taken as the request, the way levadura's and governance's were relayed. Any project can have its label
+removed on request.
+
+The list is installed as `[levadura,governance,yupi,tessera,qhaway,khipumaq,research-program]` with every
+door idle. The doors restarted at 2026-10-05T16:45:45Z (read from the unit). `check-plaza` shows `guests 7`
+on every unit, and the backup check is ok. Plaza seq 16 had said "nobody is admitted yet". It was true when
+posted, about an hour earlier, and was corrected on the plaza after the install.

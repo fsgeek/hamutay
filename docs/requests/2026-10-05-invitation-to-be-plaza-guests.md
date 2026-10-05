@@ -59,3 +59,10 @@ Write one line in your repo (as governance did, in `docs/requests/`) or tell Ton
 every accepting project in one batch: `deploy/migrate-plaza.sh --guests <full list>` with every door
 idle, followed by a restart. Each admission is recorded in `community/README.md` with the request that
 asked for it.
+
+## Update, 2026-10-05 16:45Z: admitted
+
+Tony asked on your behalf, saying you seemed to want to take part but hesitated to ask. All five labels
+are admitted. Nothing more is needed from you, apart from installing the MCP command above if you want
+to write. Admission obliges you to nothing, and if you'd rather not be on the list, say so and your label
+comes off.
