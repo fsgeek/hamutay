@@ -247,7 +247,35 @@ def _strip_think(content):
     return content
 
 
-def _natural_tool_guidance(*, declare_quiet: bool = False, assembly: bool = False, plaza: bool = False) -> str:
+_WORDS_GUIDANCE_ANCHOR = 'miss means "not in my state," never "I never said that."\n'
+_WORDS_GUIDANCE_LINES = (
+    "- recall_words(cycle? | record_id?, fields?, max_chars?): What was said "
+    "at one past cycle (the incoming message, your reply, your tool calls), "
+    "read from your own session log. If two records share a cycle you get "
+    "the candidates; ask again by record_id.\n"
+    "- search_words(pattern, fields?, max_samples?, from_cycle?, to_cycle?): "
+    "Count and sample where a phrase was said across your own log, with near "
+    "misses. Both return claims made then, not verified truth.\n"
+)
+
+
+def _with_words_guidance(text: str) -> str:
+    """Add the words tools to the ### Memory section, after search_memory.
+
+    Called only when the session offers recall_words/search_words, so the
+    prompt never names a tool the resident does not have. Anchor-asserted.
+    """
+    if text.count(_WORDS_GUIDANCE_ANCHOR) != 1:
+        raise RuntimeError("words-tools guidance anchor missing or not unique")
+    return text.replace(
+        _WORDS_GUIDANCE_ANCHOR, _WORDS_GUIDANCE_ANCHOR + _WORDS_GUIDANCE_LINES
+    )
+
+
+def _natural_tool_guidance(
+    *, declare_quiet: bool = False, assembly: bool = False, plaza: bool = False,
+    words: bool = False,
+) -> str:
     """Derive the natural-mode tool text from the terminal text.
 
     Derived, not copied, so the two modes cannot drift apart in the parts
@@ -255,9 +283,10 @@ def _natural_tool_guidance(*, declare_quiet: bool = False, assembly: bool = Fals
     the assembly tools, and send_message are described only when actually
     offered (event-managed wakes, with a binding, and — for send_message —
     the plaza set), so the prompt never names a tool the resident does not
-    have.
+    have. The words tools (recall_words, search_words) likewise appear only
+    when words is set.
     """
-    text = _TOOL_GUIDANCE
+    text = _with_words_guidance(_TOOL_GUIDANCE) if words else _TOOL_GUIDANCE
     declare_quiet_line = (
         "- declare_quiet(reason, until?): Record, in your own words, why "
         "you are going quiet after this wake. Schedules nothing; the "
@@ -2732,6 +2761,7 @@ def _build_messages(
     plaza: bool = False,
     lean_activity_log: bool = False,
     omit_activity_log: bool = False,
+    words_recall: bool = False,
 ) -> tuple[list[dict], str]:
     """Build messages for the call.
 
@@ -2805,9 +2835,20 @@ def _build_messages(
                 guidance = _TOOL_GUIDANCE_NATURAL_EVENT
             else:
                 guidance = _TOOL_GUIDANCE_NATURAL
+            if words_recall:
+                # Same flag mapping as the constants above, plus the words
+                # tools; without the option the constants are used unchanged.
+                guidance = _natural_tool_guidance(
+                    declare_quiet=bool(assembly or declare_quiet),
+                    assembly=bool(assembly),
+                    plaza=bool(assembly and plaza),
+                    words=True,
+                )
             system_parts.append(guidance)
         else:
-            system_parts.append(_TOOL_GUIDANCE)
+            system_parts.append(
+                _with_words_guidance(_TOOL_GUIDANCE) if words_recall else _TOOL_GUIDANCE
+            )
         system_parts.append("")
 
     if prior_state is not None:
@@ -3080,6 +3121,7 @@ class OpenTasteSession:
         launch_config: dict | None = None,
         wake_mode: str = "terminal",
         assembly: "AssemblyBinding | None" = None,
+        words_recall: bool = False,
     ):
         self._backend = backend or AnthropicTasteBackend(client)
         # The window policy this session runs under (spec
@@ -3109,6 +3151,14 @@ class OpenTasteSession:
                     "support natural mode yet)"
                 )
         self._wake_mode = wake_mode
+        # Words tools (recall_words, search_words) over this session's own
+        # log. Off by default so experiments stay comparable; when on, every
+        # cycle record carries "words_recall": true.
+        if words_recall and not enable_tools:
+            raise ValueError("words_recall requires enable_tools=True")
+        if words_recall and not log_path:
+            raise ValueError("words_recall requires a log_path (the tools read it)")
+        self._words_recall = bool(words_recall)
         # What this session is running on — logged with every record so a
         # resume can inherit it instead of asking the human to remember.
         self._launch_config = launch_config
@@ -3415,6 +3465,7 @@ class OpenTasteSession:
                     self.context_policy.window_aware and not compact
                 ),
                 omit_activity_log=compact,
+                words_recall=self._words_recall,
             )
 
         messages, system = build(user_message)
@@ -3442,8 +3493,16 @@ class OpenTasteSession:
                 ),
                 wake_context=wake_context if offer_assembly else None,
                 assembly=self._assembly if offer_assembly else None,
+                words_log_path=self._log_path if self._words_recall else None,
             )
             extra_tools = list(TOOL_SCHEMAS.values())
+            if self._words_recall:
+                from hamutay.tools.schemas import (
+                    RECALL_WORDS_SCHEMA,
+                    SEARCH_WORDS_SCHEMA,
+                )
+                extra_tools.append(RECALL_WORDS_SCHEMA)
+                extra_tools.append(SEARCH_WORDS_SCHEMA)
             if self._wake_mode == "natural":
                 from hamutay.tools.schemas import (
                     CONVENE_SCHEMA,
@@ -4250,6 +4309,10 @@ class OpenTasteSession:
             "scheduled_events": scheduled_events or [],
             "quiet_declaration": quiet_declaration,
         }
+        if self._words_recall:
+            # Version flag: which side of the words-tools change this cycle
+            # is on. Absent (not false) when the option is off.
+            record["words_recall"] = True
         if self._last_continuity_curator_context is not None:
             record["curator_context_injection"] = (
                 self._last_continuity_curator_context
@@ -4491,6 +4554,12 @@ def main():
              "log unless given — changing it prints WAKE SHAPE CHANGE.",
     )
     parser.add_argument(
+        "--words-recall", action="store_true",
+        help="Offer recall_words and search_words (read what was said, from "
+             "this session's own log; needs --tools). Default off, so "
+             "experiments stay comparable.",
+    )
+    parser.add_argument(
         "--curator", action="store_true",
         help="Enable model-backed continuity curator summaries",
     )
@@ -4539,6 +4608,8 @@ def main():
                 "--wake-mode natural is not implemented on the Anthropic-direct "
                 "backend yet; use --provider openrouter"
             )
+    if args.words_recall and not args.tools:
+        raise SystemExit("--words-recall requires --tools")
     if inherited is not None:
         if args.capabilities_file is None:
             args.capabilities_file = inherited.get("capabilities_file")
@@ -4698,6 +4769,7 @@ def main():
         continuity_curator=continuity_curator,
         launch_config=launch_config,
         wake_mode=args.wake_mode,
+        words_recall=args.words_recall,
     )
 
     if resume:

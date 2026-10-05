@@ -1565,7 +1565,13 @@ def build_session(args):
         wake_mode=wake_mode,
         assembly=assembly_binding,
         launch_config=launch_config,
+        # Every door may read its own words (plan 2026-10-05-recall-words).
+        words_recall=True,
     )
+    HeartbeatLoop._emit({
+        "heartbeat": "launch",
+        "note": "words recall: on (recall_words, search_words over this door's own log)",
+    })
     if bridge is not None and session._prior_states:
         # continue the database's REFINES chain from the log's last record
         bridge.resume_after(session._prior_states[-1][1])

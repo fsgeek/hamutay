@@ -839,3 +839,96 @@ UPDATE_STATE_SCHEMA = {
         },
     },
 }
+
+
+# Words tools (plan 2026-10-05-recall-words). Deliberately NOT in TOOL_SCHEMAS:
+# offered only when the session's words_recall option is on, so experiments
+# that don't ask for them stay comparable. Read-only, over this session's own
+# log only.
+_WORDS_FIELDS = {
+    "type": "array",
+    "items": {"type": "string", "enum": ["incoming", "reply", "tool_calls"]},
+}
+
+RECALL_WORDS_SCHEMA = {
+    "name": "recall_words",
+    "description": (
+        "Read what was said at one past cycle: the incoming message, your "
+        "reply, and a compact list of your tool calls (name, parameters, "
+        "result summary; never full results). Reads only your own session "
+        "log. Address it by exactly one of cycle or record_id. If two records "
+        "share a cycle, you get the candidates and must ask again by "
+        "record_id; nothing is guessed. Anything cut to fit max_chars is "
+        "reported. What comes back is a claim made then, not verified truth: "
+        "check it against other records before relying on it."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "cycle": {
+                "type": "integer",
+                "description": "The cycle to read (session-local). Give this or record_id.",
+            },
+            "record_id": {
+                "type": "string",
+                "description": "The cycle record's id. Give this or cycle.",
+            },
+            "fields": {
+                **_WORDS_FIELDS,
+                "description": (
+                    "Which words to return. Default all: incoming, reply, tool_calls."
+                ),
+            },
+            "max_chars": {
+                "type": "integer",
+                "description": (
+                    "Character budget, shared evenly across the fields asked "
+                    "for. Default 20000."
+                ),
+            },
+            "reason": _REASON_FIELD,
+        },
+    },
+}
+
+SEARCH_WORDS_SCHEMA = {
+    "name": "search_words",
+    "description": (
+        "Search what was said across your own session log for a "
+        "case-insensitive substring. Returns how many records were scanned "
+        "and matched, the total matches, samples spread across the matched "
+        "range, and (for a pattern of two or more words) near misses: "
+        "records holding every word but not the phrase, so you can see "
+        "where the pattern fails before trusting its count. Reads only your "
+        "own log. Every match is a claim made then, not verified truth: use "
+        "recall_words to read a match whole, and check it against other "
+        "records before relying on it."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "pattern": {
+                "type": "string",
+                "description": "Case-insensitive substring to look for.",
+            },
+            "fields": {
+                **_WORDS_FIELDS,
+                "description": "Which words to search. Default incoming and reply.",
+            },
+            "max_samples": {
+                "type": "integer",
+                "description": "How many samples (and near misses) to return. Default 5.",
+            },
+            "from_cycle": {
+                "type": "integer",
+                "description": "Optional lower cycle bound, inclusive.",
+            },
+            "to_cycle": {
+                "type": "integer",
+                "description": "Optional upper cycle bound, inclusive.",
+            },
+            "reason": _REASON_FIELD,
+        },
+        "required": ["pattern"],
+    },
+}

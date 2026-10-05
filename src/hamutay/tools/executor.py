@@ -36,6 +36,7 @@ from hamutay.tools.memory import (
     tool_walk,
 )
 from hamutay.tools.perception import tool_clock, tool_edit, tool_read, tool_search_project, tool_write
+from hamutay.tools.words import tool_recall_words, tool_search_words
 
 
 # Capability of each tool. Descriptive metadata for analysis and for a future
@@ -52,6 +53,8 @@ _CAPABILITY: dict[str, str] = {
     "compare": "read_only",
     "walk": "read_only",
     "search_memory": "read_only",
+    "recall_words": "read_only",
+    "search_words": "read_only",
     "store": "bounded_write",
     "annotate_edge": "bounded_write",
     "schedule_event": "bounded_write",
@@ -83,6 +86,7 @@ class ToolExecutor:
         scheduled_by_record_id: UUID | None = None,
         wake_context=None,
         assembly=None,
+        words_log_path: str | None = None,
     ):
         self._project_root = project_root
         self._cycle = cycle
@@ -101,6 +105,9 @@ class ToolExecutor:
         # input; absent unless the session offered the tools this wake.
         self._wake_context = wake_context
         self._assembly = assembly
+        # Words tools (recall_words, search_words): the door's own session
+        # log. None means the session did not offer them.
+        self._words_log_path = words_log_path
         self._pending_events: list[dict] = []
         # Natural wake mode: the resident's own words for the quiet after
         # this wake, if it chose to give them. Committed with the cycle.
@@ -197,6 +204,13 @@ class ToolExecutor:
                 prior_states=self._prior_states,
                 bridge=self._bridge,
             )
+        elif tool_name in ("recall_words", "search_words"):
+            if self._words_log_path is None:
+                result = {"error": "words tools not offered in this session"}
+            elif tool_name == "recall_words":
+                result = tool_recall_words(tool_input, log_path=self._words_log_path)
+            else:
+                result = tool_search_words(tool_input, log_path=self._words_log_path)
         elif tool_name == "store":
             result = tool_store(
                 tool_input, cycle=self._cycle, bridge=self._bridge,
@@ -441,6 +455,20 @@ def _summarize(tool_name: str, result: dict) -> str:
         return f"walk: {len(result.get('path', []))} steps"
     if tool_name == "search_memory":
         return f"search_memory: {len(result.get('results', []))} results"
+    if tool_name == "recall_words":
+        status = result.get("status", "?")
+        prov = result.get("provenance") or {}
+        if status == "ok":
+            return f"recall_words: cycle {prov.get('cycle', '?')} line {prov.get('line', '?')}"
+        if status == "ambiguous":
+            return f"recall_words: ambiguous, {len(result.get('candidates', []))} candidates"
+        return f"recall_words: {status}"
+    if tool_name == "search_words":
+        return (
+            f"search_words: {result.get('records_matched', 0)}/"
+            f"{result.get('records_scanned', 0)} records, "
+            f"{result.get('matches_total', 0)} matches"
+        )
     if tool_name == "store":
         return f"store: record_id {result.get('record_id', '?')[:8]}"
     if tool_name == "annotate_edge":

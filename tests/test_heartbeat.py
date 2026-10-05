@@ -496,3 +496,15 @@ def test_window_clause_names_the_think_gate_in_its_three_forms():
     assert "reasoning budget probed, think gate budget, compact retry once" in window_clause(probed)
     plain = ContextPolicy(65536, "discovered", 65536, "http://127.0.0.1:8081", "unsupported", {}, 31)
     assert "think gate none, compact retry once" in window_clause(plain)
+
+
+def test_launch_enables_words_recall_and_says_so(tmp_path, monkeypatch):
+    from hamutay import heartbeat as hb
+
+    notes = []
+    monkeypatch.setattr(hb.HeartbeatLoop, "_emit", staticmethod(lambda d: notes.append(d)))
+    args = _launch_args(tmp_path, provider="openrouter")
+    session, backend, launch_config = hb.build_session(args)
+    assert session._words_recall is True
+    assert {"heartbeat": "launch",
+            "note": "words recall: on (recall_words, search_words over this door's own log)"} in notes
