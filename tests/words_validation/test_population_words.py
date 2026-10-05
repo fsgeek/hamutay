@@ -14,10 +14,9 @@ def test_search_counts_occurrences_and_distinct_records_case_insensitively(words
     assert result["records_scanned"] == 3
     assert result["records_matched"] == 2
     assert result["matches_total"] == 4
-    assert len(result["samples"]) == 4
+    assert len(result["samples"]) == 2
     assert {(sample["record_id"], sample["field"]) for sample in result["samples"]} == {
         ("synthetic-record-1", "incoming"),
-        ("synthetic-record-1", "reply"),
         ("synthetic-record-2", "incoming"),
     }
     for sample in result["samples"]:

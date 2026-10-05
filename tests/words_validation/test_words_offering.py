@@ -82,7 +82,7 @@ def test_memory_guidance_names_words_tools_only_when_offered(declare_quiet, asse
 def test_words_schemas_are_opt_in_and_describe_claims_and_own_log_scope(claim_notice):
     from hamutay.tools.schemas import RECALL_WORDS_SCHEMA, SEARCH_WORDS_SCHEMA, TOOL_SCHEMAS
 
-    defaults = {schema["name"] for schema in TOOL_SCHEMAS}
+    defaults = {schema["name"] for schema in TOOL_SCHEMAS.values()}
     assert not defaults & {"recall_words", "search_words"}
     for schema, name in [(RECALL_WORDS_SCHEMA, "recall_words"), (SEARCH_WORDS_SCHEMA, "search_words")]:
         assert schema["name"] == name
@@ -214,6 +214,10 @@ def test_heartbeat_prints_the_exact_words_recall_launch_note(tmp_path, monkeypat
     monkeypatch.setenv("ANTHROPIC_API_KEY", "synthetic-no-network-key")
 
     class StoppedLoop:
+        @staticmethod
+        def _emit(payload: dict) -> None:
+            print(json.dumps(payload, default=str), flush=True)
+
         def __init__(self, *a, **kw):
             pass
 
