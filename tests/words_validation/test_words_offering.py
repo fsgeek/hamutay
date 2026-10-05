@@ -165,6 +165,7 @@ def isolated_heartbeat_args(heartbeat, tmp_path):
         if name in path_destinations and getattr(args, name) is not None:
             setattr(args, name, Path(getattr(args, name)))
     args.provider = "anthropic"
+    args.wake_mode = "terminal"
     args.model = "synthetic-validator-model"
     args.words_recall = False  # Heartbeat must force this on for its doors.
     args.context_limit = 8192
