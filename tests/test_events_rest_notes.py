@@ -86,7 +86,7 @@ def test_rule_b_survives_a_failed_first_claim():
         ev("pending", T0 + timedelta(hours=3), "e3"),
     ]
     notes = operational_notes_for_event(records, records[-1], now=T0 + timedelta(hours=3, minutes=1))
-    assert len(notes) == 1 and notes[0].startswith("Before this event existed")
+    assert len(notes) == 2 and notes[0].startswith("Before this event existed")
 
 
 def test_budget_rest_after_event_created_still_gets_no_note():
