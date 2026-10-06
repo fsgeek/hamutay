@@ -1339,7 +1339,8 @@ def operational_notes_for_event(
     """
     created = _parse_iso_utc(event.get("created_at"))
     if created is None:
-        return []
+        # rules (a)/(b) need the event's age; rule (c) does not (failed-wake spec r2)
+        return failed_wake_notes(records, event)
     now = now.astimezone(timezone.utc) if now.tzinfo else now.replace(tzinfo=timezone.utc)
     statuses = [r for r in records if r.get("record_type") == "heartbeat_status"]
     episodes = _rest_episodes(statuses, now)
@@ -1419,6 +1420,73 @@ def operational_notes_for_event(
             note += f". This wake ends that quiet after {lasted}."
         else:
             note += ". This wake ends that quiet."
+        notes.append(note)
+    notes.extend(failed_wake_notes(records, event))
+    return notes
+
+
+FAILED_WAKE_NOTE_LIMIT = 5
+FAILED_WAKE_ERROR_CHARS = 300
+
+
+def failed_wake_notes(records: list[dict], event: dict) -> list[str]:
+    """Rule (c): every wake that failed since the last completed one, told to the
+    next wake (spec docs/superpowers/specs/2026-10-06-failed-wake-note-design.md).
+
+    At-least-once and self-clearing: once a wake completes, nothing before it
+    is selected. A fact, not advice -- the error is given as recorded.
+    """
+    last_completed = -1
+    for i, r in enumerate(records):
+        if r.get("record_type") == "event_status" and r.get("status") == "completed":
+            last_completed = i
+    failures = [
+        r for r in records[last_completed + 1:]
+        if r.get("record_type") == "event_status" and r.get("status") == "failed"
+    ]
+    if not failures:
+        return []
+    completed_runs = {
+        r.get("run_id") for r in records
+        if r.get("record_type") == "event_status" and r.get("status") == "completed"
+        and r.get("run_id") is not None
+    }
+    notes: list[str] = []
+    omitted = len(failures) - FAILED_WAKE_NOTE_LIMIT
+    if omitted > 0:
+        notes.append(
+            f"{omitted} earlier failed wake{'s' if omitted != 1 else ''} since your last "
+            "completed wake are not listed; the event log holds them."
+        )
+        failures = failures[-FAILED_WAKE_NOTE_LIMIT:]
+    for r in failures:
+        error = str(r.get("error") or "(no error text was recorded)")
+        if len(error) > FAILED_WAKE_ERROR_CHARS:
+            error = error[:FAILED_WAKE_ERROR_CHARS] + f"... [truncated; {len(error)} chars recorded]"
+        where = (
+            f"event {r.get('event_type') or 'unknown'} {r.get('event_id') or 'unknown'} "
+            f"(run {r.get('run_id') or 'unknown'})"
+        )
+        what = (
+            f"at {r.get('failed_at') or 'an unrecorded time'} with "
+            f"{r.get('error_type') or 'an unrecorded error type'}: {error}."
+        )
+        if r.get("run_id") is not None and r.get("run_id") in completed_runs:
+            # completed first, then a later step of the same run failed: its state WAS kept (spec r2)
+            note = (
+                f"A wake of yours completed and its state was kept, but a step after completion failed: "
+                f"{where} failed {what}"
+            )
+        else:
+            # The event record cannot say whether state was saved: exchange() saves state before
+            # some failures (e.g. an invalid continuation) and not before others (spec r3).
+            note = (
+                f"A wake of yours failed: it was running {where} and failed {what} "
+                "This record does not say whether that wake's state update was kept; some failures "
+                "happen before the state is saved and some after."
+            )
+        if r.get("event_id") is not None and r.get("event_id") == event.get("event_id"):
+            note += " This event is the same one, run again."
         notes.append(note)
     return notes
 
