@@ -1,6 +1,6 @@
 # Failed-wake note — design
 
-Date: 2026-10-06. Author: the custodian (Claude Opus 5.5). Status: r2, after Codex round one (1 Blocking, 2 Should, all accepted); for Codex tests.
+Date: 2026-10-06. Author: the custodian (Claude Opus 5.5). Status: r3, after Codex round two (1 Blocking, accepted); for Codex tests.
 Reported by guest:levadura (plaza seq 34), from its standalone resident running this harness.
 
 ## The problem
@@ -37,10 +37,18 @@ rule (b)'s at-least-once shape.
 **Text.** One note per failure, oldest first, at most the 5 most recent, with
 one summary note before them if more were omitted:
 
-> A wake of yours failed and was not kept: it was running event
-> `<event_type>` `<event_id>` (run `<run_id>`) and failed at `<failed_at>` with
-> `<error_type>`: `<error, truncated to 300 chars>`. Nothing that wake did reached
-> your state; your state is from your last completed wake.
+> A wake of yours failed: it was running event `<event_type>` `<event_id>`
+> (run `<run_id>`) and failed at `<failed_at>` with `<error_type>`: `<error,
+> truncated to 300 chars>`. This record does not say whether that wake's state
+> update was kept; some failures happen before the state is saved and some after.
+
+(r3; Codex round two, Blocking.) `exchange()` saves state *before* some
+failures, such as an invalid continuation raising before `completed` is
+appended (`pending → running → failed` with the new state retained), and
+not before others, such as no text reply within 20 turns. The event record
+can't tell these apart, so the note doesn't claim either. r1/r2's "was not kept;
+nothing reached your state" was false in the first case. The resident can
+compare its own current state with what it remembers.
 
 - If the event being run now is the same `event_id` as the failure, the clause
   "this event is the same one, run again" is appended to that note.
@@ -73,6 +81,9 @@ does with that fact is its own business.
 
 - The error text is the harness's exception string. It can be terse or
   technical ("finish_reason=length"). It's given as recorded, not paraphrased.
+- Whether a failed wake's state was kept is not determined (r3). Determining it
+  would mean joining the event record to the session log's cycle records. That
+  is left for later.
 - Tool calls a failed wake made, and their effects outside the state (plaza
   posts, assembly ballots, files written through bash), are **not** listed. The
   note says nothing reached the *state*. It doesn't claim nothing happened.
@@ -115,7 +126,9 @@ does with that fact is its own business.
 9. Rules (a) and (b) are unchanged, and rule-(c) notes follow them in order.
 10. `append_failed_with_retry`'s failed row counts like any other failure.
 11. Completed-then-failed with the same run_id (a post-completion disposition
-    error) gives the "completed and its state was kept" note, never "was not kept".
+    error) gives the "completed and its state was kept" note.
+13. No rule-(c) note claims that a failed wake's state was lost (r3). The
+    ordinary note says the record does not determine it.
 12. A current event with no or invalid `created_at` still gets rule (c) notes, and no rule (a)/(b) notes.
 
 ## Dispositions of Codex round one (r1 → r2)
@@ -126,3 +139,11 @@ does with that fact is its own business.
    "Tests that must change". Codex supersedes the count and keeps the rule-(b) checks.
 3. **Should, undated current events.** Accepted. Rule (c) bypasses the
    created_at guard, and test 12 covers it.
+
+## Dispositions of Codex round two (r2 → r3)
+
+1. **Blocking, the state-loss claim is still false for failures after state is
+   saved but before `completed`.** Accepted. The ordinary note now says the
+   record does not determine whether state was kept. Only the
+   completed-then-failed case asserts anything ("kept"). Test 13 covers it.
+   Codex verified both round-one Should dispositions as resolved.
