@@ -15,7 +15,7 @@ def test_server_registers_exactly_three_tools_and_fixes_the_label_at_build(house
     root, cfg, binding = house_guests
     server = build_server(root, "levadura")
     names = sorted(t.name for t in asyncio.run(server.list_tools()))
-    assert names == ["plaza_post", "plaza_read", "plaza_send"]
+    assert names == ["plaza_post", "plaza_read", "plaza_send", "plaza_status"]
     desc = {t.name: t.description for t in asyncio.run(server.list_tools())}
     assert "guest:levadura" in desc["plaza_send"] and "48" in desc["plaza_send"] and "token" in desc["plaza_send"].lower()
     assert "inclusive" in desc["plaza_read"]

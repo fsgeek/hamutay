@@ -62,12 +62,14 @@ def test_server_tools_cannot_choose_identity_and_restart_keeps_token(house_guest
     async def exercise():
         first = build_server(root, 'levadura')
         schemas = {tool.name: tool for tool in await first.list_tools()}
-        assert set(schemas) == {'plaza_read', 'plaza_post', 'plaza_send'}
+        assert set(schemas) == {'plaza_read', 'plaza_post', 'plaza_send', 'plaza_status'}
         for name, schema in schemas.items():
             fields = set(schema.inputSchema.get('properties', {}))
             assert not fields.intersection({'actor', 'label', 'guest', 'from', 'via', 'root', 'project_root', 'wake'})
-            if name != 'plaza_read':
+            if name in {'plaza_post', 'plaza_send'}:
                 assert 'key' in fields
+            elif name == 'plaza_status':
+                assert fields == set()
         await first.call_tool('plaza_post', {'text': 'after restart', 'key': 'persisted'})
         before = cfg.plaza.read_bytes()
         restarted = build_server(root, 'levadura')
