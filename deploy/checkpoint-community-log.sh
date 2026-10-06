@@ -65,7 +65,8 @@ names=("${doors[@]#community/}")
 # line as two individually coherent snapshots, never one cross-ledger instant.
 plaza_ledger="community/plaza/assembly.jsonl"
 plaza_log="community/plaza/plaza.jsonl"
-if [ -f "$plaza_ledger" ] || [ -f "$plaza_log" ]; then
+plaza_reads="community/plaza/reads.jsonl"     # the guest read log (cursor spec r3); absent => line unchanged
+if [ -f "$plaza_ledger" ] || [ -f "$plaza_log" ] || [ -f "$plaza_reads" ]; then
   line="$stamp"
   if [ -f "$plaza_ledger" ]; then
     plaza_lock="community/plaza/assembly.jsonl.lock"
@@ -78,6 +79,11 @@ if [ -f "$plaza_ledger" ] || [ -f "$plaza_log" ]; then
     snap="$snapdir/plaza.jsonl"
     flock "$plaza_log_lock" cp "$plaza_log" "$snap"           # scope 2: the plaza lock, on its own
     line+=" plaza.jsonl:$(sha256sum "$snap" | cut -d' ' -f1):$(stat -c%s "$snap")"
+  fi
+  if [ -f "$plaza_reads" ]; then
+    snap="$snapdir/reads.jsonl"
+    flock "community/plaza/reads.jsonl.lock" cp "$plaza_reads" "$snap"   # scope 3: the read-log lock, on its own
+    line+=" reads.jsonl:$(sha256sum "$snap" | cut -d' ' -f1):$(stat -c%s "$snap")"
   fi
   echo "$line" >> community/plaza/CHECKPOINTS.txt
   ledgers+=("community/plaza/CHECKPOINTS.txt"); names+=("plaza")

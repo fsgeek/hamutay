@@ -9,13 +9,22 @@ from .records import reduce, validate_plaza
 
 def read_rows(cfg, *, since_seq: int | None = None, through_seq: int | None = None,
               posts_only: bool = False, door: str | None = None, for_door: str | None = None) -> list[dict]:
-    """Message rows in seq order, each with `truth`; both bounds inclusive; empty is empty.
+    """Message rows in seq order, each with `truth`; both bounds inclusive; empty is empty."""
+    return read_snapshot(cfg, since_seq=since_seq, through_seq=through_seq, posts_only=posts_only,
+                         door=door, for_door=for_door)[0]
+
+
+def read_snapshot(cfg, *, since_seq: int | None = None, through_seq: int | None = None,
+                  posts_only: bool = False, door: str | None = None,
+                  for_door: str | None = None) -> tuple[list[dict], list[dict]]:
+    """(rows, every message) from ONE locked snapshot -- the rows read_rows returns, plus the full
+    message list the read cursor needs to merge ranges and compute coverage (cursor spec r3).
 
     No page or byte ceiling is promised (declared): a caller bounds its own read
     with `through_seq`. Raises LedgerUnavailable / LedgerMalformed as the CLI does.
     """
     if not cfg.plaza.exists():
-        return []
+        return [], []
     led = Ledger(cfg.plaza)
     with led.try_locked(PLAZA_LOCK_WINDOW_S):
         records = led.read_unlocked()
@@ -36,4 +45,4 @@ def read_rows(cfg, *, since_seq: int | None = None, through_seq: int | None = No
         row = dict(m)
         row["truth"] = v.delivery_truth(m["message_id"]) if m["delivery"] else {"state": "post"}
         out.append(row)
-    return out
+    return out, list(v.messages)
