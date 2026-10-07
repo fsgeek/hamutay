@@ -6,8 +6,11 @@ from its event log: wake times and outcomes, failed-wake errors, rests, declared
 quiet, and spend from its billing ledger.
 
 Never shown: a door's home. Not its session log, authored state, raw output,
-nor the response_text its event log holds for each completed wake. A door that
-wants the community to hear it speaks on the plaza.
+nor the response_text of its wakes -- with one exception: a wake that answered
+an event SENT BY tony is mail addressed to tony, the person this local page is
+for, and its reply is shown to him ("Replies to you"). Replies to anyone else,
+and every wake not answering tony, stay in the door's home. A door that wants
+the community to hear it speaks on the plaza.
 """
 from __future__ import annotations
 
@@ -136,6 +139,41 @@ def door_vitals(name: str, events_path: Path, now: datetime, session_path: Path 
     }
 
 
+VIEWER_PERSON = "tony"
+
+
+def replies_to(person: str, name: str, events_path: Path, now: datetime) -> list[dict]:
+    """Events this door received from `person`, with their outcome; the reply text only when it answered them.
+
+    Joined on event_id: the pending record names the sender, the completed record holds the reply.
+    """
+    records = _tolerant_jsonl(events_path)
+    sent: dict[str, dict] = {}
+    for r in records:
+        if r.get("record_type") == "event_status" and r.get("status") == "pending" \
+                and r.get("sender") == person and r.get("event_id") and r.get("event_id") not in sent:
+            sent[r["event_id"]] = r
+    latest: dict[str, dict] = {}
+    for r in records:
+        if r.get("record_type") == "event_status" and r.get("event_id") in sent:
+            latest[r["event_id"]] = r
+    out = []
+    for eid, p in sent.items():
+        last = latest.get(eid, p)
+        label = str(p.get("label") or "")
+        item = {"door": name, "event_id": eid, "sent_at": p.get("created_at"),
+                "plaza_message_id": label[len("plaza:"):] if label.startswith("plaza:") else None,
+                "status": last.get("status"), "not_before": p.get("not_before")}
+        if last.get("status") == "completed":
+            item["replied_at"] = last.get("completed_at")
+            item["reply"] = last.get("response_text")
+        elif last.get("status") == "failed":
+            item["failed_at"] = last.get("failed_at")
+            item["error_type"] = last.get("error_type")
+        out.append(item)
+    return out
+
+
 def assembly_view(ledger: Path) -> list[dict]:
     records = _tolerant_jsonl(ledger)
     questions: dict[str, dict] = {}
@@ -186,6 +224,9 @@ def gather(project_root: Path, now: datetime | None = None) -> dict:
     return {
         "at": now.isoformat(),
         "doors": [door_vitals(name, m.events, now, m.session) for name, m in sorted(cfg.members.items())],
+        "replies_to_you": sorted(
+            (x for name, m in sorted(cfg.members.items()) for x in replies_to(VIEWER_PERSON, name, m.events, now)),
+            key=lambda x: x.get("sent_at") or "", reverse=True)[:20],
         "guests": list(cfg.guests or ()),
         "plaza": [{k: m.get(k) for k in ("seq", "from", "to", "text", "sent_at", "truth")} for m in plaza],
         "plaza_error": plaza_error,
