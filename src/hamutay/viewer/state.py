@@ -16,7 +16,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from hamutay.assembly.binding import load_members
-from hamutay.plaza.read import read_rows
+from hamutay.events import quiet_declaration_for_latest_wake
+from hamutay.plaza.records import reduce
 
 WEEK = timedelta(days=7)
 EVENT_FIELDS = ("event_id", "event_type", "status", "run_id", "sender", "purpose",
@@ -25,11 +26,15 @@ EVENT_FIELDS = ("event_id", "event_type", "status", "run_id", "sender", "purpose
 
 
 def _tolerant_jsonl(path: Path) -> list[dict]:
-    """Every parseable line; a torn or malformed line is skipped (the viewer never repairs or fails)."""
+    """Every parseable, newline-terminated line. An unterminated final line is a torn append (the
+    project's ledger convention) even if it parses; a malformed line is skipped. Never repairs, locks or fails."""
     if not path.exists():
         return []
+    data = path.read_bytes()
+    lines = data.split(b"\n")
+    lines = lines[:-1]                     # the piece after the last newline: empty, or a torn append
     out = []
-    for raw in path.read_bytes().split(b"\n"):
+    for raw in lines:
         if not raw.strip():
             continue
         try:
@@ -51,7 +56,7 @@ def _instant(s) -> datetime | None:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
-def door_vitals(name: str, events_path: Path, now: datetime) -> dict:
+def door_vitals(name: str, events_path: Path, now: datetime, session_path: Path | None = None) -> dict:
     records = _tolerant_jsonl(events_path)
     statuses = [r for r in records if r.get("record_type") == "event_status"]
     latest_by_event: dict[str, dict] = {}
@@ -68,8 +73,12 @@ def door_vitals(name: str, events_path: Path, now: datetime) -> dict:
     week_ago = now - WEEK
     week = [r for r in outcomes if (_instant(r.get("completed_at") or r.get("failed_at")) or now) >= week_ago]
     heartbeat = [r for r in records if r.get("record_type") == "heartbeat_status"]
-    quiet = [r for r in records if r.get("record_type") == "quiet_declaration"]
-    billing = _tolerant_jsonl(Path(str(events_path).replace(".events.jsonl", ".billing.jsonl")))
+    # the quiet in force is the one the latest wake declared, if it completed (events.py's own join)
+    quiet = quiet_declaration_for_latest_wake(records)
+    # billing lives beside the session log (billing.py: <session>.billing.jsonl), whatever the events file is called
+    billing_path = (Path(str(session_path) + ".billing.jsonl") if session_path is not None
+                    else Path(str(events_path).replace(".events.jsonl", ".billing.jsonl")))
+    billing = _tolerant_jsonl(billing_path)
     spend: dict[str, float] = {}
     for b in billing:                                  # one row per generation id; later fetches win
         if isinstance(b.get("usage_usd"), (int, float)) and b.get("generation_id"):
@@ -86,7 +95,7 @@ def door_vitals(name: str, events_path: Path, now: datetime) -> dict:
         "week": {"completed": sum(1 for r in week if r["status"] == "completed"),
                  "failed": sum(1 for r in week if r["status"] == "failed"),
                  "spend_usd_reconciled": round(sum(spend.values()), 4)},
-        "quiet": ({k: quiet[-1].get(k) for k in ("reason", "until", "created_at", "declared_by_cycle")}
+        "quiet": ({k: quiet.get(k) for k in ("reason", "until", "created_at", "declared_by_cycle")}
                   if quiet else None),
     }
 
@@ -95,15 +104,20 @@ def assembly_view(ledger: Path) -> list[dict]:
     records = _tolerant_jsonl(ledger)
     questions: dict[str, dict] = {}
     order: list[str] = []
+    def add_question(r: dict, seq, convener) -> None:
+        qid = str(r.get("question_id"))
+        if qid in questions:
+            return
+        questions[qid] = {"question_id": qid, "lineage_id": r.get("lineage_id"), "seq": seq,
+                          "round": r.get("round"), "convener": r.get("convener") or convener,
+                          "text": r.get("text"), "opened_at": r.get("opened_at"), "closes_at": r.get("closes_at"),
+                          "positions": [], "testimony": [], "closing": None, "execution": None}
+        order.append(qid)
+
     for r in records:
         t = r.get("record_type")
         if t == "question":
-            qid = str(r.get("question_id"))
-            questions[qid] = {"question_id": qid, "lineage_id": r.get("lineage_id"), "seq": r.get("seq"),
-                              "round": r.get("round"), "convener": r.get("convener"), "text": r.get("text"),
-                              "opened_at": r.get("opened_at"), "closes_at": r.get("closes_at"),
-                              "positions": [], "testimony": [], "closing": None, "execution": None}
-            order.append(qid)
+            add_question(r, r.get("seq"), None)
         elif t in ("position", "testimony", "closing", "execution"):
             q = questions.get(str(r.get("question_id")))
             if q is None:
@@ -114,6 +128,9 @@ def assembly_view(ledger: Path) -> list[dict]:
                 q["testimony"].append({k: r.get(k) for k in ("by", "text", "created_at", "seq")})
             elif t == "closing":
                 q["closing"] = {k: r.get(k) for k in ("outcome", "closed_at", "closed_by", "absent", "seq")}
+                nxt = r.get("next_question")
+                if isinstance(nxt, dict) and nxt.get("question_id"):   # an extended question's next round
+                    add_question(nxt, r.get("seq"), q["convener"])
             else:
                 q["execution"] = {k: r.get(k) for k in ("by", "outcome", "what", "created_at", "seq")}
     return [questions[q] for q in reversed(order)]
@@ -127,12 +144,21 @@ def gather(project_root: Path, now: datetime | None = None) -> dict:
     plaza, plaza_error = [], None
     if cfg.plaza is not None:
         try:
-            plaza = read_rows(cfg)
+            # read lock-free and tolerant: the viewer takes no lock (a lock file is a write) and skips a
+            # malformed line rather than losing the whole plaza; the plaza's own readers stay strict
+            records = [r for r in _tolerant_jsonl(Path(cfg.plaza))
+                       if r.get("record_type") != "message"
+                       or (r.get("message_id") and r.get("idempotency_key") is not None)]
+            v = reduce(records)
+            for m in v.messages:
+                row = dict(m)
+                row["truth"] = v.delivery_truth(m["message_id"]) if m.get("delivery") else {"state": "post"}
+                plaza.append(row)
         except Exception as e:  # noqa: BLE001 -- shown on the page, never raised to the browser as a 500
-            plaza_error = f"{type(e).__name__}: {e}"
+            plaza, plaza_error = [], f"{type(e).__name__}: {e}"
     return {
         "at": now.isoformat(),
-        "doors": [door_vitals(name, m.events, now) for name, m in sorted(cfg.members.items())],
+        "doors": [door_vitals(name, m.events, now, m.session) for name, m in sorted(cfg.members.items())],
         "guests": list(cfg.guests or ()),
         "plaza": [{k: m.get(k) for k in ("seq", "from", "to", "text", "sent_at", "truth")} for m in plaza],
         "plaza_error": plaza_error,

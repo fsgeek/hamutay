@@ -47,6 +47,11 @@ h1 { font: 600 1.75rem/1.2 var(--voice); margin: 0; }
 .doorway dt { color: var(--muted); } .doorway.awake dt { color: inherit; opacity: .8; }
 .doorway dd { margin: 0; }
 .doorway .failed { color: var(--warn); font-weight: 700; }
+.doorway .failed-detail { font-size: .8rem; margin: 8px 0 0; color: var(--warn); overflow-wrap: anywhere; }
+.q details { margin-top: 8px; font-size: .9rem; }
+.q summary { cursor: pointer; color: var(--guest); }
+.q .full { white-space: pre-wrap; font: .9rem/1.55 var(--voice); margin: 8px 0; }
+.q .reason { margin: 2px 0 8px; color: var(--muted); white-space: pre-wrap; }
 
 .guests { margin: -16px 0 32px; color: var(--muted); max-width: 90ch; }
 .guests strong { color: var(--ink); }
@@ -137,6 +142,7 @@ function renderDoors(doors) {
         <dt>This week</dt><dd>${d.week.completed} woke${d.week.failed ? `, <span class="failed">${d.week.failed} failed</span>` : ""}</dd>
         <dt>Spent</dt><dd>${d.week.spend_usd_reconciled ? "$" + d.week.spend_usd_reconciled.toFixed(2) : "$0"} this week</dd>
       </dl>
+      ${lw && lw.status === "failed" ? `<p class="failed-detail">${esc(lw.error_type || "error")}: ${esc(lw.error || "")}</p>` : ""}
     </article>`;
   }).join("");
 }
@@ -168,10 +174,16 @@ function renderAssembly(qs) {
     const latest = {};
     for (const p of q.positions) latest[p.member] = p;
     const rows = Object.values(latest).map(p => `<li><span class="k-door">${esc(p.member)}</span><span>${esc(p.stance)}</span></li>`).join("");
+    const reasons = q.positions.map(p => `<p><strong class="k-door">${esc(p.member)}</strong> (${esc(p.stance)})</p><p class="reason">${esc(p.reasons)}</p>`).join("");
+    const testimony = q.testimony.map(t => `<p><strong>${esc(t.by)}</strong>, testimony</p><p class="reason">${esc(t.text)}</p>`).join("");
+    const exec = q.execution ? `<p><strong>${esc(q.execution.by)}</strong>, execution (${esc(q.execution.outcome)})</p><p class="reason">${esc(q.execution.what)}</p>` : "";
     return `<section class="q${open ? " open" : ""}">
       <p>${esc(first.length > 220 ? first.slice(0, 220) + "…" : first)}</p>
-      <div class="meta">${open ? `Open, closes ${ago(q.closes_at)}` : `Closed ${ago(q.closing.closed_at)}: ${esc(q.closing.outcome)}`}. Put by ${esc(q.convener)}, ledger seq ${q.seq}.</div>
+      <div class="meta">${open ? `Open, closes ${esc(ago(q.closes_at))}` : `Closed ${esc(ago(q.closing.closed_at))}: ${esc(q.closing.outcome)}`}. Put by ${esc(q.convener)}, ledger seq ${esc(q.seq)}${q.round > 1 ? `, round ${esc(q.round)}` : ""}.</div>
       ${rows ? `<ul class="stances">${rows}</ul>` : `<p class="empty">No positions yet.</p>`}
+      <details><summary>The whole question, reasons and testimony</summary>
+        <div class="full">${esc(q.text)}</div>${reasons}${testimony}${exec}
+      </details>
     </section>`;
   }).join("");
 }
