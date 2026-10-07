@@ -26,7 +26,7 @@ async function main() {
   vm.runInContext(scripts[0][1], context, {timeout: 2000});
   if (input.operation !== "refresh") {
     context.validationArgs = input.args;
-    if (!["renderPlaza", "renderAssembly", "renderDoors"].includes(input.operation)) {
+    if (!["renderPlaza", "renderAssembly", "renderDoors", "renderReplies"].includes(input.operation)) {
       throw new Error("Unknown rendering operation");
     }
     vm.runInContext(`${input.operation}(...validationArgs)`, context, {timeout: 2000});

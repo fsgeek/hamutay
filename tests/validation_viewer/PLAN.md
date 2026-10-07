@@ -22,3 +22,27 @@ without xfail or assertions that bless the current incorrect behavior.
 5. Run `PYTHONDONTWRITEBYTECODE=1 python -B -m pytest -p no:cacheprovider
    tests/validation_viewer -q` and report the actual failures with production
    file:line references. Add no production fixes and hide no failures.
+
+## Narrowed mail contract validation
+
+Use the writing-plans workflow within this existing validation package.
+Only a completed wake joined to Tony's pending event may expose its reply.
+All other wake response text remains private. Leave `src/` untouched and
+never run git; defects must fail normally, without xfail.
+
+- [x] Add `test_replies.py` using the existing temporary community, real HTTP
+  handler, and page script harness. Cover exact sender matching, pending to
+  completed joins without sender on outcomes, reflection/orphan responses,
+  failed/running states, recovery duplicates, conflicting duplicate senders,
+  and event IDs reused across doors.
+- [x] Exercise literal reply XSS, long replies, waiting status and current
+  timed quiet with the existing Node VM/HTML parser; extend only the harness
+  operation allowlist to call `renderReplies` directly.
+- [x] Run `uv run pytest tests/validation_viewer` and report Blocking/Should/Nit
+  findings with references and the actual pass/fail totals.
+
+Result: 102 passed, 6 failed. The failures expose the conflicting-pending
+privacy leak in state/HTTP/page (3), expired/suppressed status rendering (2),
+and shared-door event ID collisions in reply controls (1). The initial uv
+invocation could not write its default cache; the completed invocation used
+`UV_CACHE_DIR=/tmp/hamutay-viewer-uv-cache` with the requested pytest command.
