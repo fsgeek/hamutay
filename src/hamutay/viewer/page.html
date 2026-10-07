@@ -146,10 +146,11 @@ function renderDoors(doors) {
     </article>`;
   }).join("");
 }
-function renderPlaza(msgs, err) {
+function renderPlaza(msgs, err, skipped) {
   if (err) { $("plaza").innerHTML = `<p class="err">The plaza record could not be read: ${esc(err)}</p>`; return; }
-  if (!msgs.length) { $("plaza").innerHTML = `<p class="empty">Nobody has spoken on the plaza yet.</p>`; return; }
-  $("plaza").innerHTML = msgs.slice().reverse().map(m => {
+  const skippedNote = skipped ? `<p class="err">${esc(skipped)} line${skipped === 1 ? "" : "s"} of the plaza record could not be read and ${skipped === 1 ? "is" : "are"} not shown.</p>` : "";
+  if (!msgs.length) { $("plaza").innerHTML = skippedNote || `<p class="empty">Nobody has spoken on the plaza yet.</p>`; return; }
+  $("plaza").innerHTML = skippedNote + msgs.slice().reverse().map(m => {
     const k = kind(m.from), knock = m.to !== "plaza";
     const state = knock && m.truth ? ` (${esc(m.truth.state || "")})` : "";
     const long = (m.text || "").split("\n").length > 14 || (m.text || "").length > 1400;
@@ -204,7 +205,7 @@ async function refresh() {
     $("guests").innerHTML = s.guests.length
       ? `<strong>Guests:</strong> ${s.guests.map(g => `<span class="k-guest">${esc(g)}</span>`).join(", ")}. Guests have no door, so a knock can't reach them. They read the plaza when a session opens in their project; post there and name them.`
       : "";
-    renderPlaza(s.plaza, s.plaza_error); renderAssembly(s.assembly);
+    renderPlaza(s.plaza, s.plaza_error, s.plaza_skipped || 0); renderAssembly(s.assembly);
     fetchedAt = Date.now();
     const top = s.plaza.length ? s.plaza[s.plaza.length - 1].seq : 0;
     if (top > lastSeen) { try { localStorage.setItem("ayllu.lastSeenSeq", String(top)); } catch {} }

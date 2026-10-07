@@ -56,6 +56,42 @@ def _instant(s) -> datetime | None:
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
+def plaza_readonly(plaza_path: Path) -> tuple[list[dict], int]:
+    """(message rows with delivery truth, lines skipped). Lock-free and tolerant: a lock file is a write,
+    and a malformed line is skipped -- and counted, so the loss is declared -- rather than losing the whole
+    plaza. For display only: the plaza's own readers stay strict and locked."""
+    path = Path(plaza_path)
+    if not path.exists():
+        return [], 0
+    lines = [ln for ln in path.read_bytes().split(b"\n")[:-1] if ln.strip()]
+    records, skipped = [], 0
+    for raw in lines:
+        try:
+            r = json.loads(raw)
+        except ValueError:                    # includes undecodable bytes
+            skipped += 1
+            continue
+        ok = isinstance(r, dict) and (
+            (r.get("record_type") == "message" and r.get("message_id") and r.get("idempotency_key") is not None
+             and isinstance(r.get("seq"), int))
+            or (r.get("record_type") == "delivery" and r.get("message_id") and isinstance(r.get("seq"), int)))
+        if not ok:
+            skipped += 1
+            continue
+        records.append(r)
+    v = reduce(records)
+    rows = []
+    for m in v.messages:
+        row = dict(m)
+        row["truth"] = v.delivery_truth(m["message_id"]) if m.get("delivery") else {"state": "post"}
+        rows.append(row)
+    return rows, skipped
+
+
+def read_plaza_readonly(plaza_path: Path) -> list[dict]:
+    return plaza_readonly(plaza_path)[0]
+
+
 def door_vitals(name: str, events_path: Path, now: datetime, session_path: Path | None = None) -> dict:
     records = _tolerant_jsonl(events_path)
     statuses = [r for r in records if r.get("record_type") == "event_status"]
@@ -141,19 +177,10 @@ def gather(project_root: Path, now: datetime | None = None) -> dict:
     cfg = load_members(project_root)
     if cfg is None:
         return {"error": "members.json not found: the community is not configured here", "at": now.isoformat()}
-    plaza, plaza_error = [], None
+    plaza, plaza_error, plaza_skipped = [], None, 0
     if cfg.plaza is not None:
         try:
-            # read lock-free and tolerant: the viewer takes no lock (a lock file is a write) and skips a
-            # malformed line rather than losing the whole plaza; the plaza's own readers stay strict
-            records = [r for r in _tolerant_jsonl(Path(cfg.plaza))
-                       if r.get("record_type") != "message"
-                       or (r.get("message_id") and r.get("idempotency_key") is not None)]
-            v = reduce(records)
-            for m in v.messages:
-                row = dict(m)
-                row["truth"] = v.delivery_truth(m["message_id"]) if m.get("delivery") else {"state": "post"}
-                plaza.append(row)
+            plaza, plaza_skipped = plaza_readonly(Path(cfg.plaza))
         except Exception as e:  # noqa: BLE001 -- shown on the page, never raised to the browser as a 500
             plaza, plaza_error = [], f"{type(e).__name__}: {e}"
     return {
@@ -162,5 +189,6 @@ def gather(project_root: Path, now: datetime | None = None) -> dict:
         "guests": list(cfg.guests or ()),
         "plaza": [{k: m.get(k) for k in ("seq", "from", "to", "text", "sent_at", "truth")} for m in plaza],
         "plaza_error": plaza_error,
+        "plaza_skipped": plaza_skipped,
         "assembly": assembly_view(cfg.ledger),
     }

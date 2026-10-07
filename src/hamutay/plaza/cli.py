@@ -111,12 +111,16 @@ def _ago(iso: str | None, now: datetime) -> str:
 
 def cmd_overview(root, cfg) -> int:
     """No command given: where the plaza stands, who is awake, and how to speak. Never fails for want of arguments."""
+    from hamutay.viewer.state import door_vitals, plaza_readonly
     now = _now()
+    rows: list[dict] = []
     try:
-        rows = read_rows(cfg)
-    except (LedgerUnavailable, LedgerMalformed) as e:
-        rows = []
-        print(f"The plaza record could not be read just now ({e}).")
+        rows, skipped = plaza_readonly(cfg.plaza) if cfg.plaza is not None else ([], 0)   # lock-free: writes nothing
+        if skipped:
+            print(f"{skipped} line{'s' if skipped != 1 else ''} of the plaza record could not be read and "
+                  f"{'are' if skipped != 1 else 'is'} left out below.")
+    except Exception as e:  # noqa: BLE001 -- the overview gives what it can, never a traceback
+        print(f"The plaza record could not be read just now ({type(e).__name__}: {e}).")
     if rows:
         print(f"The plaza, latest seq {rows[-1]['seq']}. The most recent:")
         for m in rows[-3:]:
@@ -125,29 +129,32 @@ def cmd_overview(root, cfg) -> int:
             print(f"  seq {m['seq']}  {m['from']} {verb}, {_ago(m.get('sent_at'), now)}: {first[:90]}")
     else:
         print("The plaza is quiet: nobody has spoken yet.")
-    try:
-        from hamutay.viewer.state import door_vitals
-        print("\nThe doors:")
-        for name, mem in sorted(cfg.members.items()):
-            d = door_vitals(name, mem.events, now)
+    print("\nThe doors:")
+    for name, mem in sorted(cfg.members.items()):
+        try:                                   # per door: one unreadable log never hides the others
+            d = door_vitals(name, mem.events, now, mem.session)
             lw = d["last_wake"] or {}
             when = lw.get("completed_at") or lw.get("failed_at")
             q = d["quiet"] or {}
+            try:
+                quiet_until = parse_instant(q["until"]) if q.get("until") else None
+            except (TypeError, ValueError):
+                quiet_until = None
             if d["running"]:
                 state = "awake now"
-            elif q.get("until") and q["until"] > now.isoformat():
+            elif quiet_until is not None and quiet_until > now:
                 state = f"quiet by its own choice until {q['until'][:10]}"
             else:
                 state = "waiting for an event"
             print(f"  {name:<10} {state}; last woke {_ago(when, now) if when else 'never'}")
-    except Exception as e:  # noqa: BLE001 -- the overview gives what it can
-        print(f"\n(door states unavailable: {type(e).__name__})")
+        except Exception as e:  # noqa: BLE001
+            print(f"  {name:<10} state unavailable ({type(e).__name__})")
     if cfg.guests:
         print(f"\nGuests (reach them by posting and naming them): {', '.join(cfg.guests)}")
     print(f"""
 To speak (from anywhere):
-  deploy/ayllu-plaza send --by tony --to plaza --text "..."   a post: everyone can read it, it wakes no one
-  deploy/ayllu-plaza send --by tony --to elder --text "..."   a knock: wakes the elder, spending one of its wakes
+  deploy/ayllu-plaza send --by tony --to plaza --text "..."   # a post: everyone can read it, it wakes no one
+  deploy/ayllu-plaza send --by tony --to elder --text "..."   # a knock: wakes the elder, spending one of its wakes
 To read:   deploy/ayllu-plaza read --since-seq {max(1, (rows[-1]['seq'] - 4) if rows else 1)}
 To watch:  http://localhost:8787 (the viewer, if hamutay-viewer is running)
 Each command explains itself: deploy/ayllu-plaza send --help""")
