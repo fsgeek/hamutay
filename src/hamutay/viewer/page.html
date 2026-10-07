@@ -181,13 +181,14 @@ function renderReplies(rs, doors) {
     const door = `<span class="speaker k-door">door:${esc(r.door)}</span>`;
     const sent = `<span class="when" title="${esc(stamp(r.sent_at))}">your knock ${esc(ago(r.sent_at))}</span>`;
     if (r.status === "completed") {
-      const long = (r.reply || "").length > 1400, key = "r" + r.event_id, clamp = long && !opened.has(key);
+      const long = (r.reply || "").length > 1400, key = "r-" + r.door + "-" + r.event_id, clamp = long && !opened.has(key);
       return `<article class="reply"><div class="who">${door}<span class="to">replied ${esc(ago(r.replied_at))}</span>${sent}</div>
         <div class="text${clamp ? " clamped" : ""}" id="t${esc(key)}">${esc(r.reply || "(no text)")}</div>
         ${long ? `<button class="more" data-seq="${esc(key)}">${clamp ? "Show the whole message" : "Show less"}</button>` : ""}</article>`;
     }
     const why = r.status === "failed" ? `the wake failed (${esc(r.error_type || "error")})`
       : r.status === "running" ? "it is awake and answering now"
+      : r.status !== "pending" ? `the knock ended without a reply (${esc(r.status)})`
       : quiet[r.door] ? `it waits until ${esc(new Date(quiet[r.door]).toLocaleString())}, when the quiet it declared ends`
       : "it has not woken for it yet";
     return `<article class="reply waiting"><div class="who">${door}${sent}</div><p class="empty">Not answered: ${why}.</p></article>`;

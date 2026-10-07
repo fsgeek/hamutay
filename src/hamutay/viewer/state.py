@@ -148,22 +148,34 @@ def replies_to(person: str, name: str, events_path: Path, now: datetime) -> list
     Joined on event_id: the pending record names the sender, the completed record holds the reply.
     """
     records = _tolerant_jsonl(events_path)
-    sent: dict[str, dict] = {}
+    # Walk in append order. Each status after a pending belongs to THAT pending; a later pending for the
+    # same id (a retry, or another sender's) starts a new episode. Authorization follows the pending that
+    # produced the outcome, so a reply is shown only when the pending it answered was sent by `person`.
+    episodes: dict[str, list[dict]] = {}          # event_id -> [{"pending": rec, "last": rec}, ...]
     for r in records:
-        if r.get("record_type") == "event_status" and r.get("status") == "pending" \
-                and r.get("sender") == person and r.get("event_id") and r.get("event_id") not in sent:
-            sent[r["event_id"]] = r
-    latest: dict[str, dict] = {}
-    for r in records:
-        if r.get("record_type") == "event_status" and r.get("event_id") in sent:
-            latest[r["event_id"]] = r
+        if r.get("record_type") != "event_status" or not r.get("event_id"):
+            continue
+        eid = r["event_id"]
+        if r.get("status") == "pending":
+            eps = episodes.setdefault(eid, [])
+            if eps and eps[-1]["last"] is eps[-1]["pending"] and eps[-1]["pending"].get("sender") == r.get("sender"):
+                continue                           # an identical retry pending, nothing ran in between
+            eps.append({"pending": r, "last": r})
+        elif eid in episodes:
+            episodes[eid][-1]["last"] = r
     out = []
-    for eid, p in sent.items():
-        last = latest.get(eid, p)
-        label = str(p.get("label") or "")
-        item = {"door": name, "event_id": eid, "sent_at": p.get("created_at"),
+    for eid, eps in episodes.items():
+        mine = [e for e in eps if e["pending"].get("sender") == person]
+        if not mine:
+            continue
+        last = mine[-1]["last"]                    # the outcome, and the authorization, of the latest episode
+
+        def first(key):                            # the knock's own metadata: from its first pending onward
+            return next((e["pending"].get(key) for e in mine if e["pending"].get(key) is not None), None)
+        label = str(first("label") or "")
+        item = {"door": name, "event_id": eid, "sent_at": first("created_at"),
                 "plaza_message_id": label[len("plaza:"):] if label.startswith("plaza:") else None,
-                "status": last.get("status"), "not_before": p.get("not_before")}
+                "status": last.get("status"), "not_before": first("not_before")}
         if last.get("status") == "completed":
             item["replied_at"] = last.get("completed_at")
             item["reply"] = last.get("response_text")
