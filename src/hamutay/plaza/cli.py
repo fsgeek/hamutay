@@ -175,7 +175,8 @@ def main(argv=None) -> int:
     sub = p.add_subparsers(dest="cmd", metavar="{send,read,status,pass}")
     s = sub.add_parser("send", help="post to the plaza, or knock on one door",
                        description="Post to everyone (--to plaza; wakes no one) or knock on one door "
-                       "(--to elder; wakes it and spends one of its wakes, even through a quiet it declared).")
+                       "(--to elder; wakes it and spends one of its wakes -- unless the door declared a TIMED quiet, in which case "
+                       "the knock waits, pending, until that quiet ends).")
     s.add_argument("--by", type=_by, required=True, help="who is speaking: tony, custodian, or guest:<label>")
     s.add_argument("--to", required=True, help="plaza, or a door name (elder or door:elder)")
     body = s.add_mutually_exclusive_group(required=True)
