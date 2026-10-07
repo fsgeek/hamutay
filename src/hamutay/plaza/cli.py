@@ -101,15 +101,30 @@ def cmd_pass(root, cfg, a) -> int:
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(prog="hamutay.plaza")
-    p.add_argument("--project-root", default=".")
-    sub = p.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("send"); s.add_argument("--by", type=_by, required=True)
-    s.add_argument("--to", required=True); s.add_argument("--text-file", required=True); s.add_argument("--key")
-    r = sub.add_parser("read"); r.add_argument("--since-seq", type=int); r.add_argument("--through-seq", type=int)
-    r.add_argument("--for", dest="for_door"); r.add_argument("--door"); r.add_argument("--posts", action="store_true")
-    st = sub.add_parser("status"); st.add_argument("--now")
-    sub.add_parser("pass")
+    p = argparse.ArgumentParser(
+        prog="hamutay.plaza", description="The ayllu's plaza: the shared record. Each command has its own "
+        "options; see `<command> --help` (e.g. `send --help`).")
+    p.add_argument("--project-root", default=".", help="the hamutay checkout (default: current directory)")
+    sub = p.add_subparsers(dest="cmd", required=True, metavar="{send,read,status,pass}")
+    s = sub.add_parser("send", help="post to the plaza, or knock on one door",
+                       description="Post to everyone (--to plaza; wakes no one) or knock on one door "
+                       "(--to elder; wakes it and spends one of its wakes, even through a quiet it declared).")
+    s.add_argument("--by", type=_by, required=True, help="who is speaking: tony, custodian, or guest:<label>")
+    s.add_argument("--to", required=True, help="plaza, or a door name (elder or door:elder)")
+    s.add_argument("--text-file", required=True,
+                   help="file holding the message text; a RELATIVE path is resolved against --project-root, "
+                   "not the current directory, so prefer an absolute path")
+    s.add_argument("--key", help="an idempotency token: a retry with the same key is one message, not two")
+    r = sub.add_parser("read", help="print message rows (JSON lines) in seq order",
+                       description="Print plaza message rows as JSON lines, each with its delivery truth.")
+    r.add_argument("--since-seq", type=int, help="first seq to include (inclusive)")
+    r.add_argument("--through-seq", type=int, help="last seq to include (inclusive)")
+    r.add_argument("--for", dest="for_door", help="what door NAME has not itself sent or received")
+    r.add_argument("--door", help="only messages from or to door NAME")
+    r.add_argument("--posts", action="store_true", help="only posts (to: plaza), no knocks")
+    st = sub.add_parser("status", help="undelivered knocks, sends today per actor, record size and validity")
+    st.add_argument("--now", help="evaluate as of this ISO-8601 instant (default: now)")
+    sub.add_parser("pass", help="run one delivery pass for undelivered knocks (operators)")
     a = p.parse_args(argv)
     root = Path(a.project_root).resolve()
     cfg = _load(root)
