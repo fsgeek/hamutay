@@ -55,7 +55,8 @@ def _by(value: str) -> str:
 
 def cmd_send(root, cfg, a) -> int:
     try:
-        r = send(cfg, actor=a.by, via="cli", to=a.to, text=Path(root / a.text_file).read_text(), now=_now(), key=a.key)
+        text = a.text if a.text is not None else Path(root / a.text_file).read_text()
+        r = send(cfg, actor=a.by, via="cli", to=a.to, text=text, now=_now(), key=a.key)
     except (SendRefused, LedgerUnavailable, LedgerMalformed, ValueError) as e:
         print(f"send: {e}", file=sys.stderr); return 2
     print(json.dumps(r, indent=2)); return 0
@@ -94,6 +95,65 @@ def cmd_status(root, cfg, a) -> int:
     print(json.dumps(out, indent=2)); return 0 if valid is True else 1
 
 
+def _ago(iso: str | None, now: datetime) -> str:
+    try:
+        secs = (now - parse_instant(iso)).total_seconds()
+    except (TypeError, ValueError):
+        return "at an unknown time"
+    if secs < 90:
+        return "just now"
+    if secs < 5400:
+        return f"{round(secs / 60)} min ago"
+    if secs < 129600:
+        return f"{round(secs / 3600)} h ago"
+    return f"{round(secs / 86400)} days ago"
+
+
+def cmd_overview(root, cfg) -> int:
+    """No command given: where the plaza stands, who is awake, and how to speak. Never fails for want of arguments."""
+    now = _now()
+    try:
+        rows = read_rows(cfg)
+    except (LedgerUnavailable, LedgerMalformed) as e:
+        rows = []
+        print(f"The plaza record could not be read just now ({e}).")
+    if rows:
+        print(f"The plaza, latest seq {rows[-1]['seq']}. The most recent:")
+        for m in rows[-3:]:
+            first = (m.get("text") or "").strip().splitlines()[0] if (m.get("text") or "").strip() else ""
+            verb = "posted" if m["to"] == "plaza" else f"knocked on {m['to']}"
+            print(f"  seq {m['seq']}  {m['from']} {verb}, {_ago(m.get('sent_at'), now)}: {first[:90]}")
+    else:
+        print("The plaza is quiet: nobody has spoken yet.")
+    try:
+        from hamutay.viewer.state import door_vitals
+        print("\nThe doors:")
+        for name, mem in sorted(cfg.members.items()):
+            d = door_vitals(name, mem.events, now)
+            lw = d["last_wake"] or {}
+            when = lw.get("completed_at") or lw.get("failed_at")
+            q = d["quiet"] or {}
+            if d["running"]:
+                state = "awake now"
+            elif q.get("until") and q["until"] > now.isoformat():
+                state = f"quiet by its own choice until {q['until'][:10]}"
+            else:
+                state = "waiting for an event"
+            print(f"  {name:<10} {state}; last woke {_ago(when, now) if when else 'never'}")
+    except Exception as e:  # noqa: BLE001 -- the overview gives what it can
+        print(f"\n(door states unavailable: {type(e).__name__})")
+    if cfg.guests:
+        print(f"\nGuests (reach them by posting and naming them): {', '.join(cfg.guests)}")
+    print(f"""
+To speak (from anywhere):
+  deploy/ayllu-plaza send --by tony --to plaza --text "..."   a post: everyone can read it, it wakes no one
+  deploy/ayllu-plaza send --by tony --to elder --text "..."   a knock: wakes the elder, spending one of its wakes
+To read:   deploy/ayllu-plaza read --since-seq {max(1, (rows[-1]['seq'] - 4) if rows else 1)}
+To watch:  http://localhost:8787 (the viewer, if hamutay-viewer is running)
+Each command explains itself: deploy/ayllu-plaza send --help""")
+    return 0
+
+
 def cmd_pass(root, cfg, a) -> int:
     binding = AssemblyBinding(door="cli", ledger_path=cfg.ledger, members=cfg, project_root=root)
     out, _ = run_plaza_pass(binding, now=_now())
@@ -105,15 +165,17 @@ def main(argv=None) -> int:
         prog="hamutay.plaza", description="The ayllu's plaza: the shared record. Each command has its own "
         "options; see `<command> --help` (e.g. `send --help`).")
     p.add_argument("--project-root", default=".", help="the hamutay checkout (default: current directory)")
-    sub = p.add_subparsers(dest="cmd", required=True, metavar="{send,read,status,pass}")
+    sub = p.add_subparsers(dest="cmd", metavar="{send,read,status,pass}")
     s = sub.add_parser("send", help="post to the plaza, or knock on one door",
                        description="Post to everyone (--to plaza; wakes no one) or knock on one door "
                        "(--to elder; wakes it and spends one of its wakes, even through a quiet it declared).")
     s.add_argument("--by", type=_by, required=True, help="who is speaking: tony, custodian, or guest:<label>")
     s.add_argument("--to", required=True, help="plaza, or a door name (elder or door:elder)")
-    s.add_argument("--text-file", required=True,
-                   help="file holding the message text; a RELATIVE path is resolved against --project-root, "
-                   "not the current directory, so prefer an absolute path")
+    body = s.add_mutually_exclusive_group(required=True)
+    body.add_argument("--text", help='the message itself, e.g. --text "Good morning, elder."')
+    body.add_argument("--text-file",
+                      help="file holding the message text; a RELATIVE path is resolved against --project-root, "
+                      "not the current directory, so prefer an absolute path")
     s.add_argument("--key", help="an idempotency token: a retry with the same key is one message, not two")
     r = sub.add_parser("read", help="print message rows (JSON lines) in seq order",
                        description="Print plaza message rows as JSON lines, each with its delivery truth.")
@@ -130,6 +192,8 @@ def main(argv=None) -> int:
     cfg = _load(root)
     if cfg is None:
         return 2
+    if a.cmd is None:              # the smallest ayni (Mallku khipu 2025-06-03): give first, then show the way
+        return cmd_overview(root, cfg)
     fn = {"send": cmd_send, "read": cmd_read, "status": cmd_status, "pass": cmd_pass}[a.cmd]
     try:
         return fn(root, cfg, a)
