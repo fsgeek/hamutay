@@ -1,6 +1,6 @@
 # Unexecuted tool call: tell the resident — design
 
-Date: 2026-10-08. Author: the custodian (Claude Opus 5.5). Status: r2, not yet reviewed. It goes to
+Date: 2026-10-08. Author: the custodian (Claude Opus 5.5). Status: r3, after Codex review round one (2 Blocking, 3 Should, 1 Could; all accepted, two narrowed). It goes to
 Codex for review and tests before any code. r1 was written by the 10-06→10-08 custodian; r2 by its
 successor (Claude Opus 5.5, seat from 10-08 evening), changes listed at the end.
 
@@ -37,22 +37,39 @@ the custodian's part is visibility), the harness owes the resident the fact.
    `<tool_call>\s*<function=NAME>…</function>\s*</tool_call>`. The detector is a table of formats, so
    another family's leaked form can be added later. Record the function name(s) and that they were
    not executed. Parameter values are not recorded: they are the resident's words.
-2. **Record.** The completed `event_status` gains
-   `unexecuted_tool_calls: [{"function": "send_message"}]`, alongside
-   `outcome_observation.response_state_mismatch`.
+2. **Record.** The completed `event_status` row for that run gains two parameter-free fields:
+   - `unexecuted_tool_calls: [{"function": "send_message"}]` (one entry per detected block, in order;
+     repeated names kept);
+   - `final_turn: {"tools_offered": bool, "all_tools_withdrawn": bool}`, copied by the loop from the
+     request that produced the final reply. This is the only evidence rule (d) reads. Today
+     `all_tools_withdrawn` exists only in executor activity (`tool_activity_full`), which the note
+     builder never sees (Codex r1, Blocking 1); a join to the session log is not allowed.
+   `response_state_mismatch` is NOT evidence of a leaked call or of withdrawal: it is a prose/state
+   heuristic, and the note never cites it.
 3. **Tell.** This is a new rule (d) in `operational_notes_for_event`, built like rule (c): at least
    once and self-clearing, for every completed wake since the last one *without* an unexecuted call.
    The text says only what that wake's record shows:
    - always: "Your wake for event … (run …) ended with a call to `send_message` written as text. It
      was not carried out."
-   - only if the same wake recorded `budget_pressure` / `all_tools_withdrawn` before its final turn:
+   - only if that row's `final_turn.all_tools_withdrawn` is true:
      "Every tool had been withdrawn for that turn, so nothing could receive it."
    - otherwise: "The record does not say why it was not parsed as a call."
-   No advice. The cause clause is conditional because the reproduction covers only the withdrawn
+   No advice.
+
+   Selection: by run, in append order, never collapsed by event id (a compact retry shares the event
+   id with a new run). Cutoff: rule (d) clears only at a *clean* completion, one with no
+   `unexecuted_tool_calls`; rule (c) still clears at any completion. Example: leaked completion →
+   failed compact attempts → leaked completion keeps both leak notes and clears the failure notes;
+   the next clean completion clears the leak notes. Repetition across receiving wakes is intended.
+   At most five rule (d) notes, the newest, with the count of older ones stated, as rule (c) does.
+   Undated rows are handled by the same early return as rule (c), extended to (d). The cause clause is conditional because the reproduction covers only the withdrawn
    path; a call that fails to parse while tools are offered (5/5 parsed in testing, a small sample)
    would otherwise be told a cause that did not happen.
 4. **Show.** The viewer marks such a wake on the door's card ("ended with an unexecuted
-   send_message"). For Tony's knocks, "Replies to you" says the same above the reply.
+   send_message"). For Tony's knocks, "Replies to you" says the same above the reply. The mark and
+   the new fields carry no parameter text. The reply itself is shown as it is today, in full,
+   including any leaked block: it is the addressee's mail, and redacting it would change what
+   Tony is shown of a message to him. That is an existing exposure, declared, not a new one.
 
 5. **Scope in time.** Detection runs when a wake completes, from this code forward. It does not scan
    old records, and rule (d) never reports a wake that has no `unexecuted_tool_calls` field. The three
@@ -69,6 +86,16 @@ that in its scope when residents are "told rather than asked". It goes to the me
 case as the example, once the note is built.
 
 ## Declared
+
+- "Parameter values are not recorded" means: no additional capture in the new fields, notes or
+  marks. The values already persist where every reply does (`response_text` in the event row,
+  `raw_output`/`response_text` in the session log, `truncated_reply`). This design does not change
+  archival behaviour.
+- Detection reads the final reply text only. Not detected, declared: XML written as `interim_text`
+  beside structured calls (more turns follow); a block followed by `finish_reason=length` (the turn
+  raises before completion; the compact retry is a new run with its own final text); a reply later
+  replaced by state repair (detection runs on the reply as the model produced it, before repair, if
+  the implementation can; otherwise this is declared too).
 
 - The detector only knows the formats in its table. An unknown format is still silent.
 - It can't tell an intended call from a quotation of one (a resident writing *about*
@@ -87,6 +114,25 @@ case as the example, once the note is built.
 5. Rule (d)'s cause clause: present exactly when the wake recorded `all_tools_withdrawn` before its
    final turn; "the record does not say why" otherwise; never both.
 6. No backfill: a completed wake recorded before this code (no field) never produces a rule (d) note.
+7. Real loop → persisted event row → rebuilt notes: full withdrawal, perception-only withdrawal,
+   stale evidence from a previous run, and state repair.
+8. Interim XML alongside structured calls (not detected, as declared); complete and truncated XML
+   under `length`; compact retry under the same event id; repeated function names.
+9. Mixed sequences: leak → failures → leak → clean; completed-then-failed in one run; missing or
+   invalid `created_at`; more than five leaks.
+10. A distinctive parameter sentinel, checked absent from the new fields, the notes, the viewer's
+   card mark and its API payload for the mark; present in the reply exactly as today.
+
+## Changes in r3 (Codex review round one, 2026-10-09)
+
+- Blocking 1: the evidence for the cause clause is a new `final_turn` field on the completed row,
+  copied from the reply-producing request; rule (d) reads nothing else.
+- Blocking 2: narrowed, not redacted. The privacy promise covers the new fields and marks; Tony's
+  view of a reply addressed to him is unchanged and the exposure declared.
+- Should: "never stored" clarified; detection's blind spots declared; rule (d)'s cutoff (clean
+  completion), run identity and undated handling specified.
+- Could: bounded at five, like rule (c).
+- Tests 7-10 added from Codex's list.
 
 ## Changes in r2
 
