@@ -1,6 +1,6 @@
 # Unexecuted tool call: tell the resident — design
 
-Date: 2026-10-08. Author: the custodian (Claude Opus 5.5). Status: r4, after Codex review rounds one and two (round two: 1 Blocking, 1 Should on tests; both accepted). It goes to
+Date: 2026-10-08. Author: the custodian (Claude Opus 5.5). Status: r4 + interface, after Codex review rounds one and two (round two: 1 Blocking, 1 Should on tests; both accepted). It goes to
 Codex for review and tests before any code. r1 was written by the 10-06→10-08 custodian; r2 by its
 successor (Claude Opus 5.5, seat from 10-08 evening), changes listed at the end.
 
@@ -83,6 +83,34 @@ the custodian's part is visibility), the harness owes the resident the fact.
    earlier cases are history, not harness state: the 10-07 one was told to qwen on the plaza (seq 66);
    whether qwen is told of the 09-18 `schedule_event` and 09-29 `update_state` is a plaza matter,
    not this design's.
+
+## Interface (fixed before tests or code, so both are written against it)
+
+- `hamutay.tool_call_text.detect_unexecuted_tool_calls(text: str | None) -> list[dict]`: one
+  `{"function": NAME}` per complete block found, in order; `[]` for None, empty or malformed.
+- Session: `TasteOpenSession._last_natural_final_turn`, reset to `None` at the start of every
+  `exchange`, and set when the natural loop returns its final reply, BEFORE state repair, to
+  `{"text": str, "tools_offered": bool, "all_tools_withdrawn": bool}`. `tools_offered` is true iff
+  that accepted request carried a non-empty `tools` list; `all_tools_withdrawn` iff the loop had set
+  its all-withdrawn flag for it.
+- `events.run_next_event` (the path that calls `append_completed_atomic`) reads that attribute. When it is
+  a dict, the completed row gets `final_turn: {"tools_offered", "all_tools_withdrawn"}` and, when
+  detection on its `text` is non-empty, `unexecuted_tool_calls`. When it is None (non-natural paths),
+  neither field is written. `EventStore._build_completed` / `append_completed_atomic` gain keyword
+  arguments `final_turn=None, unexecuted_tool_calls=None`; absent or empty means not written.
+- `hamutay.events.unexecuted_call_notes(records: list[dict], event: dict) -> list[str]`, constant
+  `UNEXECUTED_CALL_NOTE_LIMIT = 5`. `operational_notes_for_event` appends its result after rule (c)
+  on both the dated and the undated path. Note text, per row, joining multiple names as
+  "`a`, `b`" and saying "a call"/"calls" accordingly:
+  "Your wake for event {event_type} {event_id} (run {run_id}) ended with a call to `{name}` written
+  as text. It was not carried out." + one of " Every tool had been withdrawn for that turn, so nothing
+  could receive it." / " The record does not say why it was not parsed as a call." Overflow line, first:
+  "{n} earlier wake(s) that ended with an unexecuted call since your last clean wake are not listed;
+  the event log holds them."
+- Viewer (`hamutay.viewer.state`): each wake dict in `door_vitals(...)["wakes"]` / `["last_wake"]`
+  carries `unexecuted_tool_calls: [names]` when the row has them (names only); each `replies_to`
+  item for a completed reply carries the same key. The page shows "ended with an unexecuted `NAME`"
+  on the card and above the reply.
 
 ## Not in this design (it belongs to the residents)
 
