@@ -524,6 +524,15 @@ class ExchangeResult:
 
 
 
+def _door_carrier(model) -> str | None:
+    """The session's model id as the plaza carrier, or None if it can't be one (carrier spec §3)."""
+    from hamutay.plaza.records import normalize_carrier
+    try:
+        return normalize_carrier(model)
+    except ValueError:
+        return None
+
+
 def _cost_usage_fields(result: "ExchangeResult") -> dict:
     """Cost fields for a cycle record's usage block.
 
@@ -3508,6 +3517,7 @@ class OpenTasteSession:
                 wake_context=wake_context if offer_assembly else None,
                 assembly=self._assembly if offer_assembly else None,
                 words_log_path=self._log_path if self._words_recall else None,
+                carrier=_door_carrier(self._model),
             )
             extra_tools = list(TOOL_SCHEMAS.values())
             if self._words_recall:

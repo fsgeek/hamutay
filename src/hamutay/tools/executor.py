@@ -87,8 +87,12 @@ class ToolExecutor:
         wake_context=None,
         assembly=None,
         words_log_path: str | None = None,
+        carrier: str | None = None,
     ):
         self._project_root = project_root
+        # The door's carrier on the plaza: the session's model id, from the
+        # framework, never from model input (plaza carrier spec §3).
+        self._carrier = carrier
         self._cycle = cycle
         self._session_start = session_start or datetime.now(timezone.utc)
         self._last_cycle_time = last_cycle_time
@@ -418,7 +422,7 @@ class ToolExecutor:
         try:
             return send(self._assembly.members, actor=f"door:{self._assembly.door}", via="tool",
                         to=str(tool_input.get("to", "")), text=str(tool_input.get("text", "")),
-                        now=datetime.now(timezone.utc), wake=wake)
+                        now=datetime.now(timezone.utc), wake=wake, carrier=self._carrier)
         except (SendRefused, LedgerUnavailable, LedgerMalformed, ValueError, TypeError) as e:
             return {"error": f"send_message: {e}"}
 

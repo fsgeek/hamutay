@@ -13,7 +13,7 @@ from . import store as _store
 from .event import inbound_event_for
 from .ids import (HUMANS, PLAZA_LOCK_WINDOW_S, canonical_to, cli_key, door_name, guest_key, guest_label,
                   is_door, is_guest, resident_key)
-from .records import (MAX_TEXT_CHARS, SEND_CAP, append_validated, build_delivery, build_message,
+from .records import (MAX_TEXT_CHARS, SEND_CAP, append_validated, build_delivery, build_message, normalize_carrier,
                       reduce, validate_plaza)
 
 
@@ -26,11 +26,24 @@ def _next_utc_midnight(now: datetime) -> datetime:
     return (u + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
 
 
+def carrier_gate(cfg: MembersConfig) -> Path:
+    """While this file is absent no writer emits `carrier` (spec Rollout: every strict reader must accept
+    the field before any record carries it). Deleting it is the removal path (plaza seq 37)."""
+    return Path(cfg.plaza).parent / "carrier.enabled"
+
+
 def send(cfg: MembersConfig, *, actor: str, via: str, to: str, text: str, now: datetime,
          wake: dict | None = None, key: str | None = None, land=_store.land,
-         quiet=_store.recipient_quiet_until) -> dict:
+         quiet=_store.recipient_quiet_until, carrier: str | None = None) -> dict:
     if cfg.plaza is None:
         raise SendRefused("the plaza is not enabled for this house")
+    if carrier is not None:
+        try:
+            carrier = normalize_carrier(carrier)
+        except ValueError as e:
+            if via != "tool":
+                raise SendRefused(str(e))       # before any read: a bad value never gets a duplicate receipt
+            carrier = None                      # a door didn't choose its carrier; send without it
     if now.tzinfo is None:
         raise ValueError("now must be timezone-bearing")
     if via == "tool":
@@ -96,8 +109,9 @@ def send(cfg: MembersConfig, *, actor: str, via: str, to: str, text: str, now: d
             member = cfg.members[door_name(to)]
             delivery = {"door": member.name, "events_path": str(member.events), "event_id": None,
                         "members_digest": cfg.digest}
+        emit = carrier if (carrier is not None and carrier_gate(cfg).exists()) else None
         msg = build_message(actor=actor, via=via, to=to, text=text, sent_at=sent_at, idempotency_key=idem,
-                            delivery=delivery, wake=wake)
+                            delivery=delivery, wake=wake, carrier=emit)
         msg = append_validated(ledger, records, lines, {**msg, "created_at": sent_at})
         out = {"sent": True, "message_id": msg["message_id"], "seq": msg["seq"], "to": to, "delivery": "post"}
         if delivery is None:

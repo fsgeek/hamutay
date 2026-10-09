@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -uo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"; rc=0; PHASE_ONE=0; GUESTS_READY=0; MERGE="${PLAZA_MERGE:-}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"; rc=0; PHASE_ONE=0; GUESTS_READY=0; CARRIER_READY=0; MERGE="${PLAZA_MERGE:-}"
 while [ $# -gt 0 ]; do case "$1" in --phase-one) PHASE_ONE=1; shift;; --guests-ready) GUESTS_READY=1; shift;;
+  --carrier-ready) CARRIER_READY=1; shift;;
   --merge) MERGE="$2"; shift 2;; *) echo "check-plaza: unknown flag $1"; exit 2;; esac; done
 chk() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; rc=1; fi; }
 inv_note() { local inv; inv=$(systemctl --user show -p InvocationID --value "hamutay-heartbeat@$1"); [ -n "$inv" ] && journalctl --user -u "hamutay-heartbeat@$1" _SYSTEMD_INVOCATION_ID="$inv" --no-pager 2>/dev/null | grep -o "$2" | tail -1; }
@@ -23,6 +24,28 @@ if [ "$PHASE_ONE" -eq 0 ]; then
   else
     for d in heartbeat fable elder qwen; do chk "unit $d guests $n" "[ -n \"\$(inv_note $d 'guests $n\\b')\" ]"; done
   fi
+fi
+if [ "$CARRIER_READY" -eq 1 ]; then
+  # Carrier rollout (spec 2026-10-09-plaza-carrier-field-design.md): before the gate file is created, every
+  # running guest MCP plaza server must have started after the Phase A merge -- it imports this checkout
+  # at start, so an older one would reject a carrier record and fail closed. Guests restart their own.
+  merge_ct=$(git show -s --format=%ct "$MERGE" 2>/dev/null)
+  if [ -z "$merge_ct" ]; then
+    echo "FAIL carrier-ready: merge $MERGE not found"; rc=1
+  else
+    old=""
+    while read -r pid; do
+      [ -n "$pid" ] || continue
+      started=$(date -d "$(ps -o lstart= -p "$pid" 2>/dev/null)" +%s 2>/dev/null) || continue
+      if [ "$started" -lt "$merge_ct" ]; then
+        label=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -o -- '--guest [^ ]*' | awk '{print $2}')
+        old="$old ${label:-unknown}(pid $pid, since $(date -u -d @"$started" +%Y-%m-%dT%H:%MZ))"
+      fi
+    done < <(pgrep -f '[h]amutay\.plaza\.mcp')
+    chk "carrier-ready: no guest plaza server older than $MERGE${old:+ -- still running:$old}" "[ -z \"$old\" ]"
+  fi
+  chk "carrier gate is gitignored" "grep -q '^community/plaza/carrier.enabled$' .gitignore"
+  if [ -e community/plaza/carrier.enabled ]; then echo "info carrier gate: present (writers emit)"; else echo "info carrier gate: absent (writers do not emit)"; fi
 fi
 chk "gitignore rules" "grep -q '^community/plaza/plaza.jsonl$' .gitignore && grep -q 'community/plaza/plaza.jsonl.lock' .gitignore"
 chk "checkpoint names both plaza locks" "grep -q assembly.jsonl.lock deploy/checkpoint-community-log.sh && grep -q plaza.jsonl.lock deploy/checkpoint-community-log.sh"
