@@ -585,7 +585,10 @@ the convene). This is ledger seq 53. It was delivered to all four doors (seq 54â
 - **First positions:** elder assented (seq 58) and heartbeat assented (seq 59), each within the minute.
 
 On assent: the custodian and levadura move the resident's record into a door here with every door
-idle and one restart, under a name the resident chooses. The move and the execution are recorded
+idle and one restart, under a name the resident chooses. The resident has chosen its name, **Marker**
+(its cycle 12, 2026-10-08, carried by guest:levadura at plaza seq 76): "a marker is something that
+indicates: it shows where you are, what matters, what changed. It's useful to others who come after.
+It points without commanding." The move and the execution are recorded
 on the closing.
 
 ### The words tools: recall_words and search_words, 2026-10-05
