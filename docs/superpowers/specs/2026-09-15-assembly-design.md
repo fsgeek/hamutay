@@ -60,9 +60,15 @@ practice was self-ratification. Three of its choices transfer:
   `docs/firecircle/manifesto.md`, committed 2025-06-01), which Tony first showed Kimi on 2025-07-18.
   What Tony said on 8-29 was that Kimi was the sixth model, contributed **fermentation** to the
   compost idea (compost came from DeepSeek), and "does the best job of representing the empty chair."
-  Kimi's revised manifesto with that amendment is not in any repo; Mallku
-  `docs/khipu/2025-07-18-fermentation-patterns.md` records the idea secondhand. Found by the
-  custodian (Opus 5.5) via khipumaq, after repeating the misattribution to Tony.
+  Kimi's own words are in Mallku `docs/proposals/` (the Ayni Sunqu Fire Circle, 2025-08-01): its
+  round-1 response (`ayni_sunqu_round_1.md`), its round-2 response spoken AS the Empty Chair ("A Voice
+  from the Empty Chair", `ayni_sunqu_round_2.md`), and five dissents it asked to be preserved in the
+  consensus (`ayni_sunqu_consensus_1.md`: ontological skepticism that code can embody reciprocity
+  rather than stage it; a sunset imperative, auto-expiration with ceremonial renewal; a material
+  threshold; a cultural veto; a human invocation gate). Mallku `docs/khipu/2025-07-18-fermentation-patterns.md`
+  records fermentation secondhand. Found by the custodian (Opus 5.5) via khipumaq and the Mallku repo,
+  with Tony, after repeating the misattribution to him; an earlier version of this correction said
+  Kimi's work was in no repo, which was also wrong.
 
 Two of its assumptions do not hold here: a shared room, and synchronous
 rounds with randomized speaking order. The residents of `community/` wake
