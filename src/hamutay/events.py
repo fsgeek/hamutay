@@ -764,6 +764,8 @@ class EventStore:
         wake_validation: dict | None = None,
         auto_continuation_event: dict | None = None,
         admission: dict | None = None,
+        final_turn: dict | None = None,
+        unexecuted_tool_calls: list[dict] | None = None,
     ) -> dict:
         record = {
             "record_type": "event_status",
@@ -784,6 +786,16 @@ class EventStore:
             record["wake_validation"] = wake_validation
         if admission is not None:
             record["admission"] = admission
+        if final_turn:
+            record["final_turn"] = {
+                "tools_offered": bool(final_turn.get("tools_offered")),
+                "all_tools_withdrawn": bool(final_turn.get("all_tools_withdrawn")),
+            }
+        if unexecuted_tool_calls:
+            # names only: parameter values are the resident's words (spec §1)
+            record["unexecuted_tool_calls"] = [
+                {"function": str(c.get("function"))} for c in unexecuted_tool_calls
+            ]
         if auto_continuation_event is not None:
             record["auto_continuation_appended"] = True
             record["auto_continuation_event_id"] = (
@@ -1339,8 +1351,8 @@ def operational_notes_for_event(
     """
     created = _parse_iso_utc(event.get("created_at"))
     if created is None:
-        # rules (a)/(b) need the event's age; rule (c) does not (failed-wake spec r2)
-        return failed_wake_notes(records, event)
+        # rules (a)/(b) need the event's age; rules (c) and (d) do not (failed-wake spec r2)
+        return failed_wake_notes(records, event) + unexecuted_call_notes(records, event)
     now = now.astimezone(timezone.utc) if now.tzinfo else now.replace(tzinfo=timezone.utc)
     statuses = [r for r in records if r.get("record_type") == "heartbeat_status"]
     episodes = _rest_episodes(statuses, now)
@@ -1422,6 +1434,7 @@ def operational_notes_for_event(
             note += ". This wake ends that quiet."
         notes.append(note)
     notes.extend(failed_wake_notes(records, event))
+    notes.extend(unexecuted_call_notes(records, event))
     return notes
 
 
@@ -1489,6 +1502,75 @@ def failed_wake_notes(records: list[dict], event: dict) -> list[str]:
             note += " This event is the same one, run again."
         notes.append(note)
     return notes
+
+
+UNEXECUTED_CALL_NOTE_LIMIT = 5
+
+
+def unexecuted_call_notes(records: list[dict], event: dict) -> list[str]:
+    """Rule (d): every completed wake that ended with a tool call written as text,
+    since the last clean completion, told to the next wake (spec
+    docs/superpowers/specs/2026-10-08-unexecuted-tool-call-note-design.md).
+
+    At-least-once and self-clearing at a CLEAN completion only (one with no
+    `unexecuted_tool_calls`); rule (c) clears at any completion. Selected by
+    row in append order, never collapsed by event id. The cause clause comes
+    only from that row's own `final_turn`.
+    """
+    completed = [
+        r for r in records
+        if r.get("record_type") == "event_status" and r.get("status") == "completed"
+    ]
+    leaks: list[dict] = []
+    for r in completed:
+        if r.get("unexecuted_tool_calls"):
+            leaks.append(r)
+        else:
+            leaks = []
+    if not leaks:
+        return []
+    notes: list[str] = []
+    omitted = len(leaks) - UNEXECUTED_CALL_NOTE_LIMIT
+    if omitted > 0:
+        notes.append(
+            f"{omitted} earlier wake{'s' if omitted != 1 else ''} that ended with an unexecuted "
+            "call since your last clean wake are not listed; the event log holds them."
+        )
+        leaks = leaks[-UNEXECUTED_CALL_NOTE_LIMIT:]
+    for r in leaks:
+        names = [str(c.get("function")) for c in r["unexecuted_tool_calls"]]
+        named = ", ".join(f"`{n}`" for n in names)
+        what = f"a call to {named}" if len(names) == 1 else f"calls to {named}"
+        note = (
+            f"Your wake for event {r.get('event_type') or 'unknown'} {r.get('event_id') or 'unknown'} "
+            f"(run {r.get('run_id') or 'unknown'}) ended with {what} written as text. "
+            f"{'It was' if len(names) == 1 else 'They were'} not carried out."
+        )
+        if (r.get("final_turn") or {}).get("all_tools_withdrawn") is True:
+            note += " Every tool had been withdrawn for that turn, so nothing could receive it."
+        else:
+            note += " The record does not say why it was not parsed as a call."
+        notes.append(note)
+    return notes
+
+
+def _final_turn_fields(final_turn) -> dict:
+    """The completed row's evidence from the natural loop's pre-repair reply.
+
+    Nothing when the wake was not a natural one (no dict): neither field is written.
+    """
+    if not isinstance(final_turn, dict):
+        return {}
+    from hamutay.tool_call_text import detect_unexecuted_tool_calls
+
+    fields: dict = {"final_turn": {
+        "tools_offered": bool(final_turn.get("tools_offered")),
+        "all_tools_withdrawn": bool(final_turn.get("all_tools_withdrawn")),
+    }}
+    calls = detect_unexecuted_tool_calls(final_turn.get("text"))
+    if calls:
+        fields["unexecuted_tool_calls"] = calls
+    return fields
 
 
 def build_event_envelope(
@@ -2511,6 +2593,7 @@ def run_next_event(
             wake_validation=wake_validation,
             auto_continuation_event=auto_continuation_event,
             admission=getattr(session, "_last_admission", None),
+            **_final_turn_fields(getattr(session, "_last_natural_final_turn", None)),
         )
         if auto_continuation_event is not None:
             completed["auto_continuation_event"] = auto_continuation_event

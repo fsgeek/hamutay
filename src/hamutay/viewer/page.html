@@ -134,6 +134,9 @@ function doorState(d) {
   if (st && st.status === "resting") return [`Resting (${(st.reason || "").replaceAll("_", " ")})`, false];
   return ["Waiting for an event", false];
 }
+function unexecuted(names) {           // a call the wake wrote as text, which nothing carried out
+  return "ended with an unexecuted " + names.map(n => "<code>" + esc(n) + "</code>").join(", ");
+}
 function renderDoors(doors) {
   $("doors").innerHTML = doors.map(d => {
     const [label, awake] = doorState(d);
@@ -149,6 +152,7 @@ function renderDoors(doors) {
         <dt>Spent</dt><dd>${d.week.spend_usd_reconciled ? "$" + d.week.spend_usd_reconciled.toFixed(2) : "$0"} this week</dd>
       </dl>
       ${lw && lw.status === "failed" ? `<p class="failed-detail">${esc(lw.error_type || "error")}: ${esc(lw.error || "")}</p>` : ""}
+      ${lw && lw.unexecuted_tool_calls ? `<p class="failed-detail">${unexecuted(lw.unexecuted_tool_calls)}</p>` : ""}
     </article>`;
   }).join("");
 }
@@ -183,6 +187,7 @@ function renderReplies(rs, doors) {
     if (r.status === "completed") {
       const long = (r.reply || "").length > 1400, key = "r-" + r.door + "-" + r.event_id, clamp = long && !opened.has(key);
       return `<article class="reply"><div class="who">${door}<span class="to">replied ${esc(ago(r.replied_at))}</span>${sent}</div>
+        ${r.unexecuted_tool_calls ? `<p class="failed-detail">${unexecuted(r.unexecuted_tool_calls)}</p>` : ""}
         <div class="text${clamp ? " clamped" : ""}" id="t${esc(key)}">${esc(r.reply || "(no text)")}</div>
         ${long ? `<button class="more" data-seq="${esc(key)}">${clamp ? "Show the whole message" : "Show less"}</button>` : ""}</article>`;
     }
