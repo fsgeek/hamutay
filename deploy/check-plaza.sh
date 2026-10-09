@@ -31,7 +31,9 @@ if [ "$CARRIER_READY" -eq 1 ]; then
   # carrier record and fail closed. The doors' launch notes are checked above (--merge). Guests restart
   # their own servers.
   # Launch-time evidence only: each server proves what it accepts by its reader record (spec r4).
-  unready=$(uv run python -c 'import pathlib; from hamutay.plaza.mcp import carrier_unready; print("; ".join(carrier_unready(pathlib.Path("."))))' 2>/dev/null) || unready="the check itself failed to run"
+  errf=$(mktemp); trap 'rm -f "$errf"' EXIT
+  unready=$(uv run python -c 'import pathlib; from hamutay.plaza.mcp import carrier_unready; print("; ".join(carrier_unready(pathlib.Path("."))))' 2>"$errf") \
+    || unready="the readiness check itself failed: $(grep -v VIRTUAL_ENV "$errf" | tail -1)"
   chk "carrier-ready: every guest plaza server accepts carrier${unready:+ -- not ready: $unready}" "[ -z \"$unready\" ]"
   chk "reader records are gitignored" "grep -q '^community/plaza/readers/$' .gitignore"
   chk "carrier gate is gitignored" "grep -q '^community/plaza/carrier.enabled$' .gitignore"

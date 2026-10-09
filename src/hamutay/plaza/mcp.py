@@ -241,5 +241,5 @@ def carrier_unready(root: Path, proc: Path = Path("/proc"), boot_id: Path = BOOT
         except (OSError, ValueError) as e:
             why = f"unreadable reader record ({type(e).__name__})"
         if why:
-            unready.append(f"guest:{label} pid {pid}: {why}")
+            unready.append(f"guest:{label} pid {pid} (start {start} ticks after boot): {why}")
     return unready
