@@ -108,8 +108,9 @@ the custodian's part is visibility), the harness owes the resident the fact.
   "Your wake for event {event_type} {event_id} (run {run_id}) ended with a call to `{name}` written
   as text. It was not carried out." + one of " Every tool had been withdrawn for that turn, so nothing
   could receive it." / " The record does not say why it was not parsed as a call." Overflow line, first:
-  "{n} earlier wake(s) that ended with an unexecuted call since your last clean wake are not listed;
-  the event log holds them."
+  "{n} earlier wake that ended with an unexecuted call since your last clean wake is not listed;
+  the event log holds them." for n = 1, and "{n} earlier wakes … are not listed; …" otherwise (r5:
+  "wake(s)" in r4 was notation, not literal text).
 - Viewer (`hamutay.viewer.state`): each wake dict in `door_vitals(...)["wakes"]` / `["last_wake"]`
   carries `unexecuted_tool_calls: [names]` when the row has them (names only); each `replies_to`
   item for a completed reply carries the same key. The page shows "ended with an unexecuted `NAME`"
