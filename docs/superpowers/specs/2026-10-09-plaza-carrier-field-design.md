@@ -98,6 +98,10 @@ delivery passes and wake notes (plaza spec Invariant 10, fail closed). So:
 - **Removal (seq 37).** Delete the gate file. Writers stop emitting; the validator keeps accepting
   records that have the field, because they are history.
 
+Declared (Codex r5, Should): the census sees the processes this Unix account can list in /proc. A
+plaza server run under another account, or hidden by a `hidepid` mount, is invisible to it. Every guest
+server today runs as this account; a guest that runs one elsewhere takes on telling the custodian.
+
 ## Trust (unchanged from the plaza design's qualification)
 
 The carrier is as trustworthy as the record's `via`, no more. Identity comes from the transport: a
