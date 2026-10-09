@@ -123,6 +123,9 @@ tamper-proof (docs/superpowers/specs/2026-09-16-plaza-design.md, "Trust model, s
 - Viewer: each plaza message dict from `gather()` carries `carrier` when the record has it.
 - `hamutay.plaza.mcp.write_reader_record(root: Path, label: str) -> Path | None`, called by `main()`
   before `run()`; `READERS_DIR = "community/plaza/readers"`.
+- `hamutay.plaza.mcp.carrier_unready(root: Path, proc: Path = Path("/proc"), boot_id: Path =
+  Path("/proc/sys/kernel/random/boot_id")) -> list[str]`: one line per server not ready, empty when
+  ready; `check-plaza.sh --carrier-ready` fails when it returns anything or cannot run.
 - `deploy/check-plaza.sh --carrier-ready --merge SHA` as in Rollout; `.gitignore` gains
   `community/plaza/carrier.enabled` and `community/plaza/readers/`.
 
