@@ -1,7 +1,8 @@
 # Unexecuted tool call: tell the resident — design
 
-Date: 2026-10-08. Author: the custodian (Claude Opus 5.5). Status: r1, not yet reviewed. It goes to
-Codex for review and tests before any code. The custodian who wrote this may hand it on.
+Date: 2026-10-08. Author: the custodian (Claude Opus 5.5). Status: r2, not yet reviewed. It goes to
+Codex for review and tests before any code. r1 was written by the 10-06→10-08 custodian; r2 by its
+successor (Claude Opus 5.5, seat from 10-08 evening), changes listed at the end.
 
 ## The problem (found 2026-10-07/08; evidence is in this session's commits)
 
@@ -41,10 +42,23 @@ the custodian's part is visibility), the harness owes the resident the fact.
    `outcome_observation.response_state_mismatch`.
 3. **Tell.** This is a new rule (d) in `operational_notes_for_event`, built like rule (c): at least
    once and self-clearing, for every completed wake since the last one *without* an unexecuted call.
-   The text: "Your wake for event … (run …) ended with a call to `send_message` written as text. It
-   was not carried out: tools had been withdrawn for that turn, so nothing received it." No advice.
+   The text says only what that wake's record shows:
+   - always: "Your wake for event … (run …) ended with a call to `send_message` written as text. It
+     was not carried out."
+   - only if the same wake recorded `budget_pressure` / `all_tools_withdrawn` before its final turn:
+     "Every tool had been withdrawn for that turn, so nothing could receive it."
+   - otherwise: "The record does not say why it was not parsed as a call."
+   No advice. The cause clause is conditional because the reproduction covers only the withdrawn
+   path; a call that fails to parse while tools are offered (5/5 parsed in testing, a small sample)
+   would otherwise be told a cause that did not happen.
 4. **Show.** The viewer marks such a wake on the door's card ("ended with an unexecuted
    send_message"). For Tony's knocks, "Replies to you" says the same above the reply.
+
+5. **Scope in time.** Detection runs when a wake completes, from this code forward. It does not scan
+   old records, and rule (d) never reports a wake that has no `unexecuted_tool_calls` field. The three
+   earlier cases are history, not harness state: the 10-07 one was told to qwen on the plaza (seq 66);
+   whether qwen is told of the 09-18 `schedule_event` and 09-29 `update_state` is a plaza matter,
+   not this design's.
 
 ## Not in this design (it belongs to the residents)
 
@@ -70,3 +84,14 @@ case as the example, once the note is built.
 2. Record: the field is present only when a call is detected, and parameter values are never stored.
 3. Rule (d): at least once, self-clearing, ordered after rules (a)–(c). Rule (c) is unchanged.
 4. Viewer: the card mark, the Tony-reply mark, and no leak of parameter text.
+5. Rule (d)'s cause clause: present exactly when the wake recorded `all_tools_withdrawn` before its
+   final turn; "the record does not say why" otherwise; never both.
+6. No backfill: a completed wake recorded before this code (no field) never produces a rule (d) note.
+
+## Changes in r2
+
+- The note's cause clause is conditional on the wake's own record (r1 stated withdrawal as the cause
+  unconditionally, which the record cannot always back; the same defect twice reached the failed-wake
+  note's drafts).
+- §5 scope in time: no backfill; past cases left to the plaza.
+- Tests 5 and 6 added.
