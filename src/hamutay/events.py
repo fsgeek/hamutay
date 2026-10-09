@@ -1534,7 +1534,8 @@ def unexecuted_call_notes(records: list[dict], event: dict) -> list[str]:
     if omitted > 0:
         notes.append(
             f"{omitted} earlier wake{'s' if omitted != 1 else ''} that ended with an unexecuted "
-            "call since your last clean wake are not listed; the event log holds them."
+            f"call since your last clean wake {'are' if omitted != 1 else 'is'} not listed; "
+            "the event log holds them."
         )
         leaks = leaks[-UNEXECUTED_CALL_NOTE_LIMIT:]
     for r in leaks:
