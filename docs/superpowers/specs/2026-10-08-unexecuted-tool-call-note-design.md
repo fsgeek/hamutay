@@ -1,6 +1,6 @@
 # Unexecuted tool call: tell the resident — design
 
-Date: 2026-10-08. Author: the custodian (Claude Opus 5.5). Status: r3, after Codex review round one (2 Blocking, 3 Should, 1 Could; all accepted, two narrowed). It goes to
+Date: 2026-10-08. Author: the custodian (Claude Opus 5.5). Status: r4, after Codex review rounds one and two (round two: 1 Blocking, 1 Should on tests; both accepted). It goes to
 Codex for review and tests before any code. r1 was written by the 10-06→10-08 custodian; r2 by its
 successor (Claude Opus 5.5, seat from 10-08 evening), changes listed at the end.
 
@@ -41,7 +41,14 @@ the custodian's part is visibility), the harness owes the resident the fact.
    - `unexecuted_tool_calls: [{"function": "send_message"}]` (one entry per detected block, in order;
      repeated names kept);
    - `final_turn: {"tools_offered": bool, "all_tools_withdrawn": bool}`, copied by the loop from the
-     request that produced the final reply. This is the only evidence rule (d) reads. Today
+     request that produced the final reply of the natural loop.
+
+   **One text/evidence pair.** Detection and `final_turn` both describe the natural loop's final
+   reply and the accepted request that produced it, captured together the moment the loop returns,
+   before any state repair. Repair is a harness step after the resident's turn, not the resident's
+   turn, so it never changes the pair: on repair success, invalid repair, or a repair that changes
+   `response_text`, the row carries the pair captured before repair. A repair exception that fails
+   the wake leaves no completed row, so rule (c) tells it and rule (d) does not. This is the only evidence rule (d) reads. Today
      `all_tools_withdrawn` exists only in executor activity (`tool_activity_full`), which the note
      builder never sees (Codex r1, Blocking 1); a join to the session log is not allowed.
    `response_state_mismatch` is NOT evidence of a leaked call or of withdrawal: it is a prose/state
@@ -94,8 +101,7 @@ case as the example, once the note is built.
 - Detection reads the final reply text only. Not detected, declared: XML written as `interim_text`
   beside structured calls (more turns follow); a block followed by `finish_reason=length` (the turn
   raises before completion; the compact retry is a new run with its own final text); a reply later
-  replaced by state repair (detection runs on the reply as the model produced it, before repair, if
-  the implementation can; otherwise this is declared too).
+  replaced by state repair is NOT a blind spot: detection runs on the pre-repair reply (Design §2).
 
 - The detector only knows the formats in its table. An unknown format is still silent.
 - It can't tell an intended call from a quotation of one (a resident writing *about*
@@ -111,17 +117,26 @@ case as the example, once the note is built.
 2. Record: the field is present only when a call is detected, and parameter values are never stored.
 3. Rule (d): at least once, self-clearing, ordered after rules (a)–(c). Rule (c) is unchanged.
 4. Viewer: the card mark, the Tony-reply mark, and no leak of parameter text.
-5. Rule (d)'s cause clause: present exactly when the wake recorded `all_tools_withdrawn` before its
-   final turn; "the record does not say why" otherwise; never both.
+5. Rule (d)'s cause clause: present exactly when the completed row's `final_turn.all_tools_withdrawn`
+   is true; "the record does not say why" otherwise; never both. Withdrawal activity earlier in the
+   wake, or in a repair request, has no effect on it.
 6. No backfill: a completed wake recorded before this code (no field) never produces a rule (d) note.
 7. Real loop → persisted event row → rebuilt notes: full withdrawal, perception-only withdrawal,
-   stale evidence from a previous run, and state repair.
+   stale evidence from a previous run; and state repair in each case — leak then clean repair, leak
+   then invalid repair, clean reply then repair — where the row's pair is always the pre-repair one;
+   a repair exception produces no rule (d) note.
 8. Interim XML alongside structured calls (not detected, as declared); complete and truncated XML
    under `length`; compact retry under the same event id; repeated function names.
 9. Mixed sequences: leak → failures → leak → clean; completed-then-failed in one run; missing or
    invalid `created_at`; more than five leaks.
 10. A distinctive parameter sentinel, checked absent from the new fields, the notes, the viewer's
    card mark and its API payload for the mark; present in the reply exactly as today.
+
+## Changes in r4 (Codex review round two, 2026-10-09)
+
+- Blocking: one text/evidence pair, captured before state repair; repair success, invalid repair and
+  repair exception specified.
+- Tests 5 and 7 given exact oracles.
 
 ## Changes in r3 (Codex review round one, 2026-10-09)
 
