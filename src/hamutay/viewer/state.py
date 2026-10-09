@@ -95,6 +95,14 @@ def read_plaza_readonly(plaza_path: Path) -> list[dict]:
     return plaza_readonly(plaza_path)[0]
 
 
+def _unexecuted_names(row: dict) -> list[str]:
+    """Function names of calls a wake wrote as text (unexecuted-tool-call spec §4): names only."""
+    calls = row.get("unexecuted_tool_calls")
+    if not isinstance(calls, list):
+        return []
+    return [str(c.get("function")) for c in calls if isinstance(c, dict) and c.get("function")]
+
+
 def door_vitals(name: str, events_path: Path, now: datetime, session_path: Path | None = None) -> dict:
     records = _tolerant_jsonl(events_path)
     statuses = [r for r in records if r.get("record_type") == "event_status"]
@@ -105,6 +113,9 @@ def door_vitals(name: str, events_path: Path, now: datetime, session_path: Path 
     wakes = []
     for r in outcomes[-12:]:
         w = {k: r.get(k) for k in EVENT_FIELDS if r.get(k) is not None}
+        names = _unexecuted_names(r)
+        if names:
+            w["unexecuted_tool_calls"] = names
         err = w.get("error")
         if isinstance(err, str) and len(err) > 300:
             w["error"] = err[:300] + "…"
@@ -179,6 +190,9 @@ def replies_to(person: str, name: str, events_path: Path, now: datetime) -> list
         if last.get("status") == "completed":
             item["replied_at"] = last.get("completed_at")
             item["reply"] = last.get("response_text")
+            names = _unexecuted_names(last)
+            if names:
+                item["unexecuted_tool_calls"] = names
         elif last.get("status") == "failed":
             item["failed_at"] = last.get("failed_at")
             item["error_type"] = last.get("error_type")

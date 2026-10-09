@@ -516,6 +516,11 @@ class ExchangeResult:
     # Natural wake mode: assistant text emitted alongside tool calls before
     # the final reply. Logged, never the response — declared, not dropped.
     interim_text: list[str] | None = None
+    # Natural wake mode: what the request that produced the final reply
+    # offered ({"tools_offered", "all_tools_withdrawn"}), so a call written
+    # as text can be told with only the cause the record backs (spec
+    # 2026-10-08-unexecuted-tool-call-note-design.md §2). None elsewhere.
+    final_turn: dict | None = None
 
 
 
@@ -2434,6 +2439,11 @@ class OpenAITasteBackend:
                     interim_text=acct.interim_text or None,
                     cache_read_tokens=acct.cache_read,
                     cache_creation_tokens=acct.cache_write,
+                    final_turn={
+                        # read off the accepted request itself, not the loop's flags
+                        "tools_offered": bool(payload.get("tools")),
+                        "all_tools_withdrawn": payload.get("tool_choice") == "none",
+                    },
                     **self._cost_kwargs(acct.responses),
                 )
 
@@ -3219,6 +3229,9 @@ class OpenTasteSession:
         # did not run (no envelope, or a door that is not window-aware).
         # The event runner reads it to stamp the completed/failed record.
         self._last_admission: dict | None = None
+        # The natural loop's final reply and its request's tool facts,
+        # captured before state repair (unexecuted-tool-call spec §2).
+        self._last_natural_final_turn: dict | None = None
 
         if log_path:
             Path(log_path).parent.mkdir(parents=True, exist_ok=True)
@@ -3379,6 +3392,7 @@ class OpenTasteSession:
         # Admission is a per-wake fact: it must never leak from the wake
         # that ran it into one that did not.
         self._last_admission = None
+        self._last_natural_final_turn = None
         self._cycle += 1
         try:
             return self._exchange_impl(
@@ -3666,6 +3680,9 @@ class OpenTasteSession:
 
         raw_output = result.raw_output
         response_text = raw_output.get("response", "(no response)")
+        if isinstance(getattr(result, "final_turn", None), dict):
+            # Before repair: repair is the harness's step, not the resident's turn.
+            self._last_natural_final_turn = {"text": response_text, **result.final_turn}
 
         prior_state_snapshot = (
             json.loads(json.dumps(self._state)) if self._state else None
