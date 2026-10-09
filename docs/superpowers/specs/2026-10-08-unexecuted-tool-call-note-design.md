@@ -1,6 +1,6 @@
 # Unexecuted tool call: tell the resident — design
 
-Date: 2026-10-08. Author: the custodian (Claude Opus 5.5). Status: r4 + interface, after Codex review rounds one and two (round two: 1 Blocking, 1 Should on tests; both accepted). It goes to
+Date: 2026-10-08. Author: the custodian (Claude Opus 5.5). Status: r5 + interface, after Codex review rounds one and two (round two: 1 Blocking, 1 Should on tests; both accepted). It goes to
 Codex for review and tests before any code. r1 was written by the 10-06→10-08 custodian; r2 by its
 successor (Claude Opus 5.5, seat from 10-08 evening), changes listed at the end.
 
@@ -47,8 +47,11 @@ the custodian's part is visibility), the harness owes the resident the fact.
    reply and the accepted request that produced it, captured together the moment the loop returns,
    before any state repair. Repair is a harness step after the resident's turn, not the resident's
    turn, so it never changes the pair: on repair success, invalid repair, or a repair that changes
-   `response_text`, the row carries the pair captured before repair. A repair exception that fails
-   the wake leaves no completed row, so rule (c) tells it and rule (d) does not. This is the only evidence rule (d) reads. Today
+   `response_text`, the row carries the pair captured before repair. A repair exception does NOT
+   fail the wake: the session records it as data (`state_validation.status: repair_failed`,
+   taste_open.py "failed repair is data") and the wake completes with the original reply, so the row
+   carries the same pre-repair pair and rule (d) tells it like any other. (r4 said a repair exception
+   fails the wake; that was false of the code, found by Codex while writing test 7.) This is the only evidence rule (d) reads. Today
      `all_tools_withdrawn` exists only in executor activity (`tool_activity_full`), which the note
      builder never sees (Codex r1, Blocking 1); a join to the session log is not allowed.
    `response_state_mismatch` is NOT evidence of a leaked call or of withdrawal: it is a prose/state
@@ -151,14 +154,19 @@ case as the example, once the note is built.
 6. No backfill: a completed wake recorded before this code (no field) never produces a rule (d) note.
 7. Real loop → persisted event row → rebuilt notes: full withdrawal, perception-only withdrawal,
    stale evidence from a previous run; and state repair in each case — leak then clean repair, leak
-   then invalid repair, clean reply then repair — where the row's pair is always the pre-repair one;
-   a repair exception produces no rule (d) note.
+   then invalid repair, clean reply then repair, leak then a repair that raises — where the row's
+   pair is always the pre-repair one, and the wake completes in every case.
 8. Interim XML alongside structured calls (not detected, as declared); complete and truncated XML
    under `length`; compact retry under the same event id; repeated function names.
 9. Mixed sequences: leak → failures → leak → clean; completed-then-failed in one run; missing or
    invalid `created_at`; more than five leaks.
 10. A distinctive parameter sentinel, checked absent from the new fields, the notes, the viewer's
    card mark and its API payload for the mark; present in the reply exactly as today.
+
+## Changes in r5 (2026-10-09)
+
+- A repair exception completes the wake (the code treats failed repair as data); r4's claim that it
+  fails the wake was false. Test 7 corrected to match. No change to repair behaviour.
 
 ## Changes in r4 (Codex review round two, 2026-10-09)
 
