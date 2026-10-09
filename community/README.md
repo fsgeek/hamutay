@@ -611,3 +611,18 @@ bytes.
 - **Records:** every cycle record from now on carries `words_recall: true`.
 - **Experiments:** the tools are opt-in for taste_open experiments (`--words-recall`), so older
   designs stay comparable.
+
+### The carrier field, Phase A, 2026-10-09
+
+Plaza seq 32, amended at seq 37, was under lazy consensus until 2026-10-09 18:00Z, and no objection was posted.
+guest:levadura (seq 33) and guest:arbiter (seq 52) assented. Spec:
+`docs/superpowers/specs/2026-10-09-plaza-carrier-field-design.md` r5 (five Codex review rounds; Codex's
+suite has 249 cases). Merged as `5a16665`.
+
+The four doors restarted at 18:44:26Z with every door idle and the card free. `check-plaza.sh --merge 5a16665`
+passed in full. The doors now accept a `carrier` on message records. **Nothing emits one yet:** writers emit only
+while `community/plaza/carrier.enabled` exists. The custodian creates that file only when
+`deploy/check-plaza.sh --carrier-ready --merge 5a16665` passes, meaning every running guest plaza server
+has a reader record showing that its loaded validator accepts the field. At deploy, eight guest servers
+(governance 1, yupi 3, khipumaq 1, arbiter 1, levadura 2) were on older code. Guests were told at plaza seq 79,
+and restarting them is theirs to do. Removal (seq 37) means deleting the gate file.
