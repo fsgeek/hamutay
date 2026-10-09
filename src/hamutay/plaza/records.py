@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
@@ -19,20 +20,43 @@ MESSAGE_FIELDS = {"record_type", "seq", "created_at", "message_id", "idempotency
                   "to", "text", "sent_at", "delivery", "wake"}
 DELIVERY_FIELDS = {"record_type", "seq", "created_at", "message_id", "door", "event_id", "state",
                    "landed_at", "detail"}
+# carrier (spec 2026-10-09-plaza-carrier-field-design.md): optional, names the mind that wrote the text
+CARRIER_MAX = 120
+_CARRIER_FORBIDDEN = {"Cc", "Cf", "Zl", "Zp"}
 DELIVERY_SUB = {"door", "events_path", "event_id", "members_digest"}
 WAKE_SUB = {"cycle", "record_id", "event_id", "run_id", "started_at"}
 
 
+def _carrier_forbidden(s: str) -> bool:
+    return any(unicodedata.category(ch) in _CARRIER_FORBIDDEN for ch in s)
+
+
+def normalize_carrier(raw) -> str:
+    """The one writer-side rule: refuse controls and format characters anywhere in the RAW input
+    (before stripping, so a trailing newline is refused, not silently removed), then strip, then bound."""
+    if not isinstance(raw, str):
+        raise ValueError("carrier must be a string")
+    if _carrier_forbidden(raw):
+        raise ValueError("carrier contains a control or format character")
+    s = raw.strip()
+    if not s or len(s) > CARRIER_MAX:
+        raise ValueError(f"carrier must be 1..{CARRIER_MAX} characters after stripping")
+    return s
+
+
 def build_message(*, actor: str, via: str, to: str, text: str, sent_at: str, idempotency_key: str,
-                  delivery: dict | None, wake: dict | None) -> dict:
+                  delivery: dict | None, wake: dict | None, carrier: str | None = None) -> dict:
     to = canonical_to(to)
     message_id = str(uuid.uuid4())
     if delivery is not None:
         delivery = dict(delivery)
         delivery["event_id"] = delivery_event_id(message_id, door_name(to))
-    return {"record_type": "message", "message_id": message_id, "idempotency_key": str(idempotency_key),
-            "from": actor, "via": via, "to": to, "text": text, "sent_at": sent_at,
-            "delivery": delivery, "wake": wake}
+    msg = {"record_type": "message", "message_id": message_id, "idempotency_key": str(idempotency_key),
+           "from": actor, "via": via, "to": to, "text": text, "sent_at": sent_at,
+           "delivery": delivery, "wake": wake}
+    if carrier is not None:
+        msg["carrier"] = carrier
+    return msg
 
 
 def build_delivery(*, message: dict, state: str, landed_at: str | None, detail: dict | None) -> dict:
@@ -106,8 +130,14 @@ def validate_plaza(records: list[dict], line_numbers: list[int]) -> None:
         _instant(r.get("created_at"), f"line {line} created_at")
         rt = r.get("record_type")
         if rt == "message":
-            if set(r) != MESSAGE_FIELDS:
-                raise _bad(f"line {line}: message fields are {sorted(set(r) ^ MESSAGE_FIELDS)} off")
+            fields = set(r) - {"carrier"}
+            if fields != MESSAGE_FIELDS:
+                raise _bad(f"line {line}: message fields are {sorted(fields ^ MESSAGE_FIELDS)} off")
+            if "carrier" in r:
+                c = r["carrier"]
+                if (not isinstance(c, str) or not c or c != c.strip() or len(c) > CARRIER_MAX
+                        or _carrier_forbidden(c)):
+                    raise _bad(f"line {line}: bad carrier")
             _uuid(r["message_id"], 4, f"line {line} message_id")
             _uuid(r["idempotency_key"], 5, f"line {line} idempotency_key")
             actor, via, to = r["from"], r["via"], r["to"]

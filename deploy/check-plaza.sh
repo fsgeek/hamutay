@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -uo pipefail
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"; rc=0; PHASE_ONE=0; GUESTS_READY=0; MERGE="${PLAZA_MERGE:-}"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"; cd "$ROOT"; rc=0; PHASE_ONE=0; GUESTS_READY=0; CARRIER_READY=0; MERGE="${PLAZA_MERGE:-}"
 while [ $# -gt 0 ]; do case "$1" in --phase-one) PHASE_ONE=1; shift;; --guests-ready) GUESTS_READY=1; shift;;
+  --carrier-ready) CARRIER_READY=1; shift;;
   --merge) MERGE="$2"; shift 2;; *) echo "check-plaza: unknown flag $1"; exit 2;; esac; done
 chk() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; rc=1; fi; }
 inv_note() { local inv; inv=$(systemctl --user show -p InvocationID --value "hamutay-heartbeat@$1"); [ -n "$inv" ] && journalctl --user -u "hamutay-heartbeat@$1" _SYSTEMD_INVOCATION_ID="$inv" --no-pager 2>/dev/null | grep -o "$2" | tail -1; }
@@ -23,6 +24,20 @@ if [ "$PHASE_ONE" -eq 0 ]; then
   else
     for d in heartbeat fable elder qwen; do chk "unit $d guests $n" "[ -n \"\$(inv_note $d 'guests $n\\b')\" ]"; done
   fi
+fi
+if [ "$CARRIER_READY" -eq 1 ]; then
+  # Carrier rollout (spec 2026-10-09-plaza-carrier-field-design.md): before the gate file is created, every
+  # running guest MCP plaza server must be on code that accepts the field -- an older one would reject a
+  # carrier record and fail closed. The doors' launch notes are checked above (--merge). Guests restart
+  # their own servers.
+  # Launch-time evidence only: each server proves what it accepts by its reader record (spec r4).
+  errf=$(mktemp); trap 'rm -f "$errf"' EXIT
+  unready=$(uv run python -c 'import pathlib; from hamutay.plaza.mcp import carrier_unready; print("; ".join(carrier_unready(pathlib.Path("."))))' 2>"$errf") \
+    || unready="the readiness check itself failed: $(grep -v VIRTUAL_ENV "$errf" | tail -1)"
+  chk "carrier-ready: every guest plaza server accepts carrier${unready:+ -- not ready: $unready}" "[ -z \"$unready\" ]"
+  chk "reader records are gitignored" "grep -q '^community/plaza/readers/$' .gitignore"
+  chk "carrier gate is gitignored" "grep -q '^community/plaza/carrier.enabled$' .gitignore"
+  if [ -e community/plaza/carrier.enabled ]; then echo "info carrier gate: present (writers emit)"; else echo "info carrier gate: absent (writers do not emit)"; fi
 fi
 chk "gitignore rules" "grep -q '^community/plaza/plaza.jsonl$' .gitignore && grep -q 'community/plaza/plaza.jsonl.lock' .gitignore"
 chk "checkpoint names both plaza locks" "grep -q assembly.jsonl.lock deploy/checkpoint-community-log.sh && grep -q plaza.jsonl.lock deploy/checkpoint-community-log.sh"

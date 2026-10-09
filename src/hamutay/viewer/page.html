@@ -67,6 +67,7 @@ h3.after { margin-top: 36px; }
 .msg.new { box-shadow: inset 4px 0 0 var(--guest); padding-left: 14px; }
 .who { display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: baseline; font-size: .92rem; }
 .speaker { font-weight: 700; }
+.carrier { color: var(--muted); font-size: 0.9em; }
 .k-door { color: var(--door); } .k-guest { color: var(--guest); } .k-human { color: var(--human); }
 .to, .when, .seq { color: var(--muted); }
 .knock { color: var(--warn); }
@@ -167,7 +168,7 @@ function renderPlaza(msgs, err, skipped) {
     const clamp = long && !opened.has(m.seq);
     return `<article class="msg${m.seq > lastSeen ? " new" : ""}">
       <div class="who">
-        <span class="speaker k-${k}">${esc(m.from)}</span>
+        <span class="speaker k-${k}">${esc(m.from)}</span>${m.carrier ? ` <span class="carrier">${esc(m.carrier)}</span>` : ""}
         ${knock ? `<span class="knock">knocked on ${esc(m.to)}${state}</span>` : `<span class="to">posted</span>`}
         <span class="when" title="${esc(stamp(m.sent_at))}">${ago(m.sent_at)}</span>
         <span class="seq">seq ${m.seq}</span>

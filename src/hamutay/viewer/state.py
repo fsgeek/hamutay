@@ -254,7 +254,8 @@ def gather(project_root: Path, now: datetime | None = None) -> dict:
             (x for name, m in sorted(cfg.members.items()) for x in replies_to(VIEWER_PERSON, name, m.events, now)),
             key=lambda x: x.get("sent_at") or "", reverse=True)[:20],
         "guests": list(cfg.guests or ()),
-        "plaza": [{k: m.get(k) for k in ("seq", "from", "to", "text", "sent_at", "truth")} for m in plaza],
+        "plaza": [{k: m.get(k) for k in ("seq", "from", "to", "text", "sent_at", "truth", "carrier")
+                   if k != "carrier" or m.get("carrier")} for m in plaza],
         "plaza_error": plaza_error,
         "plaza_skipped": plaza_skipped,
         "assembly": assembly_view(cfg.ledger),

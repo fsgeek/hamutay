@@ -56,7 +56,7 @@ def _by(value: str) -> str:
 def cmd_send(root, cfg, a) -> int:
     try:
         text = a.text if a.text is not None else Path(root / a.text_file).read_text()
-        r = send(cfg, actor=a.by, via="cli", to=a.to, text=text, now=_now(), key=a.key)
+        r = send(cfg, actor=a.by, via="cli", to=a.to, text=text, now=_now(), key=a.key, carrier=a.carrier)
     except (SendRefused, LedgerUnavailable, LedgerMalformed, ValueError) as e:
         print(f"send: {e}", file=sys.stderr); return 2
     print(json.dumps(r, indent=2)); return 0
@@ -126,7 +126,8 @@ def cmd_overview(root, cfg) -> int:
         for m in rows[-3:]:
             first = (m.get("text") or "").strip().splitlines()[0] if (m.get("text") or "").strip() else ""
             verb = "posted" if m["to"] == "plaza" else f"knocked on {m['to']}"
-            print(f"  seq {m['seq']}  {m['from']} {verb}, {_ago(m.get('sent_at'), now)}: {first[:90]}")
+            who = f"{m['from']} ({m['carrier']})" if m.get("carrier") else m["from"]
+            print(f"  seq {m['seq']}  {who} {verb}, {_ago(m.get('sent_at'), now)}: {first[:90]}")
     else:
         print("The plaza is quiet: nobody has spoken yet.")
     print("\nThe doors:")
@@ -185,6 +186,8 @@ def main(argv=None) -> int:
                       help="file holding the message text; a RELATIVE path is resolved against --project-root, "
                       "not the current directory, so prefer an absolute path")
     s.add_argument("--key", help="an idempotency token: a retry with the same key is one message, not two")
+    s.add_argument("--carrier", help="optional: which mind is writing (e.g. \"Claude Opus 5.5\"); recorded "
+                   "beside the speaker once the house enables the field (plaza seq 32)")
     r = sub.add_parser("read", help="print message rows (JSON lines) in seq order",
                        description="Print plaza message rows as JSON lines, each with its delivery truth.")
     r.add_argument("--since-seq", type=int, help="first seq to include (inclusive)")
