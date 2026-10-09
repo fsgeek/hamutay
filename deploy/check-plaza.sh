@@ -27,34 +27,13 @@ if [ "$PHASE_ONE" -eq 0 ]; then
 fi
 if [ "$CARRIER_READY" -eq 1 ]; then
   # Carrier rollout (spec 2026-10-09-plaza-carrier-field-design.md): before the gate file is created, every
-  # running guest MCP plaza server must have started after the Phase A merge -- it imports this checkout
-  # at start, so an older one would reject a carrier record and fail closed. Guests restart their own.
-  # The barrier is when the merge reached the checkout the servers import (the main one), not its
-  # commit time: the oldest entry of the latest unbroken run of HEAD reflog entries descending from it.
-  main_root=$(cd "$(git rev-parse --path-format=absolute --git-common-dir)/.." && pwd)
-  merge_ct=""
-  if git -C "$main_root" merge-base --is-ancestor "$MERGE" HEAD 2>/dev/null; then
-    while read -r h t; do
-      git -C "$main_root" merge-base --is-ancestor "$MERGE" "$h" 2>/dev/null || break
-      merge_ct=$t
-    done < <(git -C "$main_root" reflog show --date=unix --format='%H %gd' HEAD 2>/dev/null \
-             | sed -E 's/HEAD@\{([0-9]+)\}/\1/')
-  fi
-  if [ -z "$merge_ct" ]; then
-    echo "FAIL carrier-ready: cannot establish when $MERGE reached $main_root (HEAD does not descend from it, or no reflog entry)"; rc=1
-  else
-    echo "info carrier deploy barrier: $(date -u -d @"$merge_ct" +%Y-%m-%dT%H:%M:%SZ)"
-    old=""
-    while read -r pid; do
-      [ -n "$pid" ] || continue
-      started=$(date -d "$(ps -o lstart= -p "$pid" 2>/dev/null)" +%s 2>/dev/null) || continue
-      if [ "$started" -lt "$merge_ct" ]; then
-        label=$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null | grep -o -- '--guest [^ ]*' | awk '{print $2}')
-        old="$old ${label:-unknown}(pid $pid, since $(date -u -d @"$started" +%Y-%m-%dT%H:%MZ))"
-      fi
-    done < <(pgrep -f '[h]amutay\.plaza\.mcp')
-    chk "carrier-ready: no guest plaza server older than the barrier${old:+ -- still running:$old}" "[ -z \"$old\" ]"
-  fi
+  # running guest MCP plaza server must be on code that accepts the field -- an older one would reject a
+  # carrier record and fail closed. The doors' launch notes are checked above (--merge). Guests restart
+  # their own servers.
+  # Launch-time evidence only: each server proves what it accepts by its reader record (spec r4).
+  unready=$(uv run python -c 'import pathlib; from hamutay.plaza.mcp import carrier_unready; print("; ".join(carrier_unready(pathlib.Path("."))))' 2>/dev/null) || unready="the check itself failed to run"
+  chk "carrier-ready: every guest plaza server accepts carrier${unready:+ -- not ready: $unready}" "[ -z \"$unready\" ]"
+  chk "reader records are gitignored" "grep -q '^community/plaza/readers/$' .gitignore"
   chk "carrier gate is gitignored" "grep -q '^community/plaza/carrier.enabled$' .gitignore"
   if [ -e community/plaza/carrier.enabled ]; then echo "info carrier gate: present (writers emit)"; else echo "info carrier gate: absent (writers do not emit)"; fi
 fi
