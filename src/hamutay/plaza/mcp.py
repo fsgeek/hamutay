@@ -85,16 +85,31 @@ CARRIER_SENTENCE = ("Optional carrier: which mind is writing, as you would name 
 
 
 READERS_DIR = "community/plaza/readers"
+BOOT_ID = Path("/proc/sys/kernel/random/boot_id")
 
 
-def _proc_start(pid: int) -> int:
+def _proc_start(stat_text: str) -> int:
     """Field 22 of /proc/<pid>/stat: start time in clock ticks since boot (fixed for the process's life)."""
-    stat = Path(f"/proc/{pid}/stat").read_text()
-    return int(stat[stat.rindex(")") + 2:].split()[19])   # fields after "(comm) " start at field 3
+    return int(stat_text[stat_text.rindex(")") + 2:].split()[19])   # fields after "(comm) " start at field 3
+
+
+def _loaded_accepts() -> list[str]:
+    """What the validator THIS process imported accepts, tested, not declared (carrier spec r5)."""
+    from .records import validate_plaza
+    probe = {"record_type": "message", "seq": 1, "created_at": "2026-10-09T00:00:00+00:00",
+             "message_id": "00000000-0000-4000-8000-000000000000",
+             "idempotency_key": "00000000-0000-5000-8000-000000000000",
+             "from": "custodian", "via": "cli", "to": "plaza", "text": "probe",
+             "sent_at": "2026-10-09T00:00:00+00:00", "delivery": None, "wake": None, "carrier": "probe"}
+    try:
+        validate_plaza([probe], [1])
+    except Exception:           # noqa: BLE001 -- any rejection means the field is not accepted
+        return []
+    return ["carrier"]
 
 
 def write_reader_record(root: Path, label: str) -> Path | None:
-    """Launch-time evidence of what this server's code accepts (carrier spec r4, Rollout).
+    """Launch-time evidence of what this server's loaded code accepts (carrier spec r5, Rollout).
 
     check-plaza --carrier-ready trusts a running server only through this record; one that started on
     older code wrote none. A failure is reported and never stops the server."""
@@ -106,8 +121,9 @@ def write_reader_record(root: Path, label: str) -> Path | None:
         d = Path(root) / READERS_DIR
         d.mkdir(parents=True, exist_ok=True)
         path = d / f"mcp-{pid}.json"
-        rec = {"pid": pid, "label": label, "proc_start": _proc_start(pid), "accepts": ["carrier"],
-               "written_at": datetime.now(timezone.utc).isoformat()}
+        rec = {"pid": pid, "label": label, "boot_id": BOOT_ID.read_text().strip(),
+               "proc_start": _proc_start(Path(f"/proc/{pid}/stat").read_text()),
+               "accepts": _loaded_accepts(), "written_at": datetime.now(timezone.utc).isoformat()}
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(rec) + "\n")
         tmp.replace(path)
@@ -173,45 +189,57 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-def carrier_unready(root: Path, proc: Path = Path("/proc")) -> list[str]:
-    """Every running plaza MCP server that has not shown it accepts `carrier` (carrier spec r4, Phase B).
+def _is_plaza_server(args: list[str]) -> bool:
+    """A Python process running the module, not the `uv run` wrapper that launched it."""
+    if not args or Path(args[0]).name.startswith("uv"):
+        return False
+    return any(a == "-m" and b == "hamutay.plaza.mcp" for a, b in zip(args, args[1:]))
 
-    A server is a Python process whose command line runs hamutay.plaza.mcp (the `uv run` wrapper is not
-    one). It is ready only with a reader record naming its pid, the same kernel start time, and
-    "carrier" in accepts. Returns one line per server that is not; empty means ready.
+
+def carrier_unready(root: Path, proc: Path = Path("/proc"), boot_id: Path = BOOT_ID) -> list[str]:
+    """Every running plaza MCP server that has not shown it accepts `carrier` (carrier spec r5, Phase B).
+
+    Ready only with a reader record naming its pid, this boot, the same kernel start time, and "carrier"
+    in accepts. A process that exits while examined is skipped; any other failure to see a process makes
+    it unready, because readiness can't be established for what can't be seen. Empty means ready.
     """
     import json
+    try:
+        boot = boot_id.read_text().strip()
+        entries = [d for d in proc.iterdir() if d.name.isdigit()]
+    except OSError as e:
+        return [f"cannot list processes or read the boot id: {type(e).__name__}: {e}"]
     unready: list[str] = []
-    for d in sorted(proc.iterdir(), key=lambda p: p.name):
-        if not d.name.isdigit():
-            continue
-        try:
-            argv = (d / "cmdline").read_bytes().split(b"\0")
-            exe = (d / "exe").resolve().name if (d / "exe").exists() else ""
-        except OSError:
-            continue
-        args = [a.decode(errors="replace") for a in argv if a]
-        if "hamutay.plaza.mcp" not in args or "python" not in exe:
-            continue
+    for d in sorted(entries, key=lambda p: int(p.name)):
         pid = int(d.name)
+        try:
+            args = [a.decode(errors="replace") for a in (d / "cmdline").read_bytes().split(b"\0") if a]
+        except (FileNotFoundError, ProcessLookupError):
+            continue                                       # exited while we looked
+        except OSError as e:
+            unready.append(f"pid {pid}: command line unreadable ({type(e).__name__}); cannot tell what it runs")
+            continue
+        if not _is_plaza_server(args):
+            continue
         label = args[args.index("--guest") + 1] if "--guest" in args[:-1] else "unknown"
         try:
-            stat = (d / "stat").read_text()
-            start = int(stat[stat.rindex(")") + 2:].split()[19])
-        except (OSError, ValueError, IndexError):
-            continue                                       # gone while we looked
-        rec_path = Path(root) / READERS_DIR / f"mcp-{pid}.json"
+            start = _proc_start((d / "stat").read_text())
+        except (FileNotFoundError, ProcessLookupError):
+            continue
+        except (OSError, ValueError, IndexError) as e:
+            unready.append(f"guest:{label} pid {pid}: start time unreadable ({type(e).__name__})")
+            continue
         why = None
         try:
-            rec = json.loads(rec_path.read_text())
-            if rec.get("pid") != pid or rec.get("proc_start") != start:
-                why = "its reader record belongs to an earlier process with this pid"
+            rec = json.loads((Path(root) / READERS_DIR / f"mcp-{pid}.json").read_text())
+            if rec.get("pid") != pid or rec.get("boot_id") != boot or rec.get("proc_start") != start:
+                why = "its reader record belongs to another process with this pid (or another boot)"
             elif "carrier" not in (rec.get("accepts") or []):
-                why = "its reader record does not accept carrier"
+                why = "its loaded validator does not accept carrier"
         except FileNotFoundError:
             why = "no reader record (started on older code)"
-        except (OSError, ValueError):
-            why = "unreadable reader record"
+        except (OSError, ValueError) as e:
+            why = f"unreadable reader record ({type(e).__name__})"
         if why:
             unready.append(f"guest:{label} pid {pid}: {why}")
     return unready
