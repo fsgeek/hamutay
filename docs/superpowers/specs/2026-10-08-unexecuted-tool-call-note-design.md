@@ -88,7 +88,7 @@ the custodian's part is visibility), the harness owes the resident the fact.
 
 - `hamutay.tool_call_text.detect_unexecuted_tool_calls(text: str | None) -> list[dict]`: one
   `{"function": NAME}` per complete block found, in order; `[]` for None, empty or malformed.
-- Session: `TasteOpenSession._last_natural_final_turn`, reset to `None` at the start of every
+- Session: `OpenTasteSession._last_natural_final_turn` (src/hamutay/taste_open.py), reset to `None` at the start of every
   `exchange`, and set when the natural loop returns its final reply, BEFORE state repair, to
   `{"text": str, "tools_offered": bool, "all_tools_withdrawn": bool}`. `tools_offered` is true iff
   that accepted request carried a non-empty `tools` list; `all_tools_withdrawn` iff the loop had set
