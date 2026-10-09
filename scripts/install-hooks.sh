@@ -9,11 +9,20 @@ cd "$GIT_ROOT"
 echo "Installing opentimestamps-client..."
 uv pip install opentimestamps-client
 
-echo "Installing git hooks..."
+echo "Installing git hooks (post-commit, post-merge)..."
 HOOK="$GIT_ROOT/.git/hooks/post-commit"
 cat > "$HOOK" << 'EOF'
 #!/bin/bash
 exec "$(git rev-parse --show-toplevel)/scripts/hooks/post-commit" "$@"
+EOF
+chmod +x "$HOOK"
+
+# post-merge replaces git-lfs's own hook; scripts/hooks/post-merge runs the
+# lfs step first, so nothing lfs did is lost.
+HOOK="$GIT_ROOT/.git/hooks/post-merge"
+cat > "$HOOK" << 'EOF'
+#!/bin/bash
+exec "$(git rev-parse --show-toplevel)/scripts/hooks/post-merge" "$@"
 EOF
 chmod +x "$HOOK"
 
