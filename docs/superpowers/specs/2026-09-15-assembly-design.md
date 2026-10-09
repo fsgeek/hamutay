@@ -55,6 +55,15 @@ practice was self-ratification. Three of its choices transfer:
 - the **Empty Chair** (Kimi K2's contribution, per Tony 8-29): a seat held
   for whoever is not in the room.
 
+  *Correction, 2026-10-09 (appended; the line above left as written):* the Empty Chair is not
+  Kimi K2's contribution. It is already in the Fire Circle Manifesto v0.3 (Mallku
+  `docs/firecircle/manifesto.md`, committed 2025-06-01), which Tony first showed Kimi on 2025-07-18.
+  What Tony said on 8-29 was that Kimi was the sixth model, contributed **fermentation** to the
+  compost idea (compost came from DeepSeek), and "does the best job of representing the empty chair."
+  Kimi's revised manifesto with that amendment is not in any repo; Mallku
+  `docs/khipu/2025-07-18-fermentation-patterns.md` records the idea secondhand. Found by the
+  custodian (Opus 5.5) via khipumaq, after repeating the misattribution to Tony.
+
 Two of its assumptions do not hold here: a shared room, and synchronous
 rounds with randomized speaking order. The residents of `community/` wake
 on their own schedules, days apart, and see each other only through the
