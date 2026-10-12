@@ -82,14 +82,14 @@ def make_runtime(root: Path) -> Runtime:
         EVENT_PREAMBLE
         + f"REAL_GIT = {real_git!r}\n"
         + """args = sys.argv[1:]
-is_stamp = ('commit' in args and '-m' in args
-            and args[args.index('-m') + 1].startswith('ots: stamp '))
+is_stamp = any(flag == '-m' and message.startswith('ots: stamp ')
+               for flag, message in zip(args, args[1:]))
 if is_stamp:
     record('git-stamp', argv=args, cwd=os.getcwd(),
            author_env={key: os.environ.get(key) for key in
                        ('GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_AUTHOR_DATE')})
     if os.environ.get('OTS_VALIDATION_UNSIGNED_STAMPS') == '1':
-        args = [arg for arg in args if arg != '-S']
+        args = [arg for arg in args if not arg.startswith('-S')]
 os.execv(REAL_GIT, [REAL_GIT, *args])
 """,
     )
@@ -304,30 +304,34 @@ def assert_stamp(repo: Repo, target: str, *, cwd=None):
     stamp = repo.git("rev-parse", "HEAD", cwd=checkout).stdout.strip()
     subject = repo.git("log", "-1", "--format=%s", cwd=checkout).stdout.strip()
     assert subject == f"ots: stamp {target}"
-    assert repo.git("rev-parse", "HEAD^", cwd=checkout).stdout.strip() == target
+    parents = repo.git("show", "-s", "--format=%P", stamp, cwd=checkout).stdout.split()
+    assert parents == [target], (
+        f"Stamp must have exactly one parent, the stamped commit {target}; "
+        f"actual parent count: {len(parents)}, parents: {parents}"
+    )
     assert repo.git("rev-list", "--count", f"{target}..HEAD", cwd=checkout).stdout.strip() == "1"
     assert (checkout / "timestamps" / target).read_text() == target + "\n"
     assert (checkout / "timestamps" / f"{target}.ots").read_text() == PROOF_PREFIX + target + "\n"
-    # Compare the stamp to the stamped commit explicitly: diff-tree's default
-    # output omits merge commits, and post-merge may retain MERGE_HEAD on older Git.
+    # Compare explicitly with the target so a malformed merge stamp cannot hide
+    # its changed files through diff-tree's default merge-commit suppression.
     changed = repo.git("diff", "--name-only", target, stamp, cwd=checkout).stdout.splitlines()
     assert set(changed) == {f"timestamps/{target}", f"timestamps/{target}.ots"}
     assert repo.git("status", "--porcelain", cwd=checkout).stdout == ""
+    for name in ("MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "AUTO_MERGE"):
+        state = Path(repo.git("rev-parse", "--git-path", name, cwd=checkout).stdout.strip())
+        if not state.is_absolute():
+            state = checkout / state
+        assert not state.exists(), f"Stamp must clear merge state: {state}"
+    branch = repo.git("symbolic-ref", "HEAD", cwd=checkout).stdout.strip()
+    assert branch.startswith("refs/heads/")
+    assert repo.git("rev-parse", branch, cwd=checkout).stdout.strip() == stamp
+    reflog = repo.git("reflog", "show", "--format=%H%x09%gs", branch, cwd=checkout).stdout.splitlines()
+    assert any(entry.startswith(stamp + "\t") and subject in entry.split("\t", 1)[1]
+               for entry in reflog), f"Branch reflog must mention {subject!r}: {reflog}"
     ots_events = [event for event in repo.events if event["kind"] == "ots"]
     assert len(ots_events) == 1
     assert ots_events[0]["hash"] == target
     assert ots_events[0]["argv"] == ["stamp", str(checkout / "timestamps" / target)]
-    commits = [event for event in repo.events if event["kind"] == "git-stamp"]
-    assert len(commits) == 1
-    args = commits[0]["argv"]
-    for override in (
-        f"user.name={STAMP_NAME}",
-        f"user.email={STAMP_EMAIL}",
-        f"user.signingkey={SIGNING_KEY}",
-    ):
-        assert any(args[i:i + 2] == ["-c", override] for i in range(len(args) - 1))
-    assert "-S" in args
-    assert "--no-verify" in args
     return stamp
 
 

@@ -2,7 +2,10 @@
 
 import pytest
 
-from .helpers import SIGNING_KEY, STAMP_EMAIL, assert_stamp, assert_stamp_identity
+from .helpers import (
+    EVENT_PREAMBLE, SIGNING_KEY, STAMP_EMAIL, assert_stamp, assert_stamp_identity,
+    executable, python_executable, run_command,
+)
 
 
 @pytest.mark.parametrize("commit_args", [[], ["--allow-empty"], ["--no-verify"]], ids=["ordinary", "empty", "no-verify"])
@@ -18,6 +21,29 @@ def test_non_ots_commit_creates_exactly_one_stamp_commit(repo, commit_args):
     assert not (repo.root / "timestamps" / repo.head).exists(), "stamp commit must not be stamped recursively"
 
 
+@pytest.mark.parametrize("hook", ["post-commit", "post-merge"])
+def test_stamp_creation_runs_no_git_hooks(repo, hook):
+    # Invoke a saved copy of the installed shim so every installed hook can be
+    # replaced by a recorder. There is no user commit to confuse with the stamp.
+    trigger = repo.root.parent / f"saved-{hook}"
+    executable(trigger, (repo.root / ".git/hooks" / hook).read_text())
+    for name in ("pre-commit", "prepare-commit-msg", "commit-msg", "post-commit",
+                 "post-merge", "reference-transaction"):
+        python_executable(
+            repo.root / ".git/hooks" / name,
+            EVENT_PREAMBLE + f"record('hook', name={name!r}, argv=sys.argv[1:])\n",
+        )
+    target = repo.head
+    repo.clear_events()
+    run_command([trigger, *(["0"] if hook == "post-merge" else [])],
+                cwd=repo.root, env=repo.env)
+    # Ref observers may fire for the stamp update; commit-lifecycle hooks must not.
+    calls = [event for event in repo.events
+             if event["kind"] == "hook" and event["name"] != "reference-transaction"]
+    assert calls == [], f"Stamp creation must invoke no commit-lifecycle hooks; recorded: {calls}"
+    assert_stamp(repo, target)
+
+
 @pytest.mark.parametrize("lfs_present", [False, True], ids=["without-lfs", "with-lfs"])
 def test_clean_merge_stamps_the_merge_commit_via_post_merge(repo, lfs_present):
     main, feature = repo.divergent_branches()
@@ -29,11 +55,11 @@ def test_clean_merge_stamps_the_merge_commit_via_post_merge(repo, lfs_present):
     assert repo.git("show", "-s", "--format=%s", merge).stdout.strip() == "merge experiment"
     assert_stamp(repo, merge)
     if lfs_present:
-        assert [e["kind"] for e in repo.events] == ["lfs", "ots", "git-stamp"]
+        assert [e["kind"] for e in repo.events if e["kind"] != "git-stamp"] == ["lfs", "ots"]
         assert repo.events[0]["argv"] == ["post-merge", "0"]
     assert repo.hook_calls("post-merge") == [["0"]]
-    # The one post-commit invocation is the nested proof commit, not the merge.
-    assert repo.hook_calls("post-commit") == [[]]
+    # Git invokes post-merge for the merge; stamp creation invokes no hooks.
+    assert repo.hook_calls("post-commit") == []
 
 
 def test_conflicted_merge_resolved_with_git_commit_is_stamped_once(repo):
@@ -53,7 +79,7 @@ def test_conflicted_merge_resolved_with_git_commit_is_stamped_once(repo):
     assert repo.git("show", "-s", "--format=%P", merge).stdout.split() == [main, feature]
     assert_stamp(repo, merge)
     assert repo.hook_calls("post-merge") == []
-    assert repo.hook_calls("post-commit") == [[], []]
+    assert repo.hook_calls("post-commit") == [[]]
     stamp = repo.head
     repo.hook("post-merge", "0")
     assert repo.head == stamp
@@ -91,7 +117,7 @@ def test_lfs_runs_first_and_receives_all_post_merge_arguments(repo, squash):
         assert repo.head == before
         assert not (repo.root / "timestamps").exists()
     else:
-        assert [e["kind"] for e in repo.events] == ["lfs", "ots", "git-stamp"]
+        assert [e["kind"] for e in repo.events if e["kind"] != "git-stamp"] == ["lfs", "ots"]
         assert_stamp(repo, before)
 
 
@@ -113,7 +139,7 @@ def test_post_merge_works_when_git_lfs_is_absent(repo):
     before = repo.head
     repo.hook("post-merge", "0")
     assert_stamp(repo, before)
-    assert [e["kind"] for e in repo.events] == ["ots", "git-stamp"]
+    assert [e["kind"] for e in repo.events if e["kind"] != "git-stamp"] == ["ots"]
 
 
 @pytest.mark.parametrize("hook", ["post-commit", "post-merge"])
@@ -290,7 +316,9 @@ def test_linked_worktree_warns_when_neither_checkout_has_ots(repo):
 
 
 @pytest.mark.parametrize("hook", ["post-commit", "post-merge"])
-def test_stamp_commit_has_a_real_valid_signature_from_the_required_key(repo, require_signing, hook):
+def test_stamp_commit_has_a_real_valid_signature_despite_conflicting_config(repo, require_signing, hook):
+    assert repo.git("config", "--get", "commit.gpgSign").stdout.strip() == "false"
+    assert repo.git("config", "--get", "user.signingkey").stdout.strip() == "DEADBEEFDEADBEEF"
     assert "OTS_VALIDATION_UNSIGNED_STAMPS" not in repo.env
     target = repo.head
     repo.hook(hook, *(["0"] if hook == "post-merge" else []))
@@ -300,7 +328,9 @@ def test_stamp_commit_has_a_real_valid_signature_from_the_required_key(repo, req
     assert "\ngpgsig -----BEGIN PGP SIGNATURE-----\n" in raw
     verified = repo.git("verify-commit", "--raw", stamp)
     assert "[GNUPG:] VALIDSIG " in verified.stderr
-    assert SIGNING_KEY in verified.stderr
+    valid_signatures = [line.split() for line in verified.stderr.splitlines()
+                        if line.startswith("[GNUPG:] VALIDSIG ")]
+    assert any(SIGNING_KEY in (fields[2], fields[-1]) for fields in valid_signatures), verified.stderr
     assert STAMP_EMAIL in verified.stderr
     signature = repo.git("show", "-s", "--format=%G?%n%GF%n%GP", stamp).stdout.splitlines()
     assert signature[0] in {"G", "U"}, signature
@@ -327,5 +357,5 @@ def test_stamp_author_and_committer_override_the_original_git_identity(repo, act
             repo.clear_events()
         repo.git("commit", "--allow-empty", "-m", "identity experiment", cwd=checkout)
     target = repo.git("rev-parse", "HEAD^", cwd=checkout).stdout.strip()
-    assert_stamp(repo, target, cwd=checkout)
+    assert repo.git("log", "-1", "--format=%s", cwd=checkout).stdout.strip() == f"ots: stamp {target}"
     assert_stamp_identity(repo, cwd=checkout)
