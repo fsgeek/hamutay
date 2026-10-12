@@ -66,9 +66,20 @@ export GIT_AUTHOR_NAME="$OTS_NAME" GIT_AUTHOR_EMAIL="$OTS_EMAIL"
 export GIT_COMMITTER_NAME="$OTS_NAME" GIT_COMMITTER_EMAIL="$OTS_EMAIL"
 unset GIT_AUTHOR_DATE GIT_COMMITTER_DATE
 
+# Build the stamp with commit-tree, not `git commit`. Run from post-merge,
+# git's merge state (MERGE_HEAD) is still present, and `git commit` would make
+# the stamp a second merge commit with parents [merge, side] (found 2026-10-10
+# by guest:governance, plaza seq 80; hamutay's 2b08455 has that shape and is
+# left as it is). commit-tree takes exactly the parents it is given and runs
+# no hooks. It ignores commit.gpgSign, so the key is passed with -S
+# explicitly: an unsigned stamp cannot be repaired without rewriting every
+# commit after it (governance, plaza seq 82).
 git -C "$GIT_ROOT" add "$TIMESTAMP_DIR/"
-git -C "$GIT_ROOT" \
+PARENT=$(git -C "$GIT_ROOT" rev-parse HEAD)
+TREE=$(git -C "$GIT_ROOT" write-tree)
+STAMP=$(git -C "$GIT_ROOT" \
     -c user.email="$OTS_EMAIL" \
     -c user.name="$OTS_NAME" \
-    -c user.signingkey="$OTS_SIGNINGKEY" \
-    commit --no-verify -S -m "ots: stamp $HASH"
+    commit-tree "$TREE" -p "$PARENT" -S"$OTS_SIGNINGKEY" -m "ots: stamp $HASH")
+git -C "$GIT_ROOT" update-ref -m "ots: stamp $HASH" HEAD "$STAMP" "$PARENT"
+echo "ots: stamp $HASH -> $(git -C "$GIT_ROOT" rev-parse --short "$STAMP")"
