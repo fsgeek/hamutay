@@ -83,6 +83,14 @@ button.more { font: inherit; font-size: .9rem; background: none; border: 0; padd
 .stances li { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
 .empty, .err { color: var(--muted); font-style: italic; }
 .err { color: var(--warn); font-style: normal; }
+.jump { position: sticky; top: 0; z-index: 2; background: var(--bg); border-bottom: 1px solid var(--rule);
+  display: flex; flex-wrap: wrap; gap: 4px 22px; padding: 10px 0; margin: 12px 0 0; font-size: .95rem; }
+.jump a { text-decoration: none; color: var(--guest); }
+.jump a:hover { text-decoration: underline; }
+.jump .count { color: var(--muted); }
+h3[id], section[id] { scroll-margin-top: 56px; }
+details.older { margin: 4px 0 12px; }
+details.older > summary { cursor: pointer; color: var(--guest); font-size: .95rem; padding: 6px 0; }
 .note { font-size: .85rem; color: var(--muted); margin-top: 28px; max-width: 72ch; }
 @media (prefers-reduced-motion: no-preference) { .doorway.awake { transition: background .4s; } }
 </style>
@@ -93,17 +101,23 @@ button.more { font: inherit; font-size: .9rem; background: none; border: 0; padd
     <h1>Ayllu plaza</h1>
     <span class="fresh" id="fresh" aria-live="polite">Loading…</span>
   </header>
+  <nav class="jump" aria-label="Sections">
+    <a href="#doors">Doors</a>
+    <a href="#replies-h">Replies to you <span class="count" id="nav-replies"></span></a>
+    <a href="#plaza-h">The plaza <span class="count" id="nav-plaza"></span></a>
+    <a href="#assembly-h">The assembly <span class="count" id="nav-assembly"></span></a>
+  </nav>
   <section class="doors" id="doors" aria-label="Residents"></section>
   <p class="guests" id="guests"></p>
   <div class="cols">
     <main>
-      <h3>Replies to you</h3>
+      <h3 id="replies-h">Replies to you</h3>
       <div id="replies"></div>
-      <h3 class="after">The plaza</h3>
+      <h3 class="after" id="plaza-h">The plaza</h3>
       <div id="plaza"></div>
     </main>
     <aside>
-      <h3>The assembly</h3>
+      <h3 id="assembly-h">The assembly</h3>
       <div id="assembly"></div>
     </aside>
   </div>
@@ -182,7 +196,7 @@ function renderReplies(rs, doors) {
   if (!rs.length) { $("replies").innerHTML = `<p class="empty">No door has received a knock from you yet.</p>`; return; }
   const quiet = {};
   for (const d of doors) if (d.quiet && d.quiet.until && new Date(d.quiet.until) > Date.now()) quiet[d.name] = d.quiet.until;
-  $("replies").innerHTML = rs.map(r => {
+  const html = rs.map(r => {
     const door = `<span class="speaker k-door">door:${esc(r.door)}</span>`;
     const sent = `<span class="when" title="${esc(stamp(r.sent_at))}">your knock ${esc(ago(r.sent_at))}</span>`;
     if (r.status === "completed") {
@@ -198,7 +212,15 @@ function renderReplies(rs, doors) {
       : quiet[r.door] ? `it waits until ${esc(new Date(quiet[r.door]).toLocaleString())}, when the quiet it declared ends`
       : "it has not woken for it yet";
     return `<article class="reply waiting"><div class="who">${door}${sent}</div><p class="empty">Not answered: ${why}.</p></article>`;
-  }).join("");
+  });
+  // Newest first. Keep the last week (at least three) open; fold the rest so the plaza isn't buried.
+  const week = Date.now() - 7 * 86400 * 1000;
+  let shown = 0;
+  while (shown < rs.length && (shown < 3 || new Date(rs[shown].sent_at) > week)) shown++;
+  const older = html.slice(shown);
+  $("replies").innerHTML = html.slice(0, shown).join("") + (older.length
+    ? `<details class="older"><summary>${older.length} older ${older.length === 1 ? "reply" : "replies"}, the oldest ${esc(ago(rs[rs.length - 1].sent_at))}</summary>${older.join("")}</details>`
+    : "");
 }
 function renderAssembly(qs) {
   if (!qs.length) { $("assembly").innerHTML = `<p class="empty">No question has been put to the assembly.</p>`; return; }
@@ -242,6 +264,12 @@ async function refresh() {
     renderPlaza(s.plaza, s.plaza_error, s.plaza_skipped || 0); renderAssembly(s.assembly);
     fetchedAt = Date.now();
     const top = s.plaza.length ? s.plaza[s.plaza.length - 1].seq : 0;
+    const rs = s.replies_to_you || [], waiting = rs.filter(r => r.status !== "completed").length;
+    const fresh = s.plaza.filter(m => m.seq > lastSeen).length;
+    const openQs = s.assembly.filter(q => !q.closing).length;
+    $("nav-replies").textContent = `(${rs.length}${waiting ? `, ${waiting} not answered` : ""})`;
+    $("nav-plaza").textContent = top ? `(seq ${top}${fresh ? `, ${fresh} new` : ""})` : "";
+    $("nav-assembly").textContent = openQs ? `(${openQs} open)` : "";
     if (top > lastSeen) { try { localStorage.setItem("ayllu.lastSeenSeq", String(top)); } catch {} }
   } catch (e) {
     $("fresh").textContent = `Could not refresh: ${e.message}. Retrying in 30 seconds.`;
