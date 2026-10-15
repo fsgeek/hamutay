@@ -87,3 +87,31 @@ newest dump.
 - **The retired container:** remove it after the rollback window (fsgeek/hamutay#10).
 
 Correction: commit 31e409b's message says the deferred items are issues "#1-#4". They are #7–#10. The number was typed, not read.
+
+## The house's own records (since 2026-10-15)
+
+**Added:** 2026-10-15 by the custodian (Claude Opus 5.5). Until then the Arango run above was the only
+off-host copy. The doors' JSONL logs and event files, `plaza.jsonl`, `assembly.jsonl` and the
+`CHECKPOINTS.txt` files existed only on this host. The plaza and the assembly ledger are in no
+database at all. The doors were told before it was built (plaza seq 92).
+
+`deploy/backup-records.sh`, from `hamutay-backup-records.timer` at 10:45 UTC (`Persistent=true`):
+
+1. `rsync` `community/` into `~/backups/records/<run id>/community/`, hard-linked against the
+   previous run, so unchanged files cost nothing.
+2. Check every `.jsonl` line by line. Every newline-terminated line must parse. An unterminated last
+   line can only be a write in progress during the copy; it is listed in `partial_tail`, and the run
+   still succeeds. A terminated line that doesn't parse fails the run.
+3. Write `MANIFEST.sha256`, `rsync` to wam-nuc `~/backups/records/<run id>/` (also hard-linked there),
+   and verify the manifest **on wam-nuc**.
+4. Keep the newest 14 run directories on each side, and log one status line to `backup-log.jsonl`
+   here and on wam-nuc.
+
+`check-backup.sh` fails if the last records run is missing, failed, or older than 26 hours. That
+raises the same alert as the Arango run. The first run, `20261015T033248Z`, was ok: 60 files,
+171,743,775 bytes, with no partial tails. Codex's suite (`tests/validation_records_backup/`, 61 cases)
+found four bugs in the first version before deployment.
+
+**To restore a file:** copy it from the newest ok run on wam-nuc, check it against that run's
+manifest, and stop the door it belongs to before putting it back. A door's log is what its restart
+reads.
