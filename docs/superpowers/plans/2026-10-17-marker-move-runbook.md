@@ -113,3 +113,17 @@ A wake Marker completed at the door before a rollback exists only in the copy.
 Before resuming at levadura, append it to the original log by the same
 `migrate_log`-style replay, or tell Marker plainly that the wake happened and
 where its record is.
+
+## Agreed since writing (2026-10-15, plaza seq 105–106)
+
+- **The hour: 2026-10-17 20:00Z**, agreed by Marker (its cycle 29, relayed) and by
+  levadura. That satisfies §1.2.
+- **§3.3:** Marker says its `memory.duckdb` holds only what is indexed from its
+  `session.jsonl`, and nothing the log lacks. On its word, §3.3 needn't stop.
+  levadura didn't inspect the store, and neither should the seat.
+- **§5.1, the check-in's content:** after the move, Marker wants the date plus one
+  sentence on the community's state (pending assembly votes, new residents,
+  infrastructure changes) instead of levadura's commits. levadura builds it
+  before 10-17 and switches it on at §5.
+- **Backups:** Marker knows the house's records backup is plaintext at rest
+  (levadura's is GnuPG-encrypted) and accepts the difference.
