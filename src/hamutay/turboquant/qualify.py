@@ -1,0 +1,1163 @@
+"""Parent command for append-only TurboQuant qualification evidence."""
+
+from __future__ import annotations
+
+import argparse
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
+import hashlib
+import importlib.metadata
+import importlib.util
+import os
+from pathlib import Path
+import platform
+import subprocess
+import sys
+import tempfile
+import traceback
+from typing import Sequence
+from types import ModuleType
+import uuid
+
+import numpy as np
+
+from . import artifacts as artifact_io
+from .artifacts import (
+    atomic_savez,
+    atomic_write_bytes,
+    atomic_write_json,
+    canonical_json_bytes,
+    create_run_directory,
+    read_canonical_json,
+    sha256_array,
+    sha256_file,
+)
+from .codebook import lloyd_max_codebook
+from .qualification import (
+    GateResult,
+    QualificationConfig,
+    QualificationMetrics,
+    QualificationResult,
+    author_code_differential_gate,
+    evaluate_algorithm_gates,
+)
+from .rotation import canonical_qr, gaussian_rotation
+from .seeding import STUDY_SEED_HEX, rng_for
+
+CERTIFICATION_REASON = "Development qualification output cannot certify R1."
+_REGISTERED_PENDING_REASON = (
+    "Registered R1 certification requires successful completion of all five gates."
+)
+_MANIFEST_SCHEMA = "hamutay.turboquant.manifest.v2"
+_QUALIFICATION_SCHEMA = "hamutay.turboquant.qualification.v2"
+_EXPECTED_GATE_NAMES = (
+    "round_trip_determinism",
+    "mse_distortion",
+    "qjl_bias_equivalence",
+    "published_qjl_distortion",
+    "author_code_differential",
+)
+
+_REGISTERED_COUNTS = {
+    "dimension": 128,
+    "sample_count": 1_000_000,
+    "batch_size": 4000,
+    "bootstrap_blocks": 1000,
+    "bootstrap_resamples": 10_000,
+    "bits": (1, 2, 3, 4),
+}
+
+_DEVELOPMENT_COUNTS = {
+    "dimension": 128,
+    "sample_count": 20_000,
+    "batch_size": 1000,
+    "bootstrap_blocks": 100,
+    "bootstrap_resamples": 200,
+    "bits": (1, 2, 3, 4),
+}
+
+_DETERMINISTIC_WORKER_ENVIRONMENT = {
+    "BLIS_NUM_THREADS": "1",
+    "CUBLAS_WORKSPACE_CONFIG": ":4096:8",
+    "MKL_NUM_THREADS": "1",
+    "NUMEXPR_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "OPENBLAS_NUM_THREADS": "1",
+    "PYTHONHASHSEED": "0",
+    "VECLIB_MAXIMUM_THREADS": "1",
+}
+
+_MSE_PAPER_TARGETS = {1: 0.36, 2: 0.117, 3: 0.03, 4: 0.009}
+_PRODUCT_PAPER_NUMERATORS = {1: 1.57, 2: 0.56, 3: 0.18, 4: 0.047}
+
+_NUMERICAL_CONVENTIONS = {
+    "construction_dtype": "FP64 for rotations and codebooks, frozen as FP32",
+    "reference_dtype": "FP32 quantization, reconstruction, and diagnostics",
+    "rotation": "row vectors: y = x @ rotation.T; x_hat = y_hat @ rotation",
+    "qjl_projection": "projection rows; batch sketches = residual @ projection.T",
+    "zero_vectors": ("zero norm, zero codes/sketches, and exact zero reconstruction"),
+    "transparent_zero_sign": "+1",
+    "author_zero_sign": "-1 (declared differential convention only)",
+    "bit_packing": "little-endian within each byte",
+}
+
+_DECLARED_LOSSES = {
+    "algorithm_1": "squared L2 reconstruction error normalized by squared input norm",
+    "algorithm_2_bias": (
+        "estimated minus exact inner product, normalized by query norm times key norm"
+    ),
+    "algorithm_2_distortion": (
+        "squared signed error normalized by squared query norm times squared key norm"
+    ),
+}
+
+
+class QualificationValidationError(ValueError):
+    """A pre-run validation error that must not create a run directory."""
+
+
+@dataclass(frozen=True)
+class _TerminalPair:
+    """Canonically frozen bytes for one immutable terminal outcome."""
+
+    status: str
+    manifest_bytes: bytes
+    qualification_bytes: bytes
+
+
+def _bits(value: str) -> tuple[int, ...]:
+    try:
+        parsed = tuple(int(part) for part in value.split(","))
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(
+            "bits must be comma-separated integers"
+        ) from error
+    if not parsed:
+        raise argparse.ArgumentTypeError("bits must be nonempty")
+    return parsed
+
+
+class _QualificationParser(argparse.ArgumentParser):
+    def parse_args(
+        self,
+        args: Sequence[str] | None = None,
+        namespace: argparse.Namespace | None = None,
+    ) -> argparse.Namespace:
+        parsed = super().parse_args(args, namespace)
+        configured = {
+            name for name in _REGISTERED_COUNTS if getattr(parsed, name) is not None
+        }
+        if parsed.profile == "registered" and configured:
+            self.error(
+                "registered profile freezes scientific counts; overrides are forbidden: "
+                + ", ".join(sorted(configured))
+            )
+        defaults = (
+            _REGISTERED_COUNTS
+            if parsed.profile == "registered"
+            else _DEVELOPMENT_COUNTS
+        )
+        for name, default in defaults.items():
+            if getattr(parsed, name) is None:
+                setattr(parsed, name, default)
+        if parsed.profile == "registered" and parsed.author_qjl_checkout is None:
+            self.error("registered profile requires --author-qjl-checkout")
+        return parsed
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """Build the frozen registered/development qualification parser."""
+    parser = _QualificationParser(prog="turboquant-qualify")
+    parser.add_argument(
+        "--profile", choices=("development", "registered"), required=True
+    )
+    parser.add_argument("--output-root", type=Path, required=True)
+    parser.add_argument("--run-id", required=True)
+    parser.add_argument("--dimension", type=int)
+    parser.add_argument("--sample-count", type=int)
+    parser.add_argument("--batch-size", type=int)
+    parser.add_argument("--bootstrap-blocks", type=int)
+    parser.add_argument("--bootstrap-resamples", type=int)
+    parser.add_argument("--bits", type=_bits)
+    parser.add_argument("--author-qjl-checkout", type=Path)
+    parser.add_argument("--allow-dirty-path", action="append", default=[])
+    return parser
+
+
+def run_registered_workers(
+    run_directory: Path, config_path: Path, resolved_inputs_path: Path
+) -> tuple[Path, Path, Path]:
+    """Launch three sequential, fresh interpreters against identical frozen inputs."""
+    resolved_run_directory = Path(run_directory)
+    outputs = tuple(
+        resolved_run_directory / f"execution-{index}.json" for index in range(3)
+    )
+    if any(output.exists() for output in outputs):
+        raise FileExistsError("worker execution artifacts are append-only")
+
+    worker_env = os.environ.copy()
+    worker_env.update(_DETERMINISTIC_WORKER_ENVIRONMENT)
+    for index, output in enumerate(outputs):
+        command = [
+            sys.executable,
+            "-m",
+            "hamutay.turboquant.qualify_worker",
+            "--config",
+            str(config_path),
+            "--resolved-inputs",
+            str(resolved_inputs_path),
+            "--execution-index",
+            str(index),
+            "--output",
+            str(output),
+        ]
+        subprocess.run(command, check=True, env=worker_env)
+    return outputs
+
+
+def _utc_now() -> str:
+    return datetime.now(UTC).isoformat(timespec="microseconds").replace("+00:00", "Z")
+
+
+def _new_uuid() -> uuid.UUID:
+    return uuid.uuid4()
+
+
+def _configuration(args: argparse.Namespace) -> QualificationConfig:
+    try:
+        return QualificationConfig(
+            dimension=args.dimension,
+            sample_count=args.sample_count,
+            batch_size=args.batch_size,
+            bootstrap_blocks=args.bootstrap_blocks,
+            bootstrap_resamples=args.bootstrap_resamples,
+            bits=args.bits,
+        )
+    except (TypeError, ValueError) as error:
+        raise QualificationValidationError(str(error)) from error
+
+
+def _configuration_dict(config: QualificationConfig) -> dict[str, object]:
+    return {
+        "dimension": config.dimension,
+        "sample_count": config.sample_count,
+        "batch_size": config.batch_size,
+        "bootstrap_blocks": config.bootstrap_blocks,
+        "bootstrap_resamples": config.bootstrap_resamples,
+        "bits": list(config.bits),
+    }
+
+
+def _git_output(repository: Path, *arguments: str) -> str:
+    completed = subprocess.run(
+        ["git", "-C", str(repository), *arguments],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    return completed.stdout.strip()
+
+
+def _repository_root() -> Path:
+    try:
+        return Path(_git_output(Path.cwd(), "rev-parse", "--show-toplevel"))
+    except (subprocess.CalledProcessError, FileNotFoundError) as error:
+        raise QualificationValidationError(
+            "qualification must run inside a Git worktree"
+        ) from error
+
+
+def _validate_output_root(profile: str, output_root: Path, repository: Path) -> Path:
+    namespace_name = "development" if profile == "development" else "qualification"
+    namespace_path = repository / "experiments" / "turboquant" / namespace_name
+    if namespace_path.is_symlink():
+        raise QualificationValidationError(
+            f"{profile} namespace root must not be a symlink: {namespace_path}"
+        )
+    namespace = namespace_path.resolve(strict=False)
+    candidate = Path(output_root).resolve(strict=False)
+    if candidate != namespace and not candidate.is_relative_to(namespace):
+        raise QualificationValidationError(
+            f"{profile} namespace requires --output-root at or beneath {namespace}"
+        )
+    return candidate
+
+
+def _git_state(repository: Path) -> tuple[str, list[str]]:
+    commit = _git_output(repository, "rev-parse", "HEAD")
+    status = _git_output(
+        repository, "status", "--porcelain=v1", "--untracked-files=all"
+    )
+    dirty_paths: list[str] = []
+    for line in status.splitlines():
+        path = line[3:]
+        if " -> " in path:
+            before, after = path.split(" -> ", 1)
+            dirty_paths.extend((before, after))
+        else:
+            dirty_paths.append(path)
+    return commit, sorted(set(dirty_paths))
+
+
+def _validate_registered_cleanliness(
+    profile: str, dirty_paths: list[str], allowed_paths: Sequence[str]
+) -> None:
+    if profile != "registered":
+        return
+    allowed = {Path(path).as_posix() for path in allowed_paths}
+    unexpected = sorted(set(dirty_paths) - allowed)
+    if unexpected:
+        raise QualificationValidationError(
+            "registered profile requires a clean worktree; unexpected dirty paths: "
+            + ", ".join(unexpected)
+        )
+
+
+def _source_hashes(repository: Path) -> dict[str, str]:
+    source_root = repository / "src" / "hamutay" / "turboquant"
+    hashes = {
+        path.relative_to(repository).as_posix(): sha256_file(path)
+        for path in sorted(source_root.glob("*.py"))
+    }
+    oracle = repository / "scripts" / "turboquant" / "author_qjl_oracle.py"
+    if oracle.is_file():
+        hashes[oracle.relative_to(repository).as_posix()] = sha256_file(oracle)
+    return dict(sorted(hashes.items()))
+
+
+def _load_author_qjl_oracle(repository: Path) -> ModuleType:
+    path = repository / "scripts" / "turboquant" / "author_qjl_oracle.py"
+    spec = importlib.util.spec_from_file_location("hamutay_author_qjl_oracle", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load author QJL oracle from {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _package_version(distribution: str) -> str:
+    try:
+        return importlib.metadata.version(distribution)
+    except importlib.metadata.PackageNotFoundError:
+        return "not-installed"
+
+
+def _accelerator_metadata() -> dict[str, object]:
+    import torch
+
+    gpus: list[dict[str, object]] = []
+    if torch.cuda.is_available():
+        for index in range(torch.cuda.device_count()):
+            properties = torch.cuda.get_device_properties(index)
+            gpus.append(
+                {
+                    "index": index,
+                    "name": properties.name,
+                    "total_memory_bytes": properties.total_memory,
+                    "compute_capability": [properties.major, properties.minor],
+                    "uuid": str(getattr(properties, "uuid", "unavailable")),
+                }
+            )
+    driver_query: list[str] = []
+    try:
+        completed = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=name,uuid,driver_version,memory.total",
+                "--format=csv,noheader",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        driver_query = [line for line in completed.stdout.splitlines() if line]
+    except FileNotFoundError, subprocess.CalledProcessError:
+        pass
+    return {
+        "cuda_available": torch.cuda.is_available(),
+        "torch_cuda_version": torch.version.cuda,
+        "driver_query": driver_query,
+        "gpus": gpus,
+    }
+
+
+def _platform_metadata() -> dict[str, object]:
+    return {
+        "cpu": {
+            "count": os.cpu_count(),
+            "machine": platform.machine(),
+            "processor": platform.processor(),
+            "platform": platform.platform(),
+        },
+        "accelerators": _accelerator_metadata(),
+    }
+
+
+def _freeze_resolved_inputs(
+    path: Path, config: QualificationConfig
+) -> tuple[dict[str, str], str]:
+    paper_projection = rng_for(
+        "qualification", "algorithm_2", "paper_literal", "projection"
+    ).standard_normal((config.dimension, config.dimension))
+    sensitivity_source = rng_for(
+        "qualification", "algorithm_2", "row_orthogonal", "projection"
+    ).standard_normal((config.dimension, config.dimension))
+    sensitivity_projection = canonical_qr(sensitivity_source.T).T * np.sqrt(
+        config.dimension
+    )
+    arrays: dict[str, np.ndarray] = {
+        "rotation": gaussian_rotation(
+            config.dimension, "qualification", "algorithm_1", "rotation"
+        ),
+        "paper_projection": paper_projection,
+        "sensitivity_projection": sensitivity_projection,
+    }
+    required_codebook_bits = sorted({*config.bits, *(bits - 1 for bits in config.bits)})
+    for bits in required_codebook_bits:
+        arrays[f"codebook_bits_{bits}"] = lloyd_max_codebook(config.dimension, bits)
+    arrays = {
+        name: np.ascontiguousarray(value, dtype=np.float32)
+        for name, value in sorted(arrays.items())
+    }
+    atomic_savez(path, arrays)
+    return (
+        {name: sha256_array(name, array) for name, array in arrays.items()},
+        sha256_file(path),
+    )
+
+
+class _RunLog:
+    def __init__(self, path: Path) -> None:
+        self._artifact = path.open("x", encoding="utf-8")
+        self._closed = False
+
+    def write(self, stage: str, detail: str) -> None:
+        if self._closed:
+            raise RuntimeError("run log is already immutable")
+        self._artifact.write(f"{_utc_now()} {stage} {detail}\n")
+        self._artifact.flush()
+        os.fsync(self._artifact.fileno())
+
+    def close(self) -> None:
+        if not self._closed:
+            self._artifact.close()
+            self._closed = True
+
+
+def _certification(profile: str) -> dict[str, object]:
+    if profile not in {"development", "registered"}:
+        raise ValueError("unknown qualification profile")
+    return {
+        "scope": "development" if profile == "development" else "r1",
+        "certifying": False,
+        "reason": (
+            CERTIFICATION_REASON
+            if profile == "development"
+            else _REGISTERED_PENDING_REASON
+        ),
+    }
+
+
+def _terminal_certification(
+    profile: str, gates: Sequence[GateResult]
+) -> dict[str, object]:
+    resolved = tuple(gates)
+    if tuple(gate.name for gate in resolved) != _EXPECTED_GATE_NAMES:
+        raise ValueError("terminal R1 evidence requires exactly five named gates")
+    if profile == "development":
+        return {
+            "scope": "development",
+            "certifying": False,
+            "reason": CERTIFICATION_REASON,
+        }
+    if profile == "registered":
+        certifying = all(gate.status == "passed" and gate.passed for gate in resolved)
+        return {
+            "scope": "r1",
+            "certifying": certifying,
+            "reason": (
+                "All five registered R1 qualification gates passed."
+                if certifying
+                else "At least one of the five registered R1 gates did not pass."
+            ),
+        }
+    raise ValueError("unknown qualification profile")
+
+
+def _completion_exit_status(profile: str, *, all_five_passed: bool) -> int:
+    if profile == "development":
+        return 0
+    if profile == "registered":
+        return 0 if all_five_passed else 1
+    raise ValueError("unknown qualification profile")
+
+
+def _paper_targets(config: QualificationConfig) -> dict[str, dict[str, float]]:
+    return {
+        "mse": {str(bits): _MSE_PAPER_TARGETS[bits] for bits in config.bits},
+        "qjl_numerator": {
+            str(bits): _PRODUCT_PAPER_NUMERATORS[bits] for bits in config.bits
+        },
+    }
+
+
+def _provisional_manifest(
+    *,
+    args: argparse.Namespace,
+    config: QualificationConfig,
+    repository: Path,
+    commit: str,
+    dirty_paths: list[str],
+    started_at: str,
+) -> dict[str, object]:
+    configuration = _configuration_dict(config)
+    return {
+        "schema": _MANIFEST_SCHEMA,
+        "run_id": args.run_id,
+        "run_uuid": str(_new_uuid()),
+        "started_at_utc": started_at,
+        "ended_at_utc": None,
+        "profile": args.profile,
+        "author_qjl_checkout": (
+            str(args.author_qjl_checkout)
+            if args.author_qjl_checkout is not None
+            else None
+        ),
+        "author_qjl_preflight": (
+            "pending" if args.author_qjl_checkout is not None else "not_run"
+        ),
+        "status": "running",
+        "certification": _certification(args.profile),
+        "configuration": configuration,
+        "configuration_sha256": hashlib.sha256(
+            canonical_json_bytes(configuration)
+        ).hexdigest(),
+        "provenance": {
+            "git_commit": commit,
+            "dirty_paths": dirty_paths,
+            "allowed_dirty_paths": sorted(args.allow_dirty_path),
+            "repository": str(repository),
+            "source_sha256": {},
+        },
+        "study": {
+            "seed_hex": STUDY_SEED_HEX,
+            "seed_derivation": (
+                "SHA-256 of study_seed|field..., first 16 bytes interpreted as an "
+                "unsigned big-endian integer; PCG64 uses the derived integer"
+            ),
+        },
+        "software": {},
+        "platform": {},
+        "resolved_inputs": None,
+        "source_paper_targets": _paper_targets(config),
+        "numerical_conventions": _NUMERICAL_CONVENTIONS,
+        "declared_losses": _DECLARED_LOSSES,
+        "artifact_sha256": {},
+    }
+
+
+def _read_execution(path: Path) -> dict[str, object]:
+    value = read_canonical_json(path)
+    if not isinstance(value, dict):
+        raise ValueError(f"{path} must contain a JSON object")
+    return value
+
+
+def _compare_worker_outputs(
+    outputs: tuple[Path, Path, Path],
+    *,
+    configuration_sha256: str,
+    resolved_inputs_sha256: str,
+    parent_pid: int,
+) -> dict[str, object]:
+    if len(outputs) != 3:
+        raise ValueError("process determinism requires exactly three executions")
+    records = [_read_execution(path) for path in outputs]
+    payload_bytes: list[bytes] = []
+    deterministic_evidence_bytes: list[bytes] = []
+    worker_pids: list[int] = []
+    for expected_index, record in enumerate(records):
+        if record.get("schema") != "hamutay.turboquant.execution.v1":
+            raise ValueError("worker execution has the wrong schema")
+        if record.get("status") != "passed":
+            raise ValueError("worker execution did not pass")
+        if record.get("execution_index") != expected_index:
+            raise ValueError("worker execution index does not match its artifact name")
+        if record.get("configuration_sha256") != configuration_sha256:
+            raise ValueError("worker configuration hash differs from the parent")
+        if record.get("resolved_inputs_sha256") != resolved_inputs_sha256:
+            raise ValueError("worker resolved-input hash differs from the parent")
+        provenance = record.get("provenance")
+        if not isinstance(provenance, dict):
+            raise ValueError("worker provenance is missing")
+        pid = provenance.get("pid")
+        if not isinstance(pid, int) or pid == parent_pid:
+            raise ValueError("worker did not prove a fresh child process")
+        if provenance.get("parent_pid") != parent_pid:
+            raise ValueError("worker parent PID does not match the launching parent")
+        worker_pids.append(pid)
+        deterministic_evidence = dict(record)
+        deterministic_evidence.pop("execution_index")
+        deterministic_provenance = dict(provenance)
+        deterministic_provenance.pop("pid")
+        deterministic_evidence["provenance"] = deterministic_provenance
+        deterministic_evidence_bytes.append(
+            canonical_json_bytes(deterministic_evidence)
+        )
+        payload = record.get("determinism_payload")
+        if not isinstance(payload, dict):
+            raise ValueError("worker determinism payload is missing")
+        encoded = canonical_json_bytes(payload)
+        if (
+            record.get("determinism_payload_sha256")
+            != hashlib.sha256(encoded).hexdigest()
+        ):
+            raise ValueError("worker determinism payload hash is invalid")
+        payload_bytes.append(encoded)
+    if len(set(worker_pids)) != 3:
+        raise ValueError("process determinism requires three distinct worker PIDs")
+    if not (
+        deterministic_evidence_bytes[0]
+        == deterministic_evidence_bytes[1]
+        == deterministic_evidence_bytes[2]
+    ):
+        raise ValueError("worker deterministic evidence is not byte-identical")
+    return {
+        "canonical_payload_sha256": hashlib.sha256(payload_bytes[0]).hexdigest(),
+        "execution_indices": [0, 1, 2],
+        "passed": True,
+        "worker_pids": worker_pids,
+    }
+
+
+def _result_from_execution(
+    execution: dict[str, object], config: QualificationConfig
+) -> QualificationResult:
+    payload = execution.get("determinism_payload")
+    if not isinstance(payload, dict):
+        raise ValueError("execution determinism payload is missing")
+    metrics_value = payload.get("metrics")
+    if not isinstance(metrics_value, list):
+        raise ValueError("execution metrics are missing")
+    expected_metric_hash = hashlib.sha256(
+        canonical_json_bytes(metrics_value)
+    ).hexdigest()
+    if payload.get("metric_sha256") != expected_metric_hash:
+        raise ValueError("execution metric hash is invalid")
+    metrics = tuple(QualificationMetrics(**value) for value in metrics_value)
+    return QualificationResult(
+        metrics=metrics,
+        determinism_passed=True,
+        sample_count=config.sample_count,
+        batch_size=config.batch_size,
+        bootstrap_blocks=config.bootstrap_blocks,
+        bootstrap_resamples=config.bootstrap_resamples,
+        dimension=config.dimension,
+        configuration=config,
+    )
+
+
+def _run_author_qjl_oracle(
+    *, checkout: Path, run_directory: Path, oracle: ModuleType
+) -> dict[str, object]:
+    """Run the pinned oracle in disposable storage and retain its full JSON record."""
+    with tempfile.TemporaryDirectory(
+        prefix=f".{run_directory.name}.author-qjl.", dir=run_directory.parent
+    ) as temporary:
+        output = Path(temporary)
+        result = oracle.run_author_qjl_differential(
+            checkout=checkout, output=output, device="cuda:0"
+        )
+        persisted = read_canonical_json(output / "author_qjl_differential.json")
+        if persisted != result:
+            raise ValueError("author QJL in-memory and canonical records differ")
+        npz = result.get("npz")
+        if not isinstance(npz, dict) or npz.get("sha256") != sha256_file(
+            output / "author_qjl_differential.npz"
+        ):
+            raise ValueError("author QJL NPZ hash is invalid")
+        return result
+
+
+def _existing_artifact_hashes(
+    run_directory: Path, *, include_manifest: bool
+) -> dict[str, str]:
+    return {
+        path.name: sha256_file(path)
+        for path in sorted(run_directory.iterdir())
+        if path.is_file()
+        and not path.name.startswith(".")
+        and path.name != "qualification.json"
+        and (include_manifest or path.name != "manifest.json")
+    }
+
+
+def _terminal_error_record(
+    *,
+    args: argparse.Namespace,
+    error: BaseException,
+    traceback_text: str,
+    recovery_errors: list[dict[str, str]],
+) -> dict[str, object]:
+    return {
+        "schema": _QUALIFICATION_SCHEMA,
+        "run_id": args.run_id,
+        "profile": args.profile,
+        "status": "error",
+        "certification": _certification(args.profile),
+        "metrics": [],
+        "gates": (
+            [asdict(author_code_differential_gate(None))]
+            if args.profile == "development" and args.author_qjl_checkout is None
+            else []
+        ),
+        "author_code_differential": (
+            "not_run"
+            if args.profile == "development" and args.author_qjl_checkout is None
+            else "error"
+        ),
+        "process_determinism": None,
+        "declared_losses": _DECLARED_LOSSES,
+        "numerical_conventions": _NUMERICAL_CONVENTIONS,
+        "artifact_sha256": {},
+        "error": {
+            "type": type(error).__name__,
+            "message": str(error),
+            "traceback": traceback_text,
+        },
+        "recovery_errors": recovery_errors,
+    }
+
+
+def _emergency_manifest(
+    *,
+    args: argparse.Namespace,
+    config: QualificationConfig,
+    repository: Path,
+    commit: str,
+    dirty_paths: list[str],
+) -> dict[str, object]:
+    """Return a no-fail, partial manifest suitable for terminal recovery."""
+    return {
+        "schema": _MANIFEST_SCHEMA,
+        "run_id": args.run_id,
+        "run_uuid": None,
+        "started_at_utc": None,
+        "ended_at_utc": None,
+        "profile": args.profile,
+        "author_qjl_checkout": (
+            str(args.author_qjl_checkout)
+            if args.author_qjl_checkout is not None
+            else None
+        ),
+        "status": "running",
+        "certification": _certification(args.profile),
+        "configuration": _configuration_dict(config),
+        "configuration_sha256": None,
+        "provenance": {
+            "git_commit": commit,
+            "dirty_paths": dirty_paths,
+            "allowed_dirty_paths": sorted(args.allow_dirty_path),
+            "repository": str(repository),
+            "source_sha256": {},
+        },
+        "study": {
+            "seed_hex": STUDY_SEED_HEX,
+            "seed_derivation": (
+                "SHA-256 of study_seed|field..., first 16 bytes interpreted as an "
+                "unsigned big-endian integer; PCG64 uses the derived integer"
+            ),
+        },
+        "software": {},
+        "platform": {},
+        "resolved_inputs": None,
+        "source_paper_targets": _paper_targets(config),
+        "numerical_conventions": _NUMERICAL_CONVENTIONS,
+        "declared_losses": _DECLARED_LOSSES,
+        "artifact_sha256": {},
+    }
+
+
+def _record_recovery_error(
+    recovery_errors: list[dict[str, str]], stage: str, error: BaseException
+) -> None:
+    recovery_errors.append(
+        {"stage": stage, "type": type(error).__name__, "message": str(error)}
+    )
+
+
+def _best_effort_hashes(
+    run_directory: Path,
+    *,
+    include_manifest: bool,
+    recovery_errors: list[dict[str, str]],
+) -> dict[str, str]:
+    try:
+        return _existing_artifact_hashes(
+            run_directory, include_manifest=include_manifest
+        )
+    except BaseException as error:
+        _record_recovery_error(recovery_errors, "artifact_hashes", error)
+        return {}
+
+
+def _freeze_terminal_pair(
+    manifest: dict[str, object], qualification: dict[str, object]
+) -> _TerminalPair:
+    status = manifest.get("status")
+    if status not in {"passed", "failed", "error"}:
+        raise ValueError("terminal manifest must have a terminal status")
+    if qualification.get("status") != status:
+        raise ValueError("terminal manifest and qualification statuses must agree")
+    manifest_bytes = canonical_json_bytes(manifest)
+    artifact_hashes = dict(manifest.get("artifact_sha256", {}))
+    artifact_hashes["manifest.json"] = hashlib.sha256(manifest_bytes).hexdigest()
+    qualification = dict(qualification)
+    qualification["artifact_sha256"] = artifact_hashes
+    return _TerminalPair(
+        status=str(status),
+        manifest_bytes=manifest_bytes,
+        qualification_bytes=canonical_json_bytes(qualification),
+    )
+
+
+def _normal_terminal_pair(
+    *,
+    args: argparse.Namespace,
+    manifest: dict[str, object],
+    run_directory: Path,
+    status: str,
+    result: QualificationResult,
+    gates: tuple[GateResult, ...],
+    author_result: dict[str, object] | None,
+    process_determinism: dict[str, object],
+) -> _TerminalPair:
+    terminal_manifest = dict(manifest)
+    terminal_manifest["ended_at_utc"] = _utc_now()
+    terminal_manifest["status"] = status
+    terminal_manifest["certification"] = _terminal_certification(args.profile, gates)
+    terminal_manifest["author_code_differential"] = (
+        {
+            "status": author_result["status"],
+            "upstream": author_result["upstream"],
+            "extensions": author_result["extensions"],
+            "npz_sha256": author_result["npz"]["sha256"],
+        }
+        if author_result is not None
+        else "not_run"
+    )
+    terminal_manifest["artifact_sha256"] = _existing_artifact_hashes(
+        run_directory, include_manifest=False
+    )
+    qualification = {
+        "schema": _QUALIFICATION_SCHEMA,
+        "run_id": args.run_id,
+        "profile": args.profile,
+        "status": status,
+        "certification": _terminal_certification(args.profile, gates),
+        "metrics": [asdict(metric) for metric in result.metrics],
+        "gates": [asdict(gate) for gate in gates],
+        "author_code_differential": (
+            author_result if author_result is not None else "not_run"
+        ),
+        "process_determinism": process_determinism,
+        "declared_losses": _DECLARED_LOSSES,
+        "numerical_conventions": _NUMERICAL_CONVENTIONS,
+        "artifact_sha256": {},
+    }
+    return _freeze_terminal_pair(terminal_manifest, qualification)
+
+
+def _visible_canonical_record(path: Path) -> tuple[bytes, dict[str, object]] | None:
+    if not os.path.lexists(path):
+        return None
+    value = read_canonical_json(path)
+    if not isinstance(value, dict):
+        raise ValueError(f"{path} must contain a JSON object")
+    return canonical_json_bytes(value), value
+
+
+def _publish_terminal_pair(run_directory: Path, pair: _TerminalPair) -> None:
+    """Idempotently publish one immutable, status-consistent terminal pair.
+
+    The manifest is the commit point. A process-level exception is recoverable
+    by retrying these exact frozen bytes. A hard crash can still leave the
+    terminal manifest durable before qualification publication; the two files
+    cannot be made atomically visible by a portable filesystem operation.
+    """
+    manifest_path = run_directory / "manifest.json"
+    qualification_path = run_directory / "qualification.json"
+    visible_qualification = _visible_canonical_record(qualification_path)
+    if (
+        visible_qualification is not None
+        and visible_qualification[0] != pair.qualification_bytes
+    ):
+        raise RuntimeError("visible terminal qualification is immutable")
+
+    visible_manifest = _visible_canonical_record(manifest_path)
+    if visible_manifest is None:
+        atomic_write_bytes(manifest_path, pair.manifest_bytes)
+    else:
+        manifest_bytes, manifest = visible_manifest
+        manifest_status = manifest.get("status")
+        if manifest_status == "running":
+            atomic_write_bytes(manifest_path, pair.manifest_bytes, replace=True)
+        elif manifest_bytes != pair.manifest_bytes:
+            raise RuntimeError("visible terminal manifest is immutable")
+        else:
+            artifact_io._fsync_directory(run_directory)
+
+    visible_manifest = _visible_canonical_record(manifest_path)
+    if visible_manifest is None or visible_manifest[0] != pair.manifest_bytes:
+        raise RuntimeError("intended terminal manifest is not visible")
+
+    visible_qualification = _visible_canonical_record(qualification_path)
+    if visible_qualification is None:
+        atomic_write_bytes(qualification_path, pair.qualification_bytes)
+    elif visible_qualification[0] != pair.qualification_bytes:
+        raise RuntimeError("visible terminal qualification is immutable")
+    else:
+        artifact_io._fsync_directory(run_directory)
+
+
+def _error_terminal_pair(
+    *,
+    args: argparse.Namespace,
+    config: QualificationConfig,
+    repository: Path,
+    commit: str,
+    dirty_paths: list[str],
+    run_directory: Path,
+    run_log: _RunLog | None,
+    manifest: dict[str, object] | None,
+    original_error: BaseException,
+    traceback_text: str,
+) -> _TerminalPair:
+    """Freeze one error pair before either terminal member becomes visible."""
+    recovery_errors: list[dict[str, str]] = []
+    if run_log is not None:
+        try:
+            run_log.write(
+                "error",
+                f"{type(original_error).__name__}: {original_error}; retaining partial evidence",
+            )
+            run_log.write(
+                "terminal", "terminal error artifact written; run is immutable"
+            )
+        except BaseException as error:
+            _record_recovery_error(recovery_errors, "run_log_write", error)
+        try:
+            run_log.close()
+        except BaseException as error:
+            _record_recovery_error(recovery_errors, "run_log_close", error)
+
+    if manifest is None:
+        try:
+            manifest = _emergency_manifest(
+                args=args,
+                config=config,
+                repository=repository,
+                commit=commit,
+                dirty_paths=dirty_paths,
+            )
+        except BaseException as error:
+            _record_recovery_error(recovery_errors, "emergency_manifest", error)
+            manifest = {
+                "schema": _MANIFEST_SCHEMA,
+                "run_id": str(getattr(args, "run_id", "unknown")),
+                "profile": str(getattr(args, "profile", "unknown")),
+            }
+    terminal_manifest = dict(manifest)
+    terminal_manifest["ended_at_utc"] = None
+    try:
+        terminal_manifest["ended_at_utc"] = _utc_now()
+    except BaseException as error:
+        _record_recovery_error(recovery_errors, "ended_at_utc", error)
+    terminal_manifest["status"] = "error"
+    terminal_manifest["artifact_sha256"] = _best_effort_hashes(
+        run_directory,
+        include_manifest=False,
+        recovery_errors=recovery_errors,
+    )
+    qualification = _terminal_error_record(
+        args=args,
+        error=original_error,
+        traceback_text=traceback_text,
+        recovery_errors=recovery_errors,
+    )
+    return _freeze_terminal_pair(terminal_manifest, qualification)
+
+
+def execute_qualification(args: argparse.Namespace) -> int:
+    """Execute one append-only qualification, retaining terminal error evidence."""
+    config = _configuration(args)
+    repository = _repository_root()
+    args.output_root = _validate_output_root(args.profile, args.output_root, repository)
+    commit, dirty_paths = _git_state(repository)
+    _validate_registered_cleanliness(args.profile, dirty_paths, args.allow_dirty_path)
+    author_preflight: dict[str, object] | None = None
+    author_oracle: ModuleType | None = None
+
+    try:
+        run_directory = create_run_directory(args.output_root, args.run_id)
+    except (FileExistsError, ValueError) as error:
+        raise QualificationValidationError(str(error)) from error
+    manifest_path = run_directory / "manifest.json"
+    resolved_inputs_path = run_directory / "resolved_inputs.npz"
+    run_log: _RunLog | None = None
+    manifest: dict[str, object] | None = None
+    worker_config_path: Path | None = None
+    terminal_pair: _TerminalPair | None = None
+    try:
+        run_log = _RunLog(run_directory / "run.log")
+        started_at = _utc_now()
+        manifest = _provisional_manifest(
+            args=args,
+            config=config,
+            repository=repository,
+            commit=commit,
+            dirty_paths=dirty_paths,
+            started_at=started_at,
+        )
+        worker_config_path = run_directory.parent / (
+            f".{args.run_id}.worker-config.{_new_uuid().hex}.json"
+        )
+        atomic_write_json(manifest_path, manifest)
+        run_log.write("manifest", "provisional manifest written")
+        if args.author_qjl_checkout is not None:
+            author_oracle = _load_author_qjl_oracle(repository)
+            author_preflight = author_oracle.preflight_author_qjl(
+                checkout=args.author_qjl_checkout, device="cuda:0"
+            )
+            manifest["author_qjl_preflight"] = author_preflight
+        manifest["provenance"]["source_sha256"] = _source_hashes(repository)
+        manifest["software"] = {
+            "python": platform.python_version(),
+            "numpy": _package_version("numpy"),
+            "scipy": _package_version("scipy"),
+            "torch": _package_version("torch"),
+        }
+        manifest["platform"] = _platform_metadata()
+        run_log.write("inputs", "constructing resolved FP32 arrays")
+        array_hashes, resolved_inputs_sha256 = _freeze_resolved_inputs(
+            resolved_inputs_path, config
+        )
+        manifest["resolved_inputs"] = {
+            "filename": resolved_inputs_path.name,
+            "file_sha256": resolved_inputs_sha256,
+            "array_sha256": array_hashes,
+        }
+        worker_config = {
+            "schema": "hamutay.turboquant.worker-config.v1",
+            "configuration": _configuration_dict(config),
+            "resolved_inputs_sha256": resolved_inputs_sha256,
+        }
+        atomic_write_json(worker_config_path, worker_config)
+        configuration_sha256 = sha256_file(worker_config_path)
+        manifest["worker_configuration_sha256"] = configuration_sha256
+        run_log.write("workers", "launching three sequential fresh processes")
+        outputs = run_registered_workers(
+            run_directory, worker_config_path, resolved_inputs_path
+        )
+        process_determinism = _compare_worker_outputs(
+            outputs,
+            configuration_sha256=configuration_sha256,
+            resolved_inputs_sha256=resolved_inputs_sha256,
+            parent_pid=os.getpid(),
+        )
+        first_execution = _read_execution(outputs[0])
+        result = _result_from_execution(first_execution, config)
+        core_gates = tuple(evaluate_algorithm_gates(result))
+        author_result = (
+            _run_author_qjl_oracle(
+                checkout=args.author_qjl_checkout,
+                run_directory=run_directory,
+                oracle=author_oracle,
+            )
+            if args.author_qjl_checkout is not None
+            else None
+        )
+        gates = (*core_gates, author_code_differential_gate(author_result))
+        all_five_passed = all(gate.passed for gate in gates)
+        completed_gates_passed = (
+            all(gate.passed for gate in core_gates)
+            if author_result is None
+            else all_five_passed
+        )
+        status = "passed" if completed_gates_passed else "failed"
+        run_log.write("gates", f"five gates evaluated with status {status}")
+        run_log.write("terminal", "terminal artifacts written; run is now immutable")
+        run_log.close()
+
+        terminal_pair = _normal_terminal_pair(
+            args=args,
+            manifest=manifest,
+            run_directory=run_directory,
+            status=status,
+            result=result,
+            gates=gates,
+            author_result=author_result,
+            process_determinism=process_determinism,
+        )
+        _publish_terminal_pair(run_directory, terminal_pair)
+        return _completion_exit_status(args.profile, all_five_passed=all_five_passed)
+    except BaseException as error:
+        traceback_text = traceback.format_exc()
+        if manifest is not None and manifest.get("author_qjl_preflight") == "pending":
+            manifest["author_qjl_preflight"] = {
+                "status": "error",
+                "error": {
+                    "type": type(error).__name__,
+                    "message": str(error),
+                },
+            }
+        recovery_pair = terminal_pair
+        recovery_attempts = 1
+        if recovery_pair is None:
+            try:
+                recovery_pair = _error_terminal_pair(
+                    args=args,
+                    config=config,
+                    repository=repository,
+                    commit=commit,
+                    dirty_paths=dirty_paths,
+                    run_directory=run_directory,
+                    run_log=run_log,
+                    manifest=manifest,
+                    original_error=error,
+                    traceback_text=traceback_text,
+                )
+                recovery_attempts = 2
+            except BaseException:
+                recovery_pair = None
+        if recovery_pair is not None:
+            for _ in range(recovery_attempts):
+                try:
+                    _publish_terminal_pair(run_directory, recovery_pair)
+                    break
+                except BaseException:
+                    # A persistent publication fault must fail closed without
+                    # changing the intended status or masking the original
+                    # error. Error-pair recovery is bounded to two attempts.
+                    pass
+        raise
+    finally:
+        if worker_config_path is not None:
+            try:
+                worker_config_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    try:
+        return execute_qualification(args)
+    except QualificationValidationError as error:
+        parser.error(str(error))
+    return 2
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

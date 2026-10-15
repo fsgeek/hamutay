@@ -1,0 +1,12 @@
+Candid Coverage Limitations and Verification Boundaries:
+1. Finite Sample Validation vs. Certified 1,000,000-Vector Qualification Run:
+   These tests employ bounded, deterministic workloads (N in [1000, 5000]) to guarantee rapid, reproducible execution under pytest. While they assert mathematical properties, variance bounds, and gate logic, they do not claim that finite validation samples substitute for the million-vector certified execution required for Gate 2 and Gate 3 qualification.
+2. Device & Hardware-Independent Scope:
+   These tests validate the public numerical Python/NumPy API. Direct GPU device register inspections, Triton/CUDA C++ kernel executions, and hardware architecture comparisons are tested in the designated CUDA adapter differential rather than this pure mathematical suite.
+3. Floating-Point Cancellation on Sphere Coordinates:
+   In FP32, normalization of vectors near machine subnormal thresholds can cause numerical cancellation. The suite validates normal operational regimes and extreme ranges (10^{-15} to 10^{15}) representable in IEEE 754 single precision.
+4. Consequential Extraction Ambiguities:
+   - Paper Theorem 1 publishes rounded targets (0.36, 0.117, 0.03, 0.009), whereas exact FP64 quadrature gives (0.36088859, 0.11600007, 0.03396593, 0.00931479). Both scales are tested.
+   - Theorem 2 inner-product target for 4 bits (0.047/d) inherits rounding from the 3-bit scalar residual (0.03 * pi / 2 = 0.0471), tested with the 15% tolerance.
+   - Transparent reference maps exact 0.0 projections to sign +1 (all in-range bits set in packed signs), contrasting with the author CUDA kernel convention mapping 0.0 to -1.0.
+   - 1-bit product quantizer employs a 0-bit base MSE quantizer whose codebook is {0.0}.

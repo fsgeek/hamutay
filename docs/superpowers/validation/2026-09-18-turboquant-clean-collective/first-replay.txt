@@ -1,0 +1,124 @@
+Running scope as unit: ayllu-gpu-e222e58f-80a1-4c2d-8a02-928c47073cce.scope
+............................................F........................... [ 44%]
+.................F.......F.............................................. [ 88%]
+..................                                                       [100%]
+=================================== FAILURES ===================================
+______ test_author_cuda_differential_live_execution_and_independent_math _______
+
+author_adapter = <module 'scripts.turboquant.author_qjl_oracle' from '/home/tony/projects/hamutay/.worktrees/turboquant-r1/scripts/turboquant/author_qjl_oracle.py'>
+author_checkout_path = PosixPath('/home/tony/projects/hamutay/tmp/turboquant-remedy-20260918/QJL')
+dev_run_output_root = PosixPath('/home/tony/projects/hamutay/.worktrees/turboquant-r1/experiments/turboquant/development')
+
+    def test_author_cuda_differential_live_execution_and_independent_math(
+        author_adapter,
+        author_checkout_path: Path,
+        dev_run_output_root: Path,
+    ):
+        """Executes live CUDA differential and independently evaluates reported numerical evidence."""
+        unique_run_id = f"author_diff_{uuid.uuid4().hex[:12]}"
+        output_dir = dev_run_output_root / unique_run_id
+        output_dir.mkdir(parents=True, exist_ok=True)
+    
+        result = author_adapter.run_author_qjl_differential(
+            checkout=author_checkout_path,
+            output=output_dir,
+            device="cuda:0",
+        )
+    
+        # 1. Verify schema and top-level fields
+        assert result["schema"] == "hamutay.turboquant.author-qjl.v1"
+        assert result["status"] == "passed"
+        assert result["study_seed_hex"] == "0b311d5d4eceaf773efde389305a1b5a"
+>       assert result["conventions"]["transparent_exact_zero_sign"] == "+1"
+E       AssertionError: assert 'positive' == '+1'
+E         
+E         - +1
+E         + positive
+
+tests/turboquant_clean_terminal/test_author_cuda_differential.py:106: AssertionError
+____________ TestBitPackingContract.test_pack_signs_type_rejection _____________
+
+self = <turboquant_clean_math.test_algorithm2_product.TestBitPackingContract object at 0x70470fce2850>
+
+    def test_pack_signs_type_rejection(self) -> None:
+        """pack_signs accepts ONLY boolean arrays."""
+        float_signs = np.ones((8,), dtype=np.float32)
+        int_signs = np.ones((8,), dtype=np.int32)
+        with pytest.raises(TypeError):
+>           pack_signs(float_signs)  # type: ignore
+            ^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/turboquant_clean_math/test_algorithm2_product.py:33: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+signs = array([1., 1., 1., 1., 1., 1., 1., 1.], dtype=float32)
+
+    def pack_signs(signs: np.ndarray) -> np.ndarray:
+        """Pack boolean signs little-endian within each byte."""
+        resolved = np.asarray(signs)
+        if resolved.dtype != np.bool_:
+>           raise ValueError("signs must have boolean dtype")
+E           ValueError: signs must have boolean dtype
+
+src/hamutay/turboquant/product.py:53: ValueError
+_ TestAlgorithm2StatisticalContracts.test_inner_product_unbiasedness_contrasted_with_mse_bias _
+
+self = <turboquant_clean_math.test_algorithm2_product.TestAlgorithm2StatisticalContracts object at 0x70470fce2e90>
+
+    def test_inner_product_unbiasedness_contrasted_with_mse_bias(self) -> None:
+        """Theorem 2: E[<y, x_tilde_prod>] = <y, x>.
+        Contrast with TurboQuant_mse which has severe multiplicative bias 2/pi (~0.6366) at b=1.
+        """
+        d = 128
+        rot = gaussian_rotation(d, "unbiased_test_rot")
+        # b=1 total product quantizer uses b-1=0 bit MSE quantizer
+        cb_0 = lloyd_max_codebook(d, 0)
+        mse_quant_0 = MSEQuantizer(rot, cb_0)
+    
+        rng = np.random.default_rng(909)
+        proj = rng.standard_normal((d, d)).astype(np.float32)
+        prod_quant = ProductQuantizer(mse_quant_0, proj)
+    
+        # Evaluate over 5000 independent query/key pairs
+        n = 5000
+        keys = rng.standard_normal((n, d)).astype(np.float32)
+        queries = rng.standard_normal((n, d)).astype(np.float32)
+        # Unit norm keys and queries
+        keys /= np.linalg.norm(keys, axis=-1, keepdims=True)
+        queries /= np.linalg.norm(queries, axis=-1, keepdims=True)
+    
+        true_dots = np.sum(queries * keys, axis=-1)
+    
+        # 1. Product quantizer estimates
+        prod_codes = prod_quant.quantize(keys)
+        prod_est = prod_quant.estimate_inner_products(queries, prod_codes)
+        prod_errors = prod_est - true_dots
+        prod_mean_bias = float(np.mean(prod_errors))
+        prod_std_err = float(np.std(prod_errors) / math.sqrt(n))
+    
+        # Unbiasedness: mean error is within 3 standard errors of 0
+        assert abs(prod_mean_bias) < 3.0 * prod_std_err, (
+            f"Product quantizer exhibited statistically significant bias: {prod_mean_bias} +/- {prod_std_err}"
+        )
+    
+        # 2. MSE quantizer at b=1 has bias factor 2/pi
+        cb_1 = lloyd_max_codebook(d, 1)
+        mse_quant_1 = MSEQuantizer(rot, cb_1)
+        mse_codes = mse_quant_1.quantize(keys)
+        mse_rec = mse_quant_1.dequantize(mse_codes)
+        mse_est = np.sum(queries * mse_rec, axis=-1)
+    
+        # Check empirical bias factor ~ 2/pi
+        ratio = float(np.mean(mse_est) / np.mean(true_dots))
+>       assert math.isclose(ratio, 2.0 / math.pi, rel_tol=0.10)
+E       assert False
+E        +  where False = <built-in function isclose>(1.3617863655090332, (2.0 / 3.141592653589793), rel_tol=0.1)
+E        +    where <built-in function isclose> = math.isclose
+E        +    and   3.141592653589793 = math.pi
+
+tests/turboquant_clean_math/test_algorithm2_product.py:215: AssertionError
+=========================== short test summary info ============================
+FAILED tests/turboquant_clean_terminal/test_author_cuda_differential.py::test_author_cuda_differential_live_execution_and_independent_math
+FAILED tests/turboquant_clean_math/test_algorithm2_product.py::TestBitPackingContract::test_pack_signs_type_rejection
+FAILED tests/turboquant_clean_math/test_algorithm2_product.py::TestAlgorithm2StatisticalContracts::test_inner_product_unbiasedness_contrasted_with_mse_bias
+3 failed, 159 passed in 60.71s (0:01:00)

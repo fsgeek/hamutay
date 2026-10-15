@@ -1,0 +1,54 @@
+Requirement-by-Requirement Coverage Account:
+
+Task 1: Seeding, Study Seed, and Canonical Rotations
+- test_study_seed_constant_value: Verifies exact constant "0b311d5d4eceaf773efde389305a1b5a" and length 32.
+- test_derive_seed_wire_format_against_oracle: Implements independent SHA-256 big-endian uint128 oracle over "{study_seed}|{fields}" with unpadded base-10 integers.
+- test_derive_seed_custom_study_seed: Validates explicit study_seed_hex override.
+- test_rng_for_reproducibility_and_isolation: Asserts bit-identical stream reproducibility across separate invocations with matching seeds and statistical independence for differing seeds.
+- test_canonical_qr_properties: Asserts Q^T Q = I to 1e-14 FP64 precision, R upper-triangular, diag(R) >= 0, and sign(0) == +1 convention.
+- test_gaussian_rotation_properties: Asserts shape (d, d), FP32 dtype, orthogonality Q Q^T = I within 1e-6, and seed determinism.
+
+Task 2: Dimension-Specific Spherical Lloyd-Max Codebooks
+- test_sphere_coordinate_density_against_analytic_oracle: Validates Lemma 1 density against log-gamma analytic oracle, asserts symmetry f(x) = f(-x), and verifies unit probability mass integral via high-precision quadrature.
+- test_lloyd_max_codebook_structure_and_symmetry: Asserts shape (2^b,), FP32 dtype, strict monotonicity -1 <= c_0 < ... < c_{2^b-1} <= 1, and anti-symmetry c_i = -c_{2^b-1-i}.
+- test_lloyd_max_codebook_1bit_closed_form: Asserts b=1 centroids match asymptotic +/- sqrt(2 / (pi * d)) within 1%.
+- test_nearest_code_indices_exact_midpoint_tie_breaking: Tests exact midpoint tie-breaking to the lower centroid index (< vs <=) and values infinitesimally above/below midpoints.
+
+Task 3: Algorithm 1 MSE Quantization and Frozen Representation
+- test_mse_codes_slotted_frozen_structure: Enforces slotted and frozen constraints (__slots__, mutation raises exception), uint8 indices, and FP32 norms.
+- test_mse_quantizer_zero_vector_contract: Validates exact-zero norm, all-zero indices, and exact-zero float32 array reconstruction.
+- test_mse_quantizer_scale_invariance_and_norms: Verifies that scaling vector by alpha scales norm by |alpha| while indices remain invariant.
+- test_mse_quantizer_batch_shapes: Validates 1D, 2D, and 4D tensor inputs (e.g. multi-head attention cache shapes [B, H, S, d]).
+
+Task 4: Algorithm 2 Product Estimator and Bit Packing
+- test_pack_signs_rejects_non_boolean_dtypes: Enforces Boolean input constraint and rejects other dtypes.
+- test_pack_unpack_signs_little_endian_roundtrip: Validates bit j % 8 of byte j // 8 encoding, set bit = +1, clear bit = -1, and unpack_signs FP32 return in {-1.0, +1.0}.
+- test_zero_vector_packed_signs_contract: Verifies that zero projected values map to +1, setting all in-range bits (0xFF) while clearing unused high bits.
+- test_product_codes_dataclass_contract: Validates slotted and frozen properties of ProductCodes.
+- test_product_quantizer_reconstruction_and_zero_vector: Validates (b-1)-bit MSE + 1-bit QJL composition, residual norm computation, and exact-zero reconstruction for zero vectors.
+- test_estimate_inner_products_shape_rejection_no_broadcast: Enforces paired query/key leading shapes and asserts rejection of broadcasting or mismatched shapes.
+- test_estimate_inner_products_against_analytic_oracle: Validates inner product estimate against independent oracle calculating dot(q, x_hat_mse) + sqrt(pi/2)/d * residual_norm * dot(q, S^T z).
+
+Task 5: Streaming Statistics, Bootstrap, and Gate Evaluation
+- test_partition_block_ids_contract: Validates int64 return, contiguous monotonic equal blocks, and rejection of indivisible sample counts.
+- test_analytic_codebook_distortion_reference_targets: Compares analytic FP64 distortion against frozen regression targets (0.36088859, 0.11600007, 0.03396593, 0.00931479) within 1e-4 relative error.
+- test_evaluate_algorithm_gates_all_pass: Validates that acceptable synthetic evidence passes all 4 core algorithm gates.
+- test_evaluate_algorithm_gates_determinism_rejection: Asserts round_trip_determinism gate fails when determinism_passed is False.
+- test_evaluate_algorithm_gates_mse_distortion_boundaries: Asserts mse_distortion gate fails when empirical MSE exceeds 0.5% analytic tolerance or 15% paper tolerance.
+- test_evaluate_algorithm_gates_qjl_bias_equivalence_boundaries: Asserts qjl_bias_equivalence gate fails when the 98.75% Bonferroni CI falls outside [-0.02 * RMSE, +0.02 * RMSE].
+- test_evaluate_algorithm_gates_published_qjl_distortion_boundaries: Asserts published_qjl_distortion gate fails when empirical error exceeds 15% relative tolerance.
+- test_gate_result_contract_and_distinctions: Asserts GateResult structure, non-empty names/details, and status resolution ('passed', 'failed', 'not_run').
+
+Task 6: Canonical Artifacts, CLI Namespaces, and Lifecycle
+- test_canonical_json_bytes_contract: Validates sorted keys, compact separators (no whitespace), unicode preservation, newline ending, and rejection of NaN/Infinity.
+- test_create_run_directory_append_only_refusal: Validates unique run directory creation and refusal (FileExistsError) on existing paths.
+- test_sha256_file_accuracy: Validates SHA-256 digest computation against hashlib.
+- test_cli_namespace_enforcement_refusal: Validates that CLI rejects output roots outside experiments/turboquant/development and qualification before creating directories.
+- test_cli_registered_mode_override_refusal: Validates that registered mode rejects overrides to sample_count, batch_size, dimension, bootstrap_blocks, bootstrap_resamples, or bits.
+- test_cli_registered_mode_missing_checkout_refusal: Validates that registered mode requires --author-qjl-checkout and rejects execution when omitted.
+- test_cli_development_mode_lifecycle_and_artifacts: Validates development run with small explicit counts, exit code 0, artifact generation (manifest.json, resolved_inputs.npz, execution-0..2.json, qualification.json, run.log), schemas (manifest.v2, execution.v1, qualification.v2), and author_code_differential recorded as not_run.
+
+Task 7: Pinned Author-QJL CUDA Differential and Adapter
+- test_verify_pinned_checkout_hash_and_clean_checks: Validates verification of git commit 648b3641f96b6e95e091217220b94e4739fd4d82, pinned file hashes, and clean status.
+- test_preflight_author_qjl_device_and_cuda_checks: Validates rejection of non-'cuda:0' devices and verification of CUDA 12.8 toolchain.
+- test_author_qjl_differential_live_execution: Validates live differential run when QJL_AUTHOR_CHECKOUT and CUDA are present; enforces FP32 tolerances (absolute <= 1e-5, relative <= 1e-4), verifies schema hamutay.turboquant.author-qjl.v1, checks append-only refusal, and verifies incorporation into the qualification record.

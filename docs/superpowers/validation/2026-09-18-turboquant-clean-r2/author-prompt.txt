@@ -1,0 +1,2639 @@
+You are a fresh independent pre-implementation-access validation author for TurboQuant R1. Write a complete runnable pytest suite using only the approved specification, public interface contract, and original paper supplied below. No implementation source, implementation tests, other validation suites, experimental outcomes, plans, or reviews have been supplied. Use no tools, filesystem access, external searches, or delegation. Return complete authored file contents as structured output. The coordinator will preserve your output unchanged and freeze it in a signed, timestamped commit before its first execution.
+
+This is Task 8, the implementation-validation gate before scientific qualification. Do not launch registered-profile computation: Task 9 cannot run until Task 8 passes. Preflight-only refusal checks must not be able to start registered computation. Development-mode computation and the standalone author CUDA differential are available for validation and do not certify R1.
+
+Cover the supplied public requirements thoroughly. Produce a requirement-by-requirement coverage account mapping each requirement to concrete tests and explaining what the assertions establish. Independently choose inputs, test organization, mathematical oracles, and validation methods; no worked test cases are supplied. Do not stop at a sample of smoke tests or shorten the deliverable for brevity. Where a requirement remains uncovered, state that explicitly instead of claiming coverage by association.
+
+The required scope includes the mathematical/representation contracts, faithful application of each of the five gate criteria to both acceptable and unacceptable evidence, the public CLI terminal behavior and artifact integrity, and actual successful observation of the author CUDA differential and its incorporation in the five-gate record. A measurement can legitimately fall outside a scientific criterion; distinguish correctness of the decision rule from obtaining a favorable scientific result. Never weaken a registered tolerance. Assertions about required evidence must fail if the evidence is absent or inconsistent. Error tests must distinguish the intended refusal from an unrelated earlier failure. Claims about process-level properties must be supported at that boundary. A process exit and a file's existence alone do not establish the scientific content of its evidence. These are validation requirements, not prescribed cases or harness designs.
+
+Execution contract: tests will live at tests/turboquant_clean_r2/, and run from the actual repository root with uv run pytest. The package and turboquant-qualify console entry point are installed. QJL_AUTHOR_CHECKOUT provides the pinned external author checkout, and the declared CUDA environment is selected by the coordinator. GPU acquisition is external; tests must not change services or lease state. Use only public interfaces, not implementation source inspection or private helpers. Preserve produced research evidence with unique run names. Development computation may use explicit smaller scientific counts for method validation, with no claim that such a run meets registered R1. Return paths relative to the tests directory, no traversal. If the public information is insufficient to implement a requirement, identify the missing declaration; do not guess undocumented behavior. You cannot execute tests during authorship and cannot claim they pass.
+
+Return complete Python files, the coverage account, and limitations. Model/session provenance is recorded by the transport rather than by your self-description. Signing identity: Tony Mason; hamutay@wamason.com; 01193FA2631C8AE8E4DF266E216D3C9B920813A1.
+
+The original paper follows as a verbatim pdftotext -layout extraction. Original arXiv 2504.19874v1 PDF SHA-256: 431eb13926e10491f5fbd0bebd0813c51bd6c1e884426a1500c5db640b2997ab. PDF bytes are retained; extraction can imperfectly represent mathematical layout, so disclose consequential ambiguities.
+
+
+BEGIN MATERIAL 2026-08-27-turboquant-cache-path-compositionality-design.md
+# TurboQuant Cache-Path Compositionality: Experiment 1 Design
+
+Date: 2026-08-27
+
+Status: approved and externally reviewed design. The R1 implementation plan is
+authorized; live registered execution remains gated on implementation,
+independent validation, and the qualification checks below.
+
+Revised: 2026-08-27 after the external review in
+`2026-08-27-turboquant-cache-path-compositionality-review.md`. The revision adds
+the missing quantize-once control, separates serving-lifecycle from
+compositional effects, holds sequence length and the final uncompressed window
+constant in the dose comparison, and replaces the undersized local corpus.
+
+Revised again on 2026-08-27 after external review of the R1 implementation
+plan. This amendment replaces rounding-sensitive table comparisons with a
+dual analytic/published-scale gate, turns the QJL bias criterion into a
+simultaneous equivalence test, requires process-level determinism and an
+independent adversarial-test checkpoint, and pins the author-kernel compiler
+environment.
+
+Research roles: Tony Mason is principal investigator. This design was developed
+with a Codex instance acting as researcher.
+
+## Purpose
+
+This experiment asks whether a model presented with the same visible token
+prefix can reach measurably different numerical or behavioral states depending
+on how a lossy KV cache participated in producing that prefix.
+
+The motivating comparison is:
+
+```text
+cold:  TQ(full visible prefix through call N)
+warm:  TQ(TQ(prefix through call N-1) + new tokens in call N)
+```
+
+`TQ` here denotes the complete model-and-cache transition, not merely scalar
+quantization applied twice to an otherwise fixed vector. Later-layer keys and
+values are functions of earlier-layer attention over the cached prefix. A
+lossy cached prefix can therefore alter the hidden states from which subsequent
+KV entries are produced even when each individual KV entry is quantized only
+once.
+
+The experiment separates four questions that must not be collapsed:
+
+1. Can we reproduce the published TurboQuant algorithmic properties?
+2. Does cache history create numerical path dependence for identical visible
+   input?
+3. Does any numerical path dependence change observable model behavior?
+4. Do append-only and Hamut'ay-style continuity topologies expose a model to
+   different amounts or kinds of that path dependence?
+
+Experiment 1 answers the first three at reference-harness scale. The fourth,
+production-server validation, and paper-adjacent task replication are later
+stages with their own written specifications.
+
+## Target Statements
+
+### S: serving-lifecycle divergence
+
+One full BF16 prefill and a continuation over retained quantized KV can produce
+different logits for identical visible input. This is a deployment-relevant
+raw-prefill/compressed-continuation effect, but it combines first-order
+quantization with cache-path history and therefore does not establish
+compositionality.
+
+### M: compositional mechanism
+
+For the qualified TurboQuant configuration, two paths that attend through the
+same amount of four-bit cached context and share the same final 512-token
+uncompressed chunk diverge according to whether the cached entries were all
+computed in one BF16 prefill or were themselves computed through earlier
+quantized cache states.
+
+### A: accumulation
+
+At a fixed 16,384-token visible prefix and fixed 512-token final uncompressed
+chunk, compositional divergence increases with the number of quantized-prefix
+continuation boundaries.
+
+### E: eviction discontinuity
+
+At a fixed visible checkpoint, discarding a recursively constructed quantized
+cache, rebuilding that prefix in one BF16 prefill, quantizing it once, and then
+continuing through identical remaining chunks can produce a discontinuity
+relative to an otherwise matched retained-cache trajectory.
+
+### C-seq and C-task: consequence
+
+For at least one registered behavioral task, the compositional cache path
+changes the greedy decoded sequence (`C-seq`) or semantic task correctness
+(`C-task`) while visible input and the immediate uncompressed window remain
+identical.
+
+M and the consequence statements are non-substitutable. Numerical divergence
+can support a mechanism claim without demonstrating a practical consequence.
+`C-seq` records sequence sensitivity and cannot be described as task
+degradation. `C-task` records a correctness change and reports its direction.
+Behavioral divergence without a qualified numerical result is an observed
+system effect whose cause remains unresolved. The behavioral assay runs
+regardless of the numerical result; the numerical outcome controls the
+interpretation, not whether the behavioral data are collected.
+
+Experiment 1 does not claim that:
+
+- TurboQuant is inaccurate or unsuitable for deployment;
+- cache-path effects are unique to TurboQuant;
+- an altered token is necessarily a harmful token;
+- Hamut'ay is superior to append-only continuity;
+- a production implementation faithfully represents the paper;
+- the publicly reported end-to-end Google results have been exactly replicated;
+- any result bears upon consciousness, identity, or moral status.
+
+## Reproducibility Position
+
+The public TurboQuant artifact is sufficient to reproduce Algorithms 1 and 2
+independently, but it is not a turnkey specification for the reported Llama
+3.1 8B NIAH and LongBench results. The inspected public materials do not fully
+specify model and tokenizer revisions, rotation and sampling seeds, the 3.5-bit
+channel allocation, outlier-channel selection, the exact K/V algorithm mapping,
+prompts, task revisions, scorer settings, cache lifecycle, or repetition policy.
+
+Accordingly, the research uses a replication ladder:
+
+1. **R1 — algorithm qualification.** Reproduce the paper's scalar-distortion
+   and QJL inner-product properties.
+2. **R2 — baseline qualification.** Reproduce uncompressed task baselines on a
+   pinned model, data, and harness.
+3. **R3 — registered independent instantiation.** Run the fullest disclosed
+   paper-like end-to-end configuration while publishing every choice required
+   to resolve an omission.
+4. **R4 — author-confirmed replication.** Use this label only if the authors
+   provide or confirm the missing artifacts and configuration.
+
+Only R1 is a gate for Experiment 1. R2 and R3 are required before a paper or
+outreach describes this work as an extension of the Google end-to-end result.
+This staging lets the first experiment determine whether there is a phenomenon
+worth bringing to the authors without disguising an independent instantiation
+as an exact replication.
+
+### Public artifacts and their roles
+
+- The [TurboQuant paper](https://arxiv.org/html/2504.19874) defines the target
+  algorithms and reports the algorithmic and end-to-end results.
+- The authors' [QJL repository](https://github.com/amirzandieh/QJL) is the
+  authoritative available implementation for the QJL component, but not for
+  the complete TurboQuant system.
+- [vLLM's TurboQuant backend](https://github.com/vllm-project/vllm/blob/main/vllm/v1/attention/backends/turboquant_attn.py)
+  is a production external-validity target. It intentionally uses a different
+  formulation and omits QJL. Its raw-prefill/compressed-continuation lifecycle
+  is directly relevant to the cache-path question.
+- [LMDeploy](https://github.com/InternLM/lmdeploy/blob/main/docs/en/quantization/kv_quant.md)
+  supplies a runnable QJL-bearing implementation on Ada hardware, but uses a
+  Hadamard transform rather than the paper's dense random rotation.
+- [TurboQuant+](https://github.com/TheTom/turboquant_plus) and other independent
+  implementations are cross-checks, not substitutes for the paper or author
+  code.
+- The [AMD agentic-serving study](https://rocm.blogs.amd.com/artificial-intelligence/turboquant-vllm-agentic/README.html)
+  establishes deployment relevance: compression is already being used to
+  change cache survival and eviction in multi-turn workloads. It does not test
+  identical-visible-input warm/cold divergence.
+
+The accessible arXiv artifact was version 1. The indexed OpenReview final PDF
+was blocked by an automated browser challenge during the 2026-08-27 audit. The
+audit must be amended if a later-accessible final artifact supplies any missing
+detail.
+
+## Scope Boundary
+
+This specification covers two deliverables:
+
+1. a transparent TurboQuant algorithm qualification package; and
+2. a single-GPU reference assay comparing cold, quantize-once, fixed-depth warm,
+   eviction, and replay paths for fixed token prefixes, including a small
+   mandatory behavioral assay.
+
+The following require later specifications after Experiment 1 is interpreted:
+
+- LMDeploy and vLLM integration;
+- resolution or avoidance of open production prefix-cache correctness defects;
+- append-only versus Hamut'ay state-object topology;
+- natural-wake intra-wake tool-call trajectories;
+- full NIAH, LongBench, or other paper-adjacent replication;
+- multi-model or multi-hardware generalization;
+- author outreach and publication.
+
+This boundary is deliberate. A transparent reference result must exist before
+production implementation semantics, server scheduling, block allocation, and
+prefix-cache bugs are allowed to complicate causal interpretation.
+
+## Conceptual Model
+
+Let `V` be an exact visible token prefix and let its final 512 tokens be `F`.
+For a model configuration `q`, define:
+
+- `cold_q(V)`: process all of `V` as one ordinary prefill, then materialize
+  the cache;
+- `q1_q(V)`: process `V - F` as one BF16 prefill, materialize it once in cache
+  type `q`, then process `F` through that cached prefix;
+- `warm_q(V, B)`: process `V - F` in chunks separated by boundary schedule `B`,
+  retaining cache type `q` between chunks, then process the same `F`;
+- `replay_q(V)`: reconstruct the trajectory token by token using the same
+  quantized-past rule from the first token onward.
+
+Cold and warm represent ordinary serving paths. In the TurboQuant arm, `q1` is
+the quantize-once counterfactual that isolates first-order quantization from
+compositional cache history; in the BF16 arm it is the matched two-chunk
+control. Replay is a semantic equalization control. If a deterministic replay
+after cache loss does not reproduce the prior replay state, the harness is
+defective or an unrecorded source of nondeterminism remains. Replay is not
+claimed to be a normal server policy.
+
+Within any multi-token chunk, causal attention uses uncompressed BF16 K/V for
+tokens in that chunk. Tokens from retained earlier chunks use the cache type
+named by the arm. At chunk completion, new K/V entries are retained as BF16 or
+quantized exactly once according to the arm. `q1` and every compositional dose
+arm therefore have the same effective 512-token recent uncompressed window at
+the final measurement. The cold arm has a fully uncompressed prompt and replay
+has a one-token uncompressed window; neither is used as the counterfactual for
+M. There is no additional deliberately retained recent-token buffer.
+
+The three primary paired distances are:
+
+```text
+S_q(V)    = distance(output(cold_q(V)), output(q1_q(V)))
+M_q(V, B) = distance(output(q1_q(V)), output(warm_q(V, B)))
+R_q(V)    = distance(output(replay_q(V)), output(reconstructed_replay_q(V)))
+```
+
+`S_q` measures first-order serving-lifecycle quantization. `M_q` measures the
+additional pathwise effect after matching quantized prefix length and the final
+uncompressed window. `R_q` checks deterministic reconstructability. Matched
+uncompressed-BF16 schedules measure chunking, kernel, and finite-precision
+effects that do not require lossy KV storage; they are not treated as
+mathematically zero.
+
+## Frozen Reference Configuration
+
+### Hardware and model
+
+- Device: the local NVIDIA RTX 4090, one process and one experimental sequence
+  at a time.
+- Qualification userspace: WSL2 Ubuntu 22.04.5. The author QJL extensions are
+  compiled with the side-by-side CUDA 12.8 WSL-Ubuntu toolkit selected through
+  `CUDA_HOME=/usr/local/cuda-12.8`; CUDA 13.2 remains the system default and no
+  Linux NVIDIA driver is installed inside WSL.
+- Model: `meta-llama/Meta-Llama-3.1-8B-Instruct`.
+- Model and tokenizer revision:
+  `0e9e39f249a16976918f6564b8830bc894c89659`.
+- Model weights and ordinary KV values: BF16.
+- Quantizer transforms, codebook construction, norms, and recorded diagnostic
+  reductions: FP32 unless an operation requires FP64 to create a stable frozen
+  codebook artifact.
+- Sampling for behavioral decoding: greedy with `do_sample=false`; no
+  stochastic sampling fallback.
+- Execution: one sequence at a time, no request batching, speculative decoding,
+  prefix sharing between examples, cache offload, or automatic cache eviction.
+
+The implementation manifest records GPU model, driver, CUDA, PyTorch,
+Transformers, kernel selection, model-file hashes, tokenizer-file hashes, and
+the Git commit. A dependency or kernel change creates a new execution stratum;
+results from different strata are not silently pooled.
+
+### TurboQuant instantiation
+
+The reference qualification implements both paper algorithms:
+
+- `TurboQuant_mse`: dense Gaussian orthogonal rotation, dimension-appropriate
+  Beta Lloyd-Max scalar codebook, and inverse rotation;
+- `TurboQuant_prod`: `TurboQuant_mse` at one fewer bit plus the QJL residual
+  sign sketch and residual norm.
+
+The first model-level assay uses a uniform four-bit independent instantiation:
+
+- keys use four-bit `TurboQuant_prod`;
+- values use four-bit `TurboQuant_mse`;
+- no entropy coding, mixed-precision channels, outlier channel policy,
+  additional recent-token buffer, or boundary-layer exemption is used. The
+  serving lifecycle's immediate uncompressed chunk is a declared experimental
+  variable and is fixed at 512 tokens for compositional comparisons.
+
+This is named `tq_ref_kprod4_vmse4`; it is not called the paper's 3.5-bit
+configuration. Uniform four-bit storage removes the paper's underspecified
+mixed-channel allocation from the first causal test.
+
+Random objects are fixed by the 128-bit study seed
+`0b311d5d4eceaf773efde389305a1b5a`. In seed-derivation strings it appears as
+those 32 lowercase hexadecimal characters without a `0x` prefix. Integer fields
+use unpadded base-10 ASCII; role and purpose labels use their exact lowercase
+manifest strings. A sub-seed is the first 16 bytes, interpreted as an unsigned
+big-endian integer, of SHA-256 over the UTF-8 string formed by joining the study
+seed, model revision, algorithm, layer index, K-or-V role, KV-head index, and
+purpose label with `|`. Dense matrices are generated from an iid standard
+Gaussian and orthogonalized with QR. For each `i`, column `i` of `Q` is
+multiplied by `sign(R[i,i])`, with zero assigned sign `+1`, so the diagonal of
+`R` is nonnegative. The resolved matrices, codebooks, and hashes become
+immutable run inputs.
+
+The QJL qualification reports both the paper-literal iid Gaussian projection
+and the row-orthogonalized projection used by the public QJL implementation.
+The latter is scaled by `sqrt(d)` after QR so its row norms match the expected
+Gaussian-row norm. Only the paper-literal form enters
+`tq_ref_kprod4_vmse4`. The second form is a declared sensitivity result.
+
+## Algorithm Qualification Gate
+
+No model-level TurboQuant result is interpreted until all of these checks pass:
+
+1. **Round-trip determinism.** A frozen vector batch produces bit-identical
+   indices, signs, norms, and reconstructed FP32 values across three fresh
+   same-build process executions.
+2. **Analytic and published distortion scale.** For each frozen one- through
+   four-bit codebook, compute the exact normalized scalar distortion in FP64 by
+   integrating squared error over every Lloyd-Max cell under the registered
+   dimension-128 sphere-coordinate density. On one million registered
+   synthetic length-128 vectors drawn iid from a standard Gaussian, empirical
+   normalized MSE must be within 0.5% relative error of that analytic value and
+   within 15% relative error of the paper-reported approximate value (`0.36`,
+   `0.117`, `0.03`, or `0.009`). The analytic comparison certifies the
+   implementation; the wider published-scale comparison acknowledges the
+   table's precision without discarding it.
+   Before implementation, independent FP64 quadrature gave the registered
+   reference values `0.36088859`, `0.11600007`, `0.03396593`, and `0.00931479`.
+   These values are frozen regression expectations, not results from the
+   million-vector execution.
+3. **QJL bias equivalence.** Across one million registered independent
+   query/key pairs, each length 128 and drawn iid from a standard Gaussian, the
+   Bonferroni-adjusted 98.75% bootstrap interval for normalized mean signed
+   inner-product error at every bit width must lie wholly inside the
+   equivalence region from `-0.02 * error_RMSE` through
+   `+0.02 * error_RMSE`. Ordinary 95% intervals are also reported as
+   diagnostics but do not gate qualification.
+4. **QJL distortion scale.** At one through four total bits, empirical
+   normalized mean squared inner-product error is within 15% relative error of
+   the paper's approximate dimension-scaled values (`1.57/d`, `0.56/d`,
+   `0.18/d`, and `0.047/d`). These and the scalar-distortion values above were
+   checked against the accessible arXiv text during the audit. The four-bit
+   target inherits sensitivity to the paper's rounded three-bit scalar value;
+   the analytic scalar residual and its `pi/2` scaling are reported as
+   non-gating diagnostics, and the registered 15% tolerance is not adjusted
+   after observation.
+5. **Author-code differential.** On identical residual vectors, queries,
+   projection matrix, residual norms, and floating dtype, the reference QJL
+   component agrees with the author implementation within a frozen FP32
+   tolerance of `1e-5` absolute and `1e-4` relative error. Any unavoidable
+   convention mismatch is resolved and documented before the gate is evaluated,
+   not waived afterward.
+
+A failed check remains in the evidence record. Repair changes the implementation
+version and requires the complete qualification gate to run again. Failure to
+pass is a blocked experiment, not a negative TurboQuant result.
+
+Before the registered qualification run, an instance from a model family other
+than the implementer's authors a black-box adversarial test suite from this
+specification, the published artifacts, and the frozen public interfaces,
+without first reading the implementation. The tests live in a separate signed
+commit. The reviewer may inspect the implementation only after freezing that
+suite. Registered execution requires every valid independent test to pass and
+every rejected test or review finding to have a written technical disposition
+approved by the principal investigator. Reviewer approval by itself is neither
+necessary nor sufficient; reproducible evidence is the gate.
+
+## Token Corpus and Boundary Schedules
+
+### Numerical corpus
+
+The local-document corpus proposed in the first version is ineligible: at the
+reviewed commit it contained 742,460 bytes, insufficient for the registered
+non-overlapping windows. Experiment 1 instead uses the `train` split of
+[`Salesforce/wikitext`](https://huggingface.co/datasets/Salesforce/wikitext/tree/b08601e04326c79dfdd32d625aee71d232d685c3/wikitext-103-raw-v1),
+configuration `wikitext-103-raw-v1`, pinned at revision
+`b08601e04326c79dfdd32d625aee71d232d685c3`.
+
+The corpus builder:
+
+- reads both train Parquet shards in lexicographic filename order and preserves
+  row order within each shard;
+- joins every `text` value, including empty values, with one newline;
+- tokenizes once with the pinned Llama tokenizer without chat templating;
+- partitions the result from token zero into non-overlapping 16,384-token pages;
+- permutes page indices from the study sub-seed with purpose label
+  `corpus_pages`;
+- assigns the first 24 pages as 16,384-token numerical windows, the first 8,192
+  tokens of each of the next 24 pages as 8,192-token windows, and the first 4,096
+  tokens of each of the next 24 pages as 4,096-token windows;
+- reserves the next 24 pages exclusively for the behavioral corpus: the first
+  eight at 16,384 tokens, the next eight truncated to 8,192 tokens, and the last
+  eight truncated to 4,096 tokens; and
+- records dataset revision, Parquet hashes, row counts, combined text hash,
+  complete token-stream hash, page permutation, and window token hashes.
+
+No source interval overlaps another registered numerical or behavioral example.
+If the pinned corpus does not yield at least 96 complete pages, corpus
+qualification fails; overlap is not an allowed repair.
+
+### Fixed-length boundary dose
+
+All primary dose arms contain exactly 16,384 visible tokens and use the same
+final 512-token chunk `F`. Let `P` be the preceding 15,872 tokens. A schedule
+`Qm` divides `P` into `m` ordered chunks, materializing the selected cache type
+after every chunk, then processes `F` as the final chunk. For general `m`, let
+`a = floor(15872 / m)` and `r = 15872 mod m`; the first `r` chunks contain
+`a + 1` tokens and the remaining chunks contain `a`.
+
+The registered primary schedules are:
+
+- `Q1`: one 15,872-token prefix prefill, quantized once, then `F`; this is
+  `q1` and contains no compositional history within `P`;
+- `Q2`: two 7,936-token prefix chunks, then `F`;
+- `Q8`: eight 1,984-token prefix chunks, then `F`;
+- `Q31`: thirty-one 512-token prefix chunks, then `F`;
+- `Q15872`: tokenwise prefix construction, then the same 512-token `F`.
+
+Total length, token identity, cached-prefix length, quantizer configuration, and
+the immediate uncompressed window are therefore fixed while cache-history depth
+changes. The 4,096- and 8,192-token secondary strata compare `Q1` with `Q7` and
+`Q15`, respectively, using the same 512-token final window. Pure tokenwise
+replay of the entire visible prefix remains a reconstructability control and is
+not part of the dose trend.
+
+### Behavioral corpus
+
+The behavioral assay contains 24 deterministic needle-retrieval cases: eight at
+each of 4,096, 8,192, and 16,384 context tokens. Each case uses its exclusively
+reserved corpus page as distractor text. Let length-stratum index `k` be 0, 1,
+or 2 for 4,096, 8,192, or 16,384 tokens, let local case index `j` run from 0
+through 7, and let global index `i = 8k + j`. SHA-256 over the UTF-8 string
+`0b311d5d4eceaf773efde389305a1b5a|needle|<i>`, where `<i>` is replaced by its
+unpadded base-10 value, supplies the first six bytes for a 12-character
+uppercase hexadecimal record ID and the next ten bytes for a 16-character
+unpadded RFC 4648 Base32 value. A unique statement of the form
+`The archival code for record <id> is <value>.` is inserted after 10%, 50%, or
+90% of the distractor tokens. For local case `j` in length stratum `k`, the
+position is `[0.10, 0.50, 0.90][(j + k) mod 3]`, rotating the two/three/three
+allocation across lengths.
+
+The system message is exactly `You are a precise retrieval assistant. Return
+only the requested archival code.` A single user message contains the
+distractor and needle, two newline characters, and the exact question `What is
+the archival code for record <id>? Return only the code.` Construction then
+applies the pinned Llama chat template. Distractor tokens are removed until the
+final visible prompt, excluding generated tokens, is exactly the registered
+context length. The generator divides removals between material before and
+after the needle so its final fractional token position remains within one
+percentage point of its assigned position. A case that cannot satisfy both
+constraints is a pre-inference corpus defect and invalidates the complete
+behavioral-corpus version. IDs, values, final insertion positions, token hashes,
+prompt hashes, and expected answers are frozen before any model result is
+inspected.
+
+All paths receive identical final token IDs. Greedy decoding is limited to 32
+new tokens and stops under the pinned tokenizer's ordinary EOS rules. A
+candidate code is a case-sensitive match of `[A-Z2-7]{16}`. Scoring records
+semantic retrieval correctness, format adherence, first generated-token
+divergence, complete sequence equality, and whether either path emits multiple
+candidate codes.
+
+This is an intentionally small consequence assay, not a replication of the
+paper's NIAH evaluation. It tests whether a qualified numerical path effect can
+cross an observable boundary on a task with an unambiguous answer.
+
+## Execution Arms
+
+Every numerical token window runs through these paired arm families:
+
+| Cache | Paths | Role |
+|---|---|---|
+| BF16 | cold and every matched TQ schedule | kernel and chunking controls |
+| BF16 | replay | tokenwise deterministic reconstruction control |
+| `tq_ref_kprod4_vmse4` | cold | fully uncompressed-prompt lifecycle endpoint |
+| `tq_ref_kprod4_vmse4` | `Q1` and length-specific 512-token schedule | all lengths |
+| `tq_ref_kprod4_vmse4` | `Q2`, `Q8`, `Q31`, `Q15872` | 16,384-token dose only |
+| `tq_ref_kprod4_vmse4` | replay | tokenwise deterministic reconstruction control |
+
+The behavioral corpus runs through cold, `Q1`, the length-specific 512-token
+schedule (`Q7`, `Q15`, or `Q31`), and the eviction fork. It does not run `Q2`,
+`Q8`, `Q15872`, or pure replay decoding.
+
+At completion, the numerical harness records next-token logits for every arm.
+At 25%, 50%, and 75%, it additionally records the length-specific 512-token
+warm path and an independently constructed `Q1` counterfactual whose immediate
+uncompressed window is the same 512 tokens. Dose schedules whose chunk crosses
+a checkpoint are not interrupted merely to create a measurement. At 50%, the
+harness forks the 512-token warm schedule. One branch retains its cache. The
+other discards the cache, reconstructs the
+identical visible half-prefix as one BF16 prefill, materializes it once as
+TurboQuant or BF16 according to the arm, and continues through the same
+remaining 512-token chunks. Comparing retained and evicted branches at 75% and
+completion supplies a convergent compositionality test without uncontrolled
+memory-pressure eviction. Replay is also reconstructed at 50% and must
+reproduce its pre-fork state.
+
+Arm order is deterministically permuted within each example. Each full block is
+run three times. Repetition estimates execution nondeterminism; it is not
+pseudoreplicated as three independent text examples.
+
+## Measurements
+
+### Numerical primary measurements
+
+At the checkpoints defined above and at the final prefix, record paired
+cold/`Q1`, `Qm`/`Q1`, retained/evicted, and
+replay/reconstructed-replay comparisons for:
+
+- Jensen-Shannon divergence and forward/reverse KL between next-token
+  distributions;
+- maximum and RMS logit difference;
+- logit-vector cosine similarity;
+- top-1 agreement;
+- rank and logit-margin change of the `Q1` path's top token;
+- layerwise normalized residual-stream difference at the final position;
+- K and V reconstruction normalized MSE by layer and KV head;
+- attention-distribution KL for a registered diagnostic subset consisting of
+  layers 0, 7, 15, 23, and 31 and the final 16 query positions.
+
+Distributional distances and bootstrap reductions are computed in FP64 from
+recorded FP32 logits. The primary certification comparison is `Q31` against
+`Q1` at 16,384 tokens: 24 distinct text examples, identical cached-prefix
+length, and an identical 512-token final uncompressed chunk. `Q2`, `Q8`, and
+`Q15872` estimate the fixed-length dose curve. The shorter lengths are
+registered secondary estimates of length sensitivity and cannot substitute for
+a failed primary comparison.
+
+Attention diagnostics may use a slower instrumented pass over the registered
+subset, but its arithmetic and cache inputs must match the primary path. If
+instrumentation changes the primary logits beyond the uncompressed-BF16
+nondeterminism envelope, attention KL is marked unavailable rather than mixed
+with the primary result.
+
+### Behavioral mandatory measurements
+
+For each needle case and path, record:
+
+- semantic retrieval correctness: the expected value appears exactly once and
+  no other 16-character Base32 candidate appears;
+- format adherence: the stripped output equals the expected value;
+- greedy output sequence;
+- index of first differing generated token;
+- whether sequence, semantic correctness, or format adherence changes between
+  `Q1` and the length-specific 512-token warm path;
+- whether eviction restores, removes, or creates a prior difference.
+
+For the uncompressed BF16 path, record the top-two logit margin at every
+generated position and the minimum margin over the response. Cases are neither
+selected nor excluded using this measurement. Behavioral results are reported
+by preregistered context length and needle position, then descriptively by the
+frozen BF16 margin distribution so a null or positive result can be interpreted
+without enriching the corpus for near ties.
+
+Behavioral outputs are retained even if M is not supported.
+
+### Operational measurements
+
+Record wall time, peak allocated GPU memory, cache bytes, token counts,
+recomputation count, OOMs, kernel fallbacks, and any run repair or retry. These
+describe feasibility and detect confounding; Experiment 1 makes no throughput
+claim.
+
+`Q15872` plus pure replay entails at least 4.6 million single-token prefix steps
+across two cache types and three repeats before shorter strata or attention
+diagnostics. The planning estimate is 30–50 RTX 4090 GPU-hours for those paths.
+A development-only timing probe may refine that estimate, but a high estimate
+does not authorize silently dropping a path, repeat, or example. Material scope
+changes require a revised, reviewed, and newly timestamped specification.
+
+## Calibration and Interpretation Gates
+
+The uncompressed-BF16 arms run first and establish a frozen numerical noise
+envelope before TurboQuant model-level execution. For each numerical distance
+`d`, define:
+
+```text
+E_d = max(1e-12, the 99th percentile of paired BF16 duplicate-run distance)
+```
+
+The envelope and its artifact hash are committed and timestamped before
+TurboQuant results are opened. This calibration is not adjusted using
+TurboQuant observations.
+
+For example `i`, define these Jensen-Shannon distances at completion:
+
+```text
+S_i       = JS(cold_tq_i, Q1_tq_i)
+S_fp_i    = JS(cold_bf16_i, Q1_bf16_i)
+P_m_i     = JS(Qm_tq_i, Q1_tq_i)
+P_m_fp_i  = JS(Qm_bf16_i, Q1_bf16_i)
+X_i       = JS(retained_tq_i, evicted_tq_i)
+X_fp_i    = JS(retained_bf16_i, evicted_bf16_i)
+```
+
+S is detected when median `S` is at least ten times median `S_fp` and ten times
+`E_JS`, the paired bootstrap 95% interval for median `S - S_fp` excludes zero,
+and at least 75% of examples have `S > E_JS`. It is reported as the first-order
+serving-lifecycle reference magnitude and is not evidence for M.
+
+M is supported when all of the following hold for `P_31` in the primary
+16,384-token stratum:
+
+1. median `P_31` is at least ten times median `P_31_fp` and ten times `E_JS`;
+2. median `P_31` is at least 1% of `max(median S, E_JS)`, establishing a
+   registered materiality scale relative to the first-order quantization effect;
+3. the paired bootstrap 95% interval for median `P_31 - P_31_fp` excludes zero;
+4. at least 75% of examples have `P_31 > E_JS`; and
+5. replay after reconstruction remains within its registered duplicate-run
+   envelope.
+
+A is supported when M is supported, the four medians are ordered
+`P_2 <= P_8 <= P_31 <= P_15872`, and the paired bootstrap 95% interval for
+median `P_31 - P_2` excludes zero. `Q15872` is retained as the maximal-depth
+same-window endpoint, not substituted for replay.
+
+E is supported when median `X` is at least ten times median `X_fp`, ten times
+`E_JS`, and 1% of `max(median S, E_JS)`; the paired bootstrap 95% interval for
+median `X - X_fp` excludes zero; and at least 75% of examples have `X > E_JS`.
+
+`C-seq` is supported when at least one paired case changes greedy output between
+`Q1` and the length-specific warm path, or between retained and evicted paths,
+and the case is stable across all three repeats within each path. `C-task` is
+supported only by a stable semantic correctness change under one of those same
+compositional comparisons. Direction, format adherence, and first divergence
+position are reported separately. Cold/`Q1` behavioral differences belong to S
+and cannot support either C statement. With 24 cases, both C statements are
+evidence of existence and bounded incidence, not population prevalence.
+
+All intervals use 10,000 study-seeded paired bootstrap resamples over distinct
+text examples. Effect distributions and individual examples are published; a
+gate label does not replace them.
+
+### Outcome vocabulary
+
+The labels below are component conclusions rather than a forced mutually
+exclusive menu; every supported target statement is reported.
+
+- **No qualified experiment:** algorithm or determinism gate failed.
+- **Serving-lifecycle divergence only:** S is measurable but M does not pass.
+- **Pathwise signal below registered scale:** `P_31` exceeds controls but fails
+  the 1%-of-S scale gate.
+- **No detected compositional mechanism at tested settings:** qualification
+  passed but M did not.
+- **Numerical mechanism without detected sequence consequence:** M passed and
+  `C-seq` did not.
+- **Sequence sensitivity without correctness change:** `C-seq` passed and
+  `C-task` did not.
+- **Behavioral effect of unresolved cause:** either C statement passed and M did
+  not.
+- **Numerical mechanism with task consequence:** M and `C-task` passed.
+
+These labels prevent “no behavioral divergence” from being reported as “no
+numerical effect,” or a numerical difference from being promoted into an
+unstated claim of practical harm.
+
+## Failure, Repair, and Stopping Rules
+
+- An OOM or unsupported deterministic kernel is retained as an outcome. The
+  affected context-length stratum is not silently shortened. Lower registered
+  strata continue.
+- A harness error invalidates the complete affected block, not only unfavorable
+  rows. The repaired version reruns the entire block under a new version ID.
+- A replay mismatch outside its envelope stops interpretation until explained.
+- A model, tokenizer, transform, codebook, prompt, or corpus hash mismatch stops
+  the run before inference.
+- A missing independent adversarial-test commit, a failing valid independent
+  test, or an unresolved technical disposition stops registered qualification.
+- Missing diagnostic attention data does not invalidate primary logits if the
+  reason and instrumentation comparison are recorded.
+- No case is removed because its output looks strange, ungrammatical, or
+  inconvenient. Pre-inference tokenization or expected-answer defects invalidate
+  the entire behavioral corpus version.
+- Experiment 1 stops after the registered matrix is complete. Additional bit
+  widths, recent-token buffers, rotations, models, prompts, or favorable cases
+  are exploratory and receive new manifests.
+
+## Evidence and Immutability
+
+Before any TurboQuant model-level output is inspected, the following are
+committed and OpenTimestamps-stamped:
+
+- this reviewed design and the implementation plan;
+- study seed and sub-seed derivation algorithm;
+- corpus and behavioral manifests with hashes;
+- model, tokenizer, dependency, and hardware manifest;
+- frozen rotations and codebooks or their content-addressed artifact hashes;
+- qualification results;
+- BF16 calibration envelope;
+- exact arm matrix, boundary schedules, metrics, and analysis script hash.
+
+Raw run artifacts are append-only. Every record includes a run UUID, UTC start
+time, Git commit, parent manifest hash, example ID, exact token hash, arm,
+boundary schedule, cache-reset events, repeat index, termination status, and
+artifact hashes. Analysis consumes raw records and emits new artifacts; it does
+not edit them in place.
+
+Development runs live under a visibly separate namespace and may not certify
+S, M, A, E, `C-seq`, or `C-task`. Any implementation choice influenced by
+development output is declared and frozen before the registered corpus is run.
+
+## Later Research Ladder
+
+If Experiment 1 qualifies the mechanism, later work proceeds in this order:
+
+1. reproduce the assay in LMDeploy and a pinned, qualified vLLM revision;
+2. distinguish intended raw-prefill/compressed-continuation semantics from
+   implementation defects;
+3. complete R2 and R3 paper-adjacent NIAH/LongBench work;
+4. compare append-only continuity with Hamut'ay's stable system/tool prefix plus
+   replaced explicit state object;
+5. separately measure append-only growth within a natural wake's tool-call
+   sequence;
+6. extend behavioral tasks beyond retrieval only after numerical and harness
+   behavior are understood.
+
+The Hamut'ay comparison must not describe its state object as magically free of
+cache history. Its stable prefix can remain quantized across wakes, its current
+state and event are recomputed, and a natural wake can accumulate tool-call
+history internally. The hypothesis is reduced or differently bounded exposure,
+not absence.
+
+## Authorship and Ayni Boundary
+
+The authors of TurboQuant and QJL are not treated as an unpaid validation
+service. Initial contact occurs only after there is a reproducible pilot,
+qualified artifacts, a concise account of what is new, and a concrete offer of
+reciprocal work.
+
+A genuine collaboration offer includes:
+
+- complete private access to the reproducible package before public claims;
+- a clear statement that the concern is an unmeasured deployment side effect,
+  not an allegation that the original work is defective;
+- specific work this project can contribute, such as the pathwise assay,
+  reference artifacts, additional hardware validation, or maintained tests;
+- a proposed division of labor and authorship discussion proportionate to
+  contribution;
+- freedom to decline without being portrayed as endorsing or obstructing the
+  result.
+
+If the authors decline or do not respond, the work may proceed independently.
+It must then state that configuration ambiguities remain, distinguish R3 from
+R4, and avoid attributing intentions or conclusions to them.
+
+## Success Condition for Experiment 1
+
+Experiment 1 succeeds as research when it leaves a reproducible answer to the
+tested question, including a qualified null result. Concretely, success means:
+
+- the algorithm qualification gate has passed or failed legibly;
+- cold, quantize-once, dose, replay, and eviction paths can be reconstructed
+  from immutable records;
+- numerical and behavioral outcomes are interpreted through the registered
+  gates;
+- implementation artifacts are sufficiently transparent to distinguish
+  quantizer behavior from serving lifecycle behavior;
+- limitations prevent overclaiming rather than being buried after the result.
+
+A favorable mechanism or consequence result is not itself an acceptance
+criterion.
+
+END MATERIAL 2026-08-27-turboquant-cache-path-compositionality-design.md
+
+
+BEGIN MATERIAL interface-contract.md
+# TurboQuant R1: public interface contract
+
+Extracted mechanically from the qualification plan by
+`scripts/turboquant/build_sanitized_bundle.py`. This contains the
+public names, signatures, and declared conventions the independent
+validator may rely on.
+
+Every fenced code block in the source plan was dropped, including
+inside otherwise-permitted sections: embedded test code is the
+contamination vector that invalidated the first validation round
+(finding F5). No prescribed test case, implementation-guidance step,
+or command from the plan appears here.
+
+## Task 1: Package skeleton, study seed, and canonical rotations
+
+- `STUDY_SEED_HEX = "0b311d5d4eceaf773efde389305a1b5a"`
+- `derive_seed(*fields: str | int, study_seed_hex: str = STUDY_SEED_HEX) -> int`
+- `rng_for(*fields: str | int) -> numpy.random.Generator`
+- `canonical_qr(matrix: NDArray[np.float64]) -> NDArray[np.float64]`
+- `gaussian_rotation(dimension: int, *seed_fields: str | int) -> NDArray[np.float32]`
+
+
+## Task 2: Dimension-specific spherical Lloyd-Max codebooks
+
+- `sphere_coordinate_density(x: float | NDArray, dimension: int) -> float | NDArray`
+- `lloyd_max_codebook(dimension: int, bits: int, *, tolerance: float = 1e-12, max_iterations: int = 10_000) -> NDArray[np.float32]`
+- `nearest_code_indices(values: NDArray[np.float32], codebook: NDArray[np.float32]) -> NDArray[np.uint8]`
+
+
+## Task 3: Algorithm 1 MSE quantization and frozen representation
+
+
+- Frozen slotted dataclass `MSECodes(indices: np.ndarray, norms: np.ndarray)`, where indices are `uint8` with the vectors' full shape and norms are FP32 with the final vector dimension removed.
+- `MSEQuantizer(rotation: np.ndarray, codebook: np.ndarray)`
+- `MSEQuantizer.quantize(vectors: np.ndarray) -> MSECodes`
+- `MSEQuantizer.dequantize(codes: MSECodes) -> np.ndarray`
+
+
+## Task 4: Algorithm 2 product estimator and bit packing
+
+
+- Frozen slotted dataclass `ProductCodes(mse: MSECodes, packed_signs: np.ndarray, residual_norms: np.ndarray)`. Packed signs are `uint8` with final length `ceil(sketch_dim / 8)`; residual norms are FP32 with the vector dimension removed.
+- `ProductQuantizer(mse_quantizer: MSEQuantizer, projection: np.ndarray)`
+- `ProductQuantizer.quantize(vectors: np.ndarray) -> ProductCodes`
+- `ProductQuantizer.dequantize(codes: ProductCodes) -> np.ndarray`
+- `ProductQuantizer.estimate_inner_products(queries: np.ndarray, codes: ProductCodes) -> np.ndarray`
+- `pack_signs(signs: np.ndarray) -> np.ndarray`
+- `unpack_signs(packed: np.ndarray, sketch_dim: int) -> np.ndarray`
+
+
+## Task 5: Streaming R1 statistics, bootstrap, and gate evaluation
+
+- `QualificationConfig(dimension=128, sample_count=1_000_000, batch_size=4000, bootstrap_blocks=1000, bootstrap_resamples=10_000, bits=(1,2,3,4))`
+- `run_synthetic_qualification(config: QualificationConfig) -> QualificationResult`
+- `analytic_codebook_distortion(codebook: NDArray[np.float32], dimension: int) -> float`
+- `bootstrap_mean_interval(block_means, *, rng, resamples=10_000, confidence=0.95) -> tuple[float, float]`
+- `evaluate_algorithm_gates(result: QualificationResult) -> Sequence[GateResult]`
+
+- Algorithm 1 per-pair error: `||x_hat - x||^2 / ||x||^2`.
+- Algorithm 2 signed error: `estimate(q, x) - dot(q, x)`.
+- Algorithm 2 normalized squared error: `signed_error^2 / (||q||^2 ||x||^2)`.
+- Normalized signed bias: `signed_error / (||q|| ||x||)`.
+- Paper targets for Algorithm 1 bits 1..4: `(0.36, 0.117, 0.03, 0.009)`.
+- Paper targets for Algorithm 2 total bits 1..4: `(1.57/d, 0.56/d, 0.18/d, 0.047/d)`.
+- The terminal R1 record has exactly five gates named `round_trip_determinism`, `mse_distortion`, `qjl_bias_equivalence`, `published_qjl_distortion`, and `author_code_differential`. Overall R1 status passes only when all five are present and true.
+
+
+## Task 6: Canonical, append-only evidence artifacts and CLI
+
+- Console command: `turboquant-qualify = "hamutay.turboquant.qualify:main"`
+- `canonical_json_bytes(value: object) -> bytes`
+- `sha256_file(path: Path) -> str`
+- `create_run_directory(root: Path, run_id: str) -> Path`
+- `run_registered_workers(run_directory: Path, config_path: Path, resolved_inputs_path: Path) -> tuple[Path, Path, Path]`
+- CLI modes `--profile development|registered`, `--output-root`, and `--run-id`.
+
+
+## Task 7: Pinned author-QJL CUDA differential
+
+- Repository: `https://github.com/amirzandieh/QJL`
+- Commit: `648b3641f96b6e95e091217220b94e4739fd4d82`
+- License SHA-256: `c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4`
+- `qjl_kernel/csrc/qjl_quant_kernel.cu` SHA-256: `d03b2fd86504554f48da48df2740d73a0cc2d1d8a28c22698da20c9ee801aefd`
+- `qjl_kernel/csrc/qjl_score_kernel.cu` SHA-256: `848398bb6b140433aa10f4ccea16eb680ec215cb148956f09e46bbbdabdc030c`
+- `models/llama3_utils_qjl.py` SHA-256: `725b6777b752e30b583b6834e258a849c01679c4e3c007f3b4c62212393f34c2`
+
+
+## Declared numerical and representation conventions
+
+- Registered dimension is 128. Inputs are arbitrary nonzero vectors: normalize before applying a spherical quantizer and restore the original norm on reconstruction.
+- A zero vector has norm zero, all-zero MSE indices, zero residual norm, and exact-zero reconstruction. Its *raw projected values* are zero; its *encoded sign bits* are not. See the sign encoding below.
+- Vectors are rows. Rotation is `y = x @ rotation.T`; inverse rotation is `x_hat = y_hat @ rotation`. QJL projections are stored as rows, so a batch sketch is `residual @ projection.T`.
+- In the transparent reference every zero sign maps to `+1`. The pinned author kernel maps exact zero to `-1`; this is a declared, documented convention difference, not a defect.
+- Bit packing is little-endian within each byte: sketch coordinate `j` occupies bit `j % 8` of byte `j // 8`. A set bit decodes to FP32 `+1` and a clear bit to `-1`. Because a zero projected value maps to `+1`, a zero vector's packed sign bytes have every in-range bit SET, not cleared; only unused high bits of the final byte are zero. What remains all-zero for a zero vector is the indices and the norms, and the zero norm is what forces exact-zero reconstruction.
+- `derive_seed` wire format: SHA-256 over the UTF-8 string formed by joining the study seed and the given fields with `|`, taking the first 16 bytes as an unsigned big-endian integer. Integer fields serialize as unpadded base-10.
+- A `b`-bit product quantizer contains a `b-1`-bit Algorithm 1 codebook plus its fixed QJL sketch and residual norm. Total bits 1 through 4 therefore use 0- through 3-bit MSE codebooks.
+- `nearest_code_indices` resolves an exact midpoint tie to the lower centroid.
+- `estimate_inner_products` requires paired query/key leading shapes and does not broadcast them; mismatched leading shapes are rejected.
+- Rotations and codebooks are constructed in FP64 and frozen as FP32. Quantization, reconstruction, and diagnostic reductions are FP32 unless otherwise stated.
+
+
+## Public result types
+
+The gate-evaluation API consumes and returns declared types. Field names and roles are public contract; no worked values are given.
+
+- `QualificationMetrics` carries, per bit width: `bits`, `mse_observed`, `mse_analytic_target`, `mse_paper_target`, `product_observed`, `product_paper_target`, `normalized_bias_mean`, `normalized_bias_rmse`, `normalized_bias_ci95`, `normalized_bias_ci9875`, `sample_count`, `product_mse_bits`, `product_analytic_target`, `sensitivity_product_observed`, `sensitivity_normalized_bias_mean`, `sensitivity_normalized_bias_rmse`, `sensitivity_normalized_bias_ci95`, `sensitivity_normalized_bias_ci9875`, `mse_block_means`, `product_block_means`, `normalized_bias_block_means`, `sensitivity_product_block_means`, and `sensitivity_bias_block_means`. Interval fields are `(low, high)` pairs. The `sensitivity_*` fields carry the declared row-orthogonalized projection arm, which is reported and does not gate. The `*_block_means` fields carry block-bootstrap evidence.
+- `QualificationResult` carries `metrics` (a sequence of `QualificationMetrics`), `determinism_passed`, `sample_count`, `batch_size`, `bootstrap_blocks`, `bootstrap_resamples`, `dimension`, and `configuration`.
+- `GateResult` carries `name`, `passed`, `observed`, `threshold`, `detail`, and `status`. **Every** gate carries `status`, not only the author differential; it resolves to `passed`, `failed`, or `not_run`, the last used for the author differential when the checkout is omitted in development mode.
+- `partition_block_ids(sample_count, block_count)` forms contiguous equal blocks and rejects non-divisible inputs.
+
+
+## Import locations and constructor declarations
+
+- Numerical functions and types in Tasks 1 through 5, including `partition_block_ids`, are exported by `hamutay.turboquant`. Their defining modules are `seeding`, `rotation`, `codebook`, `mse`, `product`, and `qualification` under that package. Task 6 artifact functions are in `hamutay.turboquant.artifacts`; `run_registered_workers` and `main` are in `hamutay.turboquant.qualify`.
+- `pack_signs` accepts Boolean arrays, with true encoding the positive sign and false the negative sign; it rejects other dtypes. `unpack_signs` accepts uint8 packed arrays and returns FP32 values in {-1, +1}, not Boolean values.
+- `run_synthetic_qualification` measures the configured synthetic sample and returns `determinism_passed=False`: it cannot establish the separate three-process determinism evidence. The CLI supplies that decision after comparing its workers. A measured scientific gate can legitimately fail; faithful application of the registered decision rule and a successful scientific qualification are distinct.
+- `QualificationConfig` is a frozen slotted dataclass. Its dimension, sample_count, batch_size, bootstrap_blocks, and bootstrap_resamples fields are integers; bits is `tuple[int, ...]`. Defaults appear in Task 5 above.
+- `QualificationMetrics` is a frozen slotted dataclass. Required fields, in constructor order, are `bits: int`, then the float fields `mse_observed`, `mse_analytic_target`, `mse_paper_target`, `product_observed`, `product_paper_target`, `normalized_bias_mean`, `normalized_bias_rmse`, then `normalized_bias_ci95` and `normalized_bias_ci9875`, each `tuple[float, float]`. Optional fields are `sample_count: int = 0`, `product_mse_bits: int = 0`; `product_analytic_target`, `sensitivity_product_observed`, `sensitivity_normalized_bias_mean`, and `sensitivity_normalized_bias_rmse` are floats defaulting to 0.0; the two sensitivity interval fields default to `(0.0, 0.0)`; all five block-means fields are `tuple[float, ...] = ()`.
+- `QualificationResult` is a frozen slotted dataclass with required `metrics: tuple[QualificationMetrics, ...]`, then `determinism_passed: bool = False`; its sample_count, batch_size, bootstrap_blocks, bootstrap_resamples, and dimension are integers defaulting to zero; `configuration: QualificationConfig | None = None`.
+- `GateResult` is a frozen slotted dataclass with required fields `name: str`, `passed: bool`, `observed: Any`, `threshold: Any`, `detail: str`, then `status: str | None = None`. An omitted status is resolved from passed at construction.
+
+
+## Public CLI and evidence behavior
+
+Stated as behavior, not implementation.
+
+- Registered mode freezes the declared scientific counts and rejects any attempt to override them. Development mode may accept explicit counts and is non-certifying.
+- Options are `--profile`, `--output-root`, `--run-id`, `--dimension`, `--sample-count`, `--batch-size`, `--bootstrap-blocks`, `--bootstrap-resamples`, `--bits`, `--author-qjl-checkout`, and `--allow-dirty-path`. Registered mode requires a clean worktree except for declared dirty paths.
+- `--bits` takes comma-separated integers; `--allow-dirty-path` is repeatable.
+- Output namespaces are enforced before a run directory is created: development output must be at or beneath `experiments/turboquant/development`, registered output at or beneath `experiments/turboquant/qualification`. An otherwise valid temporary output root is rejected.
+- A successfully completed run directory contains `manifest.json`, `resolved_inputs.npz`, `execution-0.json`, `execution-1.json`, `execution-2.json`, `qualification.json`, and `run.log`. All five gates and the terminal status appear in `qualification.json`. Evidence schema identifiers are `hamutay.turboquant.manifest.v2`, `hamutay.turboquant.execution.v1`, and `hamutay.turboquant.qualification.v2`.
+- An error run may retain only partial artifacts and an incomplete gate set; it cannot certify R1.
+- A development run without an author checkout reports `author_code_differential` as `not_run` and is non-certifying. Its terminal status tracks the four completed core gates, and a completed development run exits zero whether that status is `passed` or `failed`.
+- Evidence is append-only: creating a run directory that already exists is refused. Terminal status is one of `passed`, `failed`, or `error`.
+- Registered exit success is possible only when all five named gates are present and pass.
+- Canonical JSON is sorted, compact, non-ASCII-preserving, newline-terminated, and rejects non-finite floats.
+
+
+## Author CUDA adapter public boundary
+
+- The standalone entry point is `scripts/turboquant/author_qjl_oracle.py`. It requires `--checkout` (pinned author repository) and `--output` (artifact directory); `--device` defaults to `cuda:0`, the only supported device spelling. It writes `author_qjl_differential.json` and `author_qjl_differential.npz` in that directory, with JSON schema `hamutay.turboquant.author-qjl.v1`, refuses existing evidence, and exits zero only when its status is passed.
+- Public adapter functions are `verify_pinned_checkout(checkout: Path)`, `preflight_author_qjl(*, checkout: Path, device: str = 'cuda:0')`, and `run_author_qjl_differential(*, checkout: Path, output: Path, device: str = 'cuda:0')`; each returns `dict[str, Any]`.
+- Execution requires available CUDA, PyTorch reporting CUDA 12.8, CUDA_HOME resolving to `/usr/local/cuda-12.8`, PATH selecting `/usr/local/cuda-12.8/bin/nvcc`, and that compiler reporting 12.8. The system `/usr/local/cuda` must continue resolving to `/usr/local/cuda-13.2`. The checkout must be clean at the pinned commit, with the declared origin and file hashes. Preconditions are verified before compilation; missing prerequisites are errors, not successful differential evidence.
+
+
+## Registered CLI requirement (Task 7)
+
+- The registered profile requires `--author-qjl-checkout`. Development mode may omit it and must then report the `author_code_differential` gate as not-run, never as passed.
+- The terminal R1 record has exactly five gates named `round_trip_determinism`, `mse_distortion`, `qjl_bias_equivalence`, `published_qjl_distortion`, and `author_code_differential`. `evaluate_algorithm_gates` returns the first four; the fifth is joined at the CLI/evidence layer.
+
+END MATERIAL interface-contract.md
+
+
+BEGIN MATERIAL MANIFEST.json
+{
+  "audit_log_written_outside_bundle": "/home/tony/projects/hamutay/tmp/turboquant-remedy-20260918-r2/audit-final/dropped-from-plan.VERIFIER-ONLY.txt",
+  "builder_script_sha256": "d9247fded6bd216039cc93a506c3839d8fd05bf1f4f058e0e8bba59f0de25dbc",
+  "built_from_commit": "f4a07e61b6fb36ca105a7dcff1d0b18d513a05be",
+  "bundle_version": 1,
+  "caveat": "This bundle's builder cannot certify its own output. Condition 2 requires independent verification that the stripping is complete.",
+  "excluded": [
+    "the full qualification plan (embeds implementer test code, F5)",
+    "CLAUDE.md (F7, condition 13)",
+    "src/, scripts/, tests/",
+    "repository history, khipus, logs, review documents"
+  ],
+  "external_materials": {
+    "author_qjl_contract": "repo https://github.com/amirzandieh/QJL commit 648b3641f96b6e95e091217220b94e4739fd4d82; file hashes are in the interface contract",
+    "paper": "arXiv 2504.19874 v1 (https://arxiv.org/abs/2504.19874)"
+  },
+  "files": {
+    "2026-08-27-turboquant-cache-path-compositionality-design.md": "b679ef943c7a788734340375d2682cc7beb9cdd54e003ef5eb81826c6b328516",
+    "2504.19874v1.pdf": "431eb13926e10491f5fbd0bebd0813c51bd6c1e884426a1500c5db640b2997ab",
+    "interface-contract.md": "a52f9519b93d61a54f737cef3923c3635fc02b39ddbace5941862b56dce26901"
+  },
+  "implementation_under_review": "b9227ce4b94374fc26167fc1357e0e9cc145af66",
+  "lines_dropped_from_plan": 711,
+  "manifest_self_hash": "not self-referential; see MANIFEST.sha256 in the verifier audit directory and the signed freeze record",
+  "paper_artifact": "arXiv 2504.19874v1, supplied locally and hashed below",
+  "signing_identity": {
+    "email": "hamutay@wamason.com",
+    "name": "Tony Mason",
+    "note": "Condition 13: supplied as a bare string, not CLAUDE.md",
+    "signingkey": "01193FA2631C8AE8E4DF266E216D3C9B920813A1"
+  },
+  "source_plan_sha256": "6ad9f6641d854072fb3d6c0bcb5a0cf3186de1ad5da8f41d81a8325aa0246ff2",
+  "source_spec_sha256": "b679ef943c7a788734340375d2682cc7beb9cdd54e003ef5eb81826c6b328516"
+}
+
+END MATERIAL MANIFEST.json
+
+
+BEGIN MATERIAL paper-extracted.txt
+                                              TurboQuant: Online Vector Quantization with Near-optimal
+                                                                  Distortion Rate
+
+                                                   Amir Zandieh                      Majid Daliri                     Majid Hadian
+                                                  Google Research                New York University                Google DeepMind
+                                                zandieh@google.com              daliri.majid@nyu.edu               majidh@google.com
+arXiv:2504.19874v1 [cs.LG] 28 Apr 2025
+
+
+
+
+                                                                                   Vahab Mirrokni
+                                                                                   Google Research
+                                                                                mirrokni@google.com
+
+
+                                                                                        Abstract
+
+                                                  Vector quantization, a problem rooted in Shannon’s source coding theory, aims to quantize
+                                              high-dimensional Euclidean vectors while minimizing distortion in their geometric structure. We
+                                              propose TurboQuant to address both mean-squared error (MSE) and inner product distor-
+                                              tion, overcoming limitations of existing methods that fail to achieve optimal distortion rates.
+                                              Our data-oblivious algorithms, suitable for online applications, achieve near-optimal distortion
+                                              rates (within a small constant factor) across all bit-widths and dimensions. TurboQuant
+                                              achieves this by randomly rotating input vectors, inducing a concentrated Beta distribution
+                                              on coordinates, and leveraging the near-independence property of distinct coordinates in high
+                                              dimensions to simply apply optimal scalar quantizers per each coordinate. Recognizing that
+                                              MSE-optimal quantizers introduce bias in inner product estimation, we propose a two-stage ap-
+                                              proach: applying an MSE quantizer followed by a 1-bit Quantized JL (QJL) transform on the
+                                              residual, resulting in an unbiased inner product quantizer. We also provide a formal proof of
+                                              the information-theoretic lower bounds on best achievable distortion rate by any vector quan-
+                                              tizer, demonstrating that TurboQuant closely matches these bounds, differing only by a small
+                                              constant (≈ 2.7) factor. Experimental results validate our theoretical findings, showing that
+                                              for KV cache quantization, we achieve absolute quality neutrality with 3.5 bits per channel and
+                                              marginal quality degradation with 2.5 bits per channel. Furthermore, in nearest neighbor search
+                                              tasks, our method outperforms existing product quantization techniques in recall while reducing
+                                              indexing time to virtually zero.
+
+
+
+                                         1    Introduction
+
+                                         Vector quantization (VQ) in Euclidean space is crucial for efficiently handling high-dimensional
+                                         vectors across a spectrum of computational domains, from training and deploying large-scale AI
+                                         and deep learning models to powering vector databases for search/retrieval systems. The core
+                                         objective is to compress high dimensional vectors by quantizing them–converting floating-point co-
+                                         ordinate values to low-bitwidth integers–while minimizing distortion, quantified by metrics such as
+
+
+                                                                                             1
+mean-squared error (MSE) or inner product errors. By preserving these properties, inner prod-
+uct queries can be answered rapidly, with minimal latency, and using reduced computational and
+communication resources.
+This problem’s roots trace back to Shannon’s seminal work on Source Coding theory [48, 49], which
+established that the least distortion achievable by block source codes, now known as vector quan-
+tizers, is defined by the Shannon distortion-rate function, determined by the statistical properties
+of the source and the chosen distortion measure, such as MSE. Today, VQ plays a critical role in
+fundamental computational domains, including AI, deep learning, and search systems.
+A key application of VQ is in the deployment of AI models, including large language models
+(LLMs) [5, 18, 7, 52]. As LLM capabilities depend heavily on their model size and context length [34],
+serving them requires substantial memory demands and increased inference latency. This latency
+is primarily attributed to communication bottlenecks between HBM and SRAM on accelerators, or
+across distributed clusters. By compressing or quantizing model weights and activations, we can
+effectively mitigate these bottlenecks, resulting in significant reductions in inference costs. Inner
+product operations between activations and weights is at the core of deep learning models. Thus,
+model quantization schemes strive to compress weights and/or activation vectors while accurately
+preserving these inner products.
+Decoder based transformer models [54] present another compelling use case. These models must
+store key/value (KV) embeddings from previously generated tokens in the KV cache, the size of
+which scales with both model size (number of layers and attention heads) and context length. This
+scaling is a significant bottleneck in terms of memory usage and computational speed, especially
+for long context models. Therefore, reducing the KV cache size without compromising accuracy is
+essential. In this context, the preservation of the Euclidean structure of these embedding vectors–
+their inner products and distances–is crucial for maintaining model performance. VQ emerges as
+the most suitable framework for addressing this challenge, offering a robust approach to compressing
+high-dimensional embeddings while preserving their essential geometric properties.
+Additionally, nearest neighbor (NN) search in high-dimensional spaces with inner product or cosine
+similarity [1, 27] is a cornerstone of vector databases [4, 2, 3]. These databases are fundamental
+for retrieval-augmented generation [23, 19] and information retrieval [35, 46]. VQ, a.k.a. product
+quantization (PQ), plays a critical role in these applications. It enables efficient compression of
+database vectors, optimizes memory usage, and facilitates low-latency, accurate estimations of inner
+products with query vectors, thereby enabling fast and precise nearest neighbor searches.
+Existing VQ algorithms present a trade-off: either they lack accelerator (vectorization) compatibility
+and exhibit slow computation, making them unsuitable for real-time AI applications like KV cache
+quantization, or they suffer from suboptimal distortion bounds relative to bit-width. Our objective
+is to introduce an algorithm that addresses these limitations. Specifically, we design TurboQuant:
+a lightweight, capable of online application (crucial for scenarios like KV cache quantization), and
+highly accelerator-friendly—a critical attribute for modern AI workloads.
+The core of TurboQuant is a two-stage process. First, we develop a vector quantizer with optimal
+distortion rate in terms of mean-squared error (MSE). Subsequently, we apply a 1-bit quantizer to
+the residual, resulting in an unbiased and low-distortion inner product quantizer. We demonstrate
+that quantizers optimized for MSE do not produce unbiased estimators for inner products, and
+
+
+                                                  2
+our two-stage solution effectively bridges this gap. Our MSE-optimal quantizer starts by randomly
+rotating d-dimensional input vectors. Observing the key fact that each coordinate in the rotated vec-
+tors follows a Beta distribution, we design optimal Lloyd-Max quantizer [42, 43] for each coordinate
+by solving a continuous k-means problem. This method gives optimal MSE distortion bound and
+minimizes the L2 norm of the residual. To obtain an unbiased and low-distortion quantizer for inner
+products, we compose our quantizer with the recently developed Quantized Johnson-Lindenstrauss
+(QJL) transform [62], which quantizes each coordinate of the residual vector to a single bit. Our
+algorithm offers provably optimal distortion bounds for both MSE and inner products, achieving
+an exponential improvement over existing methods in terms of bit-width dependence.
+
+
+1.1   Problem Definition
+
+Formally, our goal is to design a quantization map, denoted as Q : Rd → {0, 1}B , that transforms
+d-dimensional vectors to a binary string of B bits. If we set B = b · d for some b ≥ 0, this
+quantizer will have a bit-width of b, representing the average number of bits used to encode each real-
+valued coordinate of Rd . Crucially, we require an inverse map, Q−1 : {0, 1}B → Rd that performs
+dequantization, approximately reconstructing original vectors from their quantized representations.
+Of course, this transformation is inherently lossy, as Q is not a bijection. So, our primary objective
+is to minimize distortion, with a specific focus on mean-squared error (MSE) and inner product
+distortion.
+We make no assumptions about the input vector dataset, considering the worst-case scenario. We
+let the quantizer Q(·) to be randomized, leading to stochastic outputs. Considering randomized
+quantizers, it is more appropriate to define the expected distortion over the randomness of the
+quantizer’s output. Thus, we aim to design quantizers that for any desired bit-width b minimize
+the following expected distortion measures for any (worst-case) vectors x, y ∈ Rd :
+                                                   h                     i
+                                                           −1          2
+                              (MSE)     Dmse := E x − Q (Q(x)) 2                            (1)
+                                                 Q
+                                                    h                            i
+                                                                               2
+                 (inner-prod error)     Dprod := E ⟨y, x⟩ − ⟨y, Q−1 (Q(x))⟩ .               (2)
+                                                      Q
+
+The expectations above are takes with respect to the randomness of the quantizer Q(·). Furthermore,
+for inner-product quantizers, we require unbiasedness of the inner product estimator, a desirable
+property for numerous applications. More precisely, we require:
+                                                          −1
+                                                                    
+                    (unbiased inner-prod)          E ⟨y, Q (Q(x))⟩ = ⟨y, x⟩.
+                                                   Q
+
+
+We aim to design computationally efficient quantizers Qmse and Qprod , that achieve optimal bounds
+for the distortion measures defined above, for any given bit-width b. Additionally, we aim for Qprod
+to provide unbiased inner product estimates. In particular, assume that we are given n real-valued
+vectors x1 , x2 , . . . xn ∈ Rd . We design the following primitives:
+
+   • Quant: efficiently quantizes the dataset and computes Q(x1 ), Q(x2 ), . . . Q(xn ).
+   • DeQuant: given a quantized dataset, can efficiently reconstruct original vectors by computing
+     Q−1 (Q(xi )) for any i ∈ [n].
+
+                                                  3
+1.2   Related Work
+
+Beginnings of VQ. The vector quantization theory started by Shannon’s seminal work [48, 49]
+on achievable distortion-rate functions. In 1963, Zador [61] made significant advances by employing
+high-resolution methods to derive the limiting operational distortion-rate function for fixed-rate
+quantization at high rates that closely matches Shannon’s distortion-rate function. However, Zador
+did not specifically consider implementable algorithms. Gersho’s influential paper [25], further ad-
+vanced the vector quantization by popularizing high-resolution theory, simplifying Zador’s results,
+introducing lattice vector quantization, and proposing a key conjecture that shaped the field. De-
+spite these theoretical advancements, the practical applicability of vector quantization remained
+unclear in early years. The most straightforward encoding method, brute-force nearest neighbor
+search, was computationally expensive, hindering the adoption of VQ in practice.
+
+
+Online vs Offline Quantization. Online (data-oblivious) quantization methods apply instantly
+without needing data-specific tuning or calibrations [16, 8, 41, 47, 28]. In contrast, offline (data-
+dependent) methods require heavy preprocessing and learning to adapt the quantization map to
+the data, making them unsuitable for dynamic data scenarios [37]. For instance, methods such as
+those presented in [20, 39, 57, 13] use second-order (Hessian) information to tune the quantization
+map which requires heavy preprocessing and even in some cases post processing as well.
+
+
+Online KV Cache Compression. Several approaches have been proposed to compress the KV
+cache. These include architectural modifications [50, 6, 15] which restructure the transformer to
+minimize the number of stored key-value pairs. Additionally, pruning or evicting redundant or less
+critical tokens has emerged as another approach [11, 66, 40, 58, 64, 38, 29].
+A simple yet effective approach to reducing KV cache size is quantizing the KV cache. Several
+quantization techniques have been developed specifically for this purpose [60, 59, 17, 33, 65, 41, 30,
+36, 28]. Recently, a new quantization called QJL [62] introduced an efficient, data-oblivious 1-bit
+quantization approach based on sketching techniques, which provides unbiased estimates for inner
+product queries. This method does not require tuning or adaptation to the input data and we make
+use of this technology in our quantizer optimized for inner product distortion.
+
+
+Product Quantization (PQ). In Near Neighbor (NN) search problem with Euclidean datasets,
+the index size poses a significant memory bottleneck, often mitigated by quantization techniques,
+commonly referred to as Product Quantization (PQ) in the NN literature. Many of these algo-
+rithms rely on constructing a quantization codebook using variations of k-means during the index-
+ing phase [31, 9, 24, 56, 27]. Therefore, these methods are ill-suited for online settings due to their
+requirement for extensive preprocessing.
+Recently, a grid-based PQ method was introduced in [22], eliminating the need for preprocessing.
+This approach operates by projecting a uniform grid onto the unit sphere and conducting a search
+to identify the nearest projection to the data points. While the paper’s theoretical guarantees are
+suboptimal, likely due to loose analysis—as practical performance surpasses theoretical bounds—the
+grid projection and binary search algorithm is also computationally slow and particularly inefficient
+
+
+
+                                                  4
+on accelerators like GPU because of their algorithm’s inherent lack of vectorization, which prevents
+parallel processing.
+
+
+1.3   Overview of Techniques and Contributions
+
+MSE Optimzied TurboQuant. Our first VQ algorithm is designed to minimize MSE distortion
+deinfed in Eq. (1). To achieve this, we apply a random rotation to the input vectors, thereby
+inducing a Beta distribution on each coordinate, irrespective of the input vectors themselves. In high
+dimensions d, the distribution of each coordinate converges to a Gaussian distribution N (1, 1/d)
+due to concentration of measure and the central limit theorem. Furthermore, any two distinct
+coordinates become nearly uncorrelated and, more importantly, almost independent (a deeper result
+that goes beyond just correlation). This near-independence is a crucial aspect that simplifies our
+quantization design. It allows us to quantize each coordinate using optimal scalar quantization,
+disregarding interactions or correlations between different coordinates, while still achieving near-
+optimal distortion.
+We find optimal scalar quantizers for random variables with Beta distributions by solving a con-
+tinuous 1-dimensional k-means problem using the Max-Lloyd algorithm. We precompute and store
+these optimal codebooks for a range of practically useful bit-widths, to enable efficient subsequent
+invocations of our TurboQuant algorithm.
+In Theorem 1 we prove that the b-bit MSE optimized TurboQuant Qmse : Rd → {0, 1}b·d achieves
+the following distortion for any worst-case vector x ∈ Rd with ∥x∥ = 1:
+                          h                          i √
+                                                   2
+   • Dmse (Qmse ) := E        x − Q−1
+                                   mse (Q mse (x)) 2
+                                                      ≤ 23π · 41b for any b ≥ 0.
+
+   • For small bit-widths the above distortion upper bound can be further refined. Specifically, for
+     b = 1, 2, 3, 4 we have Dmse (Qmse ) ≈ 0.36, 0.117, 0.03, 0.009, respectively.
+
+Note that the unit norm assumption, ∥x∥2 = 1, is standard and not restrictive. For datasets that
+do not satisfy this assumption we can compute and store the L2 norms in floating-point precision
+and rescale the dequantized points using these stored norms.
+
+
+Inner Product TurboQuant. We show that the MSE optimized quantizers are biased for inner
+product estimation and thus a different VQ scheme is needed to get an unbiased inner product
+quantizer. Our solution is a two stage algorithm that first applies the abovementioned Qmse with a
+bit-width one less than our target budget and then apply a QJL [62] on the residual error. This is
+proved to be unbiased and also has nearly optimal inner product error rate.
+In Theorem 2 we prove that the b-bit inner product optimized TurboQuant Qprod : Rd → {0, 1}b·d
+achieves the following distortion for any worst-case vectors x, y ∈ Rd with ∥x∥ = 1:
+         hD                         Ei
+   • E        y, Q−1
+                  prod Qprod (x)          = ⟨y, x⟩
+                              
+                                                                     2
+                                                                                √
+                                                                                     3π 2 ·∥y∥22
+   • Dprod (Qprod ) := E          ⟨y, x⟩ − ⟨y, Q−1                                               · 41b for any b ≥ 0.
+                                                                
+                                                prod   Qprod (x) ⟩           ≤           d
+
+
+                                                           5
+    • For small bit-widths the above distortion upper bound can be further refined. Specifically, for
+      b = 1, 2, 3, 4 we have Dprod (Qprod ) ≈ 1.57 0.56 0.18 0.047
+                                                d , d , d , d , respectively.
+
+
+
+Lower Bound. In Theorem 3, we leverage Shannon’s lower bound and Yao’s minimax principle
+to prove that for any randomized quantization algorithm Q : Rd → {0, 1}b·d with bit-width b, there
+exist hard input instances x, y ∈ Rd with ∥x∥ = 1 such that the following lower bounds hold:
+                      h                    i
+                                         2
+    • Dmse (Q) := E       x − Q−1 (Q(x)) 2 ≥ 41b
+
+                                                  ∥y∥2
+                   h                           i
+                                             2
+    • Dprod (Q) = E ⟨y, x⟩ − ⟨y, Q−1 (Q(x))⟩     ≥ d 2 · 41b
+
+As demonstrated
+            √       by our lower bounds, TurboQuant’s MSE distortion is provably within a factor
+of at most 23π ≈ 2.7 of the information-theoretical lower bound. Notably, for smaller bit-widths,
+this factor significantly decreases. For instance, at a bit-width of b = 1 TurboQuant achieves a
+distortion that is only a factor of approximately 1.45 away from the optimal which is also confirmed
+by our experimental results, indicating its efficiency in low-bit-width scenarios.
+
+
+Experimental Results. In Section 4.1, we empirically validate our theoretical distortion bounds,
+demonstrating that TurboQuant’s observed distortions closely align with our predictions across
+various real-world datasets, approaching the established lower bounds.
+Furthermore, in Section 4.2 and Section 4.3, we showcase TurboQuant’s efficacy in online KV
+cache quantization. Specifically, we achieve perfect long-context retrieval in needle-in-a-haystack
+tasks and maintain high performance on other long-context downstream tasks, all while compressing
+the KV cache by a factor exceeding 5×.
+Finally in Section 4.4 we apply TurboQuant to various high-dimensional near neighbor search
+tasks. TurboQuant consistently outperforms data-dependent product quantization (PQ), while
+reducing the indexing time to essentially zero.
+
+
+2    Preliminaries
+
+We use boldface lowercase letters, such as x and y, to denote vectors, and boldface uppercase
+letters, like M , to denote matrices. To denote a slice of a vector x between the coordinate indices i
+and j inclusive of the endpoints, we use the notation xi:j . For a matrix M , we write Mi,: to denote
+its i-th row vector, which we will simply refer to as Mi .
+We use the notation Sd−1 to denote the hypersphere in Rd of radius 1. For a random variable x
+we denote its differential entropy as h(x). For random variables x and y, the mutual information
+between them is denoted as I(x; y) = h(x) − h(x|y).
+Given that TurboQuant employs random rotation to mitigate worst-case input scenarios, under-
+standing the statistical properties of random points on a hypersphere is essential. The following
+lemma outlines one such property that we will need for analysis and design purposes:
+
+                                                   6
+Lemma 1 (coordinate distribution of random point on hypersphere). For any positive integer d if
+x ∈ Sd−1 is a random variable uniformly distributed over the unit hypersphere, then for any j ∈ [d]
+the coordinate xj follows the following (scaled/shifted) Beta distribution:
+
+                                                Γ(d/2)              (d−3)/2
+                         xj ∼ fX (x) := √                    1 − x2          .
+                                            π · Γ((d − 1)/2)
+In high dimensions this beta distribtion converges to the normal distribution fX (·) → N (0, 1/d).
+                                                                   √
+Proof. fX (x) equals the ratio of the area of a sphere with radius
+                                                              √      1 − x2 in dimension d − 1 to
+the volume of a unit sphere in dimension d scaled down by 1/ 1 − x2 (by Pythagorean theorem).
+Therefore,
+                 2π (d−1)/2        2 (d−2)/2
+                Γ((d−1)/2) · (1 − x )                             Γ(d/2)                  (d−3)/2
+                                                  p
+       fX (x) =                              · 1/  1 − x2 = √                    1 − x2              .
+                            2π d/2
+                                                              π · Γ((d − 1)/2)
+                            Γ(d/2)
+
+
+
+
+2.1   Shannon Lower Bound on Distortion
+
+The Shannon Lower Bound (SLB) is a powerful tool, derived from Shannon’s lossy source coding
+theorem [49], that provides a universal lower bound on the optimal achievable distortion rate for
+any lossy compression scheme. Specifically, we use a version of SLB tailored for the mean-squared
+error (MSE) distortion measure applied to general d-dimensional sources.
+Lemma 2 (SLB). Let x ∈ Rd be a random vector with an arbitrary probability distribution pX
+and finite differential entropy h(x). Define the MSE distortion-rate function D(B) for total bit
+complexity B ≥ 0 as:                       n h         i             o
+                           D(pX , B) := inf E ∥x − y∥22 : I(x; y) ≤ B ,
+where the infimum is taken over all joint distributions of x and a reconstruction
+                                                                       h         i random vector
+      d                                                                        2
+y ∈ R such that the mutual information I(x; y) is at most B and E ∥x − y∥2 is the expected
+MSE distortion, calculated with respect to the joint distribution of x and y. Then, for any bit
+complexity B ≥ 0, the following Shannon Lower Bound holds:
+                                                 d
+                                  D(pX , B) ≥       · 2(2/d)(h(x)−B) .
+                                                2πe
+
+This is a classic result proved using backward Gaussian test channel (for a proof see [14]). Our
+lower bound result uses a corollary of SLB that corresponds to the uniformly distributed random
+points on the unit hyeprsphere. We present this in the following lemma:
+Lemma 3 (SLB for random point on hypersphere). Let x ∈ Sd−1 be a random variable uniformly
+distributed over the unit hypersphere and define the MSE distortion-rate function D(B) for total bit
+complexity B as per Lemma 2. Then, for any bit complexity B ≥ 0, the following distortion lower
+bound holds:
+                                          D(B) ≥ 2−2B/d .
+
+                                                   7
+Proof. If we let Ad denote the area of the hypersphere Sd−1 , the entropy of uniform distribution
+over hypersphere is h(x) = log2 Ad . Plugging this into the SLB from Lemma 2 we get D(B) ≥
+  d
+2πe · Ad
+         2/d
+             · 2−2B/d . Using Stirling’s approximation formula for Gamma function we have Ad =
+                       q
+ 2π d/2      2πe d/2     2d
+                
+Γ(d/2)  ≥     d      ·   π · (1 − O(1/d)). By substituting this into the inequality obtained from
+Lemma 2 we get the desired lower bound.
+
+
+2.2   QJL: 1-bit inner product quantization
+
+As previously stated, we design two VQ algorithms: one optimized for minimizing MSE and the
+other for minimizing inner product error. We show that MSE-optimal quantizers do not necessarily
+provide unbiased inner product estimates, particularly exhibiting significant bias at lower bit-widths.
+Our solution for inner product quantization is a two-stage algorithm. First, we apply the MSE-
+optimal quantizer using one less bit than the desired bit-width budget, thus minimizing the L2
+norm of the residuals. Next we apply an unbiased and optimal single-bit quantizer to the residual.
+For the single-bit inner product quantizer, we utilize the recently proposed Quantized Johnson-
+Lindenstrauss (QJL) algorithm [62], which is an optimal inner product quantizer with a bit-width
+of one. Here, we present the QJL algorithm and its essential theoretical guarantees.
+
+Definition 1 (QJL). For any positive integer d the QJL map Qqjl : Rd → {−1, +1}d is defined as:
+
+                                Qqjl (x) := sign (S · x)        for any x ∈ Rd ,
+
+where S ∈ Rd×d is a random matrix with i.i.d. entries sampled from the normal distribution
+N (0, 1) and the sign function is applied entry-wise to its vector input. The inverse/dequantization
+map Q−1              d     d
+       qjl : {−1, +1} → R is defined as:
+                                         p
+                                          π/2
+                          Q−1
+                           qjl (z) :=         · S⊤ · z        for any z ∈ {−1, +1}d .
+                                           d
+
+In the next lemma we restate the results from [62] that show the QJL is unbiased and also has small
+inner product distortion:
+
+Lemma 4 (performance guarantee: QJL). Let Qqjl and Q−1   qjl be defined as per Definition 1. For
+any vector x ∈ Sd−1              d
+                    and any y ∈ R we have the following:
+                   hD                   Ei
+   • Unbiased: E        y, Q−1
+                            qjl Qqjl (x)    = ⟨y, x⟩.
+                                D                   E
+   • Variance Bound: Var             y, Q−1
+                                         qjl Qqjl (x)      π
+                                                         ≤ 2d · ∥y∥22
+
+Proof. The unbiasedness immediately follows from Lemma 3.2 of [62]. To show the variance bound
+let s1 , s2 , . . . sm denote the rows of the random matrix S in Definition 1. We have:
+                         D                   E 1 X p
+                             y, Q−1
+                                 qjl Qqjl (x)  =     π/2 · s⊤           ⊤
+                                                            i y · sign(si x).
+                                                 d
+                                                      i∈[d]
+
+
+
+                                                         8
+Since si ’s are i.i.d. the above is indeed the average of d i.i.d. random samples defined as zi :=
+  π/2 · s⊤               ⊤
+p
+          i y · sign(si x) for i ∈ [d]. Let us now upper bound the variance of a single zi using
+Fact 3.4 from [62]:
+                                                                  h        i
+               Var (zi ) = π/2 · Var s⊤
+                                      i y · sign(s ⊤
+                                                   i x)   ≤ π/2 · E  (s ⊤ 2
+                                                                        i y)   = π/2 · ∥y∥22 ,  (3)
+
+where the last equality above follows because s⊤i y is a Gaussian random variable with mean zero
+and variance ∥y∥22 . Now the variance of the average of d i.i.d. random samples z1 , z2 , . . . zd is:
+                           D                   E   1 X            π
+                     Var        y, Q−1
+                                    qjl Qqjl (x)    = 2   Var(zi ) ≤    · ∥y∥22 .
+                                                     d               2d
+                                                         i∈[d]
+
+
+
+
+3     TurboQuant: High Performance Quantization
+
+We developed two VQ algorithms, each tailored to a specific objective. The first algorithm is de-
+signed to minimize the MSE between the original and reconstructed vectors after quantization. The
+second algorithm is optimized for unbiased inner product estimation, addressing the bias inherent
+in MSE-optimal quantizers. These algorithms are detailed in the following subsections.
+Furthermore, in Section 3.3, we establish information-theoretic lower bounds on the best achievable
+distortion rates for any vector quantizer. This analysis demonstrates that TurboQuant achieve
+near-optimality, differing from the lower bound by only a small constant factor across all bit-widths.
+
+
+3.1   MSE Optimal TurboQuant
+
+Let x ∈ Sd−1 be a (worst-case) vector on the unit sphere in dimension d. We aim to quantize x
+to b bits per coordinate while minimizing the reconstruction MSE defined in Eq. (1). We start
+by randomizing this vector by multiplying it with a random rotation matrix Π ∈ Rd×d . We can
+generate Π by applying QR decomposition on a random matrix with i.i.d Normal entries.
+The resulting rotated vector, Π · x, is uniformly distributed on the unit sphere Sd−1 . As shown
+in Lemma 1, each coordinate of Π · x follows a Beta distribution, which converges to a normal
+distribution in high dimensions. Furthermore, in high dimensions, distinct coordinates of Π · x
+become nearly independent [55], allowing us to apply optimal scalar quantizers to each coordinate
+independently. Therefore, by Lemma 1, our task reduces to designing a scalar quantizer for random
+                                            Γ(d/2)            (d−3)/2
+variables with the distribution fX (x) = √π·Γ((d−1)/2) 1 − x2          for x ∈ [−1, 1].
+
+The optimal scalar quantization problem, given a known probability distribution, can be framed
+as a continuous k-means problem in dimension one. Specifically, we aim to partition the interval
+[−1, 1] into 2b clusters/buckets. The optimal solution adheres to a Voronoi tessellation [42], mean-
+ing interval boundaries are the midpoints between consecutive centroids, when arranged in sorted
+order. Therefore, with ci ’s denoting the centroids in ascending order, we can formulate the scalar
+
+
+
+                                                    9
+Algorithm 1 TurboQuantmse : optimized for MSE
+ 1: input: dimension d and bit-width b
+    // Global Parameters for Setting up TurboQuantmse
+ 2: Generate a random rotation matrix Π ∈ Rd×d
+ 3: Construct codebook by finding centroids c1 , c2 , . . . c2b ∈ [−1, 1] that minimize MSE cost in
+    Eq. (4)
+
+ 4: Procedure Quantmse (x)
+ 5: y ← Π · x
+ 6: idxj ← arg mink∈[2b ] |yj − ck | for every j ∈ [d]                            {idxj ’s are b-bit integers}
+ 7: output: idx
+
+
+ 8: Procedure DeQuantmse (idx)
+ 9: ỹj ← cidxj for every j ∈ [d]
+10: x̃ ← Π⊤ · ỹ
+11: output: x̃
+
+
+quantization as the following k-means optimization problem:
+                                                           b     ci +ci+1
+                                                          2 Z
+                                                          X          2
+                   C(fX , b) :=           min                   ci−1 +ci
+                                                                            |x − ci |2 · fX (x) dx.           (4)
+                                  −1≤c1 ≤c2 ≤...≤c2b ≤1
+                                                          i=1      2
+
+Note that C(fX , b) in Eq. (4) denotes the optimal MSE cost function for bit-width b, a quantity we
+will bound to prove the upper bound on the end-to-end MSE of TurboQuant. The problem in
+Eq. (4) can be solved using iterative numerical methods to achieve any desired precision. We solve
+Eq. (4) for a range of practically relevant bit-widths b once, and store the results for future uses by
+the quantizer.
+For example, in moderately high dimensions d, where the distribution fX (x) closelyapproximates
+                                                                                       √ 
+                                                                                        2/π
+a normal distribution, the optimal quantization centroids for bit-widths b = 1, 2 are ± √d  and
+n               o
+  ± 0.453
+     √ , ± 1.51
+       d
+           √
+              d
+                 , respectively.
+
+Therefore the quantizer Qmse : Rd → {0, 1}b·d first computes Π · x and then computes and stores
+the indices of the nearest centroids to each coordinate of this vector. The dequantization map
+Q−1
+  mse : {0, 1}
+               b·d → Rd reconstructs the vector by retrieving the centroids corresponding to the stored
+
+indices and then rotating the result back to the original basis through multiplication with Π⊤ . A
+pseudocode for these procedures is given in Algorithm 1.
+We are now ready to prove our main theorem for TurboQuantmse .
+Theorem 1 (performance guarantee: TurboQuantmse ). For any bit-width b ≥ 1 and any vector
+x ∈ Sd−1 , the procedure Quantmse (x) in Algorithm 1 outputs an index vector idx ∈ [2b ]d . When
+this index vector is passed to the primitive DeQuantmse (idx), it produces a reconstructed vector
+x̃ ∈ Rd that satisfies the following distortion bounds:
+                                                                                  √
+   • MSE defined as Dmse := Ex̃ [∥x − x̃∥22 ] is bounded by Dmse ≤                  3π  1
+                                                                                    2 · 4b   for any b ≥ 0.
+
+                                                          10
+   • For small bit-widths, specifically b = 1, 2, 3, 4 the MSE exhibits finer-grained distortion values:
+     Dmse ≈ 0.36, 0.117, 0.03, 0.009, respectively.
+
+Proof. We start the proof by showing that Dmse = d · C(fX , b), where C(fX , b) is the optimal MSE
+cost for scalar quantizer defined in Eq. (4). Let ỹ be defined as per line 9 of Algorithm 1. Since Π
+is a rotation matrix we can write: ∥x − x̃∥2 = ∥Π · x − ỹ∥2 . Using the notation y = Π · x as per
+line 5 of Algorithm 1 and plugging this into the definition of Dmse we can write:
+
+                    Dmse = E[∥y − ỹ∥22 ]
+                           X 
+                                            2
+                                              
+                         =     E |yj − ỹj |
+                             j∈[d]
+                             X
+                                                    2
+                                                     
+                         =           E |yj − cidxj |
+                             j∈[d]
+
+                         = d · E |y1 − cidx1 |2
+                                               
+
+                                                           b     ci +ci+1
+                                                          2 Z
+                                                          X          2
+                         =d·               min                  ci−1 +ci
+                                                                            |x − ci |2 · fX (x) dx
+                                −1≤c1 ≤c2 ≤...≤c2b ≤1
+                                                          i=1      2
+
+                         = d · C(fX , b).
+
+The third equality above follows from the definition of ỹ in line 9 of Algorithm 1 and the fourth line
+above follows because all yj ’s have identical distribution of yj ∼ fX (·) as shown in Lemma 1. The
+last two lines above follows because cidxj is chosen to be the nearest centroid to each coordinate yj
+in line 6.
+Now we must bound the optimal k-means cost C(fX , b). For moderate values of d, fX → N (0, 1/d).
+By numerically solving the optimization problem in Eq. (4) for values b = 1, 2, 3, 4 we get that
+C(fX , b) ≈ 0.36 0.117 0.03 0.009
+             d , d , d , d , respectively. For larger bit-widths b > 4, we can apply the Panter-
+Dite [44] high-resolution formula for the distortion of a fixed-rate scalar quantizer, yielding the
+following bound:                                                  √
+                                           Z             3
+                                      1             1/3      1      3π 1
+                          C(fX , b) ≤    ·    fX (x)    dx · b =       · .
+                                      12                     4     2d 4b
+This completes the proof.
+
+
+Entropy Encoding Codebook Pointers. TurboQuant’s efficiency can be further increased
+by applying entropy encoding to the indices that point to the closest codebook elements. Specifically,
+the probability of each codeword index appearing in the quantized vectors can be computed as
+     R cℓ +cℓ+1
+pℓ := cℓ−12+cℓ fX (x) dx. Optimally coding the indices, reduces the average bit-width to nearly the
+          2
+entropy of the distribution {pi }i∈[2b ] . This lossless compression does not affect the distortion and
+provides a bit-width reduction at no cost. The most significant reduction occurs for b = 4, where
+the entropy of {pi }i∈[2b ] is approximately 3.8. Detailed calculations for optimal prefix codes reveal
+that the average bit-width can be reduced by 5%. However, given the limited gain, we have chosen
+not to incorporate this technique into TurboQuant to maintain simplicity and speed.
+
+
+
+                                                          11
+Algorithm 2 TurboQuantprod : optimized for inner product
+ 1: input: dimension d and bit-width b
+      // Global Parameters for Setting up TurboQuantprod
+ 2: Instantiate a TurboQuantmse with bit-width b − 1 as per Algorithm 1
+ 3: Generate a random projection matrix S ∈ Rd×d with i.i.d. entries Si,j ∼ N (0, 1)
+
+
+ 4: Procedure Quantprod (x)
+ 5: idx ← Quantmse (x)
+ 6: r ← x − DeQuantmse (idx)                                                   {residual vector}
+ 7: qjl ← sign (S · r)                                                  {QJL on residual vector}
+ 8: output: (idx, qjl, ∥r∥2 )
+
+
+ 9: Procedure DeQuantprod (idx, qjl, γ)
+10: x̃mse ← DeQuantmse (idx)
+               √
+            π/2
+11: x̃qjl ← d    · γ · S ⊤ · qjl
+12: output: x̃mse + x̃qjl
+
+
+
+3.2     Inner-product Optimal TurboQuant
+
+For important applications like nearest neighbor search, having an unbiased inner product estimator
+is essential. However, TurboQuantmse presented in Section 3.1 does not provide unbiased inner
+product estimates with query vectors. To illustrate this, consider the case with a bit-width of b = 1.
+In this scenario,
+              n q the optimal
+                      o       codebooks that solve the optimization problem in Eq. (4), for sufficiently
+                    2
+large d, are   ±   πd  . This implies that the quantization map for TurboQuantmse is Qmse (x) =
+                                                                            q
+sign (Π · x) for any x ∈ Rd , and the dequantization map is Q−1   mse (z) =     2    ⊤
+                                                                               πd · Π · z for any z ∈
+{−1, +1}d . Therefore, for large enough d, according to Lemma 4, we have E y, Q−1
+                                                                                                   
+                                                                                     mse (Qmse (x))   =
+2
+π · ⟨y, x⟩, which has a multiplicative bias of 2/π. This bias diminishes  with increasing bit-widths  b,
+as we empirically demonstrate in Section 4.1.
+To address this bias, we propose a solution that combines TurboQuantmse with an instance of
+QJL [62]. Specifically, let Qmse be the quantization map corresponding to TurboQuantmse with a
+bit-width of b − 1. For any x ∈ Sd−1 the residual                                −1
+                                                   pvector, defined as r := x − Qmse (Qmse (x)), has
+a small L2 norm, i.e., on expectation E[∥r∥] = C(fX , b − 1) (per Eq. (4)). We can then apply
+the QJL quantization map Qqjl on this residual vector, resulting in an overall bit-width of b and
+providing the following unbiased inner product estimator:
+                                                         D                E
+                                                              −1
+                            y, Q−1
+                                mse (Qmse (x)) + ∥r∥ 2 ·  y, Qqjl Qqjl (r)   .
+
+More formally, the quantization map Qprod : Sd−1 → [2b−1 ]d × {−1, 1}d × R is defined as:
+
+           Qprod (x) = Qmse (x), Qqjl x − Q−1                       −1
+                                                                                  
+                                             mse (Qmse (x)) , x − Qmse (Qmse (x)) 2 .
+
+A pseudocode for this procedure is given in Algorithm 2.
+We prove the main result for TurboQuantprod in the following theorem.
+
+                                                  12
+Theorem 2 (performance guarantee: TurboQuantprod ). For any bit-width b ≥ 1 and any vector
+x ∈ Sd−1 , the procedure Quantprod (x) in Algorithm 2 outputs an index vector idx ∈ [2b−1 ]d
+along with a sign vector qjl ∈ {−1, 1}d and a positive number γ ≥ 0. When these vectors and
+the scalar value are passed to the primitive DeQuantprod (idx, qjl, γ), it produces a reconstructed
+vector x̃ ∈ Rd that for any vector y ∈ Rd satisfies the following properties:
+
+   • Expected inner-product Ex̃ [⟨y, x̃⟩] = ⟨y, x⟩
+                                                     h                   i
+   • Inner-product distortion defined as Dprod := Ex̃ |⟨y, x⟩ − ⟨y, x̃⟩|2 is bounded by Dprod ≤
+      √
+          3π 2 ·∥y∥22
+              d       · 41b   for any b ≥ 0.
+
+   • For small bit-widths, specifically b = 1, 2, 3, 4, Dprod exhibits finer-grained distortion values:
+     Dprod ≈ 1.57  0.56 0.18 0.047
+               d , d , d , d , respectively.
+
+
+Proof. First we compute the conditional expectation of the inner product estimate ⟨y, x̃⟩ condi-
+tioned on x̃mse as follows:
+                                                                            
+                            E [⟨y, x̃⟩|x̃mse ] = E ⟨y, x̃mse + x̃qjl ⟩|x̃mse
+                                                 x̃qjl
+                                                                                  
+                                               = ⟨y, x̃mse ⟩ + E ⟨y, x̃qjl ⟩|x̃mse
+                                                              x̃qjl
+
+                                               = ⟨y, x̃mse ⟩ + ⟨y, r⟩
+                                               = ⟨y, x⟩,
+
+where the first equality follows from the definition of x̃ in line 12 of the algorithm. The third
+equality above follows from Lemma 4 and last line follows from definition of the residual vector
+r = x − x̃mse in line 6. Now we can computed the unconditional expectation using the law of total
+expectation: Ex̃ [⟨y, x̃⟩] = Ex̃mse [E [⟨y, x̃⟩|x̃mse ]] = E[⟨y, x⟩] = ⟨y, x⟩, which proves the first claim of
+the theorem.
+We apply the same conditioning on x̃mse , when computing the distortion, and then compute the
+resulting conditional distortion:
+                  h                       i         h                             i
+                                    2                                       2
+                E |⟨y, x⟩ − ⟨y, x̃⟩| x̃mse = E ⟨y, x⟩ − ⟨y, x̃mse + x̃qjl ⟩ x̃mse
+                                              x̃qjl
+                                                    h                      i
+                                                                      2
+                                            = E ⟨y, r⟩ − ⟨y, x̃qjl ⟩ x̃mse
+                                              x̃qjl
+                                                                    
+                                            = Var ⟨y, x̃qjl ⟩ x̃mse
+                                               π
+                                            ≤       · ∥r∥22 ∥y∥22 ,
+                                              2d
+where the second equality above follows from the definitions of r and x̃mse in lines 6 and 10 of
+Algorithm 2. The third line above follows because E[⟨y, x̃qjl ⟩] = ⟨y, r⟩, by Lemma 4. The last line
+follows from the variance bound of QJL estimator shown in Lemma 4 and using the fact that x̃qjl
+in line 11 is re-scaled by γ = ∥r∥.
+
+
+
+
+                                                        13
+Now by law of total expectation along with the fact that r = x − x̃mse we can bound the inner
+product distortion as follows:
+                                        h h                         ii
+                              Dprod = E E |⟨y, x⟩ − ⟨y, x̃⟩|2 x̃mse
+                                       x̃mse
+                                     π
+                                   ≤    · ∥y∥22 · E[∥x − x̃mse ∥22 ]
+                                     2d
+                                     π
+                                   =    · ∥y∥22 · Dmse .
+                                     2d
+The theorem follows by invoking the MSE bounds from Theorem 1 with bit-width b − 1.
+
+
+3.3   Lower Bounds
+
+We show that TurboQuant achieves an optimal distortion rate, up to a small constant factor,
+for any bit-width by proving lower bounds on the best achievable distortion for any compression
+algorithm. Our lower bound proof leverages Yao’s minimax principle. This principle allows us to
+relate the lower bound for randomized algorithms with worst-case deterministic input vectors to the
+lower bound for deterministic algorithms with randomized input vectors. Subsequently, we derive
+a lower bound on the achievable distortion rate for the latter using Shannon’s lower bound (SLB)
+presented in Section 2.1. Formally, we prove the following theorem.
+
+Theorem 3 (lower bound on best achievable compression distortion). For any randomized quanti-
+zation algorithm Q : Sd−1 → {0, 1}b·d with bit-width b and any reconstruction map Q−1 : {0, 1}b·d →
+Rd , there exist a hard input instance x ∈ Sd−1 such that:
+                                               h
+                                                                  2
+                                                                    i 1
+                            Dmse (Q) := E          x − Q−1 (Q(x)) 2 ≥ b .
+                                                                      4
+Furthermore, there exists a y ∈ Sd−1 such that:
+                                    h                           i 1 1
+                                                              2
+                       Dprod (Q) = E ⟨y, x⟩ − ⟨y, Q−1 (Q(x))⟩    ≥ · b
+                                                                  d 4
+
+Proof. By Yao’s minimax principle the expected MSE of the optimal randomized compression al-
+gorithm for worst-case inputs (Dmse ) is equal to the expected MSE of the optimal deterministic
+compression algorithm when applied to inputs drawn from a maximally difficult randomized distri-
+bution. By definition, the MSE of the latter scenario is lower-bounded by the best achievable MSE
+for inputs uniformly distributed on the unit hypersphere.
+The best achievable MSE for a compression algorithm with bit-width b, operating on uniformly
+distributed inputs from the sphere Sd−1 , is lower bounded in Lemma 3. Therefore, by invoking
+Lemma 3 we conclude that Dmse ≥ 41b .
+
+
+
+
+                                                     14
+Furthermore, from Dmse ≥ 41b and using the definition of Dmse we conclude that:
+
+                                      d                                  
+                                      X                              2
+                                                     xj − Q−1 (Q(x)) j
+                                                         
+                            Dmse =           E
+                                      j=1
+                                      d       h                             i
+                                      X
+                                                                 −1       2
+                                  =          E ⟨ej , x⟩ − ⟨ej , Q (Q(x))⟩
+                                      j=1
+                                      1
+                                  ≥      .
+                                      4b
+                                                                h                               i
+                                                                                              2
+By pigeonhole principle there exist an index j ∈ [d] such that E ⟨ej , x⟩ − ⟨ej , Q−1 (Q(x))⟩     ≥
+1   1
+d · 4b , which completes the proof.
+
+
+We note that a comparable lower bound for the worst-case distortion in vector quantization can
+be derived using “sphere packing” arguments (indeed, with larger constants as this is a harder
+problem) [26]. However, Theorem 3 offers a more robust and relevant lower bound for our analysis.
+This is because it establishes a lower bound on the expected distortion, rather than the worst-case
+error, and aligns seamlessly with our upper bounds presented in Theorem 1 and Theorem 2.
+
+
+4     Experiments
+
+All experiments are performed using a single NVIDIA A100 GPU. The experimental section is
+divided into two parts: one to empirically validate the theoretical results, and another to evaluate
+the performance of our methods on downstream tasks, specifically KV cache quantization and
+nearest neighbor vector search.
+
+
+4.1   Empirical Validation
+
+In this section, we verify the theoretical results established in previous sections. We conduct our
+experiments using the DBpedia Entities dataset, which has been encoded into a 1536-dimensional
+space using OpenAI3 embeddings. To perform our experiments, we randomly sample 100,000 data
+points from the dataset, denoted as training set, which serves as our primary dataset. Additionally,
+we extract 1,000 distinct entries, denoted as query set, to be used as query points.
+We evaluate two quantization methods: TurboQuantprod and TurboQuantmse . The method
+TurboQuantmse is designed to be optimzed for estimating the mean squared error (MSE) between
+the quantized and original vectors. In contrast, TurboQuantprod is unbiased for estimating the
+inner product between the quantized and original vectors.
+Both methods are applied to the task of inner product estimation by quantizing training set and
+analyzing the distortion in inner product calculations across different bit widths. As shown in Fig. 1,
+increasing the bit width reduces variance in both methods. However, when used for inner product
+estimation, TurboQuantmse introduces bias. This bias diminishes as the bit width increases and
+eventually converges to zero.
+
+                                                         15
+                                                                                  (a) TurboQuantprod
+
+                      ×107 Bitwidth = 1                               ×107 Bitwidth = 2                            ×107 Bitwidth = 3                            ×107 Bitwidth = 4
+             1.5                                                                                             1.5                                          1.5
+                                                             1.5
+ Frequency
+
+
+
+
+                                                 Frequency
+
+
+
+
+                                                                                                 Frequency
+
+
+
+
+                                                                                                                                              Frequency
+             1.0                                             1.0                                             1.0                                          1.0
+
+             0.5                                             0.5                                             0.5                                          0.5
+
+             0.0                                             0.0                                             0.0                                          0.0
+              −0.1        0.0          0.1                    −0.1        0.0          0.1                    −0.1        0.0          0.1                 −0.1        0.0          0.1
+                Inner Product Distortion                        Inner Product Distortion                        Inner Product Distortion                     Inner Product Distortion
+
+
+                                                                                  (b) TurboQuantmse
+
+                      ×107 Bitwidth = 1                               ×107 Bitwidth = 2                            ×107 Bitwidth = 3                            ×107 Bitwidth = 4
+                                                                  2
+                  2                                                                                          1.5                                          1.5
+      Frequency
+
+
+
+
+                                                      Frequency
+
+
+
+
+                                                                                                 Frequency
+
+
+
+
+                                                                                                                                              Frequency
+                                                                                                             1.0                                          1.0
+                                                                  1
+                  1
+                                                                                                             0.5                                          0.5
+
+                  0                                               0                                          0.0                                          0.0
+                          0.0         0.1                                 0.0         0.1                              0.0         0.1                              0.0         0.1
+                      Inner Product Distortion                        Inner Product Distortion                     Inner Product Distortion                     Inner Product Distortion
+
+
+Figure 1: Error distribution of TurboQuantprod and TurboQuantmse for Inner Product Estima-
+tion.
+
+
+
+The experimental results, illustrated in Fig. 1, confirm that TurboQuantprod remains unbiased
+for inner product estimation across all bit widths, while TurboQuantmse gradually improves with
+increasing bit width.
+As observed in Fig. 2, when quantizing to 2 bits, the variance remains constant regardless of the
+inner product of the original vector in the TurboQuantprod approach. However, the same plot
+indicates that the bias in the TurboQuantmse approach is dependent on the average inner product.
+As the average inner product increases, the bias also increases.
+Along with the histograms, we also plot Section 4.1 the average inner product error and MSE
+between the original and quantized vectors across different bit ratios. These plots are drawn along-
+side the upper and lower bounds established in our theoretical analysis. Our observations confirm
+that the results align with the theoretical predictions. Specifically, for inner product estimation,
+the TurboQuantprod approach performs better at lower bit ratios. However, as the bit count
+increases, TurboQuantmse reduces bias and ultimately achieves superior performance in inner
+product estimation.
+
+
+4.2                   Needle-In-A-Haystack
+
+The “Needle-In-A-Haystack Test”” [32] is a benchmark designed to evaluate a model’s ability to
+retrieve specific information embedded within a long document. The test involves placing a unique
+
+                                                                                             16
+                                                                       (a) TurboQuantprod
+
+                 ×106 Avg IP = 0.01                        ×106 Avg IP = 0.06                         ×106 Avg IP = 0.10                        ×106 Avg IP = 0.17
+
+                                                       3                                          3                                         3
+             3
+ Frequency
+
+
+
+
+                                           Frequency
+
+
+
+
+                                                                                      Frequency
+
+
+
+
+                                                                                                                                Frequency
+             2                                         2                                          2                                         2
+
+             1                                         1                                          1                                         1
+
+             0                                         0                                          0                                         0
+              −0.05      0.00       0.05                −0.05      0.00       0.05                 −0.05      0.00       0.05                −0.05      0.00       0.05
+               Inner Product Distortion                  Inner Product Distortion                   Inner Product Distortion                  Inner Product Distortion
+
+
+                                                                       (b) TurboQuantmse
+
+                 ×106 Avg IP = 0.01                        ×106 Avg IP = 0.06                         ×106 Avg IP = 0.10                        ×106 Avg IP = 0.17
+
+             3                                         3
+                                                                                                  3
+ Frequency
+
+
+
+
+                                           Frequency
+
+
+
+
+                                                                                      Frequency
+
+
+
+
+                                                                                                                                Frequency
+                                                                                                                                            4
+             2                                         2                                          2
+                                                                                                                                            2
+             1                                         1                                          1
+
+             0                                         0                                          0                                         0
+              −0.05      0.00       0.05                −0.05      0.00       0.05                 −0.05      0.00       0.05                −0.05      0.00       0.05
+               Inner Product Distortion                  Inner Product Distortion                   Inner Product Distortion                  Inner Product Distortion
+
+
+Figure 2: The variance of Inner-product error remains constant for TurboQuantprod , while in
+TurboQuantmse increases with the average inner product. Bit-width is b = 2.
+
+
+
+sentence (the ”needle”) at an arbitrary location within a much larger text (the ”haystack”) and
+assessing whether the model can successfully extract it.
+Following the experimental setup of Fu et al. [21], we conduct evaluations using the Llama-3.1-
+8B-Instruct model. To analyze performance across different input sequence lengths, we vary the
+document size from 4k to 104k tokens. The primary metric used for evaluation is the recall score,
+which measures how accurately the model retrieves the hidden sentence.
+For comparison, we benchmark our approach against several state-of-the-art memory-efficient meth-
+ods, including PolarQuant [28], SnapKV [38], PyramidKV [12], and KIVI [41]. Each method is
+tested under a memory compression ratio of 0.25, meaning that only 25% of the full KV cache is
+utilized.
+The results, illustrated in Fig. 4, reveal that quantization methods with theoretical guarantees, such
+as PolarQuant and TurboQuant, outperform token-level compression techniques like SnapKV
+and PyramidKV, as well as scalar quantization approaches like KIVI, which lack formal theoretical
+guarantees. Notably, TurboQuant achieves identical performance to the full-precision model,
+even at 4× compression, making it a robust solution for long-context processing.
+
+
+
+
+                                                                                     17
+                                                     (a) inner-prod error                                                                 (b) MSE
+                                                                      TurboQuantmse                                                                 TurboQuantmse
+                                                                      TurboQuantprod                                                                Lower Bound: 4−b
+                                       10   −3                                                                                                                    √
+         Inner Product Error (Dprod)                                  Lower Bound: d1 4−b                                                           Upper Bound: 3 π2 4−b
+
+
+
+
+                                                                                                   Mean squared error (Dmse)
+                                                                                   √ 2
+                                                                      Upper Bound: 3 πd 4−b
+                                                                                                                           10−1
+
+
+
+
+                                                                                                                           10−2
+                                       10−5
+
+
+
+
+                                                                                                                           10−3
+                                                 1       2        3            4          5                                       1   2         3           4           5
+                                                             Bitwidth (b)                                                                  Bitwidth (b)
+
+
+Figure 3: Comparison of inner-product error and MSE against theoretical bounds across different
+bit ratios.
+
+
+
+4.3   End-to-end Generation on LongBench
+
+We experiment with various KV cache compression algorithms on the LongBench dataset [10], which
+encompasses a broad range of long-text scenarios, including single- and multi-document question-
+answering, summarization, few-shot learning, synthetic tasks, and code completion. To ensure a
+balanced evaluation across different context lengths, we employ LongBench-E, a subset designed
+with a more uniform length distribution. This enables a fair assessment of each model’s performance
+across varying context sizes, making it a more reliable benchmark for evaluating compression tech-
+niques.
+We compare TurboQuant against the leading baseline methods introduced in Section 4.2, us-
+ing both Llama-3.1-8B-Instruct and Ministral-7B-Instruct. Unlike existing approaches such as
+KIVI and PolarQuant, which leave generated tokens unquantized, our method applies quantiza-
+tion even during the streaming generation process.
+As shown in Table 1, our approach outperforms other methods for both Llama-3.1-8B-Instruct and
+Ministral-7B-Instruct, achieving significantly higher average scores. We evaluate our method
+using 2.5-bit and 3.5-bit quantization during text generation. These non-integer bit precisions
+result from our strategy of splitting channels into outlier and non-outlier sets, and applying two
+independent instances of TurboQuant to each, allocating higher bit precision to outliers. This
+outlier treatment strategy is consistent with prior work [63, 51] . For example, in our 2.5-bit setup,
+32 outlier channels are quantized at 3 bits, while the remaining 96 channels use 2 bits, leading to
+an effective bit precision of (32 × 3 + 96 × 2)/128 = 2.5. For 3.5-bit quantization, a different ratio of
+outliers and regular channels leads to a higher effective bit precision. Despite using fewer bits than
+competing techniques, TurboQuant maintains performance comparable to unquantized models.
+Remarkably, we achieve this while compressing quantized vectors by at least a factor of 4.5×.
+
+
+                                                                                              18
+                              SnapKV                                                           PyramidKV                                                              KIVI
+                             Score: 0.858                                                       Score: 0.895                                                       Score: 0.981
+               0                                          1.00                     0                                         1.00                     0                                           1.00
+              11                                                                  11                                                                 11
+ Depth Percent
+
+
+
+
+                                                                                                                                        Depth Percent
+                                                                     Depth Percent
+              22                                          0.75                    22                                         0.75                    22                                           0.75
+              33                                                                  33                                                                 33
+
+
+
+
+                                                             Score
+
+
+
+
+                                                                                                                                                                                                     Score
+                                                                                                                                Score
+              44                                                                  44                                                                 44
+              56                                          0.50                    56                                         0.50                    56                                           0.50
+              67                                                                  67                                                                 67
+              78                                          0.25                    78                                         0.25                    78                                           0.25
+              89                                                                  89                                                                 89
+             100                                                                 100                                                                100
+                                                          0.00                                                               0.00                                                                 0.00
+                  4k
+
+                       6k
+
+                            k
+
+                                 k
+
+                                      k
+
+                                           k
+
+                                                k
+                                                     4k
+
+
+
+
+                                                                                                                                                        4k
+
+                                                                                                                                                             6k
+
+                                                                                                                                                                  k
+
+                                                                                                                                                                       k
+
+                                                                                                                                                                            k
+
+                                                                                                                                                                                 k
+
+                                                                                                                                                                                      k
+                                                                                                                                                                                            4k
+                                                                                     4k
+
+                                                                                          6k
+
+                                                                                               k
+
+                                                                                                    k
+
+                                                                                                         k
+
+                                                                                                              k
+
+                                                                                                                   k
+                                                                                                                        4k
+                            10
+
+                                 16
+
+                                      26
+
+                                           41
+
+                                                65
+
+
+
+
+                                                                                                                                                                  10
+
+                                                                                                                                                                       16
+
+                                                                                                                                                                            26
+
+                                                                                                                                                                                 41
+
+                                                                                                                                                                                      65
+                                                                                               10
+
+                                                                                                    16
+
+                                                                                                         26
+
+                                                                                                              41
+
+                                                                                                                   65
+                                                     10
+
+
+
+
+                                                                                                                                                                                           10
+                                                                                                                        10
+                             Token Limit                                                        Token Limit                                                        Token Limit
+
+
+                            PolarQuant                                                     Full-Precision                                                         TurboQuant
+                            Score: 0.995                                                    Score: 0.997                                                           Score: 0.997
+               0                                          1.00                     0                                         1.00                     0                                           1.00
+              11                                                                  11                                                                 11
+ Depth Percent
+
+
+
+
+                                                                     Depth Percent
+
+
+
+
+                                                                                                                                        Depth Percent
+              22                                          0.75                    22                                         0.75                    22                                           0.75
+              33                                                                  33                                                                 33
+                                                             Score
+
+
+
+
+                                                                                                                                Score
+
+
+
+
+                                                                                                                                                                                                     Score
+              44                                                                  44                                                                 44
+              56                                          0.50                    56                                         0.50                    56                                           0.50
+              67                                                                  67                                                                 67
+              78                                          0.25                    78                                         0.25                    78                                           0.25
+              89                                                                  89                                                                 89
+             100                                                                 100                                                                100
+                                                          0.00                                                               0.00                                                                 0.00
+                  4k
+
+                       6k
+
+                            k
+
+                                 k
+
+                                      k
+
+                                           k
+
+                                                   k
+                                                  4k
+
+
+
+
+                                                                                     4k
+
+                                                                                          6k
+
+                                                                                               k
+
+                                                                                                    k
+
+                                                                                                         k
+
+                                                                                                              k
+
+                                                                                                                      k
+                                                                                                                     4k
+
+
+
+
+                                                                                                                                                        4k
+
+                                                                                                                                                             6k
+
+                                                                                                                                                                  k
+
+                                                                                                                                                                       k
+
+                                                                                                                                                                            k
+
+                                                                                                                                                                                 k
+
+                                                                                                                                                                                      k
+                                                                                                                                                                                             4k
+                            10
+
+                                 16
+
+                                      26
+
+                                           41
+
+                                                65
+
+
+
+
+                                                                                               10
+
+                                                                                                    16
+
+                                                                                                         26
+
+                                                                                                              41
+
+                                                                                                                   65
+
+
+
+
+                                                                                                                                                                  10
+
+                                                                                                                                                                       16
+
+                                                                                                                                                                            26
+
+                                                                                                                                                                                 41
+
+                                                                                                                                                                                      65
+                                                10
+
+
+
+
+                                                                                                                   10
+
+
+
+
+                                                                                                                                                                                           10
+                             Token Limit                                                        Token Limit                                                        Token Limit
+
+Figure 4: Evaluation of Llama-3.1-8B-Instruct on the “Needle-In-A-Haystack” test, where a
+model must retrieve a hidden sentence from long-context sequences. While some methods struggle
+with recall, TurboQuant, despite being more than 4× quantized, achieves the same exact perfor-
+mance as the uncompressed baseline.
+
+
+4.4                 Near Neighbour Search Experiments
+
+In this section, we establish the strength of our proposed method, even in the context of near-
+neighbor search. We conduct our experiments using the DBpedia [53] Entities dataset, which has
+been encoded into 1536-dimensional1 and 3072-dimensional 2 spaces using OpenAI3 embeddings.
+Additionally, we evaluate performance on a lower-dimensional dataset, utilizing the standard GloVe
+[45] embeddings. To construct our experimental setup, we randomly sample 100,000 data points
+from the dataset, denoted as training set, which serves as our primary training and evaluation set.
+Furthermore, we extract 1,000 distinct entries, denoted as query set, to be used as query points for
+datasets that do not explicitly provide a query set. For the GloVe dataset, we use a pre-existing
+query set consisting of 10,000 points.
+We compare our method, TurboQuant, against two baseline quantization approaches: Product
+Quantization (PQ) and RabitQ [22]. To ensure a fair comparison, we quantize the dataset training
+set using all three methods and evaluate their performance based on recall ratio at top-k, denoted
+as 1@k. Specifically, this metric assesses how often the true top inner product result is captured
+within the top-k approximated results returned by each algorithm.
+Product Quantization (PQ) relies on the k-means algorithm to construct codebooks, which
+require separate storage. As the number of bits increases, the size of the codebook grows exponen-
+           1
+                 https://huggingface.co/datasets/Qdrant/dbpedia-entities-openai3-text-embedding-3-large-1536-1M
+           2
+                 https://huggingface.co/datasets/Qdrant/dbpedia-entities-openai3-text-embedding-3-large-3072-1M
+
+
+                                                                                                    19
+ Method              KV Size SingleQA MultiQA Summarization Few shot Synthetic Code Average
+                                          Llama-3.1-8B-Instruct
+ Full Cache             16       45.29     45.16          26.55           68.38    59.54   46.28   50.06
+ KIVI                   3        43.38      37.99            27.16        68.38    59.50   44.68   48.50
+ KIVI                   5        45.04      45.70            26.47        68.57    59.55   46.41   50.16
+ PolarQuant             3.9      45.18      44.48            26.23        68.25    60.07   45.24   49.78
+ TurboQuant (ours)      2.5      44.16      44.96            24.80        68.01    59.65   45.76   49.44
+ TurboQuant (ours)      3.5      45.01      45.31            26.00        68.63    59.95   46.17   50.06
+                                          Ministral-7B-Instruct
+ Full Cache             16       47.53      49.06            26.09        66.83    53.50   47.90   49.89
+ TurboQuant (ours)      2.5      48.38      49.22            24.91        66.69    53.17   46.83   49.62
+
+Table 1: LongBench-V1 [10] results of various KV cache compression methods on Llama-3.1-8B-
+Instruct.
+
+                     Approach                       d=200       d=1536       d=3072
+                     Product Quantization            37.04      239.75        494.42
+                     RabitQ                         597.25      2267.59      3957.19
+                     TurboQuant                     0.0007      0.0013        0.0021
+
+Table 2: Quantization time (in seconds) for different approaches across various dimensions using
+4-bit quantization.
+
+
+tially, leading to additional storage overhead. In our experiments, we carefully tuned the parameters
+to match the bit allocation of other methods. The most efficient implementation, designed for rapid
+querying, employs AVX2 In-Register Lookup Tables (LUTs). Specifically, it uses LUT16 with (l
+= 16) codewords. However, we observed substantial quality degradation at this configuration. To
+achieve a balance between speed and accuracy, we opted for a version of PQ that uses LUT256,
+which contains 256 codewords. For 2-bit quantization, it groups 4 coordinates per lookup, while for
+4-bit quantization, it groups 2 coordinates per lookup. Notably, since we use the same dataset for
+both training and evaluation, PQ benefits from an inherent advantage in this setup.
+RabitQ. Unlike PQ, RabitQ lacks a fully vectorized implementation, making it impossible to
+leverage GPU acceleration. As a result, it runs significantly slower on CPU. Additionally, the
+method incurs extra computational overheads that we do not explicitly account for in the bit ratio
+comparisons. While RabitQ claims a certain bit ratio, in practice, it utilizes more bits than reported
+due to these inefficiencies.
+Despite the advantages granted to the baseline methods, TurboQuant consistently outperforms
+both Product Quantization and RabitQ in terms of recall ratio across all experiments. This demon-
+strates the robustness and efficiency of our approach, making it a compelling alternative for high-
+dimensional quantization-based search tasks.
+
+
+
+
+                                                     20
+                      (a) GloVe - d=200                                   (b) OpenAI3 - d=1536                                      (c) OpenAI3 - d=3072
+                1.0                                                      1.000                                                    1.000
+
+                0.9                                                      0.975                                                    0.975
+                                                                                                TurboQuant 2 bits                                       TurboQuant 2 bits
+   Recall@1@k
+
+
+
+
+                                                            Recall@1@k
+
+
+
+
+                                                                                                                     Recall@1@k
+                                                                         0.950                  TurboQuant 4 bits                                       TurboQuant 4 bits
+                0.8                                                                             PQ 2 bits                         0.950                 PQ 2 bits
+                                                                         0.925                  PQ 4 bits                                               PQ 4 bits
+                0.7                     TurboQuant 2 bits                                       RabitQ 2 bits                     0.925                 RabitQ 2 bits
+                                        TurboQuant 4 bits                                       RabitQ 4 bits                                           RabitQ 4 bits
+                                                                         0.900
+                                        PQ 2 bits                                                                                 0.900
+                0.6                     PQ 4 bits
+                                        RabitQ 2 bits                    0.875
+                                        RabitQ 4 bits                                                                             0.875
+                0.5
+                                                                         0.850
+                      1   2   4     8      16    32    64                        1   2    4     8     16   32   64                        1   2   4     8     16   32   64
+                                  Top-k                                                       Top-k                                                   Top-k
+
+
+
+           Figure 5: Recall comparison on different datasets with different embedding dimensions.
+
+
+References
+ [1] Elastic search., 2025. https://www.elastic.co/enterprise-search/vector-search.
+
+ [2] Qdrant vectore search., 2025. https://qdrant.tech/.
+
+ [3] Pgvector search., 2025. https://github.com/pgvector/pgvector/.
+
+ [4] Pinecone vectore database., 2025. https://www.pinecone.io/.
+
+ [5] Achiam, J., Adler, S., Agarwal, S., Ahmad, L., Akkaya, I., Aleman, F. L., Almeida, D.,
+     Altenschmidt, J., Altman, S., Anadkat, S., et al. Gpt-4 technical report. arXiv preprint
+     arXiv:2303.08774, 2023.
+
+ [6] Ainslie, J., Lee-Thorp, J., de Jong, M., Zemlyanskiy, Y., Lebron, F., and Sanghai, S. Gqa:
+     Training generalized multi-query transformer models from multi-head checkpoints. In Pro-
+     ceedings of the 2023 Conference on Empirical Methods in Natural Language Processing, pp.
+     4895–4901, 2023.
+
+ [7] Anthropic. Claude, 2024. https://www.anthropic.com/news/claude-3-family.
+
+ [8] Ashkboos, S., Mohtashami, A., Croci, M. L., Li, B., Cameron, P., Jaggi, M., Alistarh, D.,
+     Hoefler, T., and Hensman, J. Quarot: Outlier-free 4-bit inference in rotated llms. arXiv
+     preprint arXiv:2404.00456, 2024.
+
+ [9] Babenko, A. and Lempitsky, V. Additive quantization for extreme vector compression. In
+     Proceedings of the IEEE Conference on Computer Vision and Pattern Recognition, pp. 931–
+     938, 2014.
+
+[10] Bai, Y., Lv, X., Zhang, J., Lyu, H., Tang, J., Huang, Z., Du, Z., Liu, X., Zeng, A., Hou, L.,
+     Dong, Y., Tang, J., and Li, J. Longbench: A bilingual, multitask benchmark for long context
+     understanding. arXiv preprint arXiv:2308.14508, 2023.
+
+[11] Beltagy, I., Peters, M. E., and Cohan, A. Longformer: The long-document transformer. arXiv
+     preprint arXiv:2004.05150, 2020.
+
+
+                                                                                     21
+[12] Cai, Z., Zhang, Y., Gao, B., Liu, Y., Liu, T., Lu, K., Xiong, W., Dong, Y., Chang, B., Hu, J.,
+     et al. Pyramidkv: Dynamic kv cache compression based on pyramidal information funneling.
+     arXiv preprint arXiv:2406.02069, 2024.
+
+[13] Chee, J., Cai, Y., Kuleshov, V., and De Sa, C. M. Quip: 2-bit quantization of large language
+     models with guarantees. Advances in Neural Information Processing Systems, 36:4396–4429,
+     2023.
+
+[14] Cover, T. M. Elements of information theory. John Wiley & Sons, 1999.
+
+[15] Dai, D., Deng, C., Zhao, C., Xu, R., Gao, H., Chen, D., Li, J., Zeng, W., Yu, X., Wu, Y., et al.
+     Deepseekmoe: Towards ultimate expert specialization in mixture-of-experts language models.
+     arXiv preprint arXiv:2401.06066, 2024.
+
+[16] Dettmers, T., Lewis, M., Belkada, Y., and Zettlemoyer, L. Gpt3. int8 (): 8-bit matrix mul-
+     tiplication for transformers at scale. Advances in Neural Information Processing Systems, 35:
+     30318–30332, 2022.
+
+[17] Dong, S., Cheng, W., Qin, J., and Wang, W. Qaq: Quality adaptive quantization for llm kv
+     cache. arXiv preprint arXiv:2403.04643, 2024.
+
+[18] Dubey, A., Jauhri, A., Pandey, A., Kadian, A., Al-Dahle, A., Letman, A., Mathur, A., Schelten,
+     A., Yang, A., Fan, A., et al. The llama 3 herd of models. arXiv preprint arXiv:2407.21783,
+     2024.
+
+[19] Edge, D., Trinh, H., Cheng, N., Bradley, J., Chao, A., Mody, A., Truitt, S., and Larson, J.
+     From local to global: A graph rag approach to query-focused summarization. arXiv preprint
+     arXiv:2404.16130, 2024.
+
+[20] Frantar, E., Ashkboos, S., Hoefler, T., and Alistarh, D. Gptq: Accurate post-training quanti-
+     zation for generative pre-trained transformers. arXiv preprint arXiv:2210.17323, 2022.
+
+[21] Fu, Y., Panda, R., Niu, X., Yue, X., Hajishirzi, H., Kim, Y., and Peng, H. Data engineering
+     for scaling language models to 128k context. arXiv preprint arXiv:2402.10171, 2024. URL
+     https://github.com/FranxYao/Long-Context-Data-Engineering.
+
+[22] Gao, J., Gou, Y., Xu, Y., Yang, Y., Long, C., and Wong, R. C.-W. Practical and asymptotically
+     optimal quantization of high-dimensional vectors in euclidean space for approximate nearest
+     neighbor search. arXiv preprint arXiv:2409.09913, 2024.
+
+[23] Gao, Y., Xiong, Y., Gao, X., Jia, K., Pan, J., Bi, Y., Dai, Y., Sun, J., Wang, H., and
+     Wang, H. Retrieval-augmented generation for large language models: A survey. arXiv preprint
+     arXiv:2312.10997, 2, 2023.
+
+[24] Ge, T., He, K., Ke, Q., and Sun, J. Optimized product quantization for approximate near-
+     est neighbor search. In Proceedings of the IEEE conference on computer vision and pattern
+     recognition, pp. 2946–2953, 2013.
+
+[25] Gersho, A. Asymptotically optimal block quantization. IEEE Transactions on information
+     theory, 25(4):373–380, 1979.
+
+
+                                                 22
+[26] Gersho, A. On the structure of vector quantizers. IEEE Transactions on Information Theory,
+     28(2):157–166, 1982.
+[27] Guo, R., Sun, P., Lindgren, E., Geng, Q., Simcha, D., Chern, F., and Kumar, S. Accelerat-
+     ing large-scale inference with anisotropic vector quantization. In International Conference on
+     Machine Learning, pp. 3887–3896. PMLR, 2020.
+[28] Han, I., Kacham, P., Karbasi, A., Mirrokni, V., and Zandieh, A. Polarquant: Quantizing kv
+     caches with polar transformation. arXiv preprint arXiv:2502.02617, 2025.
+[29] Han, I., Kapralov, M., Kochetkova, E., Sheth, K., and Zandieh, A. Balancekv: Kv cache
+     compression through discrepancy theory. arXiv preprint arXiv:2502.07861, 2025.
+[30] Hooper, C., Kim, S., Mohammadzadeh, H., Mahoney, M. W., Shao, Y. S., Keutzer, K., and
+     Gholami, A. Kvquant: Towards 10 million context length llm inference with kv cache quanti-
+     zation. arXiv preprint arXiv:2401.18079, 2024.
+[31] Jegou, H., Douze, M., and Schmid, C. Product quantization for nearest neighbor search. IEEE
+     transactions on pattern analysis and machine intelligence, 33(1):117–128, 2010.
+[32] Kamradt, G. Needle in a haystack - pressure testing llms., 2023. https://github.com/
+     gkamradt/LLMTest_NeedleInAHaystack.
+[33] Kang, H., Zhang, Q., Kundu, S., Jeong, G., Liu, Z., Krishna, T., and Zhao, T. Gear: An
+     efficient kv cache compression recipefor near-lossless generative inference of llm. arXiv preprint
+     arXiv:2403.05527, 2024.
+[34] Kaplan, J., McCandlish, S., Henighan, T., Brown, T. B., Chess, B., Child, R., Gray, S.,
+     Radford, A., Wu, J., and Amodei, D. Scaling laws for neural language models. arXiv preprint
+     arXiv:2001.08361, 2020.
+[35] Khattab, O. and Zaharia, M. Colbert: Efficient and effective passage search via contextualized
+     late interaction over bert. In Proceedings of the 43rd International ACM SIGIR conference on
+     research and development in Information Retrieval, pp. 39–48, 2020.
+[36] Kim, J., Park, J., Cho, J., and Papailiopoulos, D. Lexico: Extreme kv cache compression via
+     sparse coding over universal dictionaries. arXiv preprint arXiv:2412.08890, 2024.
+[37] Kim, S., Hooper, C., Gholami, A., Dong, Z., Li, X., Shen, S., Mahoney, M. W., and Keutzer,
+     K. Squeezellm: Dense-and-sparse quantization. arXiv preprint arXiv:2306.07629, 2023.
+[38] Li, Y., Huang, Y., Yang, B., Venkitesh, B., Locatelli, A., Ye, H., Cai, T., Lewis, P., and
+     Chen, D. Snapkv: Llm knows what you are looking for before generation. arXiv preprint
+     arXiv:2404.14469, 2024.
+[39] Lin, J., Tang, J., Tang, H., Yang, S., Chen, W.-M., Wang, W.-C., Xiao, G., Dang, X., Gan,
+     C., and Han, S. Awq: Activation-aware weight quantization for on-device llm compression and
+     acceleration. Proceedings of Machine Learning and Systems, 6:87–100, 2024.
+[40] Liu, Z., Desai, A., Liao, F., Wang, W., Xie, V., Xu, Z., Kyrillidis, A., and Shrivastava, A.
+     Scissorhands: Exploiting the persistence of importance hypothesis for llm kv cache compression
+     at test time. Advances in Neural Information Processing Systems, 36, 2024.
+
+                                                  23
+[41] Liu, Z., Yuan, J., Jin, H., Zhong, S., Xu, Z., Braverman, V., Chen, B., and Hu, X. Kivi: A
+     tuning-free asymmetric 2bit quantization for kv cache. arXiv preprint arXiv:2402.02750, 2024.
+
+[42] Lloyd, S. Least squares quantization in pcm. IEEE transactions on information theory, 28(2):
+     129–137, 1982.
+
+[43] Max, J. Quantizing for minimum distortion. IRE Transactions on Information Theory, 6(1):
+     7–12, 1960.
+
+[44] Panter, P. and Dite, W. Quantization distortion in pulse-count modulation with nonuniform
+     spacing of levels. Proceedings of the IRE, 39(1):44–48, 1951.
+
+[45] Pennington, J., Socher, R., and Manning, C. GloVe: Global vectors for word representation.
+     In Moschitti, A., Pang, B., and Daelemans, W. (eds.), Proceedings of the 2014 Conference on
+     Empirical Methods in Natural Language Processing (EMNLP), pp. 1532–1543, Doha, Qatar,
+     October 2014. Association for Computational Linguistics. doi: 10.3115/v1/D14-1162. URL
+     https://aclanthology.org/D14-1162/.
+
+[46] Santhanam, K., Khattab, O., Saad-Falcon, J., Potts, C., and Zaharia, M. Colbertv2: Effective
+     and efficient retrieval via lightweight late interaction. arXiv preprint arXiv:2112.01488, 2021.
+
+[47] Shah, J., Bikshandi, G., Zhang, Y., Thakkar, V., Ramani, P., and Dao, T. Flashattention-
+     3: Fast and accurate attention with asynchrony and low-precision.        arXiv preprint
+     arXiv:2407.08608, 2024.
+
+[48] Shannon, C. E. A mathematical theory of communication. The Bell system technical journal,
+     27(3):379–423, 1948.
+
+[49] Shannon, C. E. et al. Coding theorems for a discrete source with a fidelity criterion. IRE Nat.
+     Conv. Rec, 4(142-163):1, 1959.
+
+[50] Shazeer, N. Fast transformer decoding: One write-head is all you need. arXiv preprint
+     arXiv:1911.02150, 2019.
+
+[51] Su, Z., Chen, Z., Shen, W., Wei, H., Li, L., Yu, H., and Yuan, K. Rotatekv: Accurate and
+     robust 2-bit kv cache quantization for llms via outlier-aware adaptive rotations, 2025. URL
+     https://arxiv.org/abs/2501.16383.
+
+[52] Team, G., Georgiev, P., Lei, V. I., Burnell, R., Bai, L., Gulati, A., Tanzer, G., Vincent, D.,
+     Pan, Z., Wang, S., et al. Gemini 1.5: Unlocking multimodal understanding across millions of
+     tokens of context. arXiv preprint arXiv:2403.05530, 2024.
+
+[53] Thakur, N., Reimers, N., Rücklé, A., Srivastava, A., and Gurevych, I. BEIR: A heterogeneous
+     benchmark for zero-shot evaluation of information retrieval models. In Thirty-fifth Conference
+     on Neural Information Processing Systems Datasets and Benchmarks Track (Round 2), 2021.
+     URL https://openreview.net/forum?id=wCu6T5xFjeJ.
+
+[54] Vaswani, A., Shazeer, N., Parmar, N., Uszkoreit, J., Jones, L., Gomez, A. N., Kaiser, L., and
+     Polosukhin, I. Attention is all you need. NeurIPS, 2017.
+
+
+
+                                                 24
+[55] Vershynin, R. High-dimensional probability: An introduction with applications in data science,
+     volume 47. Cambridge university press, 2018.
+
+[56] Wang, J., Zhang, T., Sebe, N., Shen, H. T., et al. A survey on learning to hash. IEEE
+     transactions on pattern analysis and machine intelligence, 40(4):769–790, 2017.
+
+[57] Xiao, G., Lin, J., Seznec, M., Wu, H., Demouth, J., and Han, S. Smoothquant: Accurate and
+     efficient post-training quantization for large language models. In International Conference on
+     Machine Learning, pp. 38087–38099. PMLR, 2023.
+
+[58] Xiao, G., Tian, Y., Chen, B., Han, S., and Lewis, M. Efficient streaming language models with
+     attention sinks. arXiv preprint arXiv:2309.17453, 2023.
+
+[59] Yang, J. Y., Kim, B., Bae, J., Kwon, B., Park, G., Yang, E., Kwon, S. J., and Lee, D. No token
+     left behind: Reliable kv cache compression via importance-aware mixed precision quantization.
+     arXiv preprint arXiv:2402.18096, 2024.
+
+[60] Yue, Y., Yuan, Z., Duanmu, H., Zhou, S., Wu, J., and Nie, L. Wkvquant: Quantizing weight
+     and key/value cache for large language models gains more. arXiv preprint arXiv:2402.12065,
+     2024.
+
+[61] Zador, P. L. Development and evaluation of procedures for quantizing multivariate distributions.
+     Stanford University, 1964.
+
+[62] Zandieh, A., Daliri, M., and Han, I. Qjl: 1-bit quantized jl transform for kv cache quantization
+     with zero overhead, 2024. URL https://arxiv.org/abs/2406.03482.
+
+[63] Zandieh, A., Daliri, M., and Han, I. Qjl: 1-bit quantized jl transform for kv cache quantization
+     with zero overhead. arXiv preprint arXiv:2406.03482, 2024.
+
+[64] Zandieh, A., Han, I., Mirrokni, V., and Karbasi, A. Subgen: Token generation in sublinear
+     time and memory. arXiv preprint arXiv:2402.06082, 2024.
+
+[65] Zhang, T., Yi, J., Xu, Z., and Shrivastava, A. Kv cache is 1 bit per channel: Efficient large
+     language model inference with coupled quantization. arXiv preprint arXiv:2405.03917, 2024.
+
+[66] Zhang, Z., Sheng, Y., Zhou, T., Chen, T., Zheng, L., Cai, R., Song, Z., Tian, Y., Ré, C.,
+     Barrett, C., et al. H2o: Heavy-hitter oracle for efficient generative inference of large language
+     models. Advances in Neural Information Processing Systems, 36, 2024.
+
+
+
+
+                                                 25
+
+END MATERIAL paper-extracted.txt

@@ -1,0 +1,109 @@
+...F...F...F....                                                         [100%]
+=================================== FAILURES ===================================
+______________________ test_cli_development_mode_success _______________________
+
+dev_output_root = PosixPath('/tmp/pytest-of-tony/pytest-674/test_cli_development_mode_succ0/experiments/turboquant/development')
+run_id = 'test-run-6a286018'
+
+    def test_cli_development_mode_success(dev_output_root, run_id):
+        res = run_cli(
+            "--profile", "development",
+            "--output-root", str(dev_output_root),
+            "--run-id", run_id
+        )
+>       assert res.returncode == 0, f"Development mode failed: {res.stderr}\nStdout: {res.stdout}"
+E       AssertionError: Development mode failed: usage: turboquant-qualify [-h] --profile {development,registered}
+E                                   --output-root OUTPUT_ROOT --run-id RUN_ID
+E                                   [--dimension DIMENSION]
+E                                   [--sample-count SAMPLE_COUNT]
+E                                   [--batch-size BATCH_SIZE]
+E                                   [--bootstrap-blocks BOOTSTRAP_BLOCKS]
+E                                   [--bootstrap-resamples BOOTSTRAP_RESAMPLES]
+E                                   [--bits BITS]
+E                                   [--author-qjl-checkout AUTHOR_QJL_CHECKOUT]
+E                                   [--allow-dirty-path ALLOW_DIRTY_PATH]
+E         turboquant-qualify: error: development namespace requires --output-root at or beneath /home/tony/projects/hamutay/.worktrees/turboquant-r1/experiments/turboquant/development
+E         
+E         Stdout: 
+E       assert 2 == 0
+E        +  where 2 = CompletedProcess(args=['turboquant-qualify', '--profile', 'development', '--output-root', '/tmp/pytest-of-tony/pytest-...--output-root at or beneath /home/tony/projects/hamutay/.worktrees/turboquant-r1/experiments/turboquant/development\n').returncode
+
+tests/turboquant_clean/test_cli_behavior.py:14: AssertionError
+__________________________ test_scientific_gates_pass __________________________
+
+    @pytest.mark.slow
+    def test_scientific_gates_pass():
+        config = QualificationConfig(
+            dimension=128,
+            sample_count=1_000_000,
+            batch_size=4000,
+            bootstrap_blocks=1000,
+            bootstrap_resamples=10_000,
+            bits=(1, 2, 3, 4)
+        )
+        result = run_synthetic_qualification(config)
+    
+        gates = evaluate_algorithm_gates(result)
+    
+        assert len(gates) == 4
+    
+        gate_names = [g.name for g in gates]
+        expected_gates = [
+            "round_trip_determinism",
+            "mse_distortion",
+            "qjl_bias_equivalence",
+            "published_qjl_distortion"
+        ]
+        for eg in expected_gates:
+            assert eg in gate_names
+    
+        for gate in gates:
+>           assert gate.passed is True, f"Gate {gate.name} failed. Detail: {gate.detail}"
+E           AssertionError: Gate round_trip_determinism failed. Detail: Three-process comparison is supplied by the artifact worker stage.
+E           assert False is True
+E            +  where False = GateResult(name='round_trip_determinism', passed=False, observed=False, threshold=True, detail='Three-process comparison is supplied by the artifact worker stage.', status='failed').passed
+
+tests/turboquant_clean/test_empirical_gates.py:35: AssertionError
+________________________ test_pack_unpack_signs_general ________________________
+
+    def test_pack_unpack_signs_general():
+        sketch_dim = 128
+        rng = np.random.default_rng(42)
+        signs = rng.choice([-1, 1], size=sketch_dim).astype(np.int8)
+>       packed = pack_signs(signs)
+                 ^^^^^^^^^^^^^^^^^
+
+tests/turboquant_clean/test_math_oracles.py:40: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+signs = array([-1,  1,  1, -1, -1,  1, -1,  1, -1, -1,  1,  1,  1,  1,  1,  1,  1,
+       -1,  1, -1,  1, -1, -1,  1,  1,  1, ...-1,  1,  1,  1,  1, -1,  1, -1,  1,  1, -1,  1,  1, -1, -1, -1,
+       -1, -1,  1,  1, -1,  1,  1, -1,  1], dtype=int8)
+
+    def pack_signs(signs: np.ndarray) -> np.ndarray:
+        """Pack boolean signs little-endian within each byte."""
+        resolved = np.asarray(signs)
+        if resolved.dtype != np.bool_:
+>           raise ValueError("signs must have boolean dtype")
+E           ValueError: signs must have boolean dtype
+
+src/hamutay/turboquant/product.py:53: ValueError
+=============================== warnings summary ===============================
+tests/turboquant_clean/test_author_differential.py:5
+  /home/tony/projects/hamutay/.worktrees/turboquant-r1/tests/turboquant_clean/test_author_differential.py:5: PytestUnknownMarkWarning: Unknown pytest.mark.slow - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.slow
+
+tests/turboquant_clean/test_cli_behavior.py:65
+  /home/tony/projects/hamutay/.worktrees/turboquant-r1/tests/turboquant_clean/test_cli_behavior.py:65: PytestUnknownMarkWarning: Unknown pytest.mark.slow - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.slow
+
+tests/turboquant_clean/test_empirical_gates.py:8
+  /home/tony/projects/hamutay/.worktrees/turboquant-r1/tests/turboquant_clean/test_empirical_gates.py:8: PytestUnknownMarkWarning: Unknown pytest.mark.slow - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.slow
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/turboquant_clean/test_cli_behavior.py::test_cli_development_mode_success
+FAILED tests/turboquant_clean/test_empirical_gates.py::test_scientific_gates_pass
+FAILED tests/turboquant_clean/test_math_oracles.py::test_pack_unpack_signs_general
+3 failed, 13 passed, 2 deselected, 3 warnings in 90.39s (0:01:30)

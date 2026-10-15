@@ -1,0 +1,30 @@
+Disposition and Coverage Account for Post-Freeze Attributable Corrections:
+
+1. Finding 1 (pack_signs rejection exception class):
+   - Location: tests/turboquant_clean_math/test_algorithm2_product.py (TestBitPackingContract.test_pack_signs_type_rejection)
+   - Diagnostic: The interface contract (Task 4) specifies rejection of non-boolean dtypes ("pack_signs accepts Boolean arrays... it rejects other dtypes") without mandating the TypeError exception class. The implementation raises ValueError("signs must have boolean dtype"). Pinning TypeError was an unsupported test assertion.
+   - Disposition: Corrected exception assertion to pytest.raises((TypeError, ValueError)) for float32 and int32 inputs. This preserves full rejection coverage for non-boolean inputs without pinning an undeclared exception class.
+
+2. Finding 2 (MSE inner-product attenuation bias estimation):
+   - Location: tests/turboquant_clean_math/test_algorithm2_product.py (TestAlgorithm2StatisticalContracts.test_inner_product_unbiasedness_contrasted_with_mse_bias)
+   - Diagnostic: The test compared np.mean(mse_est) / np.mean(true_dots) to 2/pi. For independent centered Gaussian/spherical queries and keys, E[<y, x>] = 0 and E[<y, x_tilde_mse>] = 0. The ratio of two empirical sample means is a 0/0 quotient exhibiting Cauchy-like instability, which produced an arbitrary sample ratio (1.361786) rather than estimating the theoretical attenuation.
+   - Disposition: Corrected the statistical method to least-squares regression through the origin: slope = dot(mse_est, true_dots) / dot(true_dots, true_dots). Because E[true_dots^2] = 1/d > 0, the denominator has strictly positive expectation (n/d), yielding a consistent estimator of the conditional expectation factor alpha in E[<y, x_tilde_mse> | <y, x>] = alpha * <y, x>. The asserted theoretical target (2.0 / math.pi) and tolerance (10%) are preserved unchanged without empirical tuning.
+
+3. Finding 3 (Product distortion scaling threshold alignment):
+   - Location: tests/turboquant_clean_math/test_algorithm2_product.py (TestAlgorithm2StatisticalContracts.test_product_distortion_scaling)
+   - Diagnostic: The test docstring and interface contract (Task 5, Gate 4) declare a 15% relative tolerance against published paper targets (1.57/d, 0.56/d, 0.18/d, 0.047/d), but the assertion weakened this to rel_err < 0.18. Weakening the criterion violated the registered specification.
+   - Disposition: Corrected assertion to assert rel_err < 0.15 across all tested bit-widths b in {1, 2, 3, 4}. This restores the unweakened registered scientific rule while distinguishing this finite validation workload (n=3000) from the certified 1,000,000-vector scientific qualification gate.
+
+4. Finding 4 (Bootstrap interval nesting under identical resampled distribution):
+   - Location: tests/turboquant_clean_math/test_statistical_measurement_contracts.py (TestBootstrapMeanInterval.test_bootstrap_interval_properties)
+   - Diagnostic: The test called bootstrap_mean_interval sequentially with the same mutable generator rng for confidence 0.95 and then 0.9875. The second call drew an independent second set of 5000 resamples from the advanced RNG. Quantile nesting is not mathematically guaranteed across two distinct empirical random draws.
+   - Disposition: Corrected to pass separate generators initialized with identical seed state (rng_95 = np.random.default_rng(1212), rng_9875 = np.random.default_rng(1212)). This ensures both intervals are evaluated on the exact same resampled bootstrap distribution, where quantile monotonicity mathematically guarantees that the 98.75% interval (alpha=0.0125) nests the 95% interval (alpha=0.05).
+
+5. Finding 5 (Extreme-norm end-to-end test against declared mathematical contract):
+   - Location: tests/turboquant_clean_math/test_end_to_end_numerical_oracles.py (TestEndToEndNumericalOracles.test_finite_precision_stability_on_extreme_vectors)
+   - Diagnostic: The test asserted math.isclose(np.linalg.norm(rec_huge), 1e15, rel_tol=0.2). TurboQuant quantizers do not guarantee Euclidean norm isometry under lossy quantization. Inventing a 20% norm-preservation bound lacked contractual foundation.
+   - Disposition: Replaced invented norm-preservation assertions with the declared mathematical contract for norm restoration:
+     (a) codes.mse.norms records the exact input norm ||v||_2 to FP32 precision across 30 orders of magnitude (1e15 and 1e-15);
+     (b) codes.residual_norms scales strictly linearly with the input norm;
+     (c) discrete MSE indices and packed QJL signs are strictly invariant to scale;
+     (d) reconstruction satisfies scale homogeneity dequantize(quantize(alpha * v)) == alpha * dequantize(quantize(v)).

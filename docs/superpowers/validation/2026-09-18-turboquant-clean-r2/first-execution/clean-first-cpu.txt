@@ -1,0 +1,179 @@
+F.F..F.........F........                                                 [100%]
+=================================== FAILURES ===================================
+__________________________ test_canonical_json_bytes ___________________________
+
+    def test_canonical_json_bytes():
+        data = {"b": 2.0, "a": 1, "c": "test"}
+        encoded = canonical_json_bytes(data)
+        assert encoded == b'{"a":1,"b":2.0,"c":"test"}\n'
+    
+        with pytest.raises(ValueError, match="finite"):
+>           canonical_json_bytes({"inf": float('inf')})
+
+tests/turboquant_clean_r2/test_cli_artifacts.py:16: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/hamutay/turboquant/artifacts.py:18: in canonical_json_bytes
+    encoded = json.dumps(
+/home/tony/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/json/__init__.py:242: in dumps
+    **kw).encode(obj)
+          ^^^^^^^^^^^
+/home/tony/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/json/encoder.py:202: in encode
+    chunks = self.iterencode(o, _one_shot=True)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <json.encoder.JSONEncoder object at 0x7644f2386e90>, o = {'inf': inf}
+_one_shot = True
+
+    def iterencode(self, o, _one_shot=False):
+        """Encode the given object and yield each string
+        representation as available.
+    
+        For example::
+    
+            for chunk in JSONEncoder().iterencode(bigobject):
+                mysocket.write(chunk)
+    
+        """
+        if self.check_circular:
+            markers = {}
+        else:
+            markers = None
+        if self.ensure_ascii:
+            _encoder = encode_basestring_ascii
+        else:
+            _encoder = encode_basestring
+    
+        def floatstr(o, allow_nan=self.allow_nan,
+                _repr=float.__repr__, _inf=INFINITY, _neginf=-INFINITY):
+            # Check for specials.  Note that this type of test is processor
+            # and/or platform-specific, so do tests which don't depend on the
+            # internals.
+    
+            if o != o:
+                text = 'NaN'
+            elif o == _inf:
+                text = 'Infinity'
+            elif o == _neginf:
+                text = '-Infinity'
+            else:
+                return _repr(o)
+    
+            if not allow_nan:
+                raise ValueError(
+                    "Out of range float values are not JSON compliant: " +
+                    repr(o))
+    
+            return text
+    
+    
+        if self.indent is None or isinstance(self.indent, str):
+            indent = self.indent
+        else:
+            indent = ' ' * self.indent
+        if _one_shot and c_make_encoder is not None:
+            _iterencode = c_make_encoder(
+                markers, self.default, _encoder, indent,
+                self.key_separator, self.item_separator, self.sort_keys,
+                self.skipkeys, self.allow_nan)
+        else:
+            _iterencode = _make_iterencode(
+                markers, self.default, _encoder, indent, floatstr,
+                self.key_separator, self.item_separator, self.sort_keys,
+                self.skipkeys, _one_shot)
+>       return _iterencode(o, 0)
+               ^^^^^^^^^^^^^^^^^
+E       ValueError: Out of range float values are not JSON compliant: inf
+E       when serializing dict item 'inf'
+
+/home/tony/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/json/encoder.py:263: ValueError
+
+During handling of the above exception, another exception occurred:
+
+    def test_canonical_json_bytes():
+        data = {"b": 2.0, "a": 1, "c": "test"}
+        encoded = canonical_json_bytes(data)
+        assert encoded == b'{"a":1,"b":2.0,"c":"test"}\n'
+    
+>       with pytest.raises(ValueError, match="finite"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: Regex pattern did not match.
+E         Expected regex: 'finite'
+E         Actual message: "Out of range float values are not JSON compliant: inf\nwhen serializing dict item 'inf'"
+
+tests/turboquant_clean_r2/test_cli_artifacts.py:15: AssertionError
+__________________________ test_create_run_directory ___________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-tony/pytest-676/test_create_run_directory0')
+
+    def test_create_run_directory(tmp_path):
+        dev_root = tmp_path / "experiments" / "turboquant" / "development"
+        dev_root.mkdir(parents=True)
+        run_dir = create_run_directory(dev_root, "run-1")
+        assert run_dir.exists()
+    
+        with pytest.raises(Exception):
+            create_run_directory(dev_root, "run-1")
+    
+        bad_root = tmp_path / "experiments" / "invalid"
+        bad_root.mkdir(parents=True)
+>       with pytest.raises(Exception):
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'Exception'>
+
+tests/turboquant_clean_r2/test_cli_artifacts.py:38: Failed
+______________ test_cli_development_mode_author_checkout_not_run _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-tony/pytest-676/test_cli_development_mode_auth0')
+
+    def test_cli_development_mode_author_checkout_not_run(tmp_path):
+        root = tmp_path / "experiments" / "turboquant" / "development"
+        root.mkdir(parents=True)
+    
+        args = [
+            "turboquant-qualify", "--profile", "development",
+            "--output-root", str(root), "--run-id", "test-dev"
+        ]
+    
+        from hamutay.turboquant.qualification import GateResult
+        fake_gates = [
+>           GateResult("round_trip_determinism", True, None, None, "", "passed"),
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+            GateResult("mse_distortion", True, None, None, "", "passed"),
+            GateResult("qjl_bias_equivalence", True, None, None, "", "passed"),
+            GateResult("published_qjl_distortion", True, None, None, "", "passed")
+        ]
+
+tests/turboquant_clean_r2/test_cli_artifacts.py:79: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+<string>:9: in __init__
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = GateResult(name='round_trip_determinism', passed=True, observed=None, threshold=None, detail='', status='passed')
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.name, str) or not self.name:
+            raise ValueError("gate name must be a nonempty string")
+        if not isinstance(self.passed, bool):
+            raise ValueError("gate passed must be boolean")
+        if not isinstance(self.detail, str) or not self.detail:
+>           raise ValueError("gate detail must be a nonempty string")
+E           ValueError: gate detail must be a nonempty string
+
+src/hamutay/turboquant/qualification.py:277: ValueError
+___________________________ test_partition_block_ids ___________________________
+
+    def test_partition_block_ids():
+        blocks = partition_block_ids(sample_count=100, block_count=10)
+>       assert len(blocks) == 10
+E       assert 100 == 10
+E        +  where 100 = len(array([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,\n       2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3,...6,\n       6, 6, 6, 6, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 8, 8, 8, 8, 8, 8, 8, 8,\n       8, 8, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9]))
+
+tests/turboquant_clean_r2/test_qualification_gates.py:12: AssertionError
+=========================== short test summary info ============================
+FAILED tests/turboquant_clean_r2/test_cli_artifacts.py::test_canonical_json_bytes
+FAILED tests/turboquant_clean_r2/test_cli_artifacts.py::test_create_run_directory
+FAILED tests/turboquant_clean_r2/test_cli_artifacts.py::test_cli_development_mode_author_checkout_not_run
+FAILED tests/turboquant_clean_r2/test_qualification_gates.py::test_partition_block_ids
+4 failed, 20 passed in 3.54s

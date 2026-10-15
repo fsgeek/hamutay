@@ -1,0 +1,452 @@
+Running scope as unit: ayllu-gpu-5d985f11-8a32-4936-bc54-18a0f9d3ef69.scope
+F.F..FFFFF...F.......F.................                                  [100%]
+=================================== FAILURES ===================================
+______________ test_verify_pinned_checkout_hash_and_clean_checks _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-tony/pytest-677/test_verify_pinned_checkout_ha0')
+
+    def test_verify_pinned_checkout_hash_and_clean_checks(tmp_path: Path) -> None:
+        """Verify verify_pinned_checkout validates commit, file hashes, and clean status."""
+        # A non-existent directory must raise an error
+        with pytest.raises((ValueError, FileNotFoundError, RuntimeError)):
+            verify_pinned_checkout(tmp_path / "nonexistent_checkout")
+    
+        # A mock checkout with tampered file hash must fail
+        mock_checkout = tmp_path / "mock_checkout"
+        mock_checkout.mkdir()
+        (mock_checkout / "LICENSE").write_text("tampered license content")
+        with pytest.raises((ValueError, RuntimeError)):
+>           verify_pinned_checkout(mock_checkout)
+
+tests/turboquant_clean_r3/test_author_qjl_differential.py:58: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+scripts/turboquant/author_qjl_oracle.py:114: in verify_pinned_checkout
+    commit = _run_text("git", "rev-parse", "HEAD", cwd=resolved)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+scripts/turboquant/author_qjl_oracle.py:57: in _run_text
+    completed = subprocess.run(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+input = None, capture_output = True, timeout = None, check = True
+popenargs = (['git', 'rev-parse', 'HEAD'],)
+kwargs = {'cwd': PosixPath('/tmp/pytest-of-tony/pytest-677/test_verify_pinned_checkout_ha0/mock_checkout'), 'stderr': -1, 'stdout': -1, 'text': True}
+process = <Popen: returncode: 128 args: ['git', 'rev-parse', 'HEAD']>
+stdout = ''
+stderr = 'fatal: not a git repository (or any of the parent directories): .git\n'
+retcode = 128
+
+    def run(*popenargs,
+            input=None, capture_output=False, timeout=None, check=False, **kwargs):
+        """Run command with arguments and return a CompletedProcess instance.
+    
+        The returned instance will have attributes args, returncode, stdout and
+        stderr. By default, stdout and stderr are not captured, and those attributes
+        will be None. Pass stdout=PIPE and/or stderr=PIPE in order to capture them,
+        or pass capture_output=True to capture both.
+    
+        If check is True and the exit code was non-zero, it raises a
+        CalledProcessError. The CalledProcessError object will have the return code
+        in the returncode attribute, and output & stderr attributes if those streams
+        were captured.
+    
+        If timeout (seconds) is given and the process takes too long,
+         a TimeoutExpired exception will be raised.
+    
+        There is an optional argument "input", allowing you to
+        pass bytes or a string to the subprocess's stdin.  If you use this argument
+        you may not also use the Popen constructor's "stdin" argument, as
+        it will be used internally.
+    
+        By default, all communication is in bytes, and therefore any "input" should
+        be bytes, and the stdout and stderr will be bytes. If in text mode, any
+        "input" should be a string, and stdout and stderr will be strings decoded
+        according to locale encoding, or by "encoding" if set. Text mode is
+        triggered by setting any of text, encoding, errors or universal_newlines.
+    
+        The other arguments are the same as for the Popen constructor.
+        """
+        if input is not None:
+            if kwargs.get('stdin') is not None:
+                raise ValueError('stdin and input arguments may not both be used.')
+            kwargs['stdin'] = PIPE
+    
+        if capture_output:
+            if kwargs.get('stdout') is not None or kwargs.get('stderr') is not None:
+                raise ValueError('stdout and stderr arguments may not be used '
+                                 'with capture_output.')
+            kwargs['stdout'] = PIPE
+            kwargs['stderr'] = PIPE
+    
+        with Popen(*popenargs, **kwargs) as process:
+            try:
+                stdout, stderr = process.communicate(input, timeout=timeout)
+            except TimeoutExpired as exc:
+                process.kill()
+                if _mswindows:
+                    # Windows accumulates the output in a single blocking
+                    # read() call run on child threads, with the timeout
+                    # being done in a join() on those threads.  communicate()
+                    # _after_ kill() is required to collect that and add it
+                    # to the exception.
+                    exc.stdout, exc.stderr = process.communicate()
+                else:
+                    # POSIX _communicate already populated the output so
+                    # far into the TimeoutExpired exception.
+                    process.wait()
+                raise
+            except:  # Including KeyboardInterrupt, communicate handled that.
+                process.kill()
+                # We don't call process.wait() as .__exit__ does that for us.
+                raise
+            retcode = process.poll()
+            if check and retcode:
+>               raise CalledProcessError(retcode, process.args,
+                                         output=stdout, stderr=stderr)
+E               subprocess.CalledProcessError: Command '['git', 'rev-parse', 'HEAD']' returned non-zero exit status 128.
+
+/home/tony/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/subprocess.py:577: CalledProcessError
+_________________ test_author_qjl_differential_live_execution __________________
+
+author_checkout_path = PosixPath('/home/tony/projects/hamutay/tmp/turboquant-remedy-20260918/QJL')
+tmp_path = PosixPath('/tmp/pytest-of-tony/pytest-677/test_author_qjl_differential_l0')
+
+    @pytest.mark.skipif(
+        not os.environ.get("QJL_AUTHOR_CHECKOUT") or not torch.cuda.is_available(),
+        reason="Live author CUDA differential requires external QJL_AUTHOR_CHECKOUT and CUDA hardware",
+    )
+    def test_author_qjl_differential_live_execution(
+        author_checkout_path: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Verify actual differential execution against pinned author CUDA kernel within FP32 tolerance."""
+        assert author_checkout_path is not None
+        output_dir = tmp_path / "author_diff_output"
+        output_dir.mkdir(parents=True, exist_ok=True)
+    
+        # 1. Pinned checkout verification
+        checkout_info = verify_pinned_checkout(author_checkout_path)
+        assert checkout_info.get("commit") == PINNED_COMMIT
+    
+        # 2. Preflight verification
+        preflight_info = preflight_author_qjl(checkout=author_checkout_path, device="cuda:0")
+>       assert preflight_info.get("status") == "passed"
+E       AssertionError: assert None == 'passed'
+E        +  where None = <built-in method get of dict object at 0x73832c1a6d80>('status')
+E        +    where <built-in method get of dict object at 0x73832c1a6d80> = {'environment': {'cuda_home': '/usr/local/cuda-12.8', 'default_cuda': '/usr/local/cuda', 'default_cuda_resolved': '/us...e4739fd4d82', 'origin': 'https://github.com/amirzandieh/QJL', 'repository': 'https://github.com/amirzandieh/QJL', ...}}.get
+
+tests/turboquant_clean_r3/test_author_qjl_differential.py:88: AssertionError
+__________________________ test_sha256_file_accuracy ___________________________
+
+tmp_path = PosixPath('/tmp/pytest-of-tony/pytest-677/test_sha256_file_accuracy0')
+
+    def test_sha256_file_accuracy(tmp_path: Path) -> None:
+        """Verify sha256_file computes exact sha256 checksum."""
+        file_path = tmp_path / "test.txt"
+        file_path.write_bytes(b"hello turboquant")
+        expected = "2a52efc6ff4d34f2d7a2fa7dcfbfa993f434c3fb2b67f1057c793ff826284ad4"
+>       assert sha256_file(file_path) == expected
+E       AssertionError: assert 'e41ae3d66615...7d674920ceb77' == '2a52efc6ff4d...93ff826284ad4'
+E         
+E         - 2a52efc6ff4d34f2d7a2fa7dcfbfa993f434c3fb2b67f1057c793ff826284ad4
+E         + e41ae3d66615616f150b90fc5c61f8284eb3d70d26b1514c3b67d674920ceb77
+
+tests/turboquant_clean_r3/test_cli_artifacts_lifecycle.py:65: AssertionError
+____________________ test_cli_namespace_enforcement_refusal ____________________
+
+argv = ['--profile', 'development', '--output-root', '/tmp/pytest-of-tony/pytest-677/test_cli_namespace_enforcement0/arbitrary_output', '--run-id', 'test_refuse']
+
+    def main(argv: Sequence[str] | None = None) -> int:
+        parser = build_parser()
+        args = parser.parse_args(argv)
+        try:
+>           return execute_qualification(args)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+src/hamutay/turboquant/qualify.py:1156: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/hamutay/turboquant/qualify.py:995: in execute_qualification
+    args.output_root = _validate_output_root(args.profile, args.output_root, repository)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+profile = 'development'
+output_root = PosixPath('/tmp/pytest-of-tony/pytest-677/test_cli_namespace_enforcement0/arbitrary_output')
+repository = PosixPath('/home/tony/projects/hamutay/.worktrees/turboquant-r1')
+
+    def _validate_output_root(profile: str, output_root: Path, repository: Path) -> Path:
+        namespace_name = "development" if profile == "development" else "qualification"
+        namespace_path = repository / "experiments" / "turboquant" / namespace_name
+        if namespace_path.is_symlink():
+            raise QualificationValidationError(
+                f"{profile} namespace root must not be a symlink: {namespace_path}"
+            )
+        namespace = namespace_path.resolve(strict=False)
+        candidate = Path(output_root).resolve(strict=False)
+        if candidate != namespace and not candidate.is_relative_to(namespace):
+>           raise QualificationValidationError(
+                f"{profile} namespace requires --output-root at or beneath {namespace}"
+            )
+E           hamutay.turboquant.qualify.QualificationValidationError: development namespace requires --output-root at or beneath /home/tony/projects/hamutay/.worktrees/turboquant-r1/experiments/turboquant/development
+
+src/hamutay/turboquant/qualify.py:280: QualificationValidationError
+
+During handling of the above exception, another exception occurred:
+
+tmp_path = PosixPath('/tmp/pytest-of-tony/pytest-677/test_cli_namespace_enforcement0')
+
+    def test_cli_namespace_enforcement_refusal(tmp_path: Path) -> None:
+        """Verify CLI rejects output roots not at/under experiments/turboquant/development or qualification."""
+        # Attempting to use tmp_path directly as output root must fail before run directory creation
+        invalid_root = str(tmp_path / "arbitrary_output")
+>       exit_code = main(["--profile", "development", "--output-root", invalid_root, "--run-id", "test_refuse"])
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/turboquant_clean_r3/test_cli_artifacts_lifecycle.py:72: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/hamutay/turboquant/qualify.py:1158: in main
+    parser.error(str(error))
+/home/tony/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/argparse.py:2780: in error
+    self.exit(2, _('%(prog)s: error: %(message)s\n') % args)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = _QualificationParser(prog='turboquant-qualify', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+status = 2
+message = 'turboquant-qualify: error: development namespace requires --output-root at or beneath /home/tony/projects/hamutay/.worktrees/turboquant-r1/experiments/turboquant/development\n'
+
+    def exit(self, status=0, message=None):
+        if message:
+            self._print_message(message, _sys.stderr)
+>       _sys.exit(status)
+E       SystemExit: 2
+
+/home/tony/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/argparse.py:2767: SystemExit
+----------------------------- Captured stderr call -----------------------------
+usage: turboquant-qualify [-h] --profile {development,registered}
+                          --output-root OUTPUT_ROOT --run-id RUN_ID
+                          [--dimension DIMENSION]
+                          [--sample-count SAMPLE_COUNT]
+                          [--batch-size BATCH_SIZE]
+                          [--bootstrap-blocks BOOTSTRAP_BLOCKS]
+                          [--bootstrap-resamples BOOTSTRAP_RESAMPLES]
+                          [--bits BITS]
+                          [--author-qjl-checkout AUTHOR_QJL_CHECKOUT]
+                          [--allow-dirty-path ALLOW_DIRTY_PATH]
+turboquant-qualify: error: development namespace requires --output-root at or beneath /home/tony/projects/hamutay/.worktrees/turboquant-r1/experiments/turboquant/development
+__________________ test_cli_registered_mode_override_refusal ___________________
+
+registered_output_root = PosixPath('/home/tony/projects/hamutay/.worktrees/turboquant-r1/experiments/turboquant/qualification')
+
+    def test_cli_registered_mode_override_refusal(registered_output_root: Path) -> None:
+        """Verify registered profile rejects any override of scientific counts."""
+        forbidden_overrides = [
+            ["--sample-count", "1000"],
+            ["--batch-size", "500"],
+            ["--dimension", "64"],
+            ["--bootstrap-blocks", "50"],
+            ["--bootstrap-resamples", "100"],
+            ["--bits", "1,2"],
+        ]
+        for override in forbidden_overrides:
+            cmd = [
+                "--profile", "registered",
+                "--output-root", str(registered_output_root),
+                "--run-id", "refused_run",
+            ] + override
+>           exit_code = main(cmd)
+                        ^^^^^^^^^
+
+tests/turboquant_clean_r3/test_cli_artifacts_lifecycle.py:93: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/hamutay/turboquant/qualify.py:1154: in main
+    args = parser.parse_args(argv)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+src/hamutay/turboquant/qualify.py:151: in parse_args
+    self.error(
+/home/tony/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/argparse.py:2780: in error
+    self.exit(2, _('%(prog)s: error: %(message)s\n') % args)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = _QualificationParser(prog='turboquant-qualify', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+status = 2
+message = 'turboquant-qualify: error: registered profile freezes scientific counts; overrides are forbidden: sample_count\n'
+
+    def exit(self, status=0, message=None):
+        if message:
+            self._print_message(message, _sys.stderr)
+>       _sys.exit(status)
+E       SystemExit: 2
+
+/home/tony/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/argparse.py:2767: SystemExit
+----------------------------- Captured stderr call -----------------------------
+usage: turboquant-qualify [-h] --profile {development,registered}
+                          --output-root OUTPUT_ROOT --run-id RUN_ID
+                          [--dimension DIMENSION]
+                          [--sample-count SAMPLE_COUNT]
+                          [--batch-size BATCH_SIZE]
+                          [--bootstrap-blocks BOOTSTRAP_BLOCKS]
+                          [--bootstrap-resamples BOOTSTRAP_RESAMPLES]
+                          [--bits BITS]
+                          [--author-qjl-checkout AUTHOR_QJL_CHECKOUT]
+                          [--allow-dirty-path ALLOW_DIRTY_PATH]
+turboquant-qualify: error: registered profile freezes scientific counts; overrides are forbidden: sample_count
+______________ test_cli_registered_mode_missing_checkout_refusal _______________
+
+registered_output_root = PosixPath('/home/tony/projects/hamutay/.worktrees/turboquant-r1/experiments/turboquant/qualification')
+
+    def test_cli_registered_mode_missing_checkout_refusal(registered_output_root: Path) -> None:
+        """Verify registered profile requires --author-qjl-checkout and rejects run if omitted."""
+        cmd = [
+            "--profile", "registered",
+            "--output-root", str(registered_output_root),
+            "--run-id", "missing_checkout_run",
+        ]
+>       exit_code = main(cmd)
+                    ^^^^^^^^^
+
+tests/turboquant_clean_r3/test_cli_artifacts_lifecycle.py:104: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+src/hamutay/turboquant/qualify.py:1154: in main
+    args = parser.parse_args(argv)
+           ^^^^^^^^^^^^^^^^^^^^^^^
+src/hamutay/turboquant/qualify.py:164: in parse_args
+    self.error("registered profile requires --author-qjl-checkout")
+/home/tony/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/argparse.py:2780: in error
+    self.exit(2, _('%(prog)s: error: %(message)s\n') % args)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = _QualificationParser(prog='turboquant-qualify', usage=None, description=None, formatter_class=<class 'argparse.HelpFormatter'>, conflict_handler='error', add_help=True)
+status = 2
+message = 'turboquant-qualify: error: registered profile requires --author-qjl-checkout\n'
+
+    def exit(self, status=0, message=None):
+        if message:
+            self._print_message(message, _sys.stderr)
+>       _sys.exit(status)
+E       SystemExit: 2
+
+/home/tony/.local/share/uv/python/cpython-3.14.3-linux-x86_64-gnu/lib/python3.14/argparse.py:2767: SystemExit
+----------------------------- Captured stderr call -----------------------------
+usage: turboquant-qualify [-h] --profile {development,registered}
+                          --output-root OUTPUT_ROOT --run-id RUN_ID
+                          [--dimension DIMENSION]
+                          [--sample-count SAMPLE_COUNT]
+                          [--batch-size BATCH_SIZE]
+                          [--bootstrap-blocks BOOTSTRAP_BLOCKS]
+                          [--bootstrap-resamples BOOTSTRAP_RESAMPLES]
+                          [--bits BITS]
+                          [--author-qjl-checkout AUTHOR_QJL_CHECKOUT]
+                          [--allow-dirty-path ALLOW_DIRTY_PATH]
+turboquant-qualify: error: registered profile requires --author-qjl-checkout
+______________ test_cli_development_mode_lifecycle_and_artifacts _______________
+
+dev_output_root = PosixPath('/home/tony/projects/hamutay/.worktrees/turboquant-r1/experiments/turboquant/development')
+unique_run_id = 'val_b050ce24845f'
+
+    def test_cli_development_mode_lifecycle_and_artifacts(
+        dev_output_root: Path,
+        unique_run_id: str,
+    ) -> None:
+        """Verify development mode completes with small explicit counts and emits all required artifacts."""
+        run_id = unique_run_id
+        cmd = [
+            "--profile", "development",
+            "--output-root", str(dev_output_root),
+            "--run-id", run_id,
+            "--sample-count", "200",
+            "--batch-size", "100",
+            "--bootstrap-blocks", "2",
+            "--bootstrap-resamples", "10",
+            "--bits", "1,2",
+        ]
+        exit_code = main(cmd)
+        assert exit_code == 0, f"Development CLI run failed with exit code {exit_code}"
+    
+        run_dir = dev_output_root / run_id
+        assert run_dir.exists()
+    
+        expected_files = [
+            "manifest.json",
+            "resolved_inputs.npz",
+            "execution-0.json",
+            "execution-1.json",
+            "execution-2.json",
+            "qualification.json",
+            "run.log",
+        ]
+        for fname in expected_files:
+            fpath = run_dir / fname
+            assert fpath.exists(), f"Required artifact {fname} missing from run directory"
+            assert fpath.stat().st_size > 0, f"Artifact {fname} was empty"
+    
+        # Verify manifest schema
+        manifest_data = json.loads((run_dir / "manifest.json").read_text(encoding="utf-8"))
+        assert manifest_data.get("schema") == "hamutay.turboquant.manifest.v2"
+    
+        # Verify execution schemas
+        for i in range(3):
+            exec_data = json.loads((run_dir / f"execution-{i}.json").read_text(encoding="utf-8"))
+            assert exec_data.get("schema") == "hamutay.turboquant.execution.v1"
+    
+        # Verify qualification schema and gate structure
+        qual_data = json.loads((run_dir / "qualification.json").read_text(encoding="utf-8"))
+        assert qual_data.get("schema") == "hamutay.turboquant.qualification.v2"
+        assert "gates" in qual_data
+>       assert "terminal_status" in qual_data
+E       AssertionError: assert 'terminal_status' in {'artifact_sha256': {'execution-0.json': 'b15a00823b9a0c9971a09ddc8a043f9c263cec03dbe0273d6d0baaff816f44f8', 'executio... norm', 'algorithm_2_distortion': 'squared signed error normalized by squared query norm times squared key norm'}, ...}
+
+tests/turboquant_clean_r3/test_cli_artifacts_lifecycle.py:157: AssertionError
+____________ test_nearest_code_indices_exact_midpoint_tie_breaking _____________
+
+    def test_nearest_code_indices_exact_midpoint_tie_breaking() -> None:
+        """Verify nearest_code_indices breaks exact midpoint ties strictly to the LOWER centroid."""
+        codebook = np.array([-0.8, -0.2, 0.2, 0.8], dtype=np.float32)
+    
+        # Exact midpoints between consecutive centroids
+        midpoints = (codebook[:-1] + codebook[1:]) / 2.0  # [-0.5, 0.0, 0.5]
+        indices = nearest_code_indices(midpoints, codebook)
+    
+        # Must resolve to lower centroid indices: 0, 1, 2
+>       assert np.array_equal(indices, np.array([0, 1, 2], dtype=np.uint8))
+E       AssertionError: assert False
+E        +  where False = <function array_equal at 0x738457183cf0>(array([1, 1, 2], dtype=uint8), array([0, 1, 2], dtype=uint8))
+E        +    where <function array_equal at 0x738457183cf0> = np.array_equal
+E        +    and   array([0, 1, 2], dtype=uint8) = <built-in function array>([0, 1, 2], dtype=<class 'numpy.uint8'>)
+E        +      where <built-in function array> = np.array
+E        +      and   <class 'numpy.uint8'> = np.uint8
+
+tests/turboquant_clean_r3/test_codebook_and_mse.py:89: AssertionError
+_____________ test_evaluate_algorithm_gates_determinism_rejection ______________
+
+    def test_evaluate_algorithm_gates_determinism_rejection() -> None:
+        """Verify round_trip_determinism fails when determinism_passed=False."""
+>       result = QualificationResult(
+            metrics=(),
+            determinism_passed=False,
+        )
+
+tests/turboquant_clean_r3/test_gates_and_evaluation.py:124: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+<string>:11: in __init__
+    ???
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = QualificationResult(metrics=(), determinism_passed=False, sample_count=0, batch_size=0, bootstrap_blocks=0, bootstrap_resamples=0, dimension=0, configuration=None)
+
+    def __post_init__(self) -> None:
+        metrics = tuple(self.metrics)
+        if not metrics:
+>           raise ValueError("metrics must be nonempty")
+E           ValueError: metrics must be nonempty
+
+src/hamutay/turboquant/qualification.py:234: ValueError
+=========================== short test summary info ============================
+FAILED tests/turboquant_clean_r3/test_author_qjl_differential.py::test_verify_pinned_checkout_hash_and_clean_checks
+FAILED tests/turboquant_clean_r3/test_author_qjl_differential.py::test_author_qjl_differential_live_execution
+FAILED tests/turboquant_clean_r3/test_cli_artifacts_lifecycle.py::test_sha256_file_accuracy
+FAILED tests/turboquant_clean_r3/test_cli_artifacts_lifecycle.py::test_cli_namespace_enforcement_refusal
+FAILED tests/turboquant_clean_r3/test_cli_artifacts_lifecycle.py::test_cli_registered_mode_override_refusal
+FAILED tests/turboquant_clean_r3/test_cli_artifacts_lifecycle.py::test_cli_registered_mode_missing_checkout_refusal
+FAILED tests/turboquant_clean_r3/test_cli_artifacts_lifecycle.py::test_cli_development_mode_lifecycle_and_artifacts
+FAILED tests/turboquant_clean_r3/test_codebook_and_mse.py::test_nearest_code_indices_exact_midpoint_tie_breaking
+FAILED tests/turboquant_clean_r3/test_gates_and_evaluation.py::test_evaluate_algorithm_gates_determinism_rejection
+9 failed, 30 passed in 21.60s
