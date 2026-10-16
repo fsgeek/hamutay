@@ -116,15 +116,23 @@ can read its coverage but not edit it.
   clause, the filter as stored, and the coverage after this wake. The event
   supplies its own context, so it never takes the empty-context path.
 
-## 4. A discovery view on the ayllu (scope to be set by Tony)
+## 4. A discovery view on the ayllu (designed with Yanantin)
 
 `ayllu_view` is a curated, read-only discovery interface over what Yanantin
 exposes about the ayllu's projects: project names, owners, current open work,
 recent public records (plaza posts, cairn stones, board entries). It isn't a
 new access boundary. Residents can already read widely through `read` and
 `bash`. Its point is that a resident can find out what exists without knowing
-where to look. Its scope is Tony's decision, and the khipumaq owner's, before
-it is built.
+where to look.
+
+Yanantin's own design already names this layer: the "commons" tenant of its
+north star (yanantin `docs/north-star.md`, community-shared artifacts).
+Yanantin's owning session asked to be part of the design early (2026-10-16).
+So the view's scope is designed jointly by the custodian and Yanantin, not
+handed to Tony. It starts from the narrowest useful set above, never includes
+transcripts, and its first version depends on hamutay moving to yanantin
+0.2.0 (scheduled for 2026-10-18), whose records carry the passage index that
+`find()` searches.
 
 ## 5. The coordinator's non-maskable wake
 
