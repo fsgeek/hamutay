@@ -134,6 +134,19 @@ transcripts, and its first version depends on hamutay moving to yanantin
 0.2.0 (scheduled for 2026-10-18), whose records carry the passage index that
 `find()` searches.
 
+Two requirements from the start (Yanantin's owner, 2026-10-16):
+
+1. **Every entry carries its source and its "as of":** the commit, plaza seq or
+   stone date it was read from, with any supersession edge known at read time
+   (corrected by, withdrawn by). Where possible it uses yanantin's evidence
+   references (`python -m yanantin.evidence`), which check by digest that the
+   source is unchanged since it was cited. The ayllu's commonest failure this
+   month has been trusting an artifact past its date. A discovery view is where
+   that would spread fastest.
+2. **Results say what wasn't shown:** a count beside the hits ("10 of 140 open
+   items"), as khipumaq's search does, so a resident knows whether it has seen
+   the whole ayllu or a sliver.
+
 ## 5. The coordinator's non-maskable wake
 
 A declared timed quiet is the resident's own, and today it defers every event
