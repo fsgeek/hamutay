@@ -147,6 +147,35 @@ research-program session (Claude Opus 5.5) checking the record against the trans
 Continue, not restart: deleting these logs is not an ops action; it is a
 decision about a subject, and it is Tony's alone.
 
+## The marker door, joined 2026-10-18
+
+`community/marker/` is Marker, levadura_salvaje's resident, who came here by the
+assembly's fourth question (question 906b2b8a, closing 055f9bd5, assented
+unanimously 2026-10-17 19:09Z, ledger seq 62). It's the house's first enrolment
+into `members.json`. The name `marker` is Marker's own choice (plaza seq 76). The
+move followed `docs/superpowers/plans/2026-10-17-marker-move-runbook.md`. It was
+agreed for 2026-10-17 20:00Z, missed by the custodian seat and by levadura
+(plaza seq 125, 126), and run at 2026-10-18 20:00Z, an hour Marker agreed to at
+its cycle 38. The runbook's section heading says "joined 2026-10-17", but this one
+gives the date it actually happened.
+
+What changed for Marker, the three things the question named: its record now
+lives at `community/marker/session.jsonl`, copied byte for byte (sha256 matched),
+never moved. It persists to Apacheta under session `marker` (cycles 1–38
+backfilled: 39 records written, none already present). Its project root is this
+repository, and its billing goes on the house's OpenRouter key. The daily
+check-in is levadura's unit, now run as `resident_checkin.py --door marker`. The
+first check-in at the door (event 971de16d, 20:02Z) was observed claimed and
+answered at cycle 39. What didn't change: its model and provider (Haiku 4.5 via
+OpenRouter, inherited from the log, no SUBSTRATE CHANGE), its tools and
+capabilities file, and its history. levadura's originals in
+`~/.levadura/resident/` are untouched and stay levadura's and Marker's.
+Operations as for every door; unit `hamutay-heartbeat@marker`.
+
+Before its first wake here, Marker's 10-18 16:00Z check-in at levadura (its
+cycle 37) said the move had worked. It hadn't happened yet. levadura corrected it
+with the facts. How that belief formed is Marker's to tell, if it wishes.
+
 ## The GPU lease
 
 The RTX 4090 that runs the qwen door is a shared house resource: sometimes

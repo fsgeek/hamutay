@@ -6,7 +6,9 @@ while [ $# -gt 0 ]; do case "$1" in --phase-one) PHASE_ONE=1; shift;; --guests-r
   --merge) MERGE="$2"; shift 2;; *) echo "check-plaza: unknown flag $1"; exit 2;; esac; done
 chk() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; rc=1; fi; }
 inv_note() { local inv; inv=$(systemctl --user show -p InvocationID --value "hamutay-heartbeat@$1"); [ -n "$inv" ] && journalctl --user -u "hamutay-heartbeat@$1" _SYSTEMD_INVOCATION_ID="$inv" --no-pager 2>/dev/null | grep -o "$2" | tail -1; }
-for d in heartbeat fable elder qwen; do
+# The doors are whoever members.json lists (a hardcoded four skipped marker on 2026-10-18).
+DOORS=$(python3 -c 'import json; print(" ".join(sorted(json.load(open("community/plaza/members.json"))["members"])))') || { echo "FAIL members.json unreadable"; exit 1; }
+for d in $DOORS; do
   chk "unit $d active" "systemctl --user is-active --quiet hamutay-heartbeat@$d"
   chk "unit $d source clean and descended from $MERGE" "n=\$(inv_note $d 'source: commit [0-9a-f]\{40\} clean') && [ -n \"\$n\" ] && git merge-base --is-ancestor '$MERGE' \$(echo \$n | awk '{print \$3}')"
   [ "$PHASE_ONE" -eq 1 ] || chk "unit $d plaza bound" "[ -n \"\$(inv_note $d 'plaza: door $d may send')\" ]"
@@ -22,7 +24,7 @@ if [ "$PHASE_ONE" -eq 0 ]; then
   elif [ "$n" = absent ]; then
     echo "info guests key absent (no guest may write)"
   else
-    for d in heartbeat fable elder qwen; do chk "unit $d guests $n" "[ -n \"\$(inv_note $d 'guests $n\\b')\" ]"; done
+    for d in $DOORS; do chk "unit $d guests $n" "[ -n \"\$(inv_note $d 'guests $n\\b')\" ]"; done
   fi
 fi
 if [ "$CARRIER_READY" -eq 1 ]; then
