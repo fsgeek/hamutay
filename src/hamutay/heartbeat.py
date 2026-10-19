@@ -236,7 +236,7 @@ class DailyLedger:
 
     A wake is a cycle record; its day is the UTC day of the record's
     timestamp (written when the wake completes). Only METERED records
-    (launch.provider other than anthropic) contribute cost; a metered record
+    (launch.metered true, or launch.provider other than anthropic) contribute cost; a metered record
     with no numeric cost, or with unreported turns, is UNMEASURED — counted,
     reported, never treated as free; a partial number is a lower bound.
     Records with no launch block (pre-2026-08-26 logs) are not metered.
@@ -277,7 +277,9 @@ class DailyLedger:
             if ts is None:
                 continue
             launch = record.get("launch") or {}
-            metered = bool(launch) and launch.get("provider") != "anthropic"
+            metered = bool(launch) and (
+                launch.get("metered") is True or launch.get("provider") != "anthropic"
+            )
             usage = record.get("usage") or {}
             if not isinstance(usage, dict):
                 usage = {}
@@ -1432,12 +1434,6 @@ def build_session(args):
         "heartbeat": "launch",
         "note": ("!!! " if budget is None else "") + budget_note,
     })
-    if wake_mode == "natural" and args.provider == "anthropic":
-        raise SystemExit(
-            "wake_mode=natural is not implemented on the Anthropic-direct "
-            "backend yet; use --provider openrouter or --wake-mode terminal"
-        )
-
     context_limit, context_limit_source = None, "provider default"
     base_url = None
     context_policy = None
@@ -1446,8 +1442,30 @@ def build_session(args):
         # the anthropic-direct backend resolves none, so refuse here rather than
         # warm forever in silence.
         assert_lease_door_has_base_url(store.lease_binding, base_url)
-        backend = AnthropicTasteBackend(max_tokens=args.max_tokens)
+        # Both wake shapes run the OpenAI-format loops over Anthropic's
+        # Messages API (hamutay.anthropic_direct): the natural wake a resident
+        # had on OpenRouter is the same code here, and every turn is priced
+        # from its tokens so the daily budget sees it. The key comes only from
+        # HAMUTAY_ANTHROPIC_API_KEY, never ANTHROPIC_API_KEY.
+        from hamutay.anthropic_direct import AnthropicDirectBackend
         context_policy = ContextPolicy.none()
+        backend = AnthropicDirectBackend(
+            max_tokens=args.max_tokens,
+            timeout=600,
+            wake_mode=wake_mode,
+            context_policy=ContextPolicyHolder(context_policy),
+        )
+        from hamutay.anthropic_direct import KEY_ENV, WORKSPACE_ENV
+        missing = [n for n in (KEY_ENV, WORKSPACE_ENV) if not os.environ.get(n, "").strip()]
+        HeartbeatLoop._emit({
+            "heartbeat": "launch",
+            "note": (
+                f"!!! anthropic-direct: {' and '.join(missing)} not set; every wake will fail"
+                if missing else
+                f"anthropic-direct: key {KEY_ENV} with its workspace; "
+                "cost per turn estimated from tokens (metered)"
+            ),
+        })
     else:
         if args.provider == "openrouter":
             base_url = args.base_url or "https://openrouter.ai/api/v1"
@@ -1539,6 +1557,10 @@ def build_session(args):
         ),
         "wake_mode": wake_mode,
         "base_url": args.base_url,
+        # Every wake launched from here is metered, Anthropic-direct included
+        # (its cost is estimated from tokens). Older anthropic records carry
+        # no flag and stay unmetered, as they were.
+        "metered": True,
         "context_limit": context_limit,
         "context_limit_source": context_limit_source,
         "context_policy": context_policy.as_dict(),
@@ -1610,6 +1632,11 @@ def main() -> None:
     lock_handle = acquire_lock(lock_path)  # held for process lifetime
 
     session, backend, launch_config = build_session(args)
+    if launch_config.get("provider") == "anthropic":
+        # A live door without its credentials would loop through failing
+        # wakes; refuse to start instead (build_session itself stays offline).
+        from hamutay.anthropic_direct import anthropic_client_from_env
+        anthropic_client_from_env()
     base_url = session._heartbeat_base_url
     budget = session._heartbeat_budget
     assembly_binding = session._assembly

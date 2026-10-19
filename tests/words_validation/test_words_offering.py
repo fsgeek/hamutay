@@ -204,6 +204,7 @@ def test_heartbeat_enables_words_recall_for_each_door(tmp_path, monkeypatch, doo
 def test_heartbeat_prints_the_exact_words_recall_launch_note(tmp_path, monkeypatch, capsys):
     import hamutay.heartbeat as heartbeat
     import hamutay.taste_open as taste_open
+    import hamutay.anthropic_direct as direct
 
     parser, args = isolated_heartbeat_args(heartbeat, tmp_path)
     monkeypatch.setattr(parser, "parse_args", lambda *a, **kw: args)
@@ -212,7 +213,9 @@ def test_heartbeat_prints_the_exact_words_recall_launch_note(tmp_path, monkeypat
     monkeypatch.setattr(heartbeat, "AnthropicTasteBackend", SyntheticBackend, raising=False)
     monkeypatch.setattr(heartbeat, "resolve_persistence", lambda args: (None, "synthetic persistence: off"))
     monkeypatch.setattr(heartbeat, "assert_canonical_lock_path", lambda *a, **kw: None)
-    monkeypatch.setenv("ANTHROPIC_API_KEY", "synthetic-no-network-key")
+    monkeypatch.setenv("HAMUTAY_ANTHROPIC_API_KEY", "synthetic-no-network-key")
+    monkeypatch.setenv("HAMUTAY_ANTHROPIC_WORKSPACE_ID", "synthetic-workspace")
+    monkeypatch.setattr(direct.anthropic, "Anthropic", lambda **kw: object())
 
     class StoppedLoop:
         @staticmethod
