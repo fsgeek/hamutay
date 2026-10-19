@@ -17,6 +17,7 @@ reconcile against it.
 from __future__ import annotations
 
 import json
+import math
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
 from pathlib import Path
@@ -40,8 +41,10 @@ class CreditPool:
 
 def _number(raw: dict, key: str, default: float | None = None) -> float:
     value = raw.get(key, default)
-    if isinstance(value, bool) or not isinstance(value, (int, float)) or value < 0:
-        raise SystemExit(f"credit pool: {key} must be a non-negative number, got {value!r}")
+    # json.load accepts NaN and Infinity (and 1e309 overflows to inf): refuse them, never show $nan.
+    if (isinstance(value, bool) or not isinstance(value, (int, float))
+            or not math.isfinite(value) or value < 0):
+        raise SystemExit(f"credit pool: {key} must be a finite non-negative number, got {value!r}")
     return float(value)
 
 
