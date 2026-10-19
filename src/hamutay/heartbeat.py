@@ -247,7 +247,7 @@ class DailyLedger:
     def __init__(self, log_path: str):
         self._log_path = log_path
         self._size = -1
-        self._rows: list[tuple[datetime, float | None, bool, int]] = []
+        self._rows: list[tuple[datetime, float | None, bool, int, str | None]] = []
 
     def _refresh(self) -> None:
         try:
@@ -260,7 +260,7 @@ class DailyLedger:
         with open(self._log_path, "rb") as f:
             data = f.read()
         complete = data.endswith(b"\n")
-        rows: list[tuple[datetime, float | None, bool, int]] = []
+        rows: list[tuple[datetime, float | None, bool, int, str | None]] = []
         lines = data.split(b"\n")
         if not complete:
             lines = lines[:-1]  # the torn tail is not a record yet
@@ -288,7 +288,7 @@ class DailyLedger:
                 cost = None
             unreported = usage.get("cost_turns_unreported")
             unreported = int(unreported) if _is_number(unreported) else 0
-            rows.append((ts, cost, metered, unreported))
+            rows.append((ts, cost, metered, unreported, launch.get("provider")))
         # Cache by size only when the whole file was complete records; a torn
         # tail forces a re-read next time so the finished record is counted.
         self._size, self._rows = (size if complete else -1), rows
@@ -300,7 +300,7 @@ class DailyLedger:
         cost_total = 0.0
         unmeasured = 0
         unreported_turns = 0
-        for ts, cost, metered, unreported in self._rows:
+        for ts, cost, metered, unreported, _provider in self._rows:
             if ts.date() != today:
                 continue
             wakes += 1
@@ -318,6 +318,29 @@ class DailyLedger:
             "unmeasured_wakes": unmeasured,
             "cost_turns_unreported": unreported_turns,
         }
+
+    def span(self, start: datetime, end: datetime, *, provider: str | None = None) -> dict:
+        """Metered cost over [start, end), optionally for one provider only.
+
+        Same rules as `day`: a metered record with no numeric cost, or with
+        unreported turns, is UNMEASURED (counted, never free).
+        """
+        self._refresh()
+        start, end = _as_utc(start), _as_utc(end)
+        wakes = 0
+        cost_total = 0.0
+        unmeasured = 0
+        for ts, cost, metered, unreported, row_provider in self._rows:
+            if not (start <= ts < end) or not metered:
+                continue
+            if provider is not None and row_provider != provider:
+                continue
+            wakes += 1
+            if cost is not None:
+                cost_total += float(cost)
+            if cost is None or unreported > 0:
+                unmeasured += 1
+        return {"wakes": wakes, "cost_usd": cost_total, "unmeasured_wakes": unmeasured}
 
 
 class WakeBudget:
@@ -911,8 +934,8 @@ def _summarize_for(binding):
     return _summarize
 
 
-def _run_pending_for(binding, store, on_error):
-    """A `run_pending=` callable for HeartbeatLoop: plain unless plaza is set.
+def _run_pending_for(binding, store, on_error, pool_notes=None):
+    """A `run_pending=` callable for HeartbeatLoop: plain unless a note producer is set.
 
     An unbound loop, or a bound one whose members lack the `plaza` key, runs
     `run_pending_events` itself untouched. A plaza-set binding gets the same
@@ -920,13 +943,22 @@ def _run_pending_for(binding, store, on_error):
     wake sees what appeared on the plaza since its last wake began. The producer
     is called `(event, store_records)` with the records run_next_event has already
     read, so the note never takes a second lock on this door's own store.
+    `pool_notes` (a door launched with --credit-pool) is a second producer of the
+    same shape; its note follows the plaza's.
     """
-    if binding is None or binding.members.plaza is None:
+    producers = []
+    if binding is not None and binding.members.plaza is not None:
+        producers.append(note_producer(binding.members, binding.door, store, on_error))
+    if pool_notes is not None:
+        producers.append(pool_notes)
+    if not producers:
         return run_pending_events
-    return functools.partial(
-        run_pending_events,
-        extra_notes=note_producer(binding.members, binding.door, store, on_error),
-    )
+    if len(producers) == 1:
+        extra = producers[0]
+    else:
+        def extra(event, store_records):
+            return [note for produce in producers for note in produce(event, store_records)]
+    return functools.partial(run_pending_events, extra_notes=extra)
 
 
 def _positive_context_limit(value) -> int | None:
@@ -1222,6 +1254,13 @@ def build_parser():
         type=float,
         default=1.5,
         help="Cost ceiling per UTC day for this resident (default 1.50).",
+    )
+    parser.add_argument(
+        "--credit-pool",
+        default=None,
+        metavar="PATH",
+        help="A credit-pool file (e.g. ~/.config/hamutay/anthropic-pool.json). "
+        "Each wake is told the pool's remaining balance and expiry. Off by default.",
     )
     parser.add_argument(
         "--daily-wake-cap",
@@ -1640,6 +1679,22 @@ def main() -> None:
     base_url = session._heartbeat_base_url
     budget = session._heartbeat_budget
     assembly_binding = session._assembly
+    pool_notes = None
+    if getattr(args, "credit_pool", None):
+        from hamutay.credit_pool import PoolSpend, load_credit_pool, pool_note_producer
+        pool = load_credit_pool(args.credit_pool)
+        ceiling = budget.daily_usd if budget is not None else None
+        pool_notes = pool_note_producer(args.project_root, pool, ceiling)
+        spent = PoolSpend(args.project_root, pool).total()
+        HeartbeatLoop._emit({
+            "heartbeat": "launch",
+            "note": ("" if pool.period_start_confirmed else "!!! ")
+            + f"credit pool: {args.credit_pool}; ${pool.credit_usd - spent['cost_usd']:.2f} of "
+            f"${pool.credit_usd:.2f} remaining by the house's estimate, period "
+            f"{pool.period_start.isoformat()} to {pool.period_end.isoformat()}"
+            + ("" if pool.period_start_confirmed else " (period_start unconfirmed)")
+            + "; each wake is told the balance and expiry",
+        })
 
     guard = None
     if store.lease_binding:
@@ -1680,6 +1735,7 @@ def main() -> None:
         run_pending=_run_pending_for(
             assembly_binding, store,
             lambda s: HeartbeatLoop._emit({"heartbeat": "plaza", "error": s}),
+            pool_notes=pool_notes,
         ),
     )
     try:
