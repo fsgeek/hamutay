@@ -7,7 +7,8 @@ while [ $# -gt 0 ]; do case "$1" in --phase-one) PHASE_ONE=1; shift;; --guests-r
 chk() { if eval "$2"; then echo "ok   $1"; else echo "FAIL $1"; rc=1; fi; }
 inv_note() { local inv; inv=$(systemctl --user show -p InvocationID --value "hamutay-heartbeat@$1"); [ -n "$inv" ] && journalctl --user -u "hamutay-heartbeat@$1" _SYSTEMD_INVOCATION_ID="$inv" --no-pager 2>/dev/null | grep -o "$2" | tail -1; }
 # The doors are whoever members.json lists (a hardcoded four skipped marker on 2026-10-18).
-DOORS=$(python3 -c 'import json; print(" ".join(sorted(json.load(open("community/plaza/members.json"))["members"])))') || { echo "FAIL members.json unreadable"; exit 1; }
+# Names reach eval (chk), so a name that isn't [a-z0-9_-]+ fails closed instead of running.
+DOORS=$(python3 -c 'import json, re, sys; m = sorted(json.load(open("community/plaza/members.json"))["members"]); bad = [k for k in m if not re.fullmatch(r"[a-z0-9_-]+", k)]; sys.exit("bad door name(s): %r" % bad) if bad else print(" ".join(m))') || { echo "FAIL members.json unreadable or has an unsafe door name"; exit 1; }
 for d in $DOORS; do
   chk "unit $d active" "systemctl --user is-active --quiet hamutay-heartbeat@$d"
   chk "unit $d source clean and descended from $MERGE" "n=\$(inv_note $d 'source: commit [0-9a-f]\{40\} clean') && [ -n \"\$n\" ] && git merge-base --is-ancestor '$MERGE' \$(echo \$n | awk '{print \$3}')"
