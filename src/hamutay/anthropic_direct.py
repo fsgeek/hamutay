@@ -175,7 +175,7 @@ class AnthropicDirectBackend(OpenAITasteBackend):
             return {"type": "none"}
         if choice == "required":
             return {"type": "any"}
-        if isinstance(choice, dict):
+        if isinstance(choice, dict) and choice.get("type") == "function":
             name = (choice.get("function") or {}).get("name")
             if name:
                 return {"type": "tool", "name": name}
@@ -213,10 +213,12 @@ class AnthropicDirectBackend(OpenAITasteBackend):
             else:
                 messages.append({"role": role, "content": list(blocks)})
 
+        promoted = False  # only the first system message becomes `system` (notes item 4)
         for msg in payload["messages"]:
             role = msg.get("role")
-            if role == "system" and not messages:
+            if role == "system" and not messages and not promoted:
                 system_parts.extend(_text_blocks(msg.get("content")))
+                promoted = True
             elif role in ("user", "system"):
                 add("user", _text_blocks(msg.get("content")))
             elif role == "assistant":
