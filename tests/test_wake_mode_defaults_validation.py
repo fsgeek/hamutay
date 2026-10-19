@@ -331,11 +331,18 @@ def test_heartbeat_explicit_shape_equal_to_log_has_no_change_note(
     assert not any(note.startswith("WAKE SHAPE CHANGE") for note in notes)
 
 
-def test_heartbeat_main_refuses_anthropic_direct_natural_before_backend_start(
+def test_heartbeat_main_refuses_missing_anthropic_credentials_before_loop_start(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from hamutay import heartbeat
 
+    monkeypatch.delenv("HAMUTAY_ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("HAMUTAY_ANTHROPIC_WORKSPACE_ID", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "bogus-general-key")
+    monkeypatch.setattr(
+        heartbeat.HeartbeatLoop, "run_forever",
+        lambda self: pytest.fail("loop started without credentials"),
+    )
     monkeypatch.setattr(
         sys,
         "argv",
@@ -347,12 +354,15 @@ def test_heartbeat_main_refuses_anthropic_direct_natural_before_backend_start(
             "anthropic",
             "--wake-mode",
             "natural",
+            "--no-persist",
+            "--project-root",
+            str(tmp_path),
         ],
     )
 
     with pytest.raises(
         SystemExit,
-        match="wake_mode=natural is not implemented on the Anthropic-direct backend",
+        match="HAMUTAY_ANTHROPIC_API_KEY and HAMUTAY_ANTHROPIC_WORKSPACE_ID not set",
     ):
         heartbeat.main()
 
