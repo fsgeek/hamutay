@@ -15,8 +15,17 @@ while [ $# -gt 0 ]; do case "$1" in --phase-one) PHASE=one; shift;; --phase-two)
   --dry-run) DRY=1; shift;; --root) ROOT="$2"; shift 2;; --merge) MERGE="$2"; shift 2;; *) echo "migrate-plaza: unknown flag $1"; exit 2;; esac; done
 [ -n "$PHASE" ] || { echo "migrate-plaza: --phase-one, --phase-two or --guests LIST"; exit 2; }
 cd "$ROOT"
-DOORS=(heartbeat fable elder qwen)
 say() { echo "migrate-plaza: $*"; }
+# The doors are whoever members.json lists (a hardcoded four would have left marker on the old
+# list on 2026-10-20). No members.json is the phase-one house: the founding four. A name that
+# isn't [a-z0-9_-]+ refuses the run, since names reach unit names and paths. File order is the
+# stop/start order (the rollback tests rely on it).
+if [ ! -e community/plaza/members.json ]; then DOORS=(heartbeat fable elder qwen)
+else
+  door_list=$(python3 -c 'import json, re, sys; m = list(json.load(open("community/plaza/members.json"))["members"]); bad = [k for k in m if not re.fullmatch(r"[a-z0-9_-]+", k)]; sys.exit("bad door name(s): %r" % bad) if bad else print(" ".join(m))') \
+    || { say "members.json unreadable or has an unsafe door name; refusing"; exit 1; }
+  read -r -a DOORS <<< "$door_list"
+fi
 running_wake() {
   local store="community/$1/session.jsonl.events.jsonl"; [ -f "$store" ] || return 1
   uv run python - "$store" <<'PY'
