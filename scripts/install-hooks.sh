@@ -9,7 +9,15 @@ cd "$GIT_ROOT"
 echo "Installing opentimestamps-client..."
 uv pip install opentimestamps-client
 
-echo "Installing git hooks (post-commit, post-merge)..."
+echo "Installing git hooks (pre-commit, post-commit, post-merge)..."
+# pre-commit: the secret scan and the signing-identity check (versioned since 2026-10-22).
+HOOK="$GIT_ROOT/.git/hooks/pre-commit"
+cat > "$HOOK" << 'EOF'
+#!/bin/bash
+exec "$(git rev-parse --show-toplevel)/scripts/hooks/pre-commit" "$@"
+EOF
+chmod +x "$HOOK"
+
 HOOK="$GIT_ROOT/.git/hooks/post-commit"
 cat > "$HOOK" << 'EOF'
 #!/bin/bash

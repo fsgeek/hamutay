@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# Pre-commit hook:
+#   1. Verify committer email matches the GPG signing key email
+#   2. Scan staged files for secret patterns (API keys, private keys)
+
+set -euo pipefail
+
+# --- Secret scanning ---
+# Patterns that should never appear in committed files.
+# Uses git diff --cached to scan only what's being committed.
+
+scan_secrets() {
+    local patterns=(
+        'sk-ant-[a-zA-Z0-9_-]{20,}'        # Anthropic API keys
+        'sk-[a-zA-Z0-9]{40,}'               # OpenAI API keys (legacy form)
+        'sk-proj-[a-zA-Z0-9_-]{20,}'        # OpenAI project keys
+        'sk-or-v1-[a-f0-9]{32,}'            # OpenRouter keys (the doors' key; missed until 2026-10-22)
+        'github_pat_[a-zA-Z0-9_]{20,}'      # GitHub fine-grained tokens
+        'AKIA[0-9A-Z]{16}'                   # AWS access key IDs
+        '-----BEGIN[[:space:]].*PRIVATE KEY'  # Private keys
+        'ghp_[a-zA-Z0-9]{36}'               # GitHub personal access tokens
+        'gho_[a-zA-Z0-9]{36}'               # GitHub OAuth tokens
+        'xoxb-[0-9]+-[a-zA-Z0-9]+'          # Slack bot tokens
+        'xoxp-[0-9]+-[a-zA-Z0-9]+'          # Slack user tokens
+    )
+
+    local found=0
+    for pattern in "${patterns[@]}"; do
+        # -G uses basic regex; scan staged diff content only
+        local matches
+        matches=$(git diff --cached -G"$pattern" --name-only 2>/dev/null || true)
+        if [ -n "$matches" ]; then
+            if [ "$found" -eq 0 ]; then
+                echo "ERROR: Possible secrets detected in staged files:"
+                echo ""
+            fi
+            found=1
+            echo "  Pattern: $pattern"
+            echo "$matches" | sed 's/^/    /'
+            echo ""
+        fi
+    done
+
+    if [ "$found" -ne 0 ]; then
+        echo "If these are false positives, commit with --no-verify (but be sure)."
+        return 1
+    fi
+    return 0
+}
+
+scan_secrets || exit 1
+
+signing_key=$(git config user.signingkey 2>/dev/null || true)
+if [ -z "$signing_key" ]; then
+    echo "WARNING: No signing key configured, skipping email check."
+    exit 0
+fi
+
+committer_email=$(git config user.email 2>/dev/null || true)
+if [ -z "$committer_email" ]; then
+    echo "ERROR: No committer email configured."
+    exit 1
+fi
+
+# Get all UIDs on the signing key and extract emails
+key_emails=$(gpg --with-colons --list-keys "$signing_key" 2>/dev/null \
+    | awk -F: '/^uid/ { print $10 }' \
+    | grep -oP '<\K[^>]+')
+
+if [ -z "$key_emails" ]; then
+    echo "ERROR: Could not read emails from signing key $signing_key"
+    exit 1
+fi
+
+if echo "$key_emails" | grep -qxF "$committer_email"; then
+    exit 0
+else
+    echo "ERROR: Committer email ($committer_email) does not match signing key."
+    echo "Key $signing_key has email(s):"
+    echo "$key_emails" | sed 's/^/  /'
+    echo ""
+    echo "Fix with: git config user.email <correct-email>"
+    exit 1
+fi
