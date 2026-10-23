@@ -50,6 +50,19 @@ scan_secrets() {
 
 scan_secrets || exit 1
 
+# --- Executable entries in the repo's own git config (a tripwire, not a guard) ---
+# Doors run as this user inside this checkout, so they can write .git/config; host git then runs
+# whatever it names (guest:tupay, plaza seq 153). core.fsmonitor fires on `git status`, before
+# this hook, so this can only catch a planted entry afterwards and refuse to sign until it's removed.
+planted=$(git config --local --name-only --get-regexp \
+    '^(core\.(fsmonitor|pager|editor|sshcommand|hookspath|askpass)|gpg\.(program|ssh\.program|x509\.program)|filter\..*\.(clean|smudge|process)|diff\..*\.(command|textconv)|merge\..*\.driver|credential\..*|alias\..*)$' 2>/dev/null || true)
+if [ -n "$planted" ]; then
+    echo "ERROR: .git/config names programs host git would run:"
+    echo "$planted" | sed 's/^/  /'
+    echo "Inspect and remove them (git config --local --unset <key>) before committing."
+    exit 1
+fi
+
 signing_key=$(git config user.signingkey 2>/dev/null || true)
 if [ -z "$signing_key" ]; then
     echo "WARNING: No signing key configured, skipping email check."
