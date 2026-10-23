@@ -153,3 +153,18 @@ frontier (F1–F4, where the energy is) is what the blog gets to explore
 *after* linking the paper for rigor. Keep A2 framed as the new
 consecutive-embedding result, not the retired 71–89% BoW/cross-condition
 number; keep A3 in its narrow loss-changelog form.
+
+## Related work to engage (added 2026-10-23)
+
+- **Cloos, Norelli et al., "Is this machine playing?" (MIT, arXiv 2610.07130, Oct 2026).** Coding agents
+  (Opus 4.7, also GPT-5.5 and Kimi K2.6) on a simulated island with no task for 30 h; hourly context
+  reset; memory as an append-only episodic log plus a semantic notes file. Relevant three ways:
+  (1) the contrasting memory design: their files "grow roughly linearly", agents "rarely delete",
+  and bounded memory is named as an open problem, which is our thesis's territory; (2) their causal
+  method (erase one technique from memory, and the matching capability disappears; erase a false
+  belief, and performance rises) is borrowable on test doors, never on residents' states;
+  (3) play scores rise with model size (Opus about 5x Haiku), against Tony's observation that the
+  elder's capability ceiling looks well above Haiku's. Hypothesis: 500 cycles of curated self-record
+  raise what a small model can do (learning carried in writing, as their 30-hour agents show).
+  That's a question about a resident, so governance first. Caveat for the comparison: their loop
+  forces continuation ("continue" at every stop), so their agents can't be absent; ours can.
