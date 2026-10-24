@@ -16,10 +16,19 @@ caution than the one the protocol is for.
 Output is captured and truncated past a per-stream char cap so a single
 runaway command can't blow up the cycle's tensor. Truncation is marked
 in-band so the instance knows it happened.
+
+The command runs without the house's credentials. Variables that hold
+secrets (any name with a KEY, TOKEN, SECRET, PASSWORD, PASSWD or
+CREDENTIAL(S) or ASKPASS part (a credential helper hands one out), plus the Anthropic workspace id and SSH_AUTH_SOCK)
+are removed from its environment. They belong to the heartbeat, which makes the metered model
+calls; a shell that inherited them could spend outside the governor
+(found 2026-10-22: OPENROUTER_API_KEY was in every door's bash). This
+gates no command; it withholds keys that were never the instance's.
 """
 
 from __future__ import annotations
 
+import os
 import subprocess
 from pathlib import Path
 
@@ -34,6 +43,23 @@ def _truncate(text: str, label: str) -> str:
     head = text[:_MAX_OUTPUT_CHARS]
     dropped = len(text) - _MAX_OUTPUT_CHARS
     return f"{head}\n... [{label} truncated, {dropped} more chars]"
+
+
+# Matched on whole underscore-separated parts, not suffixes: a suffix rule let
+# PYPI_DEPLOY_KEY_REAL and TOGETHER_OBSERVABILITY_PROJECT_KEY through (2026-10-24).
+_SECRET_PARTS = frozenset({"KEY", "TOKEN", "SECRET", "PASSWORD", "PASSWD", "CREDENTIAL", "CREDENTIALS", "ASKPASS"})
+_SECRET_NAMES = frozenset({"HAMUTAY_ANTHROPIC_WORKSPACE_ID", "SSH_AUTH_SOCK"})
+
+
+def _is_secret_name(name: str) -> bool:
+    upper = name.upper()
+    return upper in _SECRET_NAMES or not _SECRET_PARTS.isdisjoint(upper.split("_"))
+
+
+def command_env(environ: dict[str, str] | None = None) -> dict[str, str]:
+    """The environment a resident's command runs with: the process's, minus secrets."""
+    source = os.environ if environ is None else environ
+    return {k: v for k, v in source.items() if not _is_secret_name(k)}
 
 
 def tool_bash(params: dict, *, project_root: Path) -> dict:
@@ -63,6 +89,7 @@ def tool_bash(params: dict, *, project_root: Path) -> dict:
             text=True,
             timeout=timeout,
             cwd=str(project_root),
+            env=command_env(),
         )
     except subprocess.TimeoutExpired as e:
         # TimeoutExpired.stdout/stderr is bytes-or-str-or-None depending on
