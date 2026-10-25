@@ -171,6 +171,9 @@ function renderDoors(doors) {
     </article>`;
   }).join("");
 }
+function escapedBreaks(t) {           // a door wrote "\n" as two characters and no real line break
+  return !!t && !t.includes("\n") && t.includes("\\n");
+}
 function renderPlaza(msgs, err, skipped) {
   if (err) { $("plaza").innerHTML = `<p class="err">The plaza record could not be read: ${esc(err)}</p>`; return; }
   const skippedNote = skipped ? `<p class="err">${esc(skipped)} line${skipped === 1 ? "" : "s"} of the plaza record could not be read and ${skipped === 1 ? "is" : "are"} not shown.</p>` : "";
@@ -178,7 +181,9 @@ function renderPlaza(msgs, err, skipped) {
   $("plaza").innerHTML = skippedNote + msgs.slice().reverse().map(m => {
     const k = kind(m.from), knock = m.to !== "plaza";
     const state = knock && m.truth ? ` (${esc(m.truth.state || "")})` : "";
-    const long = (m.text || "").split("\n").length > 14 || (m.text || "").length > 1400;
+    const broke = escapedBreaks(m.text);  // shown with line breaks; the record keeps the text as sent
+    const text = broke ? m.text.replaceAll("\\n", "\n") : (m.text || "");
+    const long = text.split("\n").length > 14 || text.length > 1400;
     const clamp = long && !opened.has(m.seq);
     return `<article class="msg${m.seq > lastSeen ? " new" : ""}">
       <div class="who">
@@ -187,8 +192,9 @@ function renderPlaza(msgs, err, skipped) {
         <span class="when" title="${esc(stamp(m.sent_at))}">${ago(m.sent_at)}</span>
         <span class="seq">seq ${m.seq}</span>
       </div>
-      <div class="text${clamp ? " clamped" : ""}" id="t${m.seq}">${esc(m.text)}</div>
+      <div class="text${clamp ? " clamped" : ""}" id="t${m.seq}">${esc(text)}</div>
       ${long ? `<button class="more" data-seq="${m.seq}">${clamp ? "Show the whole message" : "Show less"}</button>` : ""}
+      ${broke ? `<p class="reason">Sent with "\\n" written out instead of line breaks; shown here with the breaks. The record keeps it as sent.</p>` : ""}
     </article>`;
   }).join("");
 }
