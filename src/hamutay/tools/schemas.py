@@ -708,7 +708,9 @@ DECLARE_QUIET_SCHEMA = {
         "It schedules nothing: a wake you want later is schedule_event's job. "
         "Undeclared quiet is also allowed and is recorded as undeclared. One "
         "declaration per wake; a later call replaces an earlier one. The next "
-        "wake is told what you declared and how long the quiet lasted."
+        "wake is told what you declared and how long the quiet lasted. The "
+        "end of a quiet does not wake you; nothing does except an event. Pass "
+        "wake_at_until=true with until to be woken when it ends."
     ),
     "input_schema": {
         "type": "object",
@@ -721,7 +723,16 @@ DECLARE_QUIET_SCHEMA = {
                 "type": "string",
                 "description": (
                     "Optional ISO-8601 instant after which a knock would be "
-                    "welcome. Informational only; it does not wake you."
+                    "welcome. On its own it does not wake you; see wake_at_until."
+                ),
+            },
+            "wake_at_until": {
+                "type": "boolean",
+                "description": (
+                    "Optional. True schedules one wake for you at until, "
+                    "carrying your reason. Needs until; without it your "
+                    "declaration is still recorded and the result says no "
+                    "wake was scheduled."
                 ),
             },
         },

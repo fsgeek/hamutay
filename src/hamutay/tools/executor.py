@@ -116,6 +116,8 @@ class ToolExecutor:
         # Natural wake mode: the resident's own words for the quiet after
         # this wake, if it chose to give them. Committed with the cycle.
         self._quiet_declaration: dict | None = None
+        # The quiet-end wake that declaration buffered, if it asked for one.
+        self._quiet_wake_event_id: str | None = None
         self._activity_log: list[dict] = []
         # Natural wake mode: update_state calls accumulate here and are
         # merged into raw_output when the wake ends on text.
@@ -360,12 +362,52 @@ class ToolExecutor:
             )
         except (TypeError, ValueError) as e:
             return {"error": str(e)}
+        # Last call wins: a replaced declaration takes its quiet-end wake with it.
+        if self._quiet_wake_event_id is not None:
+            self._pending_events = [
+                e for e in self._pending_events
+                if e.get("event_id") != self._quiet_wake_event_id
+            ]
+            self._quiet_wake_event_id = None
         self._quiet_declaration = record
-        return {
+        result = {
             "recorded": True,
             "reason": record["reason"],
             **({"until": record["until"]} if "until" in record else {}),
         }
+        if "wake_at_until" not in tool_input:
+            return result
+        # A refused wake never costs the declaration: the reason is the
+        # resident's words and stands without it (spec 2026-10-25).
+        wake = tool_input.get("wake_at_until")
+        refused = None
+        if not isinstance(wake, bool):
+            refused = "wake_at_until must be true or false"
+        elif wake and "until" not in record:
+            refused = "wake_at_until needs until: the instant to wake you"
+        if refused or not wake:
+            result["wake_scheduled"] = False
+            if refused:
+                result["wake_refused"] = refused
+            return result
+        event = build_pending_event(
+            purpose=(
+                "Your declared quiet has ended; you asked to be woken now. "
+                f"Your reason when you went quiet: {record['reason']}"
+            ),
+            # The wake arrives holding the state the resident went quiet with.
+            requested_context=[{"tool": "recall", "record_id": str(self._scheduled_by_record_id)}],
+            scheduled_by_cycle=self._cycle,
+            scheduled_by_record_id=self._scheduled_by_record_id,
+            label="quiet_end",
+            not_before=record["until"],
+        )
+        self._pending_events.append(event)
+        self._quiet_wake_event_id = event["event_id"]
+        result.update(
+            wake_scheduled=True, wake_event_id=event["event_id"], wake_at=record["until"]
+        )
+        return result
 
     def _assembly_ready(self) -> str | None:
         if self._assembly is None:

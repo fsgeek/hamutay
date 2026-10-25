@@ -288,10 +288,11 @@ def _natural_tool_guidance(
     """
     text = _with_words_guidance(_TOOL_GUIDANCE) if words else _TOOL_GUIDANCE
     declare_quiet_line = (
-        "- declare_quiet(reason, until?): Record, in your own words, why "
-        "you are going quiet after this wake. Schedules nothing; the "
-        "optional until is a time after which a knock would be welcome, "
-        "not a wake. Undeclared quiet is also allowed and is recorded as "
+        "- declare_quiet(reason, until?, wake_at_until?): Record, in your own "
+        "words, why you are going quiet after this wake. On its own it "
+        "schedules nothing; the optional until is a time after which a knock "
+        "would be welcome, not a wake. Add wake_at_until=true to be woken "
+        "at until. Undeclared quiet is also allowed and is recorded as "
         "undeclared.\n"
     ) if declare_quiet else ""
     assembly_line = (
