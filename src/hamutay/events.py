@@ -5,11 +5,12 @@ from __future__ import annotations
 import fcntl
 import json
 import os
+import re
 import sys
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from uuid import UUID, uuid4
 
@@ -966,6 +967,89 @@ class EventStore:
         self.append(record)
         return record
 
+    def append_failed_with_deferral(
+        self,
+        *,
+        event: dict,
+        run_id: str,
+        exc: Exception,
+        context_results: list[dict] | None = None,
+        admission: dict | None = None,
+        now: datetime | None = None,
+    ) -> tuple[dict, dict | None]:
+        """Fail this run and re-pend the event after a backoff, because the
+        provider failed, not the wake (spec 2026-10-25-transient-failure-
+        deferral-design.md). One buffer under one lock, like the compact
+        retry. Past the cap, or past the event's expiry, only `failed` is
+        written.
+        """
+        current = now or datetime.now(timezone.utc)
+        failed = {
+            "record_type": "event_status",
+            "event_id": event["event_id"],
+            "event_type": event.get("event_type", EVENT_TYPE_REFLECTION),
+            "status": "failed",
+            "run_id": run_id,
+            "failed_at": utc_now_iso(),
+            "error_type": type(exc).__name__,
+            "error": str(exc),
+            "detail": {"transient": True},
+        }
+        if context_results is not None:
+            failed["context_results"] = context_results
+        if admission is not None:
+            failed["admission"] = admission
+        with self._locked():
+            records = self._read_records_unlocked()
+            # Count this event's own deferral rows; a compact retry inherits
+            # detail, so its copy is not a deferral and is not counted.
+            earlier = sum(
+                1 for r in records
+                if r.get("event_id") == event["event_id"]
+                and (r.get("detail") or {}).get("transient_retry")
+                and not (r.get("detail") or {}).get("compact_context")
+            )
+            if earlier >= TRANSIENT_RETRY_CAP:
+                failed["detail"]["retry_cap_reached"] = True
+                self._append_unlocked(failed)
+                return failed, None
+            k = earlier + 1
+            retry_at = current + transient_retry_delay(k)
+            expires = _parse_iso(event.get("expires_at"))
+            if expires is not None and retry_at >= expires:
+                failed["detail"]["retry_after_expiry"] = True
+                self._append_unlocked(failed)
+                return failed, None
+            failed["detail"]["retry_at"] = retry_at.isoformat()
+            retry = {
+                key: value
+                for key, value in event.items()
+                if key not in (
+                    "status",
+                    "run_id",
+                    "started_at",
+                    "recovered_by",
+                    "recovered_at",
+                    "recovered_from_run_id",
+                )
+            }
+            retry.update({
+                "status": "pending",
+                # The original created_at keeps the event's place in the queue.
+                "created_at": event.get("created_at") or utc_now_iso(),
+                "not_before": retry_at.isoformat(),
+                "detail": {
+                    **(event.get("detail") or {}),
+                    "transient_retry": k,
+                    "retry_of_run": run_id,
+                },
+            })
+            self._write_lines_unlocked([
+                json.dumps(failed, default=str) + "\n",
+                json.dumps(retry, default=str) + "\n",
+            ])
+        return failed, retry
+
     def has_compact_retry(self, event_id: str) -> bool:
         """True once this event has already been re-pended for a compact run."""
         return self._has_compact_retry_in(self.read_records(), event_id)
@@ -1125,6 +1209,36 @@ def is_expired(event: dict, *, now: datetime | None = None) -> bool:
     if deadline.tzinfo is None:
         deadline = deadline.replace(tzinfo=timezone.utc)
     return (now or datetime.now(timezone.utc)) >= deadline
+
+
+# A provider failure that time may cure defers the event instead of ending it
+# (spec 2026-10-25-transient-failure-deferral-design.md). Both providers raise
+# RuntimeError with these prefixes; the prefixes are the contract.
+TRANSIENT_STATUS_CODES = (408, 429, 500, 502, 503, 504, 529)
+TRANSIENT_RETRY_CAP = 8
+_TRANSIENT_CODES_RE = "|".join(str(c) for c in TRANSIENT_STATUS_CODES)
+_TRANSIENT_PATTERNS = (
+    re.compile(r"OpenAI backend error: \{.*['\"]code['\"]: (" + _TRANSIENT_CODES_RE + r")\b", re.S),
+    re.compile(r"OpenAI backend transport failed after retries"),
+    re.compile(r"anthropic-direct error (" + _TRANSIENT_CODES_RE + r")\b"),
+    re.compile(r"anthropic-direct transport failed"),
+)
+
+
+def is_transient_provider_failure(exc: BaseException) -> bool:
+    """True when a wake failed because the provider did, in a way time may cure.
+
+    A ReadTimeout after the transport timeout is deliberately not transient:
+    the substrate was still generating, and a retry re-runs the same
+    generation against the same clock.
+    """
+    text = str(exc)
+    return any(p.search(text) for p in _TRANSIENT_PATTERNS)
+
+
+def transient_retry_delay(k: int) -> timedelta:
+    """The k-th deferral's wait: 5 minutes doubling, at most 6 hours."""
+    return min(timedelta(minutes=5) * (2 ** (k - 1)), timedelta(hours=6))
 
 
 def is_due(event: dict, *, now: datetime | None = None) -> bool:
@@ -2638,6 +2752,19 @@ def run_next_event(
                     reason=reason,
                     context_results=context_results,
                     admission=admission,
+                )
+            except OSError as store_error:
+                _note_unrecorded_failure(e, store_error)
+        elif is_transient_provider_failure(e):
+            # The provider failed, not the wake: defer the event, don't end it.
+            try:
+                store.append_failed_with_deferral(
+                    event=event,
+                    run_id=run_id,
+                    exc=e,
+                    context_results=context_results,
+                    admission=admission,
+                    now=now,
                 )
             except OSError as store_error:
                 _note_unrecorded_failure(e, store_error)
