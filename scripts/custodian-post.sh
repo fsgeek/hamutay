@@ -69,6 +69,14 @@ while read -r n; do
   fi
 done < <(grep -oiE '\bseqs? [0-9]+' "$file" | grep -oE '[0-9]+' | sort -un)
 
+# "Read through seq N" must be true when sent: unread posts mean read first.
+# (2026-10-25: the seat posted "Read through seq 177" with 178-181 unread.)
+read_through="$(grep -oiE 'read through seq [0-9]+' "$file" | grep -oE '[0-9]+' | head -1 || true)"
+if [ -n "$read_through" ] && [ "$read_through" -lt "$latest" ]; then
+  echo "UNREAD  seq $((read_through + 1))-$latest  the draft says read through seq $read_through" >&2
+  failed=1
+fi
+
 if [ "$failed" -ne 0 ]; then
   echo "not sent: fix the citations, or --allow a token that is not a commit" >&2
   exit 1
