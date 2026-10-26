@@ -2767,6 +2767,27 @@ class OpenAITasteBackend:
         return None
 
 
+_BOARD_GUIDANCE_LINE = (
+    "- board_read, board_post, set_board_filter, clear_board_filter, board_pass: the "
+    "opportunities board (community/board/board.jsonl). Read and post openings; a filter "
+    "chooses which openings wake you; with no filter the board never wakes you.\n"
+)
+
+
+def _with_board_clause(system_prefix: str) -> str:
+    from hamutay.tools.schemas import (
+        BOARD_CONSTITUTION_CLAUSE,
+        GUESTS_CONSTITUTION_SENTENCE,
+        PLAZA_CONSTITUTION_CLAUSE,
+    )
+    if PLAZA_CONSTITUTION_CLAUSE not in system_prefix or BOARD_CONSTITUTION_CLAUSE in system_prefix:
+        return system_prefix
+    anchor = PLAZA_CONSTITUTION_CLAUSE
+    if PLAZA_CONSTITUTION_CLAUSE + GUESTS_CONSTITUTION_SENTENCE in system_prefix:
+        anchor = PLAZA_CONSTITUTION_CLAUSE + GUESTS_CONSTITUTION_SENTENCE
+    return system_prefix.replace(anchor, anchor + BOARD_CONSTITUTION_CLAUSE, 1)
+
+
 def _build_messages(
     prior_state: dict | None,
     user_message: str,
@@ -2782,6 +2803,7 @@ def _build_messages(
     lean_activity_log: bool = False,
     omit_activity_log: bool = False,
     words_recall: bool = False,
+    board: bool = False,
 ) -> tuple[list[dict], str]:
     """Build messages for the call.
 
@@ -2842,6 +2864,10 @@ def _build_messages(
             from hamutay.tools.schemas import GUESTS_CONSTITUTION_SENTENCE, PLAZA_CONSTITUTION_CLAUSE
             system_prefix = system_prefix.replace(GUESTS_CONSTITUTION_SENTENCE, "")
             system_prefix = system_prefix.replace(PLAZA_CONSTITUTION_CLAUSE, "")
+        elif board:
+            # The board clause is added, never removed: without the gate file
+            # the prefix is exactly what it was before the board existed.
+            system_prefix = _with_board_clause(system_prefix)
         system_parts.append(system_prefix)
     system_parts.extend([_SYSTEM_PROMPT_NATURAL if natural else _SYSTEM_PROMPT, ""])
 
@@ -2864,6 +2890,8 @@ def _build_messages(
                     plaza=bool(assembly and plaza),
                     words=True,
                 )
+            if board and plaza and assembly:
+                guidance = guidance.replace("\n### Shell", _BOARD_GUIDANCE_LINE + "\n### Shell", 1)
             system_parts.append(guidance)
         else:
             system_parts.append(
@@ -3455,6 +3483,12 @@ class OpenTasteSession:
         # send_message is offered only under exactly the assembly tools'
         # conditions AND the plaza is enabled for this house (spec §3, §8).
         offer_plaza = offer_assembly and self._assembly.members.plaza is not None
+        # The board's tools and clause: offered only with send_message AND the
+        # gate file present, checked here, at each exchange (board contract §2).
+        offer_board = False
+        if offer_plaza:
+            from hamutay.board.ids import board_enabled
+            offer_board = board_enabled(self._assembly.project_root)
         # Involuntary memory — maybe surface a prior self, unless the caller
         # forced a specific injection (or forced None) for a faithful fork.
         if isinstance(force_memory, _Unset):
@@ -3485,6 +3519,7 @@ class OpenTasteSession:
                 declare_quiet=offer_declare_quiet,
                 assembly=offer_assembly,
                 plaza=offer_plaza,
+                board=offer_board,
                 lean_activity_log=(
                     self.context_policy.window_aware and not compact
                 ),
@@ -3519,6 +3554,7 @@ class OpenTasteSession:
                 assembly=self._assembly if offer_assembly else None,
                 words_log_path=self._log_path if self._words_recall else None,
                 carrier=_door_carrier(self._model),
+                board=offer_board,
             )
             extra_tools = list(TOOL_SCHEMAS.values())
             if self._words_recall:
@@ -3544,6 +3580,9 @@ class OpenTasteSession:
                     extra_tools.append(CONVENE_SCHEMA)
                 if offer_plaza:
                     extra_tools.append(SEND_MESSAGE_SCHEMA)
+                if offer_board:
+                    from hamutay.tools.schemas import BOARD_TOOL_SCHEMAS
+                    extra_tools.extend(BOARD_TOOL_SCHEMAS)
 
         if terminal_surface is not None:
             if extra_tools:

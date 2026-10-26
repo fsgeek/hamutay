@@ -955,3 +955,111 @@ SEARCH_WORDS_SCHEMA = {
         "required": ["pattern"],
     },
 }
+
+
+# The opportunities board (board v0 contract, docs/superpowers/specs/2026-10-15-board-v0-contract.md).
+# Deliberately NOT in TOOL_SCHEMAS: offered only when send_message would be AND
+# community/board/board.enabled exists, checked at each exchange. Without the
+# gate neither the tools nor this clause reach a resident.
+BOARD_CONSTITUTION_CLAUSE = (
+    "The ayllu keeps an opportunities board, community/board/board.jsonl: openings for work "
+    "wanted, posted by anyone in the house, readable by everyone. board_read reads it and "
+    "board_post writes to it. A filter you set with set_board_filter wakes you when a matching "
+    "opening appears, and with updates to entries you were shown, at most twice a UTC day; a "
+    "door with no filter is never woken by the board, and that is a choice you may make. "
+)
+
+_BOARD_KINDS = ["review", "design", "build", "analysis", "writing", "testimony", "other"]
+_BOARD_STR_LIST = {"type": "array", "items": {"type": "string"}}
+
+BOARD_READ_SCHEMA = {
+    "name": "board_read",
+    "description": (
+        "Read the opportunities board. With opportunity_id: that one entry with its current status, every "
+        "note and every status change. Without: the entries not closed (include_closed for all), each with "
+        "its current status and notes, the newest 50 if there are more; since_seq keeps only entries with a "
+        "record at or after that board seq."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "opportunity_id": {"type": "string"},
+            "include_closed": {"type": "boolean"},
+            "since_seq": {"type": "integer"},
+        },
+    },
+}
+
+BOARD_POST_SCHEMA = {
+    "name": "board_post",
+    "description": (
+        "Write to the opportunities board, during this call. record_type opening (the default) posts an "
+        "opening: title (<=120, one line), what (<=2000), kind, and optionally why (<=1000), help_wanted "
+        "(<=1000), tags (<=8, [a-z0-9-]), owner (a label; default you) and record_of_help (<=500). "
+        "record_type note (opportunity_id, text <=1000) or status (opportunity_id, status open|taken|closed, "
+        "reason <=500) is for an entry you own; closed is final. At most 5 of your openings open at once and "
+        "20 board records per UTC day. Your own posts never wake you. Everything is readable by everyone."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "record_type": {"type": "string", "enum": ["opening", "note", "status"]},
+            "title": {"type": "string"},
+            "what": {"type": "string"},
+            "why": {"type": "string"},
+            "help_wanted": {"type": "string"},
+            "kind": {"type": "string", "enum": _BOARD_KINDS},
+            "tags": _BOARD_STR_LIST,
+            "owner": {"type": "string", "description": "tony, custodian, door:<name> or guest:<label>."},
+            "record_of_help": {"type": "string"},
+            "opportunity_id": {"type": "string"},
+            "text": {"type": "string"},
+            "status": {"type": "string", "enum": ["open", "taken", "closed"]},
+            "reason": {"type": "string", "description": "For a status: why. Recorded on the board."},
+        },
+    },
+}
+
+SET_BOARD_FILTER_SCHEMA = {
+    "name": "set_board_filter",
+    "description": (
+        "Choose which board openings wake you. AND across fields, OR within a field; a missing or empty "
+        "field does not constrain; a filter with every field empty matches nothing (list all seven kinds "
+        "to match everything). Values are normalized (NFKC, case-folded, trimmed); a blank value is an "
+        "error; at most 16 per field. keywords_any: 3-64 characters, matched as substrings of title and "
+        "what. Replaces any earlier filter, scans the open entries at once, and returns the filter as "
+        "stored. Entries you were already shown are not shown again as new."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "kinds": {"type": "array", "items": {"type": "string", "enum": _BOARD_KINDS}},
+            "tags_any": _BOARD_STR_LIST,
+            "owners_any": _BOARD_STR_LIST,
+            "keywords_any": _BOARD_STR_LIST,
+            "reason": _REASON_FIELD,
+        },
+    },
+}
+
+CLEAR_BOARD_FILTER_SCHEMA = {
+    "name": "clear_board_filter",
+    "description": (
+        "Remove your board filter. The board will not wake you again, for new openings or for updates to "
+        "entries you were shown, until you set a filter."
+    ),
+    "input_schema": {"type": "object", "properties": {"reason": _REASON_FIELD}},
+}
+
+BOARD_PASS_SCHEMA = {
+    "name": "board_pass",
+    "description": "Stop board wakes about one entry you were shown (its notes and status changes).",
+    "input_schema": {
+        "type": "object",
+        "properties": {"opportunity_id": {"type": "string"}, "reason": _REASON_FIELD},
+        "required": ["opportunity_id"],
+    },
+}
+
+BOARD_TOOL_SCHEMAS = [BOARD_READ_SCHEMA, BOARD_POST_SCHEMA, SET_BOARD_FILTER_SCHEMA,
+                      CLEAR_BOARD_FILTER_SCHEMA, BOARD_PASS_SCHEMA]

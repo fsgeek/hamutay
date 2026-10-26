@@ -18,6 +18,8 @@ from hamutay.terminal_surface import validate_terminal_surface
 
 EVENT_TYPE_REFLECTION = "self_scheduled_reflection"
 EVENT_TYPE_INBOUND = "inbound_message"
+# The opportunities board (hamutay.board; contract docs/superpowers/specs/2026-10-15-board-v0-contract.md).
+EVENT_TYPE_BOARD_MATCH = "board_match"
 VALID_CONTEXT_TOOLS = {"recall", "compare", "walk"}
 VALID_WALK_DIRECTIONS = {"forward", "backward", "both"}
 VALID_WALK_MODES = {"path", "adjacent"}
@@ -635,6 +637,22 @@ class EventStore:
         with self._locked():
             self._append_unlocked(record)
 
+    def append_derived(self, derive, *, timeout_s: float = 2.0) -> list[dict]:
+        """Under one bounded lock: read, let `derive(records)` decide what to append, write it as one buffer.
+
+        For writers whose record depends on what is already there (the board's
+        filter generation, its reconciliation pass). Returns what was written.
+        """
+        with self._try_locked(timeout_s):
+            try:
+                records = self._read_records_unlocked()
+            except json.JSONDecodeError as e:
+                raise StoreUnavailable(f"{self.path}: malformed line: {e}") from e
+            out = list(derive(records) or [])
+            if out:
+                self._write_lines_unlocked([json.dumps(r, default=str) + "\n" for r in out])
+            return out
+
     def append_many(self, records: list[dict]) -> None:
         """Append a batch as one buffer and one write syscall.
 
@@ -675,7 +693,10 @@ class EventStore:
         pending = sorted((r for r in latest.values() if r.get("status") == "pending"),
                          key=lambda r: r.get("created_at", ""))
         current = now or datetime.now(timezone.utc)
+        board_holds = _board_holds(records, pending, current)
         for event in pending:
+            if str(event.get("event_id")) in board_holds:
+                continue
             if is_expired(event, now=current):
                 return event
             if not is_due(event, now=current):
@@ -728,7 +749,30 @@ class EventStore:
                 if r.get("status") == "pending"
             ]
             pending.sort(key=lambda r: r.get("created_at", ""))
+            board_tried = False
             for event in pending:
+                if event.get("event_type") == EVENT_TYPE_BOARD_MATCH:
+                    # Coalesced at claim (board contract §7): the first board
+                    # event reached claims every claimable one with it, or none.
+                    if board_tried:
+                        continue
+                    board_tried = True
+                    from hamutay.board.delivery import claim_board_batch
+                    appends, primary, running = claim_board_batch(
+                        records,
+                        [r for r in pending if r.get("event_type") == EVENT_TYPE_BOARD_MATCH],
+                        now=now or datetime.now(timezone.utc),
+                        run_id=run_id,
+                        build_running=self._build_running,
+                        quiet_claimable=lambda recs, ev, at: assembly_claimable(recs, ev, at)[0] == "claimable",
+                        is_due=is_due,
+                    )
+                    if appends:
+                        self._write_lines_unlocked(
+                            [json.dumps(r, default=str) + "\n" for r in appends])
+                    if primary is not None:
+                        return primary, running
+                    continue
                 if is_expired(event, now=now):
                     expired = _expired_record(event)
                     self._append_unlocked(expired)
@@ -816,9 +860,15 @@ class EventStore:
         "wake finished" and "its future exists" down to power-loss scale.
         """
         auto_continuation_event = kwargs.get("auto_continuation_event")
+        batch = kwargs.pop("batch_events", None) or []
         record = self._build_completed(**kwargs)
-        if auto_continuation_event is not None:
-            self.append_many([record, auto_continuation_event])
+        # A coalesced board batch completes as one wake: every other event in
+        # it gets a lean completed row (same run, cycle and result record),
+        # written before the primary's so the primary stays the latest outcome.
+        extras = [_batch_completed(record, e) for e in batch if e["event_id"] != record["event_id"]]
+        lines = extras + [record] + ([auto_continuation_event] if auto_continuation_event is not None else [])
+        if len(lines) > 1:
+            self.append_many(lines)
         else:
             self.append(record)
         return record
@@ -1181,6 +1231,28 @@ class EventStore:
                 self._append_unlocked(record)
                 suppressed.append(record)
         return suppressed
+
+
+def _batch_completed(primary: dict, event: dict) -> dict:
+    """The completed row for a non-primary event of a coalesced batch: the primary's
+    wake facts (including any unexecuted-call evidence, so rule (d) is not cleared by
+    a sibling row), without its response text, context results or continuation."""
+    skip = {"response_text", "context_results", "outcome_observation", "wake_validation", "admission",
+            "auto_continuation_appended", "auto_continuation_event_id"}
+    row = {k: v for k, v in primary.items() if k not in skip}
+    row["event_id"] = event["event_id"]
+    row["event_type"] = event.get("event_type", EVENT_TYPE_REFLECTION)
+    row["completed_with_event_id"] = primary["event_id"]
+    return row
+
+
+def _board_holds(records: list[dict], pending: list[dict], now: datetime) -> dict:
+    """event_id -> (kind, until) for pending board events not claimable now (gate absent,
+    superseded, or over the daily board-wake limit). Empty when there are none."""
+    if not any(e.get("event_type") == EVENT_TYPE_BOARD_MATCH for e in pending):
+        return {}
+    from hamutay.board.delivery import holds_for_summary
+    return holds_for_summary(records, pending, now if now.tzinfo else now.replace(tzinfo=timezone.utc))
 
 
 def _expired_record(event: dict, detail: dict | None = None) -> dict:
@@ -1573,6 +1645,19 @@ def failed_wake_notes(records: list[dict], event: dict) -> list[str]:
     ]
     if not failures:
         return []
+    # A coalesced board batch fails as ONE wake with one failed row per event
+    # (board contract §8): one note per run, its first row, plus what the
+    # batch's events became.
+    board_runs: dict[str, list[dict]] = {}
+    for r in failures:
+        if r.get("board") is not None and r.get("run_id") is not None:
+            board_runs.setdefault(r["run_id"], []).append(r)
+    if board_runs:
+        failures = [
+            r for r in failures
+            if r.get("board") is None or r.get("run_id") is None
+            or board_runs[r["run_id"]][0] is r
+        ]
     completed_runs = {
         r.get("run_id") for r in records
         if r.get("record_type") == "event_status" and r.get("status") == "completed"
@@ -1614,6 +1699,16 @@ def failed_wake_notes(records: list[dict], event: dict) -> list[str]:
             )
         if r.get("event_id") is not None and r.get("event_id") == event.get("event_id"):
             note += " This event is the same one, run again."
+        if r.get("board") is not None and r.get("run_id") in board_runs:
+            rows = board_runs[r["run_id"]]
+            terminal = sum(1 for x in rows if (x.get("board") or {}).get("terminal"))
+            # both counts, always, zero included (board contract §8)
+            note += (
+                f" That wake carried {len(rows)} board match event{'s' if len(rows) != 1 else ''}: "
+                f"{len(rows) - terminal} will be offered again in a later board wake, and "
+                f"{terminal} reached the limit of 3 attempts and will not be offered again"
+                + ("; board_read still shows those entries." if terminal else ".")
+            )
         notes.append(note)
     return notes
 
@@ -1711,8 +1806,21 @@ def build_event_envelope(
             else policy.result_cap_chars // 2
         )
         context_results = project_context_results(context_results, cap)
-    if event.get("event_type") == EVENT_TYPE_INBOUND:
-        if event.get("origin") == "member":
+    if event.get("event_type") == EVENT_TYPE_BOARD_MATCH:
+        event_instruction = (
+            "This is a wake from the opportunities board: entries matched the board "
+            "filter you set, or entries you were shown have changed. board_text says "
+            "why each entry is here and shows it as it stands now. Nothing obliges "
+            "you to act on any of them. "
+        )
+    elif event.get("event_type") == EVENT_TYPE_INBOUND:
+        if event.get("origin") == "board":
+            event_instruction = (
+                "This is a notice from the opportunities board, the ayllu's shared "
+                "list of work wanted. Its purpose field describes the board and its "
+                "tools. "
+            )
+        elif event.get("origin") == "member":
             s = str(event.get("sender", ""))
             who = ("another resident" if s.startswith("door:")
                    else "a guest of the ayllu" if s.startswith("guest:") else "a human")
@@ -1764,6 +1872,13 @@ def build_event_envelope(
     if event.get("event_type") == EVENT_TYPE_INBOUND:
         envelope["origin"] = event.get("origin")
         envelope["sender"] = event.get("sender")
+    if event.get("event_type") == EVENT_TYPE_BOARD_MATCH:
+        # The dedicated board rendering (board contract §9): the event carries
+        # its own context, built and bounded at claim; never the empty path.
+        board = dict(event.get("board_context") or {})
+        envelope["origin"] = "board"
+        envelope["board_text"] = board.pop("text", None) or event.get("purpose", "")
+        envelope["board"] = board
     if operational_notes:
         envelope["operational_notes"] = list(operational_notes)
     return json.dumps(envelope, indent=2, default=str)
@@ -2157,6 +2272,29 @@ def summarize_event_log(
                     nb = _parse_iso_utc(e.get("not_before"))
                     if nb is None or nb < until_dt:
                         e["not_before"] = until
+    board_parked = 0
+    # Board events the claim would not take now (board contract §7): over the
+    # daily board-wake limit they wait for the next UTC day; with the gate
+    # absent, or superseded, they are neither runnable nor waiting, so the
+    # heartbeat never spins on an event no claim will take.
+    if any(e.get("event_type") == EVENT_TYPE_BOARD_MATCH for e in pending):
+        latest_pending = [
+            r for r in EventStore._latest_by_event_id_from_records(records).values()
+            if r.get("status") == "pending"
+        ]
+        holds = _board_holds(records, latest_pending, current_time)
+        for e in pending:
+            hold = holds.get(str(e.get("event_id")))
+            if hold is None:
+                continue
+            if hold[0] == "held":
+                nb = _parse_iso_utc(e.get("not_before"))
+                if nb is None or nb < _parse_iso_utc(hold[1]):
+                    e["not_before"] = hold[1]
+            else:
+                e["_board_parked"] = hold[0]
+        board_parked = sum(1 for e in pending if e.get("_board_parked"))
+        pending = [e for e in pending if not e.get("_board_parked")]
     pending_expired = [
         event for event in pending
         if is_expired(event, now=current_time) or event.get("_expire_by_quiet")
@@ -2257,6 +2395,7 @@ def summarize_event_log(
         "evidence_fulfillment_count": len(evidence_fulfillments),
         "evidence_fulfillments": evidence_fulfillments[:limit],
         "pending_runnable_count": len(pending_runnable),
+        "pending_board_parked_count": board_parked,
         "pending_waiting_count": len(pending_waiting),
         "pending_expired_count": len(pending_expired),
         "oldest_pending": pending[0] if pending else None,
@@ -2622,7 +2761,11 @@ def run_next_event(
     context_results: list[dict] | None = None
     try:
         requested_context = event.get("requested_context")
-        if (
+        if event.get("event_type") == EVENT_TYPE_BOARD_MATCH:
+            # Its context is the board text rendered at claim (board_context),
+            # carried into the envelope by its own path; no memory requests.
+            context_results = []
+        elif (
             event.get("event_type") == EVENT_TYPE_INBOUND
             and requested_context is None
         ):
@@ -2709,6 +2852,7 @@ def run_next_event(
             auto_continuation_event=auto_continuation_event,
             admission=getattr(session, "_last_admission", None),
             **_final_turn_fields(getattr(session, "_last_natural_final_turn", None)),
+            **({"batch_events": event["_board_batch"]} if event.get("_board_batch") else {}),
         )
         if auto_continuation_event is not None:
             completed["auto_continuation_event"] = auto_continuation_event
@@ -2731,7 +2875,20 @@ def run_next_event(
 
         policy = getattr(session, "context_policy", None)
         admission = getattr(session, "_last_admission", None)
-        if (
+        if event.get("_board_batch"):
+            # A failed board batch loses no match (board contract §8): every
+            # event fails and gets its successor (attempt+1), or at the cap a
+            # terminal record -- one buffer, so no failure without its retry.
+            from hamutay.board.delivery import failure_records
+            try:
+                store.append_many(failure_records(
+                    event, run_id=run_id, exc=e, now=now or datetime.now(timezone.utc),
+                    compact=isinstance(e, WindowFailure) and policy is not None and policy.window_aware,
+                    context_results=context_results, admission=admission,
+                ))
+            except OSError as store_error:
+                _note_unrecorded_failure(e, store_error)
+        elif (
             isinstance(e, WindowFailure)
             and policy is not None
             and policy.window_aware

@@ -64,6 +64,11 @@ _CAPABILITY: dict[str, str] = {
     "take_position": "bounded_write",
     "convene": "bounded_write",
     "send_message": "bounded_write",
+    "board_read": "read_only",
+    "board_post": "bounded_write",
+    "set_board_filter": "bounded_write",
+    "clear_board_filter": "bounded_write",
+    "board_pass": "bounded_write",
 }
 
 # Keys the state protocol owns; update_state may not write them.
@@ -88,11 +93,15 @@ class ToolExecutor:
         assembly=None,
         words_log_path: str | None = None,
         carrier: str | None = None,
+        board: bool = False,
     ):
         self._project_root = project_root
         # The door's carrier on the plaza: the session's model id, from the
         # framework, never from model input (plaza carrier spec §3).
         self._carrier = carrier
+        # The board tools: offered only when send_message is AND the board's
+        # gate file exists (board contract §2); set by the session per exchange.
+        self._board = board
         self._cycle = cycle
         self._session_start = session_start or datetime.now(timezone.utc)
         self._last_cycle_time = last_cycle_time
@@ -237,6 +246,8 @@ class ToolExecutor:
             result = self._convene(tool_input)
         elif tool_name == "send_message":
             result = self._send_message(tool_input)
+        elif tool_name in ("board_read", "board_post", "set_board_filter", "clear_board_filter", "board_pass"):
+            result = self._board_tool(tool_name, tool_input)
         elif tool_name == "bash":
             result = tool_bash(tool_input, project_root=self._project_root)
         else:
@@ -467,6 +478,19 @@ class ToolExecutor:
                         now=datetime.now(timezone.utc), wake=wake, carrier=self._carrier)
         except (SendRefused, LedgerUnavailable, LedgerMalformed, ValueError, TypeError) as e:
             return {"error": f"send_message: {e}"}
+
+
+    def _board_tool(self, tool_name: str, tool_input: dict) -> dict:
+        from hamutay.board.tools import run_board_tool
+        # The board's records bind to no cycle, so unlike the assembly tools they
+        # need no cycle record_id: a binding and a framework wake context suffice.
+        if self._assembly is None:
+            return {"error": f"{tool_name}: this wake is not bound to the assembly"}
+        if self._wake_context is None:
+            return {"error": f"{tool_name}: board tools need a framework wake context (event-managed wake)"}
+        if not self._board or self._assembly.members.plaza is None:
+            return {"error": f"{tool_name}: the board is not offered on this wake"}
+        return run_board_tool(tool_name, tool_input, binding=self._assembly)
 
 
 def _summarize(tool_name: str, result: dict) -> str:

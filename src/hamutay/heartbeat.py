@@ -24,6 +24,7 @@ from hamutay.assembly.binding import bind
 from hamutay.assembly.pass_ import run_pass
 from hamutay.plaza.note import note_producer
 from hamutay.plaza.pass_ import run_plaza_pass
+from hamutay.board.pass_ import run_board_pass
 from hamutay.events import (
     EVENT_TYPE_REFLECTION,
     EventStore,
@@ -401,6 +402,7 @@ class HeartbeatLoop:
         assembly=None,
         assembly_pass=run_pass,
         plaza_pass=run_plaza_pass,
+        board_pass=run_board_pass,
     ):
         self._session = session
         self._guard = guard
@@ -422,6 +424,8 @@ class HeartbeatLoop:
         self._assembly_memo = None
         self._plaza_pass = plaza_pass
         self._plaza_memo = None
+        self._board_pass = board_pass
+        self._board_memo = None
 
     @staticmethod
     def _emit(payload: dict) -> None:
@@ -477,6 +481,23 @@ class HeartbeatLoop:
             return
         if result.get("error") or result.get("landed") or result.get("unreadable") or result.get("skipped") == "lock":
             self._emit({"heartbeat": "plaza", **result, "at": now.isoformat()})
+
+    def _board_step(self, now) -> None:
+        """After the plaza pass; same guard. Dormant inside the pass while the gate file is absent."""
+        if self._assembly is None or self._assembly.members.plaza is None:
+            return
+        root = getattr(self._assembly, "project_root", None)
+        if root is None:
+            return
+        try:
+            result, self._board_memo = self._board_pass(
+                door=self._assembly.door, project_root=root,
+                store=self._store, now=now, memo=self._board_memo)
+        except Exception as e:
+            self._emit({"heartbeat": "board", "error": f"{type(e).__name__}: {e}", "at": now.isoformat()})
+            return
+        if result.get("error") or result.get("appended"):
+            self._emit({"heartbeat": "board", **result, "at": now.isoformat()})
 
     def _transition(
         self,
@@ -661,6 +682,7 @@ class HeartbeatLoop:
         now = self._now()
         self._assembly_step(now)
         self._plaza_step(now)
+        self._board_step(now)
         # The substrate guard runs before the budget: a door whose GPU is lent
         # has nothing to spend the budget on.
         if self._guard is not None:
