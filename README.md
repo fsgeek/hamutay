@@ -37,8 +37,11 @@ conservatively in [`docs/paper-evidence-ledger.md`](docs/paper-evidence-ledger.m
   content-embedding cosine). Memory as re-explanation, not storage.
 - **The one thing a mind won't volunteer** is a record of what it discarded.
   Given a free schema, models invent scaffolding, planning, even
-  tension-tracking — but never a declared-losses changelog. That honesty has
-  to be designed in. It is the load-bearing part.
+  tension-tracking — but almost never a record of what they discarded: 2 of
+  103 runs in April (both Claude 4.6, and neither repeated it in October), 0
+  of 50 in October whether or not the harness told them deletion loses
+  nothing. That honesty has to be designed in. It is the load-bearing part.
+  (We once wrote "never"; a pre-registered recount found the two.)
 - **A model can manage its own memory** coherently over hundreds of cycles.
 - **The mechanism underneath is stochastic, not a clock.** The "breathing" we
   fell in love with is real but aperiodic; the curation richness we hunted a

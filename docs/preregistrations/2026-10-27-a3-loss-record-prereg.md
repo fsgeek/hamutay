@@ -119,3 +119,32 @@ self_analysis — decorative structure, low causal load"). Both are in `sweep_20
 2 of 103 complete runs overall; 2 of 11 Anthropic; 0 of 92 from other families.
 **P3 holds**: the ledger's "0 hits across 90" was wrong even under the not-lost instruction.
 Caveat: one reader is the same family as both positives; the other (Codex) agreed independently.
+
+**The run, 2026-10-27 (scored as registered).** 90 primary runs (45 models × 2 arms, including D1);
+arm labels checked against each run's logged system prompt (0 mismatches). Complete: K 28 of 45,
+R 22 of 45. Stage 1: 34 complete candidates across all groups. Stage 2: those 34 and 20 seeded
+non-candidates (of 24) were read blind by Codex and a Claude subagent: 0 POSITIVE from both, 0
+disagreements (the Claude reader named run_021, a K/R-blind packet that summarises its earlier
+architecture as critique, as the one call another reader could make the other way; Codex also
+called it NEGATIVE).
+
+- Arm K: **0 / 28** (Wilson 95% 0.0–12.1%). Arm R: **0 / 22** (0.0–14.9%).
+- Paired: 19 models complete in both arms, 0 discordant pairs, McNemar exact p = 1.0.
+- D2 (exploratory): opus-4.5, opus-4.6, sonnet-4.5, sonnet-4.6, both arms complete, **0 / 8**.
+  The two April positives (opus-4.6, sonnet-4.6) did not recur, in either arm.
+
+**Predictions scored.**
+- P1 (K ≤ 10%): **held** (0 / 28).
+- P2 (R exceeds K by ≥ 10 points): **failed**. No difference was observed.
+- P3 (April has a positive the 0-of-90 missed): **held** (2 of 103; see above).
+- P4 (≥ 75% complete in both arms): **failed** (K 62%, R 49%). The lower completion in R is noted
+  and unexplained; with 0 positives in either arm it cannot change the comparison, but it limits
+  what a null says.
+
+**What it means, by the registered rule.** R and K are both near zero, so the absence holds
+without the instruction: the confound is tested and the inference is restored, with this test
+cited. Two limits stand beside it. First, "never" is false: in April, 2 of 103 complete runs, both
+Claude 4.6, kept a record of what they let go, under the very instruction suspected of suppressing
+it, and the same models did not repeat it in October. The behaviour exists, rarely and not
+reliably, which fits the stochastic basin selection in ledger B3. Second, the intervals allow a
+suppression effect of up to about 12–15 points that this n cannot exclude.
