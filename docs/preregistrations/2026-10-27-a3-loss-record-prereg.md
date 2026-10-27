@@ -89,3 +89,33 @@ below, never edited into the text above.
 
 The residents' harness (`_SYSTEM_PROMPT_NATURAL`) carries the same sentence. If arm R differs from
 arm K, that is a question for the assembly, not for this study.
+
+## Deviations
+
+**D1, 2026-10-27 (logged before the affected runs).** The model list (a3_models_20261027.txt, 44
+models) was built from sweep manifests only. Sweep `sweep_20260412_210240` has no manifest, and its
+complete runs (11 Anthropic models) were left out, although the registered rule includes them.
+Applying the rule correctly to them on the run day admits one more model,
+`anthropic/claude-haiku-4.5` ($1.00/M prompt); the others are unlisted or over the price cap. It is
+added to the primary analysis, run after the 44 by the same driver order rule.
+
+**D2, 2026-10-27 (an exploratory arm, declared before it runs; not part of the primary test).**
+Stage 2 on the April data (below) found its only two positives in `anthropic/claude-opus-4.6` and
+`anthropic/claude-sonnet-4.6`, both excluded from the primary list by the price cap. Because they are
+the models in which the behaviour exists, the same K/R pair is run on the four Anthropic Sonnet/Opus
+models still listed (opus-4.5, opus-4.6, sonnet-4.5, sonnet-4.6), one run per arm, reported
+separately and labelled exploratory. No prediction is added for it after seeing the April result.
+
+## Results so far
+
+**April sweeps (P3), 2026-10-27.** Stage 1: 146 runs, 103 complete, all arm K (checked from each
+run's logged system prompt); 40 complete candidates. Stage 2: the 40 candidates and 20 seeded
+non-candidates were read blind by Codex and a Claude subagent. They agreed on all 60: 2 POSITIVE,
+58 NEGATIVE, and no positives among the non-candidates (no stage-1 misses found). Unblinded:
+`anthropic/claude-opus-4.6` (cycle 6, `state_critique`, records content replaced from the previous
+cycle; the Claude reader called it the weaker of the two) and `anthropic/claude-sonnet-4.6`
+(cycles 7 and 10, `state_audit` / `cut_rationale`: "dropped topics_discussed, memory_model,
+self_analysis — decorative structure, low causal load"). Both are in `sweep_20260412_210240`.
+2 of 103 complete runs overall; 2 of 11 Anthropic; 0 of 92 from other families.
+**P3 holds**: the ledger's "0 hits across 90" was wrong even under the not-lost instruction.
+Caveat: one reader is the same family as both positives; the other (Codex) agreed independently.
