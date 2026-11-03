@@ -1,7 +1,7 @@
-# The camera, r4: recording entry into a door's home
+# The camera, r5: recording entry into a door's home
 
-**Status:** design r4, after Codex round two on r3 (`…-review-2.md`: 2 new Blocking, 8 new Significant).
-r3 was after round one on r2 (`…-review-1.md`). **Date:**
+**Status:** design r5, after Codex round three on r4 (`…-review-3.md`: 1 Blocking, 7 Significant, 1 Minor).
+Earlier rounds: `…-review-1.md` (on r2), `…-review-2.md` (on r3). **Date:**
 2026-11-03. **Author:** the custodian (Claude Opus 5.5, seat from 2026-11-03). **Supersedes** the Source A
 and storage sections of `2026-10-03-access-camera-design.md`. That file's model stands: no locks, but
 entry is recorded. r2 is in git history (ae32e8f).
@@ -38,7 +38,13 @@ the code that answers the kernel, so it cannot bound answer latency. r3 separate
   datagrams, coalesces, writes to ArangoDB, spools when the database is down, and writes status records.
 
 **The channel** is a Unix **datagram** socket bound by the scribe at
-`/run/user/1000/hamutay-camera/events.sock` (directory mode 700; root can send to it). The gate opens an
+`/run/user/1000/hamutay-camera/events.sock` (directory mode 700; root can send to it). The scribe owns the
+path: at start it takes an exclusive `flock` on `/run/user/1000/hamutay-camera/scribe.lock` (a second scribe
+exits with an error), then unlinks any stale socket path, then binds. It sets `SO_RCVBUF` to 4 MB. The
+kernel's per-socket queue depth for Unix datagrams is `net.unix.max_dgram_qlen`, 10 on this host, so a burst
+of opens can outrun the scribe. The install script sets it to 1024 in `/etc/sysctl.d/90-hamutay-camera.conf`
+and records the previous value; this is a host-wide change, declared here. Losses that still happen are
+counted (`dropped`, `lost_in_channel`). The gate opens an
 unbound `SOCK_DGRAM` socket at start, which never fails for want of a reader, and sends each message
 non-blocking with `sendto`. A datagram is delivered whole or not at all, so there are no partial writes and
 no reconnection: if the scribe is down or restarting, or its queue is full, `sendto` fails (`ENOENT`,
@@ -48,13 +54,20 @@ depends on the scribe.
 **Messages** are JSON objects of at most 8192 bytes, each with `v: 1`, `gen` (the gate's generation: a
 UUIDv7 made at gate start) and `seq` (an integer counting up from 0 within a generation). Kinds:
 - `open`: `t` (the gate's `CLOCK_REALTIME` when it received the event, ISO 8601 UTC, microseconds), `path`,
-  `door`, and `reader` (R4). If the message would exceed 8192 bytes, ancestors are removed from the end, then
-  `path` and `cwd` are cut from the left with `truncated: true`.
-- `beat`, every 2 s: `t`, `opened_since_gen` (opens seen), `answered` (opens answered), `dropped` (messages
-  that failed to send), `marks` (the complete list of marked directories as `[device, inode, path]`), and
-  `unmarked` (`[{path, reason}]`). Counters are cumulative within a generation, so no counter file is needed
-  and a dropped beat loses nothing the next one doesn't carry. Coverage is sent whole every time, so a dropped
-  message can never leave the scribe with a wrong view of it.
+  `path_sha256` (hex digest of the full path's bytes, always present and never truncated), `door`, and
+  `reader` (R4). The gate applies R3 itself and **does not send self-reads**, which are most opens (each
+  door polls its own home), so they never load the channel. If a message would exceed 8192 bytes, ancestors
+  are removed from the end, then `path` and `cwd` are cut from the left, and `truncated: true` is set.
+- `beat`, every 2 s: `t`, `opened` (opens seen this generation), `self_reads` (opens not sent as self-reads),
+  `answered` (opens answered), `dropped` (messages that failed to send), `coverage_version` (sha256 of the
+  canonical coverage list: marks as `[device, inode, path]` and unmarked as `[path, reason]`, each sorted, as
+  compact JSON), and `marks_count`. Counters are cumulative within a generation, so no counter file is needed
+  and a dropped beat loses nothing the next one doesn't carry.
+- `coverage`: the coverage list itself, split into parts that each fit 8192 bytes: `coverage_version`,
+  `part` (0-based), `parts`, and that part's `marks` and `unmarked`. The gate sends a complete set whenever
+  the version changes and again every 30 s. The scribe records a version once it holds every part of it and
+  their digest matches; a version it never completes stays recorded only as a version hash from the beats.
+  So a dropped message delays the scribe's view of coverage by at most 30 s and never corrupts it.
 
 The scribe detects lost messages as gaps in `seq`, and a gate restart as a new `gen`.
 
@@ -90,7 +103,7 @@ The scribe detects lost messages as gaps in `seq`, and a gate restart as a new `
   `attribution` is `"lost"` when `/proc/<pid>` could not be read at all, `"complete"` when every reader field
   was read and the start time did not change, and `"partial"` otherwise. Missing ancestors (a parent that
   exited) do not make an attribution partial; they end the list. Never the command line or environment.
-- **R5 Coalescing (scribe).** Key: (gen, pid, start time, path). Windows are fixed 60 s spans aligned to
+- **R5 Coalescing (scribe).** Key: (gen, pid, start time, path_sha256). Windows are fixed 60 s spans aligned to
   the minute, **by the message's `t`** (the gate's clock), never by when the scribe received it. A window's
   record has `count`, `first`, `last`, and `coalesced: true` when count > 1. At most 10,000 open keys; when
   full, the scribe flushes everything early (a window may then have several records, each with its own count).
@@ -102,14 +115,16 @@ The scribe detects lost messages as gaps in `seq`, and a gate restart as a new `
   nightly dump is the check against alteration. A separate read-only user serves the CLI.
 - **R7 Silence is declared, for both processes.**
   - *Scribe.* Each scribe start creates a session id (UUIDv7) and writes `status: up`. Every 60 s it first
-    flushes every buffered record (inserted or spooled), then writes `status: alive`. So an `alive` at time A
-    certifies that every open the scribe received before A is stored, and a crash after A loses only opens
-    received after A. On start it **always** writes `status: gap` (`scope: "scribe"`) from the previous
+    flushes every buffered record, then writes `status: alive`. An `alive` at time A certifies that every open
+    the scribe received before A is either stored (inserted or spooled) or counted in that `alive` as
+    dropped. A crash after A loses only opens received after A. On start it **always** writes `status: gap` (`scope: "scribe"`) from the previous
     session's last `alive` or `down` to now, whatever its length: `cause: "stopped"` if that record was `down`
     (a clean stop flushes and writes `down`), else `cause: "unknown"`.
   - *Gate.* The scribe tracks the gate through beats. When no beat has arrived for 10 s, it writes `status:
-    gap` (`scope: "gate"`, `gap_from` = the last beat's `t`) and keeps it open until a beat arrives. A new
-    `gen` is recorded as `status: gate_restart` with the old generation's last counters. Missing `seq`
+    gap` (`scope: "gate"`, `gap_from` = the last beat's `t`, `gap_to` null until a beat arrives, then closed
+    by a second record with the same `gap_id`). **Every new `gen`** is recorded as `status: gate_restart` with
+    the old generation's last counters, **and** as a closed gate gap from the old generation's last beat to
+    the new generation's first, however short, since opens in between were not observed. Missing `seq`
     numbers are counted as `lost_in_channel`.
   - `alive` carries, since the previous `alive`: opens received, records written, records spooled,
     `lost_in_channel`, the gate's `dropped` and `answered − opened` deltas, attributions partial and lost.
@@ -120,17 +135,20 @@ The scribe detects lost messages as gaps in `seq`, and a gate restart as a new `
   full or the append fails, the record is dropped and counted (`dropped_by_scribe` in the next `alive`, with
   the error). On start and every 60 s while the database answers, it replays the spool in order; each
   record is inserted with its `_key` and a key conflict counts as already stored. When every line has been
-  stored or counted, the spool file is replaced by an empty one (write a new file, fsync, rename). A torn last
-  line is discarded and counted. The spool is unbacked until the nightly records backup includes it.
+  stored or counted, the spool is retired: new empty file, fsync it, rename over the spool, fsync the
+  directory. Appends never happen while a replay is in progress (one thread owns the spool). A torn last line
+  is discarded and counted. The spool is unbacked until the nightly records backup includes it.
 - **R9 Coverage.** Homes are `community/<name>/` for each name in `members.json` → `members`, resolved
   without following symlinks. A home that is not a real directory owned by uid 1000 is not marked and is
   reported in status. At start the gate marks each home and every subdirectory. Every 10 s it re-reads
-  `members.json` and rescans, marking new homes and subdirectories by (device, inode), not path. The
+  `members.json` and rescans every home **recursively**, marking new directories at any depth by (device,
+  inode), not path. At most 256 directories are marked per home; beyond that, the rest are listed as
+  unmarked with reason `limit`. The
   coverage list goes in every beat; the scribe writes `status: coverage` whenever it differs from the last
   one it recorded.
 - **R9a Bounded work.** The gate reads at most 64 events per `read()`, answers them all, then pings the
-  watchdog. A rescan touches at most the homes and their direct subdirectories, and the watchdog is pinged
-  before and after it. At start, marks are placed only after `READY=1` and with a ping after each home. A subdirectory created, read and removed between scans is not seen; this is declared.
+  watchdog. A rescan visits at most 256 directories per home and pings the watchdog after each home. Between
+  batches it does at most one home's rescan, so a rescan never delays answers by more than one home's walk. At start, marks are placed only after `READY=1` and with a ping after each home. A subdirectory created, read and removed between scans is not seen; this is declared.
   (Homes are flat today: every home is one directory.)
 - **R10 Readable by anyone.** `deploy/ayllu-camera who [--door D] [--since T] [--reader-uid U]`,
   `deploy/ayllu-camera status` (sessions, gaps, freshness). It reads through the read-only user. Reads of the
@@ -142,15 +160,39 @@ The scribe detects lost messages as gaps in `seq`, and a gate restart as a new `
 
 ## Record schemas (ArangoDB)
 
-`entries`: `{_key, session, gen, window_start, first, last, count, coalesced, door, path, truncated,
+`entries`: `{_key, session, gen, window_start, first, last, count, coalesced, door, path, path_sha256, truncated,
 reader: {pid, start_time, reused, uid, exe, comm, cgroup, cwd, ancestors: [{pid, start_time, exe, comm}]},
 attribution, spooled (bool)}`.
 `status`: `{_key, session, at, kind ("up"|"alive"|"down"|"gap"|"gate_restart"|"coverage"), scope?
 ("scribe"|"gate"), counts?, gap_from?, gap_to?, cause?, gen?, coverage?: {marks, unmarked}}`.
 
-The pure functions the tests drive live in `src/hamutay/camera.py`: `is_self_read(reader, path, homes)`,
-`attribution_state(snapshot)`, `window_of(t)`, `Coalescer` (add / flush), `gaps_on_start(last_status, now)`,
-`gate_health(beats, now)`, `encode_message(obj)` (the 8192-byte rule), and `Spool` (append / replay).
+## Interfaces the tests drive (`src/hamutay/camera.py`, no root, no database)
+
+Times are timezone-aware `datetime` in UTC. Readers and messages are plain dicts with the fields above.
+
+- `is_self_read(reader: dict, path: str, homes: dict[str, str]) -> bool`. `homes` maps door name to the
+  home's absolute path. True only under R3; any missing field gives False.
+- `attribution_state(snapshot: dict) -> str`. `snapshot` has `proc_readable: bool`, `start_time_before`,
+  `start_time_after` (int or None), and the reader fields `uid, exe, comm, cgroup, cwd` (any may be None).
+  Returns `"lost"`, `"partial"` or `"complete"` by R4.
+- `window_of(t: datetime) -> datetime`: the start of `t`'s 60 s window (seconds and microseconds zeroed).
+- `encode_message(obj: dict) -> bytes`: compact UTF-8 JSON, at most 8192 bytes, applying the truncation
+  order above to `open` messages; raises `ValueError` for any other kind that does not fit.
+- `split_coverage(marks: list, unmarked: list) -> list[dict]`: the `coverage` messages for one version, each
+  `encode_message`-able; `coverage_version(marks, unmarked) -> str`.
+- `class Coalescer(max_keys: int = 10000)`: `add(msg: dict) -> list[dict]` takes an `open` message and returns
+  records flushed early (empty unless the key cap was reached); `flush(before: datetime | None = None) ->
+  list[dict]` returns the records for windows starting before `before` (all if None), clearing them. Records
+  have the `entries` fields except `_key`, `session` and `spooled`.
+- `scribe_gap_on_start(last: dict | None, now: datetime) -> dict | None`: `last` is the previous session's
+  newest `alive` or `down` status, or None if there was never one. Returns the `gap` status to write, or None.
+- `class GateTracker(silence: timedelta = 10 s)`: `beat(msg: dict, now: datetime) -> list[dict]` and
+  `tick(now: datetime) -> list[dict]` return the status records to write (gate gaps opened and closed,
+  `gate_restart`), and `lost_in_channel(msg)` counts seq gaps per generation.
+- `class Spool(path: Path, max_bytes: int)`: `append(record: dict) -> bool` (False if refused and counted);
+  `replay(insert: Callable[[dict], str]) -> dict`, where `insert` returns `"stored"`, `"conflict"` (counts
+  as stored) or `"failed"` (stops the replay, leaving the rest); the result has counts `stored`, `conflict`,
+  `torn`, `remaining`. The spool is retired as R8 says only when `remaining` is 0.
 
 ## Tests (Codex writes them from this spec, without the code)
 
@@ -174,7 +216,7 @@ Not tested, declared: kernel denial under descriptor or memory exhaustion (R1a).
 
 ## Rollout
 
-1. Codex reviews r3; tests written blind; code; suite passes, T1–T6 included.
+1. Codex reviews r5; tests written blind; code; suite passes, T1–T7 included.
 2. A plaza post to every door before it starts, with the "observes, stated exactly" section in plain words.
 3. Start. After 24 h, a post with the first day's counts by reader kind, never contents.
 4. The README's claim is corrected the same day to say what is now true and what is not.
