@@ -1144,7 +1144,7 @@ def load_capability_profile(provider: str, model: str, capabilities_file=None):
     registry by default instead of relying on anyone remembering a flag.
     Returns (profile, note); the note is emitted so the resolution is legible.
     """
-    from hamutay.taste_open import CapabilityProfile
+    from hamutay.taste_open import CapabilityProfile, _strict_label
 
     path = capabilities_file or DEFAULT_CAPABILITIES_FILE
     key = f"{provider}:{model}"
@@ -1167,7 +1167,8 @@ def load_capability_profile(provider: str, model: str, capabilities_file=None):
         raise SystemExit(f"Capabilities mark {key} as no-tools; aborting")
     return (
         profile,
-        f"capabilities loaded for {key}: tool_choice={profile.tool_choice_mode}",
+        f"capabilities loaded for {key}: tool_choice={profile.tool_choice_mode}, "
+        f"strict={_strict_label(profile.function_strict)}",
     )
 
 
