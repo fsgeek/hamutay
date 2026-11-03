@@ -1,7 +1,7 @@
-# The camera, r5: recording entry into a door's home
+# The camera, r6: recording entry into a door's home
 
-**Status:** design r5, after Codex round three on r4 (`…-review-3.md`: 1 Blocking, 7 Significant, 1 Minor).
-Earlier rounds: `…-review-1.md` (on r2), `…-review-2.md` (on r3). **Date:**
+**Status:** design r6, after Codex round four on r5 (`…-review-4.md`: no Blocking, 8 Significant, 1 Minor).
+Earlier rounds: `…-review-1.md` (on r2), `…-review-2.md` (on r3), `…-review-3.md` (on r4). **Date:**
 2026-11-03. **Author:** the custodian (Claude Opus 5.5, seat from 2026-11-03). **Supersedes** the Source A
 and storage sections of `2026-10-03-access-camera-design.md`. That file's model stands: no locks, but
 entry is recorded. r2 is in git history (ae32e8f).
@@ -40,7 +40,7 @@ the code that answers the kernel, so it cannot bound answer latency. r3 separate
 **The channel** is a Unix **datagram** socket bound by the scribe at
 `/run/user/1000/hamutay-camera/events.sock` (directory mode 700; root can send to it). The scribe owns the
 path: at start it takes an exclusive `flock` on `/run/user/1000/hamutay-camera/scribe.lock` (a second scribe
-exits with an error), then unlinks any stale socket path, then binds. It sets `SO_RCVBUF` to 4 MB. The
+exits with an error), then unlinks any stale socket path, then binds. (`SO_RCVBUF` has no effect on Unix sockets, unix(7).) The
 kernel's per-socket queue depth for Unix datagrams is `net.unix.max_dgram_qlen`, 10 on this host, so a burst
 of opens can outrun the scribe. The install script sets it to 1024 in `/etc/sysctl.d/90-hamutay-camera.conf`
 and records the previous value; this is a host-wide change, declared here. Losses that still happen are
@@ -59,15 +59,17 @@ UUIDv7 made at gate start) and `seq` (an integer counting up from 0 within a gen
   door polls its own home), so they never load the channel. If a message would exceed 8192 bytes, ancestors
   are removed from the end, then `path` and `cwd` are cut from the left, and `truncated: true` is set.
 - `beat`, every 2 s: `t`, `opened` (opens seen this generation), `self_reads` (opens not sent as self-reads),
-  `answered` (opens answered), `dropped` (messages that failed to send), `coverage_version` (sha256 of the
-  canonical coverage list: marks as `[device, inode, path]` and unmarked as `[path, reason]`, each sorted, as
-  compact JSON), and `marks_count`. Counters are cumulative within a generation, so no counter file is needed
+  `answered` (opens answered), `dropped` (messages that failed to send), `coverage_version` (defined exactly under
+  Interfaces), and `marks_count`. Counters are cumulative within a generation, so no counter file is needed
   and a dropped beat loses nothing the next one doesn't carry.
 - `coverage`: the coverage list itself, split into parts that each fit 8192 bytes: `coverage_version`,
   `part` (0-based), `parts`, and that part's `marks` and `unmarked`. The gate sends a complete set whenever
   the version changes and again every 30 s. The scribe records a version once it holds every part of it and
   their digest matches; a version it never completes stays recorded only as a version hash from the beats.
-  So a dropped message delays the scribe's view of coverage by at most 30 s and never corrupts it.
+  A dropped part delays the scribe's view until a later retransmission of it arrives; there is no fixed
+  bound, since the same part can be dropped again. It never corrupts the view. While a version announced by
+  beats is incomplete, every `alive` carries `coverage_pending: <version>`, and the CLI shows coverage as
+  unconfirmed since the last complete version.
 
 The scribe detects lost messages as gaps in `seq`, and a gate restart as a new `gen`.
 
@@ -142,10 +144,11 @@ The scribe detects lost messages as gaps in `seq`, and a gate restart as a new `
   without following symlinks. A home that is not a real directory owned by uid 1000 is not marked and is
   reported in status. At start the gate marks each home and every subdirectory. Every 10 s it re-reads
   `members.json` and rescans every home **recursively**, marking new directories at any depth by (device,
-  inode), not path. At most 256 directories are marked per home; beyond that, the rest are listed as
-  unmarked with reason `limit`. The
-  coverage list goes in every beat; the scribe writes `status: coverage` whenever it differs from the last
-  one it recorded.
+  inode), not path. A walk visits at most 256 directories per home, breadth first. Each directory the walk
+  found but did not visit within that budget is listed as unmarked with reason `limit`, meaning that
+  directory **and everything under it** is unwatched. Coverage travels as the beat's version and the
+  `coverage` messages (Architecture); the scribe writes `status: coverage` when it completes a version
+  different from the last one it recorded.
 - **R9a Bounded work.** The gate reads at most 64 events per `read()`, answers them all, then pings the
   watchdog. A rescan visits at most 256 directories per home and pings the watchdog after each home. Between
   batches it does at most one home's rescan, so a rescan never delays answers by more than one home's walk. At start, marks are placed only after `READY=1` and with a ping after each home. A subdirectory created, read and removed between scans is not seen; this is declared.
@@ -172,27 +175,58 @@ Times are timezone-aware `datetime` in UTC. Readers and messages are plain dicts
 
 - `is_self_read(reader: dict, path: str, homes: dict[str, str]) -> bool`. `homes` maps door name to the
   home's absolute path. True only under R3; any missing field gives False.
+- `read_reader(pid: int, proc_root: Path = Path("/proc"), between: Callable[[], None] | None = None) -> dict`.
+  Reads, under `proc_root/<pid>/`: `stat` (start time is field 22, parent pid field 4, counted after the
+  `)` that closes `comm` as proc(5) numbers them), `status` (the first number on the `Uid:` line is the real
+  uid), `exe` and `cwd` (symlinks, read with readlink), `comm`, and `cgroup` (the path after the last `:` of
+  the `0::` line). It calls `between()` (if given) after the first read of `stat` and before the second, so
+  a test can simulate pid reuse by rewriting the fixture. Ancestors follow the parent pid up to 4 levels,
+  stopping at pid 1 or the first unreadable one. Returns a dict with `proc_readable`, `start_time_before`,
+  `start_time_after`, the reader fields (`pid, start_time, reused, uid, exe, comm, cgroup, cwd, ancestors`)
+  and `attribution` (computed by `attribution_state`). A file that cannot be read gives `None` for its fields.
 - `attribution_state(snapshot: dict) -> str`. `snapshot` has `proc_readable: bool`, `start_time_before`,
   `start_time_after` (int or None), and the reader fields `uid, exe, comm, cgroup, cwd` (any may be None).
-  Returns `"lost"`, `"partial"` or `"complete"` by R4.
+  Returns `"lost"` if not `proc_readable`; `"complete"` if every reader field is non-None and the two start
+  times are equal and non-None; else `"partial"`.
 - `window_of(t: datetime) -> datetime`: the start of `t`'s 60 s window (seconds and microseconds zeroed).
 - `encode_message(obj: dict) -> bytes`: compact UTF-8 JSON, at most 8192 bytes, applying the truncation
   order above to `open` messages; raises `ValueError` for any other kind that does not fit.
-- `split_coverage(marks: list, unmarked: list) -> list[dict]`: the `coverage` messages for one version, each
-  `encode_message`-able; `coverage_version(marks, unmarked) -> str`.
-- `class Coalescer(max_keys: int = 10000)`: `add(msg: dict) -> list[dict]` takes an `open` message and returns
-  records flushed early (empty unless the key cap was reached); `flush(before: datetime | None = None) ->
-  list[dict]` returns the records for windows starting before `before` (all if None), clearing them. Records
-  have the `entries` fields except `_key`, `session` and `spooled`.
+- `coverage_version(marks: list, unmarked: list) -> str`. Marks are `[device: int, inode: int, path: str]`,
+  unmarked are `[path: str, reason: str]`. The version is the lowercase hex sha256 of
+  `json.dumps({"marks": sorted(marks), "unmarked": sorted(unmarked)}, separators=(",", ":"),
+  ensure_ascii=False, sort_keys=True).encode("utf-8")`. Test vector: marks
+  `[[66,1001,"/h/community/elder"],[66,1002,"/h/community/fable"]]`, unmarked
+  `[["/h/community/x","not_a_directory"]]` give
+  `fffdbb29a61c16a2e906a95b6f2c3304f89c2685816fe0c32b2afbf51d0dfae8`.
+- `split_coverage(marks, unmarked, gen: str, seq_start: int, t: datetime) -> list[dict]`: complete `coverage`
+  messages for one version, envelope included (`v`, `kind: "coverage"`, `gen`, `seq` = `seq_start`,
+  `seq_start + 1`, …, `t`, `coverage_version`, `part`, `parts`, `marks`, `unmarked`), each of which
+  `encode_message` accepts within 8192 bytes. Marks come first in sorted order, then unmarked; concatenating
+  the parts' lists gives back the sorted lists. A single row too large for any part raises `ValueError`.
+- `class Coalescer(max_keys: int = 10000)`: `add(msg: dict) -> list[dict]` takes an `open` message. If the
+  message's key is new and the coalescer already holds `max_keys` keys, it first flushes **all** held
+  records and returns them, then holds the new message; otherwise it returns `[]`. So with `max_keys=1`, the
+  first `add` returns `[]` and a second, distinct key returns the first key's record. `flush(before:
+  datetime | None = None) -> list[dict]` returns and clears the records for windows starting before `before`
+  (all if None). Records have the `entries` fields except `_key`, `session` and `spooled`.
 - `scribe_gap_on_start(last: dict | None, now: datetime) -> dict | None`: `last` is the previous session's
   newest `alive` or `down` status, or None if there was never one. Returns the `gap` status to write, or None.
-- `class GateTracker(silence: timedelta = 10 s)`: `beat(msg: dict, now: datetime) -> list[dict]` and
-  `tick(now: datetime) -> list[dict]` return the status records to write (gate gaps opened and closed,
-  `gate_restart`), and `lost_in_channel(msg)` counts seq gaps per generation.
-- `class Spool(path: Path, max_bytes: int)`: `append(record: dict) -> bool` (False if refused and counted);
-  `replay(insert: Callable[[dict], str]) -> dict`, where `insert` returns `"stored"`, `"conflict"` (counts
-  as stored) or `"failed"` (stops the replay, leaving the rest); the result has counts `stored`, `conflict`,
-  `torn`, `remaining`. The spool is retired as R8 says only when `remaining` is 0.
+- `class GateTracker(silence: timedelta = timedelta(seconds=10))`: `observe(msg: dict, now: datetime) ->
+  list[dict]` takes **every** message (open, beat, coverage), does the seq accounting, and returns the status
+  records to write: on a new `gen` after an earlier one, a `gate_restart` and a closed gate `gap` (from the
+  old generation's last beat `t` to the new message's `t`); on a beat that ends an open silence, the closing
+  `gap` record. `tick(now: datetime) -> list[dict]` returns an opening gate `gap` when `now` minus the last
+  beat's arrival exceeds `silence` and no gap is open. The attribute `lost_in_channel: int` is cumulative
+  since construction: within a generation, a message with seq `s` after highest seq `h` adds `s - h - 1` when
+  `s > h + 1`; a seq at or below `h` adds nothing. Seq counting restarts with each generation. Gap records
+  carry `kind: "gap"`, `scope: "gate"`, `gap_id`, `gap_from`, `gap_to` (None while open).
+- `class Spool(path: Path, max_bytes: int)`: `append(record: dict) -> bool` (False if refused, counted in the
+  attribute `refused: int`); `replay(insert: Callable[[dict], str]) -> dict`, where `insert` returns
+  `"stored"`, `"conflict"` or `"failed"` (which stops the replay, leaving that line and the rest). The result
+  has disjoint counts `stored` (inserts that returned stored), `conflict` (inserts that returned conflict,
+  meaning already stored), `torn` (unparseable last line, discarded) and `remaining` (lines not yet stored).
+  One replayed conflict gives `stored=0, conflict=1`. The spool is retired as R8 says only when `remaining`
+  is 0.
 
 ## Tests (Codex writes them from this spec, without the code)
 
