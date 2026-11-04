@@ -37,3 +37,19 @@ Probe by the custodian (Claude Opus 5.5) on a throwaway container from the produ
   line containing `S3CR3T` (finding #11's hypothesis, confirmed: `query document` is not a read).
 - Some AQL lines carry `with bindVars {…}` in the detail, and lines can end with ` | /_api/cursor`.
 - Production `arango-apacheta` arguments (no environment values read): see the design's Fact 8.
+
+## B9 load measurement (2026-11-04, throwaway container, production image, 100,000 documents, 2,000 ops each)
+| workload | audit off p50 / p99 | synchronous p50 / p99 | queued p50 / p99 |
+|---|---|---|---|
+| AQL `FOR … FILTER n >= @a LIMIT 50` | 1.333 / 2.049 ms | 1.408 / 2.210 ms | 1.318 / 2.146 ms |
+| read by key | 0.687 / 1.213 ms | 0.778 / 1.283 ms | 0.676 / 1.088 ms |
+| insert | 0.891 / 1.495 ms | 0.895 / 1.463 ms | 0.865 / 1.520 ms |
+Synchronous p99 is within 8% of audit-off for all three (B9's bound is 25%), so B9 chooses **synchronous**
+auditing: no queue, and no queued-loss limitation.
+
+## B7 probe: a full audit filesystem (2026-11-04)
+A 2 MB tmpfs bound at `/audit`, then 3,000 AQL requests carrying about 6 MB of query text. Every request
+returned 201, none took over 0.5 s, and the filesystem reached 100%. arangod wrote
+`cannot log data: No space left on device` to its own log (docker logs) and dropped the audit lines. So a
+full filesystem does not refuse clients (the cutover gate passes), but the lost lines are visible only in
+the container's log. The rotate job (root) must scan it and declare a gap.
