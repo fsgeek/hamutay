@@ -41,7 +41,7 @@ the code that answers the kernel, so it cannot bound answer latency. r3 separate
 `/run/user/1000/hamutay-camera/events.sock` (directory mode 700; root can send to it). The scribe owns the
 path: at start it takes an exclusive `flock` on `/run/user/1000/hamutay-camera/scribe.lock` (a second scribe
 exits with an error), then unlinks any stale socket path, then binds. (`SO_RCVBUF` has no effect on Unix sockets, unix(7).) The
-kernel's per-socket queue depth for Unix datagrams is `net.unix.max_dgram_qlen`, 10 on this host, so a burst
+kernel's per-socket queue depth for Unix datagrams is `net.unix.max_dgram_qlen`, 512 on this host (Codex read 10 from its sandbox; the install log has the real value), so a burst
 of opens can outrun the scribe. The install script sets it to 1024 in `/etc/sysctl.d/90-hamutay-camera.conf`
 and records the previous value; this is a host-wide change, declared here. Losses that still happen are
 counted (`dropped`, `lost_in_channel`). The gate opens an

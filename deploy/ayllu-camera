@@ -1,0 +1,52 @@
+#!/usr/bin/env bash
+# Who entered a door's home, and when the camera wasn't looking (camera spec R10).
+#   deploy/ayllu-camera who [--door D] [--since ISO] [--reader-uid U] [--limit N]
+#   deploy/ayllu-camera status [--limit N]
+# Reads ayllu_camera through the read-only user in ~/.config/hamutay/camera.ini [reader].
+set -euo pipefail
+exec python3 -I - "$@" <<'PY'
+import argparse, base64, configparser, json, sys, urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+ap = argparse.ArgumentParser(prog="ayllu-camera")
+sub = ap.add_subparsers(dest="cmd", required=True)
+w = sub.add_parser("who"); w.add_argument("--door"); w.add_argument("--since"); w.add_argument("--reader-uid", type=int)
+w.add_argument("--limit", type=int, default=50)
+s = sub.add_parser("status"); s.add_argument("--limit", type=int, default=30)
+a = ap.parse_args(sys.argv[1:])
+cp = configparser.ConfigParser(); cp.read(Path.home() / ".config/hamutay/camera.ini"); r = cp["reader"]
+auth = "Basic " + base64.b64encode(f"{r['user']}:{r['password']}".encode()).decode()
+def q(query, bind):
+    req = urllib.request.Request(r.get("url", "http://127.0.0.1:8529") + "/_db/ayllu_camera/_api/cursor",
+        data=json.dumps({"query": query, "bindVars": bind, "batchSize": 1000}).encode(),
+        headers={"Content-Type": "application/json", "Authorization": auth})
+    return json.load(urllib.request.urlopen(req, timeout=10))["result"]
+def age(ts):
+    if not ts: return "never"
+    t = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+    return f"{(datetime.now(timezone.utc) - t).total_seconds():.0f} s ago ({ts})"
+print("Note: reads of the camera itself are database reads and are not recorded yet (Source B, phase 2).")
+if a.cmd == "who":
+    f, bind = [], {"n": a.limit}
+    if a.door: f.append("e.door == @door"); bind["door"] = a.door
+    if a.since: f.append("e.last >= @since"); bind["since"] = a.since
+    if a.reader_uid is not None: f.append("e.reader.uid == @uid"); bind["uid"] = a.reader_uid
+    rows = q("FOR e IN entries " + ("FILTER " + " AND ".join(f) + " " if f else "") +
+             "SORT e.last DESC LIMIT @n RETURN e", bind)
+    for e in rows:
+        rd = e.get("reader") or {}
+        anc = " < ".join(x.get("comm") or "?" for x in rd.get("ancestors") or [])
+        print(f"{e['last']}  {e.get('door')}  x{e['count']}  {e['path']}\n    by uid {rd.get('uid')} {rd.get('comm')} "
+              f"({rd.get('exe')}) in {rd.get('cwd')}  unit {(rd.get('cgroup') or '').rsplit('/',1)[-1]}"
+              + (f"  < {anc}" if anc else "") + f"  [{e.get('attribution')}]")
+    if not rows: print("No entries match.")
+else:
+    alive = q("FOR s IN status FILTER s.kind == 'alive' SORT s.at DESC LIMIT 1 RETURN s", {})
+    print("scribe freshness:", age(alive[0]["at"]) if alive else "never")
+    beat = (alive[0].get("counts") or {}).get("gate_last_beat") if alive else None
+    print("gate freshness (last beat the scribe saw, as of that alive):", age(beat) if beat else "unknown")
+    if alive and alive[0].get("coverage_pending"): print("coverage: unconfirmed, version", alive[0]["coverage_pending"])
+    for s in q("FOR s IN status FILTER s.kind != 'alive' SORT s.at DESC LIMIT @n RETURN s", {"n": a.limit}):
+        extra = {k: s[k] for k in ("scope", "cause", "gap_from", "gap_to", "gen") if s.get(k) is not None}
+        print(f"{s['at']}  {s['kind']}  {json.dumps(extra)}")
+PY

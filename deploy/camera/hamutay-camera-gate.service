@@ -1,0 +1,20 @@
+# The camera's gate (spec: docs/superpowers/specs/2026-11-03-access-camera-design.md).
+# Installed to /etc/systemd/system by deploy/camera/install.sh. Runs the installed copy, never the
+# repository (R11). Records opens in door homes; never refuses one.
+[Unit]
+Description=hamutay camera gate: records who opens files in door homes, refuses nothing
+After=local-fs.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=notify
+NotifyAccess=main
+ExecStart=/usr/bin/python3 -I /usr/local/lib/hamutay-camera/gate.py --community /home/tony/projects/hamutay/community
+WatchdogSec=6
+WatchdogSignal=SIGKILL
+Restart=always
+RestartSec=1
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
