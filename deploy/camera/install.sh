@@ -2,14 +2,14 @@
 # Install the camera (spec: docs/superpowers/specs/2026-11-03-access-camera-design.md, R6, R11).
 # Run as the house user; root steps go through sudo. Installs; starts nothing unless --start.
 #
-#   deploy/camera/install.sh [--start]
+#   deploy/camera/install.sh [--start] [--rotate]
 #
 # 1. The gate and camera.py are copied root-owned to /usr/local/lib/hamutay-camera (R11); sha256 logged.
 # 2. net.unix.max_dgram_qlen raised to 1024 (host-wide; previous value logged).
 # 3. The system user hamutay-camera, and both system units (gate as root, scribe as hamutay-camera).
 # 4. Database ayllu_camera on arango-apacheta (8529), with users camera_scribe (rw) and camera_reader (ro).
 #    Admin credentials are read from ~/.yanantin/config/db.ini inside Python and never printed.
-#    The scribe's password is regenerated on every install and written only to
+#    The scribe's password is generated on first install (or with --rotate) and written only to
 #    /etc/hamutay-camera/scribe.ini (owner hamutay-camera, mode 600). The house user keeps only the
 #    read-only user's credentials, in ~/.config/hamutay/camera.ini [reader] (mode 600). (R12)
 set -euo pipefail
@@ -43,10 +43,13 @@ sudo systemctl daemon-reload
 sudo systemctl enable hamutay-camera-gate.service hamutay-camera-scribe.service 2>/dev/null
 stamp "units installed and enabled (not started)"
 
+start=0; rotate=0
+for a in "$@"; do case "$a" in --start) start=1 ;; --rotate) rotate=1 ;; esac; done
+sudo test -f /etc/hamutay-camera/scribe.ini || rotate=1
 scribe_tmp="$(mktemp)"; chmod 600 "$scribe_tmp"; trap 'rm -f "$scribe_tmp"' EXIT
-python3 -I - "$HOME/.yanantin/config/db.ini" "$HOME/.config/hamutay/camera.ini" "$scribe_tmp" <<'PY'
+python3 -I - "$HOME/.yanantin/config/db.ini" "$HOME/.config/hamutay/camera.ini" "$scribe_tmp" "$rotate" <<'PY'
 import base64, configparser, json, os, secrets, sys, urllib.error, urllib.request
-admin_ini, camera_ini, scribe_out = sys.argv[1], sys.argv[2], sys.argv[3]
+admin_ini, camera_ini, scribe_out, rotate = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4] == "1"
 c = configparser.ConfigParser(); c.read(admin_ini); d = c["database"]
 auth = "Basic " + base64.b64encode(f"{d['admin_user']}:{d['admin_passwd']}".encode()).decode()
 url = "http://127.0.0.1:8529"
@@ -71,14 +74,16 @@ if not cam.has_section("reader"):
 scribe = configparser.ConfigParser()
 scribe["scribe"] = {"url": url, "user": "camera_scribe", "password": secrets.token_urlsafe(24)}
 for section, conf, user, grant in (("scribe", scribe, "camera_scribe", "rw"), ("reader", cam, "camera_reader", "ro")):
-    status = call("POST", "/_api/user", {"user": user, "passwd": conf[section]["password"]})
-    if status == 409:
-        call("PATCH", f"/_api/user/{user}", {"passwd": conf[section]["password"]})
+    if section == "reader" or rotate:
+        status = call("POST", "/_api/user", {"user": user, "passwd": conf[section]["password"]})
+        if status == 409:
+            call("PATCH", f"/_api/user/{user}", {"passwd": conf[section]["password"]})
     print("user", user, "grant", grant + ":",
           call("PUT", f"/_api/user/{user}/database/ayllu_camera", {"grant": grant}),
           call("PUT", f"/_api/user/{user}/database/ayllu_camera/*", {"grant": grant}))
-with open(scribe_out, "w") as f:
-    scribe.write(f)
+if rotate:
+    with open(scribe_out, "w") as f:
+        scribe.write(f)
 os.makedirs(os.path.dirname(camera_ini), exist_ok=True)
 fd = os.open(camera_ini, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
 with os.fdopen(fd, "w") as f:
@@ -87,10 +92,17 @@ os.chmod(camera_ini, 0o600)
 print("credentials:", camera_ini, "(mode 600; not printed)")
 PY
 sudo install -d -o root -g hamutay-camera -m 750 /etc/hamutay-camera
-sudo install -o hamutay-camera -g hamutay-camera -m 600 "$scribe_tmp" /etc/hamutay-camera/scribe.ini
-stamp "database ayllu_camera ready; scribe credentials rotated into /etc/hamutay-camera/scribe.ini"
+if [ "$rotate" = 1 ]; then
+  sudo install -o hamutay-camera -g hamutay-camera -m 600 "$scribe_tmp" /etc/hamutay-camera/scribe.ini
+  stamp "scribe credentials rotated into /etc/hamutay-camera/scribe.ini"
+fi
+# A running scribe keeps old code and credentials until restarted.
+if sudo systemctl is-active --quiet hamutay-camera-scribe.service; then
+  sudo systemctl restart hamutay-camera-scribe.service; stamp "scribe restarted onto this install"
+fi
+stamp "database ayllu_camera ready"
 
-if [ "${1:-}" = "--start" ]; then
+if [ "$start" = 1 ]; then
   sudo systemctl restart hamutay-camera-scribe.service
   sudo systemctl restart hamutay-camera-gate.service
   stamp "started"
