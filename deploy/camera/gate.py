@@ -46,7 +46,8 @@ BEAT_EVERY = 2.0
 RESCAN_EVERY = 10.0
 COVERAGE_EVERY = 30.0
 DIRS_PER_HOME = 256
-SOCKET_PATH = "/run/user/1000/hamutay-camera/events.sock"
+SOCKET_PATH = "/run/hamutay-camera/events.sock"  # r7: the scribe user's directory, 0750
+CACHE_SECONDS = 1.0  # R4a
 
 libc = ctypes.CDLL("libc.so.6", use_errno=True)
 
@@ -86,6 +87,7 @@ class Gate:
         self.marks: dict[tuple, str] = {}         # (dev, ino) -> path
         self.unmarked: list[list] = []
         self.rescan_queue: deque = deque()
+        self.cache: dict[int, tuple[int, float, dict]] = {}  # pid -> (start_time, taken_at, snapshot)
         self.version = camera.coverage_version([], [])
         self.out = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
         self.out.setblocking(False)
@@ -213,31 +215,52 @@ class Gate:
 
     # --- events (R1, R4) ---------------------------------------------------------------------------
 
-    def answer_batch(self, buf: bytes) -> list[dict]:
-        out: list[dict] = []
+    def snapshot(self, pid: int) -> dict:
+        """R4 with R4a: a full snapshot at most CACHE_SECONDS old, identity checked on every open."""
+        t = time.monotonic()
+        hit = self.cache.get(pid)
+        if hit is not None and t - hit[1] < CACHE_SECONDS:
+            try:
+                with open(f"/proc/{pid}/stat", "rb") as f:
+                    start, _ppid = camera._stat_fields(f.read().decode("utf-8", "replace"))
+            except OSError:
+                start = None
+            if start is not None and start == hit[0]:
+                return hit[2]
+        reader = camera.read_reader(pid)
+        if reader.get("attribution") == "complete":
+            self.cache[pid] = (reader["start_time"], t, reader)
+        else:
+            self.cache.pop(pid, None)
+        if len(self.cache) > 4096:
+            self.cache = {k: v for k, v in self.cache.items() if t - v[1] < CACHE_SECONDS}
+        return reader
+
+    def answer_batch(self, buf: bytes) -> list[tuple]:
+        """Answer every event in the batch (R1). Returns (t, path, reader) for each non-self open; the
+        caller builds and sends messages only after every event here has been answered (R4a)."""
+        seen: list[tuple] = []
         off = 0
         while off + EVENT.size <= len(buf):
             length, _v, _r, _meta, _mask, efd, pid = EVENT.unpack_from(buf, off)
             off += length if length >= EVENT.size else EVENT.size
             if efd < 0:
                 continue
-            msg = None
+            item = None
             try:
                 try:
                     path = os.readlink(f"/proc/self/fd/{efd}")
                 except OSError:
                     path = None
                 if pid != self.me and path is not None:
-                    reader = camera.read_reader(pid)
+                    reader = self.snapshot(pid)
                     self.counts["opened"] += 1
                     if camera.is_self_read(reader, path, self.homes):
                         self.counts["self_reads"] += 1
                     else:
-                        msg = {"kind": "open", "t": now(), "path": path,
-                               "path_sha256": hashlib.sha256(path.encode("utf-8", "surrogateescape")).hexdigest(),
-                               "door": self.door_of(path), "reader": reader}
+                        item = (now(), path, reader)
             except Exception:
-                msg = None  # attribution must never block the answer
+                item = None  # attribution must never block the answer
             finally:
                 try:
                     os.write(self.fan, RESPONSE.pack(efd, FAN_ALLOW))
@@ -245,9 +268,22 @@ class Gate:
                     fail(f"response write: {e}")
                 self.counts["answered"] += 1
                 os.close(efd)
-            if msg is not None:
-                out.append(msg)
-        return out
+            if item is not None:
+                seen.append(item)
+        return seen
+
+    def send_opens(self, seen: list[tuple]) -> None:
+        for t, path, reader in seen:
+            self.send({"kind": "open", "t": t, "path": path,
+                       "path_sha256": hashlib.sha256(path.encode("utf-8", "surrogateescape")).hexdigest(),
+                       "door": self.door_of(path), "reader": reader})
+
+    def members_stamp(self):
+        try:
+            st = os.stat(self.members)
+            return (st.st_ino, st.st_mtime_ns)
+        except OSError:
+            return None
 
     def run(self) -> None:
         last_ping = [0.0]
@@ -264,6 +300,7 @@ class Gate:
         t_beat = t_cov = time.monotonic()
         t_rescan = time.monotonic()
         pending: dict | None = None  # an in-progress rescan, one home per loop turn
+        stamp = self.members_stamp()
         while True:
             ready, _, _ = select.select([self.fan], [], [], 0.25)
             if ready:
@@ -272,20 +309,22 @@ class Gate:
                 except BlockingIOError:
                     buf = b""
                 if buf:
-                    for msg in self.answer_batch(buf):
-                        self.send(msg)
+                    seen = self.answer_batch(buf)
                     ping()
+                    self.send_opens(seen)
             t = time.monotonic()
             if t - last_ping[0] >= BEAT_EVERY:
                 ping()
             if t - t_beat >= BEAT_EVERY:
                 self.beat()
                 t_beat = t
-            if pending is None and t - t_rescan >= RESCAN_EVERY:
+            new_stamp = self.members_stamp()
+            if new_stamp != stamp or (pending is None and t - t_rescan >= RESCAN_EVERY):
+                stamp = new_stamp  # R9: a members change starts a fresh rescan at once
                 self.read_homes()
                 pending = {"doors": deque(self.homes), "desired": {}, "unmarked": []}
                 t_rescan = t
-            if pending is not None and not ready:
+            if pending is not None:
                 if pending["doors"]:
                     door = pending["doors"].popleft()
                     if door in self.homes:

@@ -1,14 +1,26 @@
-# The camera's scribe (spec: docs/superpowers/specs/2026-11-03-access-camera-design.md).
-# A user unit of the house user; installed to ~/.config/systemd/user by deploy/camera/install.sh.
+# The camera's scribe (spec: docs/superpowers/specs/2026-11-03-access-camera-design.md, r7).
+# A system unit running as its own user, never as the house user (R12). Installed to /etc/systemd/system
+# by deploy/camera/install.sh. Runs the root-owned installed copy, never the repository (R11).
 [Unit]
 Description=hamutay camera scribe: coalesces the gate's records into ArangoDB (ayllu_camera)
+After=network-online.target docker.service
+StartLimitIntervalSec=0
 
 [Service]
 Type=simple
-WorkingDirectory=/home/tony/projects/hamutay
-ExecStart=/home/tony/.local/bin/uv run python -m hamutay.camera_scribe
+User=hamutay-camera
+Group=hamutay-camera
+RuntimeDirectory=hamutay-camera
+RuntimeDirectoryMode=0750
+StateDirectory=hamutay-camera
+StateDirectoryMode=0700
+ExecStart=/usr/bin/python3 -I /usr/local/lib/hamutay-camera/scribe.py
 Restart=always
 RestartSec=2
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
 
 [Install]
-WantedBy=default.target
+WantedBy=multi-user.target

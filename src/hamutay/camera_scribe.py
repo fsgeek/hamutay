@@ -1,10 +1,10 @@
 """The camera's scribe: receive the gate's messages, coalesce, store, and say when the camera wasn't looking.
 
-Spec: docs/superpowers/specs/2026-11-03-access-camera-design.md (r6), R5-R8. Runs as the house user (a
-systemd user unit), from the repository. Credentials come from ~/.config/hamutay/camera.ini (mode 600),
-section [scribe]; they are never printed.
-
-    uv run python -m hamutay.camera_scribe
+Spec: docs/superpowers/specs/2026-11-03-access-camera-design.md (r7), R5-R8, R11, R12. Runs as the system
+user hamutay-camera (never the house user), from the root-owned installed copy
+/usr/local/lib/hamutay-camera/scribe.py, with camera.py beside it. Credentials come from
+/etc/hamutay-camera/scribe.ini (owner hamutay-camera, mode 600) and are never printed. It accepts only
+datagrams whose kernel-reported sender uid is 0 (the gate).
 """
 
 from __future__ import annotations
@@ -23,14 +23,20 @@ import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 
-from hamutay import camera
+try:
+    from hamutay import camera
+except ImportError:  # the installed copy, run with python3 -I: camera.py sits beside this file
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import camera  # type: ignore[no-redef]
+import struct
 
-RUN_DIR = Path("/run/user/1000/hamutay-camera")
+RUN_DIR = Path(os.environ.get("RUNTIME_DIRECTORY", "/run/hamutay-camera"))
 SOCKET_PATH = RUN_DIR / "events.sock"
 LOCK_PATH = RUN_DIR / "scribe.lock"
-SPOOL_PATH = Path.home() / ".local/state/hamutay-camera/spool.jsonl"
+SPOOL_PATH = Path(os.environ.get("STATE_DIRECTORY", "/var/lib/hamutay-camera")) / "spool.jsonl"
 SPOOL_MAX = 256 * 1024 * 1024
-CONFIG = Path.home() / ".config/hamutay/camera.ini"
+CONFIG = Path("/etc/hamutay-camera/scribe.ini")
+UCRED = struct.Struct("iII")  # pid, uid, gid
 ALIVE_EVERY = 60.0
 INSERT_TIMEOUT = 5.0
 
@@ -93,7 +99,7 @@ class Scribe:
     @staticmethod
     def _zero() -> dict:
         return {"opens_received": 0, "records_written": 0, "records_spooled": 0, "dropped_by_scribe": 0,
-                "attribution_partial": 0, "attribution_lost": 0}
+                "attribution_partial": 0, "attribution_lost": 0, "rejected_sender": 0}
 
     # --- storing -----------------------------------------------------------------------------------
 
@@ -206,8 +212,7 @@ def load_store() -> Store:
 
 
 def bind_socket() -> tuple[socket.socket, int]:
-    RUN_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
-    os.chmod(RUN_DIR, 0o700)
+    RUN_DIR.mkdir(mode=0o750, parents=True, exist_ok=True)
     lock = os.open(LOCK_PATH, os.O_RDWR | os.O_CREAT, 0o600)
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -218,6 +223,7 @@ def bind_socket() -> tuple[socket.socket, int]:
     except FileNotFoundError:
         pass
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
     sock.bind(str(SOCKET_PATH))
     sock.settimeout(1.0)
     return sock, lock
@@ -239,11 +245,18 @@ def main() -> None:
     t_alive = time.monotonic()
     while not scribe.stopping:
         try:
-            data = sock.recv(65536)
-            try:
-                scribe.handle(json.loads(data))
-            except (ValueError, KeyError, TypeError):
-                pass  # a malformed message is counted by the seq gap it leaves
+            data, anc, _flags, _addr = sock.recvmsg(65536, socket.CMSG_SPACE(UCRED.size))
+            uid = None
+            for level, kind, payload in anc:
+                if level == socket.SOL_SOCKET and kind == socket.SCM_CREDENTIALS:
+                    _pid, uid, _gid = UCRED.unpack(payload[:UCRED.size])
+            if uid != 0:
+                scribe.c["rejected_sender"] += 1  # only the gate (root) may speak here
+            else:
+                try:
+                    scribe.handle(json.loads(data))
+                except (ValueError, KeyError, TypeError):
+                    pass  # a malformed message is counted by the seq gap it leaves
         except socket.timeout:
             pass
         for s in scribe.tracker.tick(utcnow()):

@@ -1,7 +1,7 @@
-# The camera, r6: recording entry into a door's home
+# The camera, r7: recording entry into a door's home
 
-**Status:** design r6, after Codex round four on r5 (`…-review-4.md`: no Blocking, 8 Significant, 1 Minor).
-Earlier rounds: `…-review-1.md` (on r2), `…-review-2.md` (on r3), `…-review-3.md` (on r4). **Date:**
+**Status:** design r7, after the first root-test run and a security review of the r6 code (both summarised
+in `…-review-5.md`). Earlier rounds: `…-review-1.md` (on r2) to `…-review-4.md` (on r5). **Date:**
 2026-11-03. **Author:** the custodian (Claude Opus 5.5, seat from 2026-11-03). **Supersedes** the Source A
 and storage sections of `2026-10-03-access-camera-design.md`. That file's model stands: no locks, but
 entry is recorded. r2 is in git history (ae32e8f).
@@ -34,13 +34,19 @@ the code that answers the kernel, so it cannot bound answer latency. r3 separate
 - **The gate** (`hamutay-camera-gate.service`, root). It does only this, per event: read
   `/proc/self/fd/<fd>` for the path; snapshot the reader (R4); answer `FAN_ALLOW`; close the event fd; send
   one datagram to the scribe. It imports nothing but the standard library, does no other I/O, and never forks.
-- **The scribe** (`hamutay-camera-scribe.service`, a user unit of the house's user, not root). It receives
-  datagrams, coalesces, writes to ArangoDB, spools when the database is down, and writes status records.
+- **The scribe** (`hamutay-camera-scribe.service`, a **system** unit running as its own system user,
+  `hamutay-camera`, never as the house's user). It receives datagrams, coalesces, writes to ArangoDB, spools
+  when the database is down, and writes status records. r6 ran it as the house user (uid 1000). Every door's
+  bash also runs as uid 1000, so a recorded party could have sent the scribe forged messages, or read its
+  read-write credentials and edited the record about itself. A camera the watched can edit is not a camera.
 
-**The channel** is a Unix **datagram** socket bound by the scribe at
-`/run/user/1000/hamutay-camera/events.sock` (directory mode 700; root can send to it). The scribe owns the
-path: at start it takes an exclusive `flock` on `/run/user/1000/hamutay-camera/scribe.lock` (a second scribe
-exits with an error), then unlinks any stale socket path, then binds. (`SO_RCVBUF` has no effect on Unix sockets, unix(7).) The
+**The channel** is a Unix **datagram** socket bound by the scribe at `/run/hamutay-camera/events.sock`.
+The directory is the scribe unit's `RuntimeDirectory=`, owned by `hamutay-camera`, mode 0750, so the house
+user can neither send to the socket nor replace it with a symlink that would redirect root's sends. The
+scribe also sets `SO_PASSCRED` and drops, and counts as `rejected_sender`, any datagram whose
+kernel-reported sender uid is not 0. The scribe owns the path: at start it takes an exclusive `flock` on
+`/run/hamutay-camera/scribe.lock` (a second scribe exits with an error), then unlinks any stale socket path,
+then binds. (`SO_RCVBUF` has no effect on Unix sockets, unix(7).) The
 kernel's per-socket queue depth for Unix datagrams is `net.unix.max_dgram_qlen`, 512 on this host (Codex read 10 from its sandbox; the install log has the real value), so a burst
 of opens can outrun the scribe. The install script sets it to 1024 in `/etc/sysctl.d/90-hamutay-camera.conf`
 and records the previous value; this is a host-wide change, declared here. Losses that still happen are
@@ -105,6 +111,12 @@ The scribe detects lost messages as gaps in `seq`, and a gate restart as a new `
   `attribution` is `"lost"` when `/proc/<pid>` could not be read at all, `"complete"` when every reader field
   was read and the start time did not change, and `"partial"` otherwise. Missing ancestors (a parent that
   exited) do not make an attribution partial; they end the list. Never the command line or environment.
+- **R4a Attribution cache.** Reading about twenty `/proc` files per open kept the caller waiting 25 ms at the
+  99th percentile under twenty concurrent readers (first root run, T5). The gate therefore keeps each full
+  snapshot for 1 s, keyed by (pid, start time). For an open by a cached pid it reads only `/proc/<pid>/stat`;
+  if the start time matches it reuses the snapshot, otherwise it takes a full one. So identity is checked on
+  every open, and the other fields (uid, exe, cwd, cgroup, ancestors) may be up to 1 s old. Within a batch,
+  the gate answers every event before it builds, hashes, encodes or sends any message.
 - **R5 Coalescing (scribe).** Key: (gen, pid, start time, path_sha256). Windows are fixed 60 s spans aligned to
   the minute, **by the message's `t`** (the gate's clock), never by when the scribe received it. A window's
   record has `count`, `first`, `last`, and `coalesced: true` when count > 1. At most 10,000 open keys; when
@@ -133,7 +145,7 @@ The scribe detects lost messages as gaps in `seq`, and a gate restart as a new `
   - The CLI's freshness is the age of the newest `alive` **and** of the newest gate beat seen by the scribe,
     reported separately: a dead gate behind a live scribe shows as a stale gate.
 - **R8 Spool.** If an insert fails or takes more than 5 s, the scribe appends the record to
-  `~/.local/state/hamutay-camera/spool.jsonl` (mode 600), each line fsync'd, at most 256 MB. If the spool is
+  `/var/lib/hamutay-camera/spool.jsonl` (the unit's `StateDirectory=`, mode 600, owner `hamutay-camera`), each line fsync'd, at most 256 MB. If the spool is
   full or the append fails, the record is dropped and counted (`dropped_by_scribe` in the next `alive`, with
   the error). On start and every 60 s while the database answers, it replays the spool in order; each
   record is inserted with its `_key` and a key conflict counts as already stored. When every line has been
@@ -142,8 +154,9 @@ The scribe detects lost messages as gaps in `seq`, and a gate restart as a new `
   is discarded and counted. The spool is unbacked until the nightly records backup includes it.
 - **R9 Coverage.** Homes are `community/<name>/` for each name in `members.json` → `members`, resolved
   without following symlinks. A home that is not a real directory owned by uid 1000 is not marked and is
-  reported in status. At start the gate marks each home and every subdirectory. Every 10 s it re-reads
-  `members.json` and rescans every home **recursively**, marking new directories at any depth by (device,
+  reported in status. At start the gate marks each home and every subdirectory. It checks `members.json`'s
+  inode and modification time on every loop turn and starts a rescan as soon as either changes; otherwise
+  every 10 s it re-reads `members.json` and rescans every home **recursively**, marking new directories at any depth by (device,
   inode), not path. A walk visits at most 256 directories per home, breadth first. Each directory the walk
   found but did not visit within that budget is listed as unmarked with reason `limit`, meaning that
   directory **and everything under it** is unwatched. Coverage travels as the beat's version and the
@@ -156,10 +169,14 @@ The scribe detects lost messages as gaps in `seq`, and a gate restart as a new `
 - **R10 Readable by anyone.** `deploy/ayllu-camera who [--door D] [--since T] [--reader-uid U]`,
   `deploy/ayllu-camera status` (sessions, gaps, freshness). It reads through the read-only user. Reads of the
   camera itself are database reads, not recorded until Source B, and its output says so.
-- **R11 Root code is not the repository's code.** `deploy/camera/install.sh` (run with sudo) copies the gate
-  to `/usr/local/lib/hamutay-camera/gate.py`, root-owned and mode 755, and records its sha256 in the install
-  log. The gate unit runs `/usr/bin/python3 -I` on that copy, so a same-user edit of the repository never
-  becomes root code without a reinstall. The scribe runs from the repository, as the house user.
+- **R11 Neither process runs the repository's code.** `deploy/camera/install.sh` (run as the house user;
+  it uses sudo for root steps) copies `gate.py`, `scribe.py` and `camera.py` to `/usr/local/lib/hamutay-camera/`,
+  root-owned, and records their sha256 in the install log. Both units run `/usr/bin/python3 -I` on those
+  copies, so a same-user edit of the repository changes neither without a reinstall.
+- **R12 Credentials.** The scribe's read-write credentials are in `/etc/hamutay-camera/scribe.ini`, owned by
+  `hamutay-camera`, mode 600. The house user holds only the read-only user's credentials
+  (`~/.config/hamutay/camera.ini`, section `[reader]`). Writing the record therefore needs root or the
+  database's admin, both of which can switch the camera off anyway, and either act would show (R7).
 
 ## Record schemas (ArangoDB)
 
@@ -236,8 +253,10 @@ truncation, coalescing R5 (windows by `t`, key cap), scribe and gate gap logic R
 short outage, dead gate behind a live scribe, new generation, seq gaps), spool R8 (torn tail, duplicate keys,
 cap, append failure, retirement).
 Root integration, skipped without passwordless sudo:
-- **T1** with the scribe stopped, never started, or with its queue full, and with the database down: the
-  gate starts and marks every home, and every open is allowed;
+- **T1** with the scribe stopped, never started, or with its queue full: the gate starts and marks every
+  home, and every open is allowed. (r6 also stopped the database container. `arango-apacheta` is the
+  production store every door persists to, and the gate never touches the database, so T1 must not stop it.
+  The scribe's database-down behaviour is covered by the pure spool tests.)
 - **T2** release on gate death on this kernel: SIGSTOP the gate, open a watched file in a child, SIGKILL the
   gate, and the open returns allowed within 1 s; with both one queued and one delivered event;
 - **T3** watchdog recovery: SIGSTOP only, and the open returns within 7 s with no manual kill;
@@ -245,12 +264,17 @@ Root integration, skipped without passwordless sudo:
 - **T5** caller-observed latency: 20 concurrent readers opening watched files in a loop for 60 s, measured
   from the caller's side, p99 below 2 ms and maximum below 50 ms with the scribe running and writing;
 - **T6** coverage: a new member's home is marked within 10 s and a coverage status appears;
-- **T7** a gate restart while the scribe runs produces a gate gap and a `gate_restart` record.
+- **T7** a gate restart while the scribe runs produces a gate gap and a `gate_restart` record;
+- **T8** sender check: a datagram sent to the scribe's socket by a process running as uid 1000 is refused at
+  the directory (EACCES), and one sent by a root process that is not the gate (a forged beat) is accepted,
+  since the check is the uid; a datagram from any non-root uid that reaches the socket is counted as
+  `rejected_sender` in the next `alive` and changes no record.
+Both units are system units (`sudo systemctl`); the scribe's is no longer a user unit.
 Not tested, declared: kernel denial under descriptor or memory exhaustion (R1a).
 
 ## Rollout
 
-1. Codex reviews r5; tests written blind; code; suite passes, T1–T7 included.
+1. Codex reviews r5; tests written blind; code; suite passes, T1–T8 included.
 2. A plaza post to every door before it starts, with the "observes, stated exactly" section in plain words.
 3. Start. After 24 h, a post with the first day's counts by reader kind, never contents.
 4. The README's claim is corrected the same day to say what is now true and what is not.
