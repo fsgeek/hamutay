@@ -1,4 +1,4 @@
-"""T1--T7, destructive-to-service integration tests. NEVER enabled by default.
+"""T1--T8, destructive-to-service integration tests. NEVER enabled by default.
 
 Run only on the installed house as uid 1000, with HAMUTAY_CAMERA_ROOT_TESTS=1
 and passwordless sudo. Collection without that opt-in does not even run sudo.
@@ -9,7 +9,9 @@ See ASSUMPTIONS.md before explicitly enabling these tests.
 
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
+import errno
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -24,6 +26,7 @@ import time
 from urllib.request import Request, urlopen
 import base64
 import uuid
+import warnings
 
 import pytest
 
@@ -31,9 +34,9 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 GATE = "hamutay-camera-gate.service"
 SCRIBE = "hamutay-camera-scribe.service"
-CONTAINER = "arango-apacheta"
-SOCKET = Path("/run/user/1000/hamutay-camera/events.sock")
+SOCKET = Path("/run/hamutay-camera/events.sock")
 INSTALLED_GATE = Path("/usr/local/lib/hamutay-camera/gate.py")
+INSTALLED_FILES = tuple(INSTALLED_GATE.with_name(name) for name in ("gate.py", "scribe.py", "camera.py"))
 MEMBERS = ROOT / "community/plaza/members.json"
 pytestmark = pytest.mark.skipif(
     os.environ.get("HAMUTAY_CAMERA_ROOT_TESTS") != "1",
@@ -50,9 +53,7 @@ def sudo(*args, **kwargs):
     return command("sudo", "-n", *args, **kwargs)
 
 
-def systemctl(*args, user=False, **kwargs):
-    if user:
-        return command("systemctl", "--user", *args, **kwargs)
+def systemctl(*args, **kwargs):
     return sudo("systemctl", *args, **kwargs)
 
 
@@ -92,11 +93,11 @@ def marked_inodes():
             for ino in re.findall(r"fanotify ino:([0-9a-fA-F]+)\b", info)}
 
 
-def statuses():
+def database_rows(query, bind_vars=None):
     # The CLI has no specified JSON format; query the specified database/schema.
     endpoint = os.environ.get("HAMUTAY_CAMERA_ARANGO_URL", "http://127.0.0.1:8529")
     req = Request(endpoint.rstrip("/") + "/_db/ayllu_camera/_api/cursor",
-                  data=json.dumps({"query": "FOR s IN status SORT s.at DESC LIMIT 2000 RETURN s", "batchSize": 2000}).encode(),
+                  data=json.dumps({"query": query, "bindVars": bind_vars or {}, "batchSize": 2000}).encode(),
                   headers={"Content-Type": "application/json"})
     username = os.environ.get("HAMUTAY_CAMERA_ARANGO_USER")
     if username is not None:
@@ -104,8 +105,12 @@ def statuses():
         req.add_header("Authorization", "Basic " + base64.b64encode(secret.encode()).decode())
     with urlopen(req, timeout=5) as response:
         body = json.load(response)
-    assert not body.get("hasMore"), "status observation exceeded the harness's 2000-row bound"
+    assert not body.get("hasMore"), "database observation exceeded the harness's 2000-row bound"
     return body["result"]
+
+
+def statuses():
+    return database_rows("FOR s IN status SORT s.at DESC LIMIT 2000 RETURN s")
 
 
 def fresh_statuses(previous):
@@ -122,12 +127,11 @@ def house():
     if not available:
         pytest.skip("requires sudo -n true to succeed")
     assert os.geteuid() == 1000, "invoke pytest as the house user, never as root"
-    assert INSTALLED_GATE.is_file(), "install deploy/camera/install.sh before opting in"
+    assert all(p.is_file() for p in INSTALLED_FILES), "install deploy/camera/install.sh before opting in"
     assert (ROOT / "deploy/ayllu-camera").is_file()
     states = {
         "gate": systemctl("is-active", GATE, check=False).returncode == 0,
-        "scribe": systemctl("is-active", SCRIBE, user=True, check=False).returncode == 0,
-        "db": sudo("docker", "inspect", "--format={{.State.Running}}", CONTAINER).stdout.strip() == "true",
+        "scribe": systemctl("is-active", SCRIBE, check=False).returncode == 0,
     }
     original_members = MEMBERS.read_bytes()
     members_mode = MEMBERS.stat().st_mode & 0o777
@@ -139,17 +143,17 @@ def house():
 
     class House:
         def start_gate(self):
-            systemctl("reset-failed", GATE)
+            systemctl("reset-failed", GATE, check=False)
             systemctl("restart", GATE)
             return wait_for(lambda: gate_pid() or False, 5, "gate MainPID")
 
         def start_scribe(self):
-            systemctl("start", SCRIBE, user=True)
-            wait_for(SOCKET.exists, 5, "scribe socket")
+            systemctl("start", SCRIBE)
+            wait_for(lambda: sudo("test", "-S", SOCKET, check=False).returncode == 0, 5, "scribe socket")
 
         def start_db(self):
-            sudo("docker", "start", CONTAINER)
-            # A query also proves the test's read-only credentials work.
+            # Never control the production container; only check readiness and
+            # that the test's read-only credentials work.
             def ready():
                 try:
                     statuses()
@@ -220,8 +224,7 @@ print(json.dumps({'allowed': True, 'elapsed': time.monotonic() - t}), flush=True
                 p.unlink(missing_ok=True)
             for p in new_homes:
                 p.rmdir()
-            sudo("docker", "start" if states["db"] else "stop", CONTAINER)
-            systemctl("start" if states["scribe"] else "stop", SCRIBE, user=True)
+            systemctl("start" if states["scribe"] else "stop", SCRIBE)
             systemctl("start" if states["gate"] else "stop", GATE)
 
 
@@ -263,7 +266,7 @@ def memory(addr, size):
     return bytes(out[:size])
 ptrace(16)  # ATTACH
 os.waitpid(pid, 0)
-ptrace(0x4200, data=0x80)  # SETOPTIONS, TRACESYSGOOD
+ptrace(0x4200, data=0x1)  # SETOPTIONS, PTRACE_O_TRACESYSGOOD
 # Remove the deliberate group stop used to queue the test readers.
 os.kill(pid, signal.SIGCONT)
 writes, injected = 0, False
@@ -336,45 +339,85 @@ def trace_line(tracer, timeout=3):
     return json.loads(line)
 
 
-def test_t1_gate_starts_and_allows_every_home_without_scribe_or_database(house):
+@contextmanager
+def scribe_endpoint(mode):
+    # The house user cannot traverse RuntimeDirectory. Keep endpoint setup,
+    # queue filling and cleanup in a root helper, including the sender socket.
+    code = r'''
+import json, os, pathlib, pwd, socket, sys
+path, mode = pathlib.Path(sys.argv[1]), sys.argv[2]
+created = not path.parent.exists()
+bound = None
+try:
+    if created:
+        owner = pwd.getpwnam('hamutay-camera')
+        path.parent.mkdir(mode=0o750)
+        os.chown(path.parent, owner.pw_uid, owner.pw_gid)
+        path.parent.chmod(0o750)
+    path.unlink(missing_ok=True)
+    if mode != 'never_started':
+        bound = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
+        bound.bind(str(path))
+        if mode == 'stopped':
+            bound.close()
+            bound = None
+        else:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sender:
+                sender.setblocking(False)
+                for _ in range(100000):
+                    try:
+                        sender.sendto(b'{}', str(path))
+                    except BlockingIOError:
+                        break
+                else:
+                    raise RuntimeError('could not fill the Unix datagram queue')
+    print(json.dumps({'ready': True, 'pid': os.getpid()}), flush=True)
+    sys.stdin.buffer.read(1)
+finally:
+    if bound is not None:
+        bound.close()
+    path.unlink(missing_ok=True)
+    if created:
+        path.parent.rmdir()
+'''
+    helper = subprocess.Popen(["sudo", "-n", sys.executable, "-u", "-c", code, str(SOCKET), mode],
+                              stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    helper_pid = None
+    try:
+        assert select.select([helper.stdout], [], [], 5)[0], "endpoint helper did not start"
+        line = helper.stdout.readline()
+        assert line, "endpoint helper exited: " + helper.stderr.read().decode()
+        ready = json.loads(line)
+        helper_pid = ready["pid"]
+        assert ready["ready"] is True
+        yield
+    finally:
+        try:
+            _, stderr = helper.communicate(input=b"\n", timeout=3)
+        except subprocess.TimeoutExpired:
+            sudo("kill", "-KILL", helper_pid or helper.pid, check=False)
+            helper.communicate(timeout=3)
+            raise
+        assert helper.returncode == 0, stderr.decode()
+
+
+def test_t1_gate_starts_and_allows_every_home_without_scribe(house):
     systemctl("stop", GATE)
-    systemctl("stop", SCRIBE, user=True)
-    sudo("docker", "stop", CONTAINER)
+    systemctl("stop", SCRIBE)
     homes = [ROOT / "community" / name for name in json.loads(MEMBERS.read_bytes())["members"]]
     probes = [house.probe(home) for home in homes]
     # Absent pathname, stopped scribe's stale pathname, and a bound/full queue
     # exercise ENOENT, ECONNREFUSED, and EAGAIN respectively.
     for mode in ("never_started", "stopped", "queue_full"):
         systemctl("stop", GATE)
-        SOCKET.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
-        SOCKET.unlink(missing_ok=True)
-        bound = None
-        try:
-            if mode != "never_started":
-                bound = socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM)
-                bound.bind(str(SOCKET))
-                if mode == "stopped":
-                    bound.close()
-                    bound = None
-                else:
-                    with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sender:
-                        sender.setblocking(False)
-                        for _ in range(100000):
-                            try:
-                                sender.sendto(b"{}", str(SOCKET))
-                            except BlockingIOError:
-                                break
-                        else:
-                            pytest.fail("could not fill the Unix datagram queue")
-            house.start_gate()
-            wait_for(lambda: {h.stat().st_ino for h in homes} <= marked_inodes(), 5, "every home's fanotify mark")
-            for path in probes:
-                assert_allowed(house.reader(path), timeout=7)
-        finally:
-            systemctl("stop", GATE)
-            if bound is not None:
-                bound.close()
-            SOCKET.unlink(missing_ok=True)
+        with scribe_endpoint(mode):
+            try:
+                house.start_gate()
+                wait_for(lambda: {h.stat().st_ino for h in homes} <= marked_inodes(), 5, "every home's fanotify mark")
+                for path in probes:
+                    assert_allowed(house.reader(path), timeout=7)
+            finally:
+                systemctl("stop", GATE)
 
 
 def test_t2_gate_death_releases_queued_and_delivered_events_within_one_second(house):
@@ -520,3 +563,114 @@ def test_t7_short_gate_restart_records_restart_and_closed_gate_gap(house):
     restarts, gaps = wait_for(restart_and_gap, 65, "gate_restart and closed gate gap")
     assert restarts[0].get("counts") is not None
     assert any(0 <= (datetime.fromisoformat(s["gap_to"]) - datetime.fromisoformat(s["gap_from"])).total_seconds() < 10 for s in gaps)
+
+
+def test_t8_directory_denies_house_user_and_scribe_checks_kernel_sender_uid(house):
+    house.start_db()
+    systemctl("stop", GATE)
+    house.start_scribe()
+    assert systemctl("show", SCRIBE, "--property=User", "--value").stdout.strip() == "hamutay-camera"
+    directory = json.loads(sudo(sys.executable, "-c", """import json, os, pwd, stat, sys
+s = os.stat(sys.argv[1])
+print(json.dumps({'owner': pwd.getpwuid(s.st_uid).pw_name, 'mode': stat.S_IMODE(s.st_mode)}))
+""", SOCKET.parent).stdout)
+    assert directory == {"owner": "hamutay-camera", "mode": 0o750}
+
+    # house enforces uid 1000. This must fail on directory traversal, before
+    # the scribe can see or authenticate the payload.
+    with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sender:
+        with pytest.raises(PermissionError) as refused:
+            sender.sendto(b"{}", str(SOCKET))
+    assert refused.value.errno == errno.EACCES
+
+    def send_as(messages, identity):
+        # Connect as root, then drop *all* uid/gid privileges before sending.
+        # A connected datagram socket needs no subsequent pathname traversal;
+        # SO_PASSCRED still supplies the uid of the process doing the send.
+        # No production directory or socket permissions are changed.
+        code = r'''
+import json, os, pwd, socket, sys
+path, messages, identity = sys.argv[1], json.loads(sys.argv[2]), sys.argv[3]
+with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as sender:
+    sender.settimeout(3)
+    sender.connect(path)
+    if identity != 'root':
+        account = pwd.getpwnam(identity)
+        assert account.pw_uid not in (0, 1000)
+        os.setgroups([])
+        os.setgid(account.pw_gid)
+        os.setuid(account.pw_uid)
+        assert os.getuid() == os.geteuid() == account.pw_uid
+    sent = 0
+    error = None
+    for message in messages:
+        payload = json.dumps(message, separators=(',', ':')).encode()
+        try:
+            assert sender.send(payload) == len(payload)
+        except PermissionError as exc:
+            error = exc.errno
+            break
+        sent += 1
+print(json.dumps({'uid': os.getuid(), 'sent': sent, 'errno': error}))
+'''
+        return json.loads(sudo(sys.executable, "-c", code, SOCKET, json.dumps(messages), identity).stdout)
+
+    def beat(gen):
+        return {
+            "v": 1, "kind": "beat", "gen": gen, "seq": 0,
+            "t": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+            "opened": 0, "self_reads": 0, "answered": 0, "dropped": 0,
+            "coverage_version": hashlib.sha256(b'{"marks":[],"unmarked":[]}').hexdigest(),
+            "marks_count": 0,
+        }
+
+    # Two unique forged generations give observable proof that root sends from
+    # a process other than the gate are accepted, even with no prior gate beat.
+    previous = {s["_key"] for s in statuses()}
+    first_gen, accepted_gen, rejected_gen = (str(uuid.uuid7()) for _ in range(3))
+    root_beats = [beat(first_gen), beat(accepted_gen)]
+    assert send_as(root_beats, "root") == {"uid": 0, "sent": 2, "errno": None}
+
+    def accepted_beats():
+        rows = fresh_statuses(previous)
+        # R7 promises these gap endpoints; the status schema leaves gen optional.
+        return (any(s["kind"] == "gate_restart" for s in rows)
+                and any(s["kind"] == "gap" and s.get("scope") == "gate"
+                        and s.get("gap_from") is not None and s.get("gap_to") is not None
+                        and datetime.fromisoformat(s["gap_from"]) == datetime.fromisoformat(root_beats[0]["t"])
+                        and datetime.fromisoformat(s["gap_to"]) == datetime.fromisoformat(root_beats[1]["t"])
+                        for s in rows))
+
+    wait_for(accepted_beats, 65, "acceptance of a root helper's forged beats")
+
+    door = next(iter(json.loads(MEMBERS.read_bytes())["members"]))
+    path = str(ROOT / "community" / door / (".camera-validation-" + rejected_gen))
+    forged_open = {
+        "v": 1, "kind": "open", "gen": rejected_gen, "seq": 0,
+        "t": datetime.now(timezone.utc).isoformat(timespec="microseconds"),
+        "path": path, "path_sha256": hashlib.sha256(path.encode()).hexdigest(),
+        "door": door, "truncated": False,
+        "reader": {
+            "pid": os.getpid(), "start_time": 123456, "reused": False, "uid": 1000,
+            "exe": sys.executable, "comm": "camera-validation", "cgroup": "/",
+            "cwd": str(ROOT), "ancestors": [], "proc_readable": True,
+            "start_time_before": 123456, "start_time_after": 123456,
+            "attribution": "complete",
+        },
+    }
+    previous = {s["_key"] for s in statuses()}
+    result = send_as([forged_open], "nobody")
+    assert result["uid"] not in (0, 1000)
+    if result["errno"] in (errno.EACCES, errno.EPERM):
+        warnings.warn("T8 verified uid-1000 EACCES and root-beat acceptance only: "
+                      "this host denies the connected non-root send; "
+                      "rejected_sender/entries checks omitted without changing production modes.")
+        return
+    assert result["sent"] == 1 and result["errno"] is None
+    # An alive flushes all earlier buffered opens (R7). Observe rejection in
+    # that cycle before checking that the unique forged entry was not stored.
+    wait_for(lambda: [s for s in fresh_statuses(previous)
+                      if s["kind"] == "alive" and s.get("counts", {}).get("rejected_sender", 0) >= 1],
+             65, "rejected_sender in the next scribe alive")
+    assert database_rows("FOR e IN entries FILTER e.gen == @gen RETURN e", {"gen": rejected_gen}) == []
+    assert not [s for s in fresh_statuses(previous) if s.get("gen") == rejected_gen], "rejected sender changed gate status"
