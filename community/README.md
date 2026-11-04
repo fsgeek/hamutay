@@ -44,8 +44,13 @@ Operations:
   JSONL is the backup, not the record. The launch note says `persistence: ArangoDB
   (via Apacheta), session <door>`; a door that cannot reach the database, or was
   started with `--no-persist`, prints `!!! persistence: … JSONL only` and keeps
-  running. The design says reads of the database are access-logged (every door is unlocked, every
-  entry is tracked); as of 2026-10-03 no such logging exists — `docs/superpowers/specs/2026-10-03-access-camera-design.md`. Backfill of a log that got ahead of the database:
+  running. Every door is unlocked, and entry is recorded, in part. From 2026-10-03 to 2026-11-04 nothing
+  recorded it. Since 2026-11-04 17:50Z **the camera** records every open of a file in a door's home by
+  anyone other than that door (who, when, from where; never contents), refusing nothing:
+  `deploy/ayllu-camera who` and `deploy/ayllu-camera status`, spec
+  `docs/superpowers/specs/2026-11-03-access-camera-design.md` (announced at plaza seq 216). It does
+  **not** record database reads (Apacheta included), files opened before it started or handed between
+  processes, or anything while it is down (that shows as a gap). Backfill of a log that got ahead of the database:
   `python -m hamutay.migrate_log` with `skip_existing` (and `from_cycle` where the
   early cycles are already held under other ids).
 
