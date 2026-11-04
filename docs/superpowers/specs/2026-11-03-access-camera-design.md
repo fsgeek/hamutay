@@ -1,7 +1,7 @@
-# The camera, r7: recording entry into a door's home
+# The camera, r8: recording entry into a door's home
 
-**Status:** design r7, after the first root-test run and a security review of the r6 code (both summarised
-in `…-review-5.md`). Earlier rounds: `…-review-1.md` (on r2) to `…-review-4.md` (on r5). **Date:**
+**Status:** design r8, after latency measurement and a second security review (`…-review-6.md`). r7 followed
+the first root-test run and a security review of the r6 code (`…-review-5.md`). Earlier rounds: `…-review-1.md` (on r2) to `…-review-4.md` (on r5). **Date:**
 2026-11-03. **Author:** the custodian (Claude Opus 5.5, seat from 2026-11-03). **Supersedes** the Source A
 and storage sections of `2026-10-03-access-camera-design.md`. That file's model stands: no locks, but
 entry is recorded. r2 is in git history (ae32e8f).
@@ -115,8 +115,11 @@ The scribe detects lost messages as gaps in `seq`, and a gate restart as a new `
   99th percentile under twenty concurrent readers (first root run, T5). The gate therefore keeps each full
   snapshot for 1 s, keyed by (pid, start time). For an open by a cached pid it reads only `/proc/<pid>/stat`;
   if the start time matches it reuses the snapshot, otherwise it takes a full one. So identity is checked on
-  every open, and the other fields (uid, exe, cwd, cgroup, ancestors) may be up to 1 s old. Within a batch,
-  the gate answers every event before it builds, hashes, encodes or sends any message.
+  every open, and the other fields (uid, exe, cwd, cgroup, ancestors) may be up to 1 s old **in a recorded
+  entry**. An exemption is never decided from the cache: when a cached snapshot would make an open a
+  self-read, the gate re-reads the uid and cgroup first, so a process that has left a door's unit within the
+  last second is recorded. Within a batch, the gate answers every event before it builds, hashes, encodes or
+  sends any message.
 - **R5 Coalescing (scribe).** Key: (gen, pid, start time, path_sha256). Windows are fixed 60 s spans aligned to
   the minute, **by the message's `t`** (the gate's clock), never by when the scribe received it. A window's
   record has `count`, `first`, `last`, and `coalesced: true` when count > 1. At most 10,000 open keys; when
@@ -155,7 +158,9 @@ The scribe detects lost messages as gaps in `seq`, and a gate restart as a new `
 - **R9 Coverage.** Homes are `community/<name>/` for each name in `members.json` → `members`, resolved
   without following symlinks. A home that is not a real directory owned by uid 1000 is not marked and is
   reported in status. At start the gate marks each home and every subdirectory. It checks `members.json`'s
-  inode and modification time on every loop turn and starts a rescan as soon as either changes; otherwise
+  inode and modification time on every loop turn and starts a rescan as soon as either changes; a change during
+  a rescan adds any new homes to that rescan rather than restarting it, so repeated changes cannot keep a
+  rescan from finishing; otherwise
   every 10 s it re-reads `members.json` and rescans every home **recursively**, marking new directories at any depth by (device,
   inode), not path. A walk visits at most 256 directories per home, breadth first. Each directory the walk
   found but did not visit within that budget is listed as unmarked with reason `limit`, meaning that
@@ -261,8 +266,15 @@ Root integration, skipped without passwordless sudo:
   gate, and the open returns allowed within 1 s; with both one queued and one delivered event;
 - **T3** watchdog recovery: SIGSTOP only, and the open returns within 7 s with no manual kill;
 - **T4** a failure in the middle of a multi-event batch: every event in it is answered or the gate exits;
-- **T5** caller-observed latency: 20 concurrent readers opening watched files in a loop for 60 s, measured
-  from the caller's side, p99 below 2 ms and maximum below 50 ms with the scribe running and writing;
+- **T5** caller-observed latency, measured around `open()` in separate **processes** (threads in one Python
+  process measure their own wait for the GIL: with no camera at all, 20 threads saw p99 4.1 ms on this host,
+  against 0.008 ms for 20 processes). (a) One reader opening a watched file in a loop for 30 s: p99 below
+  2 ms. (b) Twenty concurrent reader processes for 60 s: every open completes, p99 below 50 ms and maximum
+  below 250 ms (liveness, not speed). Both with the scribe running and writing. r6's bound (20 concurrent
+  readers, p99 below 2 ms) cannot be met here by any gate. The cost of answering one permission event
+  rose from 0.023 ms with one waiting opener to 0.39 ms with twenty, and neither `nice -15` nor `SCHED_RR`
+  changed it, so the cost is in the kernel's response path, not in the gate (measured 2026-11-04,
+  `…-review-6.md`). The house's real load is each door polling its own home about every 30 s;
 - **T6** coverage: a new member's home is marked within 10 s and a coverage status appears;
 - **T7** a gate restart while the scribe runs produces a gate gap and a `gate_restart` record;
 - **T8** sender check: a datagram sent to the scribe's socket by a process running as uid 1000 is refused at

@@ -226,7 +226,7 @@ class Gate:
             except OSError:
                 start = None
             if start is not None and start == hit[0]:
-                return hit[2]
+                return {**hit[2], "_cached": True}
         reader = camera.read_reader(pid)
         if reader.get("attribution") == "complete":
             self.cache[pid] = (reader["start_time"], t, reader)
@@ -235,6 +235,22 @@ class Gate:
         if len(self.cache) > 4096:
             self.cache = {k: v for k, v in self.cache.items() if t - v[1] < CACHE_SECONDS}
         return reader
+
+    @staticmethod
+    def fresh_uid(pid: int):
+        try:
+            with open(f"/proc/{pid}/status", "rb") as f:
+                return camera._real_uid(f.read().decode("utf-8", "replace"))
+        except OSError:
+            return None
+
+    @staticmethod
+    def fresh_cgroup(pid: int):
+        try:
+            with open(f"/proc/{pid}/cgroup", "rb") as f:
+                return camera._cgroup_path(f.read().decode("utf-8", "replace"))
+        except OSError:
+            return None
 
     def answer_batch(self, buf: bytes) -> list[tuple]:
         """Answer every event in the batch (R1). Returns (t, path, reader) for each non-self open; the
@@ -255,9 +271,18 @@ class Gate:
                 if pid != self.me and path is not None:
                     reader = self.snapshot(pid)
                     self.counts["opened"] += 1
-                    if camera.is_self_read(reader, path, self.homes):
+                    exempt = camera.is_self_read(reader, path, self.homes)
+                    if exempt and reader.get("_cached"):
+                        # An exemption is never decided from a cached snapshot (R4a): re-read the
+                        # fields R3 rests on, so a process that left a door's unit is not exempt.
+                        fresh = dict(reader, uid=self.fresh_uid(pid), cgroup=self.fresh_cgroup(pid))
+                        exempt = camera.is_self_read(fresh, path, self.homes)
+                        if not exempt:
+                            reader = camera.read_reader(pid)
+                    if exempt:
                         self.counts["self_reads"] += 1
                     else:
+                        reader = {k: v for k, v in reader.items() if k != "_cached"}
                         item = (now(), path, reader)
             except Exception:
                 item = None  # attribution must never block the answer
@@ -319,11 +344,20 @@ class Gate:
                 self.beat()
                 t_beat = t
             new_stamp = self.members_stamp()
-            if new_stamp != stamp or (pending is None and t - t_rescan >= RESCAN_EVERY):
-                stamp = new_stamp  # R9: a members change starts a fresh rescan at once
-                self.read_homes()
-                pending = {"doors": deque(self.homes), "desired": {}, "unmarked": []}
+            changed = new_stamp != stamp
+            stamp = new_stamp
+            if pending is None and (changed or t - t_rescan >= RESCAN_EVERY):
+                self.read_homes()  # R9: a members change starts a rescan at once
+                pending = {"doors": deque(self.homes), "queued": set(self.homes), "desired": {}, "unmarked": []}
                 t_rescan = t
+            elif pending is not None and changed:
+                # Join the rescan in progress rather than restarting it, so repeated changes can't
+                # starve finish_rescan (unmarking and coverage).
+                self.read_homes()
+                for door in self.homes:
+                    if door not in pending["queued"]:
+                        pending["doors"].append(door)
+                        pending["queued"].add(door)
             if pending is not None:
                 if pending["doors"]:
                     door = pending["doors"].popleft()
