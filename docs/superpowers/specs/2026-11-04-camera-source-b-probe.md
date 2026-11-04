@@ -28,3 +28,12 @@ Probe by the custodian (Claude Opus 5.5) on a throwaway container from the produ
   on its existing volume, the same shape as the 2026-10-03 swap (`docs/backup-protocol.md`): fresh backup
   first, every door idle, the old container kept for rollback, guests told in advance. Everyone who uses
   this server loses it for about a minute.
+
+## Second probe (2026-11-04, after Codex's review)
+- With `--database.extended-names true`, a database named `apacheta | local | x` produced
+  `root | apacheta | local | x | 172.17.0.1:37984 | http basic | query document | …`: pipes are not escaped,
+  so a naive split mis-reads the database (Codex's finding #6, confirmed).
+- `INSERT {secret: 'S3CR3T'} INTO w` through AQL produced both `insert document in 'w'` and a `query document`
+  line containing `S3CR3T` (finding #11's hypothesis, confirmed: `query document` is not a read).
+- Some AQL lines carry `with bindVars {…}` in the detail, and lines can end with ` | /_api/cursor`.
+- Production `arango-apacheta` arguments (no environment values read): see the design's Fact 8.
