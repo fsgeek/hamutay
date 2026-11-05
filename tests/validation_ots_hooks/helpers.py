@@ -188,6 +188,13 @@ class Repo:
             destination = root / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(SOURCE_ROOT / relative, destination)
+        # install-hooks.sh also wires a pre-commit shim (since 2026-10-22). The
+        # real pre-commit is out of scope here, and it would rightly refuse this
+        # fixture: its tripwire (8031183) rejects the core.hooksPath set above.
+        # A no-op stands in, so the shim has a target and these tests stay
+        # about stamping.
+        stub = root / "scripts/hooks/pre-commit"
+        executable(stub, "#!/bin/sh\n# fixture stand-in for scripts/hooks/pre-commit\nexit 0\n")
         (root / ".gitignore").write_text(".venv/\n.worktrees/\n")
         (root / "base.txt").write_text("base\n")
         self.git("add", ".")
