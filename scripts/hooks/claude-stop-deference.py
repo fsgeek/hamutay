@@ -115,7 +115,12 @@ def main() -> int:
         data = json.load(sys.stdin)
     except json.JSONDecodeError:
         return 0
-    text = last_assistant_text(data.get("transcript_path", ""))
+    # The transcript can lag the turn: on 2026-11-05 the hook judged the turn's
+    # first text, not its last, because the final message was not yet written.
+    # Prefer the final message from the hook input when Claude Code supplies it.
+    supplied = data.get("last_assistant_message")
+    source = "input" if isinstance(supplied, str) and supplied.strip() else "transcript"
+    text = supplied if source == "input" else last_assistant_text(data.get("transcript_path", ""))
     if not text:
         return 0
     tail = text[-TAIL_CHARS:]
@@ -130,6 +135,8 @@ def main() -> int:
         "kind": kind,
         "match": match,
         "tail": tail,
+        "source": source,
+        "input_keys": sorted(data),
         "action": "logged" if kind in LOG_ONLY else ("allowed_second_stop" if second else "blocked"),
     })
     if second or kind in LOG_ONLY:
