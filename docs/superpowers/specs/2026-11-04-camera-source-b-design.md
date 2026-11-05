@@ -1,7 +1,8 @@
 # The camera, Source B: recording reads of the residents' database
 
-**Status:** design r3, after Codex round two (`…-source-b-review-2.md`: 3 Blocking, 6 Significant) and the B7/B9
-probes. r2 followed round one (`…-source-b-review-1.md`). **Date:** 2026-11-04. **Author:** the custodian (Claude Opus 5.5).
+**Status:** design r4, after Codex round three (`…-source-b-review-3.md`: 2 Blocking, 3 Significant, 1 Minor).
+Earlier: `…-source-b-review-1.md`, `…-source-b-review-2.md`. **r4 replaces B4's hash, B5, B6 and B7 below; where an
+earlier paragraph conflicts with the r4 section, r4 governs.** **Date:** 2026-11-04. **Author:** the custodian (Claude Opus 5.5).
 Extends `2026-11-03-access-camera-design.md` (r8, "Source A": file opens in homes). Probe facts:
 `2026-11-04-camera-source-b-probe.md` and §Facts below.
 
@@ -42,7 +43,7 @@ directory. First Luna named unlogged access to its history and persistence as a 
 - **Contents, stated exactly.** The camera's **record** (`ayllu_camera`) never holds query text, bind values
   or document contents. The server's **raw audit file** does, for every database on the server, including
   other projects' and writes. That file lives only on a RAM filesystem (Architecture), readable only by root and the
-  camera's own user, normally for under two minutes, never backed up, and gone on reboot. RAM-only holds
+  camera's own user, for under ten minutes (r4's seal waits five minutes of quiet), never backed up, and gone on reboot. RAM-only holds
   because the host has no swap (`/proc/swaps` empty, `.wslconfig` `swap=0` since 2026-10-16). The rotate job
   checks `/proc/swaps` every run and, if swap ever appears, records a `status: gap` with
   `cause: "swap_enabled"`, since from then on the RAM-only promise would not hold. A crash of the
@@ -137,6 +138,60 @@ Source A (review-1 #10):
   there is no cutover. All numbers are posted on the plaza either way.
 - **B10 Attribution is shown with its limit.** Every CLI listing of `db_entries` prints, once: "the reader is
   the database user; programs sharing a user cannot be told apart".
+
+## r4: replacements after round three
+
+**Host fact (2026-11-05):** the engine is Docker Desktop. `docker inspect arango-apacheta` reports `.State.Pid` 663,
+and `/proc/663` does not exist in this distribution: the container's processes live in Docker Desktop's own
+distribution. So nothing here may depend on inspecting the container's processes. The container's log driver
+is `local`, which rotates by size.
+
+- **B4′ The query hash.** The query part is everything from the start of the detail to the start of the
+  run-statistics suffix. The suffix is identified only by a full anchored match at the end of the line:
+  `, id \d+, token QRY\d+, exit code -?\d+, elapsed: [0-9.e-]+s( \| /_api/\S+)?$`. A line without that suffix is
+  `parse_rejected`, which is how a damaged or truncated line is treated. Nothing is stripped from the query
+  part. If the server appended bind values, they stay in it, because there is no way to tell from the line
+  alone whether the logger or the author wrote `, with bindVars {…}` (review-3 C). In place of a plain sha256,
+  the record keeps `query_mac`: HMAC-SHA256 of the query part's UTF-8 bytes under a 32-byte key in
+  `/etc/hamutay-camera/query-mac.key` (mode 600, owner `hamutay-camera`, never logged). Readers of the camera can
+  tell repeats of one query apart from others, but cannot test a guessed query or value against the record.
+  The same query with different bind values gets different macs (declared). `query_bytes` is the length of
+  the query part.
+- **B5′ File generations.** When the reader first opens a file it has not seen, it assigns a generation id
+  (UUIDv7) and records (generation, inode, sha256 of the first complete line, current name) in its state file
+  before reading any line. After a restart it matches the files now present to recorded generations by (inode,
+  first-line hash). Two present files can't share an inode, so a match is unambiguous. A recorded generation
+  whose file is gone is closed and never matched again. Line identity is (generation, byte offset). Record keys
+  use generations, never contents (review-3 A).
+- **B5″ Atomic store and checkpoint (review-3 tests; round-two replay case).** A batch is the records produced
+  since the last checkpoint plus the new checkpoint (generation and offset for each open file). It is written
+  in **one** ArangoDB stream transaction (records into `db_entries`, checkpoint into `db_checkpoint`), or, when
+  the database is down, as **one** fsync'd spool line holding the whole batch, later replayed in one
+  transaction. After a crash the reader resumes from the last committed checkpoint, so a batch is either wholly
+  stored with its checkpoint or wholly absent, and re-reading regenerates it. Partial windows close at each
+  batch: a window that spans two batches yields two records.
+- **B6′ Seal by quiet, observed from outside.** After a rename and `SIGHUP`, a rotated file is sealed when both
+  hold: its size has not changed for 5 minutes, and the new `audit.log` has received at least one complete line
+  stamped after the `SIGHUP`. The rotate job, which runs as root, checks both and writes `<name>.sealed`. Whether
+  arangod still holds the old file can't be observed from this distribution, so this is evidence, not proof
+  (declared). Because the reader keeps the file open until it deletes it, any later growth is still read. The
+  reader deletes only after the seal **and** after a final read at EOF that finds no growth since the seal.
+- **B7′ Losses, ordered and durable.** Before the rotate job deletes any file for capacity, it appends the
+  loss to the ledger (file name, generation if known, size, time span) and fsyncs the ledger and its directory.
+  If that append or fsync fails, it deletes nothing and exits non-zero, which triggers the unit's `OnFailure`
+  alert (review-3 E). The `docker logs` scan for `cannot log data` keeps its own durable cursor (the last
+  timestamp scanned) in the ledger directory. If the oldest retained log line is newer than the cursor, the logs
+  have rotated past unscanned time, and that interval is written as a gap with `cause: "log_coverage_lost"`
+  (review-3 D). The scan runs every minute. The `local` driver keeps 100 MB by default, which is far more
+  than a minute of this container's logging.
+- **Cutover ordering (review-3 F):** the tmpfs mount, the ledger directory and the MAC key are installed and
+  checked **before step 2**. Step 3's note and step 6a no longer install the mount; step 6a starts the dbreader
+  and the rotate timer only.
+- **Fixtures:** the probe lines (successful reads by key; AQL with and without bind variables; a write through
+  AQL; a failed query; a forged database name; a query whose comment contains `, with bindVars {…}` and a fake
+  statistics marker) are to be captured on a throwaway container and committed to `tests/fixtures/arango_audit/`
+  with their expected B1, B2 and B4′ results **before** the blind tests are written. r3 claimed they were
+  committed; they were not.
 
 ## Cutover (a production event)
 
