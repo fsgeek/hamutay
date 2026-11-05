@@ -1,7 +1,7 @@
 # The camera, Source B: recording reads of the residents' database
 
-**Status:** design r2, after Codex round one (`2026-11-04-camera-source-b-review-1.md`: 4 Blocking,
-7 Significant, 1 Minor) and a second probe. **Date:** 2026-11-04. **Author:** the custodian (Claude Opus 5.5).
+**Status:** design r3, after Codex round two (`…-source-b-review-2.md`: 3 Blocking, 6 Significant) and the B7/B9
+probes. r2 followed round one (`…-source-b-review-1.md`). **Date:** 2026-11-04. **Author:** the custodian (Claude Opus 5.5).
 Extends `2026-11-03-access-camera-design.md` (r8, "Source A": file opens in homes). Probe facts:
 `2026-11-04-camera-source-b-probe.md` and §Facts below.
 
@@ -41,8 +41,11 @@ directory. First Luna named unlogged access to its history and persistence as a 
   result, and for AQL a sha256 and the length of the query text.
 - **Contents, stated exactly.** The camera's **record** (`ayllu_camera`) never holds query text, bind values
   or document contents. The server's **raw audit file** does, for every database on the server, including
-  other projects' and writes. That file lives only on a RAM filesystem (B5), readable only by root and the
-  camera's own user, normally for under two minutes, never backed up, and gone on reboot. A crash of the
+  other projects' and writes. That file lives only on a RAM filesystem (Architecture), readable only by root and the
+  camera's own user, normally for under two minutes, never backed up, and gone on reboot. RAM-only holds
+  because the host has no swap (`/proc/swaps` empty, `.wslconfig` `swap=0` since 2026-10-16). The rotate job
+  checks `/proc/swaps` every run and, if swap ever appears, records a `status: gap` with
+  `cause: "swap_enabled"`, since from then on the RAM-only promise would not hold. A crash of the
   reader leaves no core dump (`LimitCORE=0`), and the reader never logs a line's text.
 - **Not seen:** which process or resident read (only the database user, and residents share users);
   which documents an AQL read returned; reads during any gap; reads the server does not audit (to be listed
@@ -72,37 +75,54 @@ Source A (review-1 #10):
   `^read document '[^']*'$`, `^query document$`, or another known operation; result `ok` or `failed`. A forged
   header (Fact 4) fails the client pattern at the field after the database and is counted as a
   `parse_rejected` line, never recorded.
-- **B2 Classification.** `read document '<id>'` is a read by key. `query document` is a read unless its
-  detail matches, case-insensitively and as a whole word outside string literals, `INSERT`, `UPDATE`,
-  `REPLACE`, `REMOVE` or `UPSERT`, in which case it is a write and is not an entry. This is a heuristic, and
+- **B2 Classification.** `read document '<id>'` is a read by key. For `query document`, the query text (B4's
+  definition) is tokenized first. These are removed: `//` to end of line, `/* … */`, string literals in `'…'` or
+  `"…"` (with backslash escapes), quoted names in `` `…` `` or `´…´`, and bind parameters (`@name`, `@@name`).
+  If any remaining token equals, case-insensitively, `INSERT`, `UPDATE`, `REPLACE`, `REMOVE` or `UPSERT`, the
+  query is a write and not an entry; otherwise it is a read. This is a heuristic, and
   the record says `class: "read-by-key" | "query-read"`. A query that both reads and writes counts as a write
   (declared: such reads are not recorded). `(internal)` users are skipped (server housekeeping).
 - **B3 Discards.** A line for any other database is dropped once its database field fails B1. Its detail is
   never parsed or hashed, and nothing about it is kept except a per-day total of discarded lines.
 - **B4 Entries.** Collection `db_entries`: `{_key, window_start, first, last, count, coalesced, database,
   db_user, class, target (document id, read-by-key only), query_sha256, query_bytes (query-read only),
-  result, source: "arango-audit"}`. `query_sha256` hashes the detail with the trailing `, id N, token …`
-  run-statistics removed and any ` | /_api/…` endpoint field removed. Coalescing key: (database, db_user,
+  result, source: "arango-audit"}`. **The query text** is the detail up to, not including, the **last**
+  occurrence of `, id <digits>, token QRY<digits>, exit code ` in the line. If the part before it ends with
+  `, with bindVars {…}` (a balanced JSON object closing just before that marker), that suffix is removed too,
+  so bind values never reach the hash and one query with different values hashes the same. The endpoint field,
+  if present, follows the run statistics and so is never part of the text. A line without the run-statistics
+  marker is a `parse_rejected` line. `query_sha256` is the sha256 of the query text's UTF-8 bytes, and
+  `query_bytes` is their count. Exact lines captured from the probes are committed as fixtures
+  (`tests/fixtures/arango_audit/`) with their expected parse results. Coalescing key: (database, db_user,
   class, target or query_sha256, result), 60 s windows by the line's own time.
-- **B5 Stable identities and the checkpoint (review-1 #3).** A file's identity is (inode, sha256 of its first
-  4096 bytes, or of all of it while shorter). A line's identity is (file identity, byte offset). A record's
+- **B5 Stable identities and the checkpoint (review-1 #3, review-2 #1).** A file's identity is the sha256 of
+  its **first complete line** (through the first newline). That line never changes once written, and it
+  begins with a microsecond timestamp, so two files can't share it. A file with no complete line yet is not
+  read. Inode numbers are not used, so their reuse on tmpfs does not matter. A line's identity is (file identity, byte offset). A record's
   `_key` is the first 32 hex digits of sha256 over (window_start, coalescing key, identity of the record's
   first line). The reader stores records (insert, or spool) and only then writes the checkpoint (file
   identity, offset after the last stored line), with fsync of the file and its directory. A crash re-reads
   from the checkpoint, regenerates the same keys, and a key conflict counts as already stored. No line is
   lost and none is counted twice.
 - **B6 Rotation with a seal (review-1 #2).** Each minute the rotate job (root): (1) renames `audit.log` to
-  `audit.log.<UTC stamp>`; (2) sends `SIGHUP` to `arango-apacheta`; (3) polls `/proc/<arangod pid>/fd` until
-  no descriptor refers to the renamed file's inode, up to 10 s; (4) only then creates `<name>.sealed`. If the
+  `audit.log.<UTC stamp>`; (2) sends `SIGHUP` to `arango-apacheta`; (3) polls the `fd` directory of **every**
+  process in the container's cgroup (the pids in its `cgroup.procs`, found from `docker inspect`'s
+  `.State.Pid` cgroup), until none refers to the renamed file's inode, up to 10 s. Any failure to read a
+  process's `fd` directory, other than that process having exited, counts as "still open"; (4) only then creates `<name>.sealed`. If the
   descriptor is still open after 10 s, it writes no seal and records the failure. The reader keeps an open
   descriptor on the file it is reading, follows it across the rename, reads to EOF, and deletes a rotated file
   only when its `.sealed` marker exists **and** it has read to EOF after the seal appeared.
-- **B7 Capacity (review-1 #5).** The rotate job also checks the tmpfs. Above 75% it deletes the oldest
-  rotated files, sealed or not, never the live one, until below 50%. Before deleting, it appends a line to
-  `/run/hamutay-camera-audit/overflow.jsonl` with the file's name, size and time span. The reader turns each
-  overflow line into a `status: gap` with `scope: "database"` and `cause: "overflow"`. On a full tmpfs the
-  server's audit writes fail; how arangod behaves then is probed before cutover, and the cutover is stopped if
-  it would refuse client requests.
+- **B7 Capacity (review-1 #5, review-2 #6, #7).** The ledger of losses is **not** on the tmpfs: it is
+  `/var/lib/hamutay-camera-audit-ledger/ledger.jsonl` (persistent, root-written, group-readable by
+  `hamutay-camera`, no contents: file names, sizes, times, counts only). Each run the rotate job: (a) deletes
+  rotated files that are **sealed** and older than 30 minutes (the reader has fallen behind), oldest first, while
+  the tmpfs is above 75%, logging each to the ledger; unsealed files are never deleted, because their space
+  isn't freed while arangod holds them; (b) scans `docker logs --since <last run>` of the container for
+  `cannot log data`, and logs the count and time span to the ledger (measured 2026-11-04: on a full audit
+  filesystem arangod refuses no client and drops audit lines, reporting each in its log). The reader turns
+  every ledger line into a `status: gap`, `scope: "database"`, `cause: "overflow"` or `"audit_write_failed"`.
+  The full-filesystem gate is already measured for synchronous mode (3,000 requests, all succeeded, none over
+  0.5 s, `…-source-b-probe.md`), so it is satisfied.
 - **B8 Gaps and freshness.** A `status: gap`, `scope: "database"`, is written for: a missing audit directory
   or file; a checkpoint that names a file which no longer exists (deleted before it was read); any overflow;
   any reader restart, from its last alive to now. The reader's `alive` (every 60 s, after storing) carries
@@ -124,9 +144,16 @@ Scripts under `deploy/camera/`, written and tested before cutover.
 - **`recreate-arango.sh`** builds the new container from `docker inspect` of the old one, mechanically:
   image, entrypoint, command (plus the audit arguments), every environment variable (passed in a mode-600
   env file that is deleted afterwards and never printed), every mount, every port binding with its host
-  address, the restart policy, hostname, labels and networks. It is tested first on a throwaway container
-  created with unusual settings: recreate it, then diff the two `docker inspect` outputs. Any difference
-  outside the intended arguments and mount fails the test.
+  address, the restart policy, hostname, labels and networks. **Its test (review-2 #8)** compares a normalized
+  projection of `docker inspect` for the old and new container. The projection is: `Config.{Image, Entrypoint,
+  Cmd, Env, Labels, Hostname, User, WorkingDir, ExposedPorts}`, `HostConfig.{PortBindings, RestartPolicy,
+  NetworkMode, Memory, MemorySwap, NanoCpus, ShmSize, Ulimits, CapAdd, CapDrop, Privileged, SecurityOpt,
+  LogConfig, Init}`, `Mounts` (type, name or source, destination, read-only), and the names of
+  `NetworkSettings.Networks`. The new projection must equal the old one except for exactly the audit arguments
+  appended to `Cmd`, the one added bind mount, and `RestartPolicy` (set back to `always` by the script). Every
+  other field (Id, Created, State, ResolvConfPath, and so on) is outside the projection by definition. The
+  fixture container sets a non-default value for every projected field, so the test can tell a dropped
+  setting from a default one.
 - **`check-arango-identity.sh`** writes a fresh random sentinel document into `ayllu_camera` through host port
   8529, then reads it **inside** the named container (`docker exec … arangosh` to its own endpoint). A match
   proves the host port reaches that container (review-1 #8; plaza seq 116). It runs before the backup, after
@@ -135,19 +162,24 @@ Scripts under `deploy/camera/`, written and tested before cutover.
 Steps:
 1. Notice on the plaza at least 48 h ahead (posted 11-04, seq 218), and in yanantin's requests folder.
 2. `check-arango-identity.sh` passes.
-3. **Quiesce what the house controls:** stop the five door units and Source A's scribe and the dbreader,
-   each recorded. Other writers (khipumaq's session-end ingest, yanantin) can't be stopped from here. Their
+3. **Quiesce what the house controls:** stop the five door units and Source A's scribe, each recorded. (The
+   dbreader, rotate timer and audit mount do not exist yet; they are installed in step 6a.) Other writers (khipumaq's session-end ingest, yanantin) can't be stopped from here. Their
    writes after the backup simply stay in the volume, which is kept.
 4. Fresh backup by hand, status `ok`.
 5. Record `docker inspect` of the old container (environment values redacted from the record).
 6. Stop the old container, rename it `arango-apacheta-pre-audit`, set its restart policy to `no`, and run
    `recreate-arango.sh`.
+6a. **Bring up Source B (review-2 #3), in order:** confirm the audit mount is mounted (it is mounted before
+   step 6, since the container binds it); start the dbreader and wait for its first `alive`; start the rotate
+   timer and wait for one run that seals a file.
 7. Verify: the identity check; every database's counts against the backup's `live-counts.json` (equal or
    higher; writes may have arrived between steps 4 and 6); a test read appears in the audit file and as a
    `db_entries` record; the rotate job seals a file; khipumaq's search answers.
 8. Restart the doors one at a time, idle, and check every launch note for `!!! persistence` (none expected);
-   restart the scribe and dbreader.
-- **Rollback is container-level only (review-1 #4):** stop and remove the new container, rename
+   restart Source A's scribe.
+- **Rollback is container-level only (review-1 #4):** stop the rotate timer and the dbreader (so nothing
+  sends `SIGHUP` to the restored container or waits on an audit file it won't write); stop and remove the new
+  container, rename
   `arango-apacheta-pre-audit` back to `arango-apacheta`, restore its restart policy to `always`, start it, run
   the identity check, then restart the scribe and the doors as in step 8. The volume is the same, so nothing
   written is lost. **Restoring the backup is never part of rollback.** It is a separate decision, made only if
@@ -157,11 +189,14 @@ Steps:
 ## Tests (Codex, from this spec)
 
 Pure: B1 (each field pattern; Fact 4's forged line rejected; ` | ` inside query text kept in the detail),
-B2 (each write keyword, keywords inside string literals ignored, case), B3 (no output of any kind derived
-from another database's line except the daily total), B4 (hash input without run-statistics and endpoint),
-B5 (keys stable across a crash at every point between store and checkpoint; a rename followed by reading the
-same inode yields no duplicates), B6 reader side (no deletion without both seal and EOF-after-seal), B7
-overflow lines become gaps, B8.
+B2 (each write keyword; keywords inside `//` and `/* */` comments, string literals, quoted names, and
+`@bind` names ignored; case; a write inside a subquery makes the whole query a write), B3 (no output of any kind
+derived from another database's line except the daily total), B4 against the committed fixtures (run
+statistics, `with bindVars`, endpoint, and a ` | ` or a fake `, id 9, token QRY9, exit code ` inside a string
+literal, where only the last marker counts), B5 (keys stable across a crash at every point between store and
+checkpoint; a file read while live and again after rename yields no duplicates; a file with no complete line
+is not read), B6 reader side (no deletion without both seal and EOF-after-seal), B7 ledger lines become gaps,
+B8.
 Integration, opt-in like Source A's T1–T8, on throwaway containers only, never `arango-apacheta`: the
 rotate job seals only after arangod lets go; the full tmpfs behaviour of B7; `recreate-arango.sh`'s inspect
 diff; `check-arango-identity.sh` fails against a deliberately wrong port mapping; the B9 measurement harness.
