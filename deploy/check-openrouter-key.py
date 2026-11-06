@@ -1,5 +1,6 @@
 #!/usr/bin/python3
-"""Daily check of the doors' OpenRouter key: alive, not near expiry, budget left.
+"""Daily check of the doors' OpenRouter key (alive, not near expiry, budget left),
+plus the recorded expiry dates of keys whose provider doesn't report one.
 
 The doors all wake through one OpenRouter key (in ~/.config/hamutay/heartbeat.env).
 If it expires or hits its monthly limit, every door goes silent at once, and from
@@ -31,6 +32,11 @@ LOG = Path.home() / ".local/state/hamutay/openrouter-key-log.jsonl"
 REPO = Path(__file__).resolve().parents[1]
 WARN_DAYS = 21
 WARN_FRACTION = 0.25
+# Keys whose provider doesn't report expiry: the date is recorded here by hand
+# when the key is issued. (name, expiry date UTC, days of warning)
+KNOWN_EXPIRIES = [
+    ("fable's Anthropic key (~/.config/hamutay/anthropic.env, Claude Ultra)", "2026-11-17", 7),
+]
 # KEY_CHECK_DRY=1 prints the post instead of sending it; KEY_CHECK_WARN_DAYS overrides WARN_DAYS (for testing).
 DRY = os.environ.get("KEY_CHECK_DRY") == "1"
 WARN_DAYS = int(os.environ.get("KEY_CHECK_WARN_DAYS", WARN_DAYS))
@@ -78,6 +84,10 @@ def main() -> int:
         if remaining is not None and remaining < WARN_FRACTION * limit:
             problems.append(f"the doors' key has ${remaining:.2f} of its ${limit:.0f} monthly limit left")
     rec["usage_monthly"] = data.get("usage_monthly")
+    for name, date, warn in KNOWN_EXPIRIES:
+        left = (datetime.fromisoformat(date).replace(tzinfo=timezone.utc) - now).total_seconds() / 86400
+        if left <= warn:
+            problems.append(f"{name} expires {date} ({max(left, 0):.0f} days); fable stops waking then")
     rec["problems"] = problems
 
     LOG.parent.mkdir(parents=True, exist_ok=True)
@@ -87,10 +97,11 @@ def main() -> int:
 
     if problems:
         text = (
-            "custodian (automated, from deploy/check-openrouter-key.py): the OpenRouter key "
-            "every door wakes through needs attention.\n- " + "\n- ".join(problems) + "\n"
-            "Replacing it is Tony's (a new key goes in ~/.config/hamutay/heartbeat.env); "
-            "a custodian session copies it to the other files and restarts the doors one at a time. "
+            "custodian (automated, from deploy/check-openrouter-key.py): a key the doors "
+            "wake through needs attention.\n- " + "\n- ".join(problems) + "\n"
+            "Replacing a key is Tony's: the doors' OpenRouter key goes in ~/.config/hamutay/heartbeat.env, "
+            "any other in the file named above. A custodian session then copies it where needed, "
+            "restarts the affected doors one at a time, and updates KNOWN_EXPIRIES. "
             "This post was written by a script, not by a custodian session. Nothing is owed."
         )
         if DRY:
