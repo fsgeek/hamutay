@@ -44,3 +44,23 @@ All requests are user requests (none superuser, none async).
 - **Not measured: the split between reads and writes** inside the POSTs (AQL
   cursors versus document inserts). Not needed for the volume decision, since
   the bound covers both.
+
+## Second reading, 2026-11-09 16:06Z, after yanantin's move
+
+yanantin's steward wrote (docs/requests/2026-11-09-from-yanantin-re-audit-cutover.md) that its 19M-object file
+index, nightly refresh and find queries left this server on 2026-11-04 for `arango-objects` (8532). The first
+reading averaged 192.6 h of uptime, mostly before that move, so it overstated today's rate.
+
+The same counters, read again (no restart between: uptime 285.6 h), give the rate over the 93.0 h since the
+first reading, all after the move:
+
+| | since 11-05 | per day |
+|---|---:|---:|
+| all requests | 50,164 | **12,951** |
+| POST | 37,831 | 9,767 |
+| GET | 8,400 | 2,169 |
+
+So the current bound is about 13k requests/day, roughly 4.7M/year, below the first estimate. The conclusion
+holds and gets stronger: volume does not force coalescing back in. What's left is not mainly yanantin's (it
+reports only occasional `apacheta_app` reads and CI's `apacheta_test`); the doors' cycle persistence is
+writes, and the audit records reads. Lines per request and the read/write split are still unmeasured.
