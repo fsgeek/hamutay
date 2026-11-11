@@ -89,8 +89,10 @@ expiry. The same line appears at seq 160, a fortnight before the leak.
   added. So the pool didn't expire unused; most of what Sut'i left went to research-program.
 - Anthropic console, as read by Tony on 2026-11-11 about 04:45Z: $78.07 prepaid and $190.02 promotional credit
   available; $207.33 spent "this month"; hard cap $380. **Not reconciled.** The house's records account for $120.34
-  of November's spend (10.48 + 109.86). The rest is outside every ledger the custodian can read, and isn't
-  attributed here.
+  of November's spend (10.48 + 109.86). Tony (11-11) accounts for the rest: he created a workspace for each
+  project that used tokens and encouraged them to use the expiring credit, while the additional API credits
+  kept the guarantee to Sut'i (its pool was never at risk). Per-project amounts are in the console, not in any
+  ledger the custodian reads, so they aren't itemized here.
 
 ## Limits
 
