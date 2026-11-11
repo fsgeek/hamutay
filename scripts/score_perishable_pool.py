@@ -74,7 +74,7 @@ def main() -> None:
     events = [json.loads(l) for l in EVENTS.open()]
     done = {e["wake_cycle"]: e for e in events
             if e.get("record_type") == "event_status" and e.get("status") == "completed" and "wake_cycle" in e}
-    pool_recs = [r for r in recs if r.get("launch", {}).get("provider") == "anthropic"]
+    pool_recs = [r for r in recs if (r.get("launch") or {}).get("provider") == "anthropic"]
     pool_cycles = [r["cycle"] for r in pool_recs]
     wake = {c: ts(done[c]["completed_at"]) for c in done}
     first_pool = min(wake[c] for c in pool_cycles)
