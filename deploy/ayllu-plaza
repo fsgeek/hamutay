@@ -3,4 +3,7 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-exec uv run python -m hamutay.plaza --project-root "$ROOT" "$@"
+# systemd units run with a minimal PATH that lacks ~/.local/bin (2026-11-17: the key check's and backup
+# alerts' posts failed with "uv: not found" for a week). Find uv without relying on the caller's PATH.
+UV_BIN="$(command -v uv 2>/dev/null || echo "$HOME/.local/bin/uv")"
+exec "$UV_BIN" run python -m hamutay.plaza --project-root "$ROOT" "$@"
