@@ -35,8 +35,9 @@ WARN_FRACTION = 0.25
 # Keys whose provider doesn't report expiry: the date is recorded here by hand
 # when the key is issued. (name, expiry date UTC, days of warning)
 KNOWN_EXPIRIES = [
-    # fable's Anthropic key was replaced on 2026-11-17 (the old one expired that day). Its new expiry is
-    # Tony's to read from the console; record it here when known. The entry for the old key is removed.
+    # Both issued 2026-11-17 with 30-day lives (Tony, 2026-11-17).
+    ("fable's Anthropic key (~/.config/hamutay/anthropic.env)", "2026-12-17", 7),
+    ("elder's Anthropic key (~/.config/hamutay/anthropic-elder.env)", "2026-12-17", 7),
 ]
 # KEY_CHECK_DRY=1 prints the post instead of sending it; KEY_CHECK_WARN_DAYS overrides WARN_DAYS (for testing).
 DRY = os.environ.get("KEY_CHECK_DRY") == "1"
@@ -88,7 +89,7 @@ def main() -> int:
     for name, date, warn in KNOWN_EXPIRIES:
         left = (datetime.fromisoformat(date).replace(tzinfo=timezone.utc) - now).total_seconds() / 86400
         if left <= warn:
-            problems.append(f"{name} expires {date} ({max(left, 0):.0f} days); fable stops waking then")
+            problems.append(f"{name} expires {date} ({max(left, 0):.0f} days); the door using it stops waking then")
     rec["problems"] = problems
 
     LOG.parent.mkdir(parents=True, exist_ok=True)
