@@ -2692,6 +2692,13 @@ class OpenAITasteBackend:
         )
 
     def _post_chat(self, payload: dict) -> dict:
+        # OpenAI's own endpoint rejects max_tokens on its newer models and wants
+        # max_completion_tokens (found 2026-11-18 by the first direct-OpenAI trial,
+        # gpt-6.2-sol). Renamed only on the wire: the window code reads and rewrites
+        # payload["max_tokens"] internally. OpenRouter accepts max_tokens and is untouched.
+        if self._provider_name == "openai" and "max_tokens" in payload:
+            payload = dict(payload)
+            payload["max_completion_tokens"] = payload.pop("max_tokens")
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
