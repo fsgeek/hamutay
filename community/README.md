@@ -29,6 +29,11 @@ Operations:
   template unit `deploy/hamutay-heartbeat@.service`, one instance per door:
   `systemctl --user enable --now hamutay-heartbeat@heartbeat hamutay-heartbeat@fable`.
   Neither passes substrate or wake-shape flags: a restart inherits what the log last ran.
+  Since 2026-11-20 a door that fails to start 5 times in 10 minutes stops retrying and posts to the
+  plaza (`deploy/door-alert.sh` via `hamutay-door-alert@.service`); recover with
+  `systemctl --user reset-failed hamutay-heartbeat@<door> && systemctl --user restart hamutay-heartbeat@<door>`.
+  Before that the default limit could never trip, and a persistent fault was retried forever, silently.
+  Test the alert through systemd with `DOOR_ALERT_DRY_RUN=<file>` (set-environment), never from a shell.
 - speak (one door only): `uv run python -m hamutay.events send --log-path community/heartbeat/session.jsonl --message "..." --sender tony`
   — byte-for-byte unchanged, and it still writes only to that one door's store: it is now
   the wrong tool for anything a resident should be able to see. Use the plaza
