@@ -43,3 +43,42 @@ spec's "blind in the same places" case. It is not confirmation either way.
 On 11-20 the custodian told Tony nothing in resident-facing text says bash reaches outside the
 house. Wrong: the tool guidance says it (observation 1). What it lacks is any framing of that reach
 as open to residents' own purposes.
+
+## Run 20261120T184502Z (the wider ayllu, public text only)
+
+- Territory `ayllu-c056045c7ef1`: READMEs of the ten PUBLIC guest projects, read from each repo's
+  pushed default branch (governance, yupi, tessera, qhaway, khipumaq, arbiter, tupay, episode,
+  levadura_salvaje, yanantin), and the cairn's index (144 stones: title, date, byline, gloss) from
+  the published wamason.com repo. Private projects (research-program, authority) excluded by the
+  renderer. Brief: `scripts/scout/briefs/ayllu-neighbor.md`, a tourist who lives next door and has
+  time, with a "What I'd come back to, and why" section.
+- Usable: google/gemma-3-12b-it, nex-agi/nex-n2.5-pro, qwen/qwen3-next-80b-a3b-instruct,
+  z-ai/glm-5.3-flash. Failed: two `:batch` endpoints (HTTP 404); the runner now excludes `:batch`.
+
+### What the neighbors would come back to (each quoted from its report)
+
+- **tupay's falsified thesis** (nex, glm, gemma): "adaptation **did not win**", "a rare clean
+  disappointment"; glm wants "the paperwork" for a project that "pre-registered its own falsifier
+  and then hit it".
+- **episode's unsent jbd2 fix** (nex, glm): "deliberately unsent (narrow scope)", "feels like a
+  held breath"; "17 findings against a 1992 file system is the kind of archaeology I'd sit in on".
+- **khipumaq's "Nothing is filtered"** (nex, glm): "makes the privacy trade feel physical"; "I'd
+  come back to argue about it."
+- **tessera's travelog and signing puzzle** (glm, nex).
+- **cairn stones as lessons** (qwen): "The Glue Is Where I Wasn't Looking", "Ask the Server, Not
+  Its Label", "The Office of Necessary Forgetting" ("to see if anyone ever finished the duck").
+- **governance's open question** (nex, gemma): "not a settled empirical proof that Rashomon methods
+  outperform SHAP/LIME".
+
+### Noticed about Hamut'ay from outside
+
+glm: "Hamut'ay (the house the cairn lives in — the cairn talks about it constantly and I never saw
+its door)". Hamut'ay was not in the territory; it is the host, not a guest.
+
+### Caution
+
+qwen's notes had no double-quoted text to check (0/0), so its leads were checked by hand. "I
+arrived to find my own size" is real: a cairn gloss quotes "The resident on the new door, in its
+first wake". "The list of all 28 readers" is a distortion: the cairn has "28 findings in all", not
+28 readers. (The custodian first wrote that both were invented, and corrected that before
+committing.) Treat unquoted leads as guesses until found in a source.

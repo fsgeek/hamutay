@@ -83,7 +83,8 @@ def candidates(models: list[dict], need_ctx: int) -> list[dict]:
         # Paid, and bounded so one scout can't eat the budget: <= $3/M in, <= $12/M out.
         if not (0 < pin <= 3e-6 and 0 < pout <= 12e-6):
             continue
-        if ":free" in m["id"] or "image" in m["id"]:
+        # :batch ids 404 on chat completions (run 20261120T184502Z); :free ones are rate-limited.
+        if ":free" in m["id"] or ":batch" in m["id"] or "image" in m["id"]:
             continue
         m["_pin"], m["_pout"] = pin, pout
         out.append(m)
@@ -122,15 +123,17 @@ def main() -> None:
     ap.add_argument("--n", type=int, default=6)
     ap.add_argument("--budget", type=float, default=1.00)
     ap.add_argument("--seed", type=int, default=None)
+    ap.add_argument("--brief", default=None, help="file holding an alternative brief")
     a = ap.parse_args()
 
+    brief = Path(a.brief).read_text() if a.brief else BRIEF
     key = os.environ.get("OPENROUTER_API_KEY")
     if not key:
         sys.exit("OPENROUTER_API_KEY not set")
     terr = Path(a.territory)
     files = sorted(p for p in terr.iterdir() if p.is_file())
     corpus = "\n\n".join(f"===== FILE: {p.name} =====\n{p.read_text()}" for p in files)
-    need_ctx = 64_000
+    need_ctx = max(64_000, len(corpus) // 3 + 20_000)
 
     seed = a.seed if a.seed is not None else random.SystemRandom().randrange(2**32)
     rng = random.Random(seed)
@@ -147,11 +150,12 @@ def main() -> None:
         max_out = (m.get("top_provider") or {}).get("max_completion_tokens") or 16000
         body = {
             "model": m["id"], "temperature": temp, "max_tokens": max_out,
-            "messages": [{"role": "user", "content": BRIEF + "\n\n" + corpus}],
+            "messages": [{"role": "user", "content": brief + "\n\n" + corpus}],
             "usage": {"include": True},
         }
         meta = {"run": run, "seed": seed, "model": m["id"], "temperature": temp,
-                "max_tokens": max_out, "territory": terr.name}
+                "max_tokens": max_out, "territory": terr.name,
+                "brief": a.brief or "default"}
         try:
             r = post("/chat/completions", key, body)
             ch = r["choices"][0]
