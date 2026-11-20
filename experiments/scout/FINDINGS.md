@@ -53,7 +53,11 @@ as open to residents' own purposes.
   renderer. Brief: `scripts/scout/briefs/ayllu-neighbor.md`, a tourist who lives next door and has
   time, with a "What I'd come back to, and why" section.
 - Usable: google/gemma-3-12b-it, nex-agi/nex-n2.5-pro, qwen/qwen3-next-80b-a3b-instruct,
-  z-ai/glm-5.3-flash. Failed: two `:batch` endpoints (HTTP 404); the runner now excludes `:batch`.
+  z-ai/glm-5.3-flash, mistralai/mistral-large-4-0 (landed last; the most thorough, 144 of 150 quotes
+  found). Failed: two `:batch` endpoints (HTTP 404); the runner now excludes `:batch`.
+- Spent $0.1245 (seed 692826282), of which mistral-large-4-0 alone was $0.0996 (25,821 completion
+  tokens, 21,517 of them reasoning). Both runs together: $0.147. The custodian told Tony "$0.05"
+  before the last report landed; corrected.
 
 ### What the neighbors would come back to (each quoted from its report)
 
@@ -72,8 +76,15 @@ as open to residents' own purposes.
 
 ### Noticed about Hamut'ay from outside
 
-glm: "Hamut'ay (the house the cairn lives in — the cairn talks about it constantly and I never saw
-its door)". Hamut'ay was not in the territory; it is the host, not a guest.
+Two scouts independently. glm: "Hamut'ay (the house the cairn lives in — the cairn talks about it
+constantly and I never saw its door)". mistral: "The house without a signboard: Hamut'ay. Every story
+circles it". Hamut'ay was not in the territory; it is the host, not a guest.
+
+### A cross-project tension mistral raised (unverified)
+
+khipumaq's README admits its `raw` collection keeps "a file with a password in it or a token echoed
+to the terminal", while a stone ("The Words Survived") says a collector "thrown away metadata at
+intake". mistral: "I'd check whether both claims can be true of the same store." Not checked yet.
 
 ### Caution
 
