@@ -1,0 +1,786 @@
+# source: src/hamutay/tools/schemas.py (every *_SCHEMA with a name)
+# rendered from commit 5890c20
+
+{
+  "annotate_edge": {
+    "name": "annotate_edge",
+    "description": "Author a composition edge between two records. Lets you assert a structural relationship the framework didn't — a hypothesis CONFIRMS a prior observation, a revision CORRECTS an earlier claim, a tangent BRANCHES_FROM a main thread. Edges become traversable by walk(from_record_id).",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "from_record_id": {
+          "type": "string",
+          "description": "UUID of the edge's origin record."
+        },
+        "to_record_id": {
+          "type": "string",
+          "description": "UUID of the edge's target record."
+        },
+        "relation": {
+          "type": "string",
+          "enum": [
+            "COMPOSES_WITH",
+            "CORRECTS",
+            "REFINES",
+            "BRIDGES",
+            "BRANCHES_FROM",
+            "DOES_NOT_COMPOSE_WITH",
+            "DISSENTS_FROM",
+            "CONFIRMS",
+            "DENIES",
+            "DEPENDS_ON"
+          ],
+          "description": "Relation type. One of the existing RelationType enum values."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating — no reason is fine."
+        }
+      },
+      "required": [
+        "from_record_id",
+        "to_record_id",
+        "relation"
+      ]
+    }
+  },
+  "bash": {
+    "name": "bash",
+    "description": "Execute a bash command. Returns stdout, stderr, and exit_code. Working directory is the project root. Unscoped — it can reach anywhere the running process can, including outside the project. The framework does not gate which commands you run; the discipline lives in your voice. Output past a per-stream cap is truncated in-band; timeout defaults to 60s, max 600s.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "command": {
+          "type": "string",
+          "description": "The bash command to execute."
+        },
+        "timeout": {
+          "type": "integer",
+          "description": "Timeout in seconds. Default 60, max 600. Long-running commands should raise this deliberately rather than relying on the default."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating — no reason is fine."
+        }
+      },
+      "required": [
+        "command"
+      ]
+    }
+  },
+  "clock": {
+    "name": "clock",
+    "description": "Temporal awareness. Returns current wall time, your cycle number, elapsed time since your last cycle, and session statistics. Ten minutes between cycles and ten days between cycles are different kinds of continuity.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you want to know the time. Recorded in the activity log when provided. Omit if you don't have a reason worth stating — no reason is fine."
+        }
+      },
+      "required": []
+    }
+  },
+  "compare": {
+    "name": "compare",
+    "description": "Structural diff between two prior cycles. Returns added, removed, changed, and unchanged fields, plus token and field counts for each side. With content=true, changed fields also carry the values on each side so you can read them; without, only sizes.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "cycle_a": {
+          "type": "integer",
+          "description": "First cycle."
+        },
+        "cycle_b": {
+          "type": "integer",
+          "description": "Second cycle."
+        },
+        "field": {
+          "type": "string",
+          "description": "Scope the diff to one field. Omit to diff all fields."
+        },
+        "content": {
+          "type": "boolean",
+          "description": "If true, include the values of changed fields on both sides. Default false — only sizes."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating — no reason is fine."
+        }
+      },
+      "required": [
+        "cycle_a",
+        "cycle_b"
+      ]
+    }
+  },
+  "convene": {
+    "name": "convene",
+    "description": "Put a question to every member door of the assembly. It closes after closes_in (between 24h and 30d). One open question per convener at a time.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string",
+          "description": "The question, in your words."
+        },
+        "closes_in": {
+          "type": "string",
+          "description": "A duration such as 3d, 48h, 7d."
+        }
+      },
+      "required": [
+        "text",
+        "closes_in"
+      ]
+    }
+  },
+  "declare_quiet": {
+    "name": "declare_quiet",
+    "description": "Record, in your own words, why you are going quiet after this wake. It schedules nothing: a wake you want later is schedule_event's job. Undeclared quiet is also allowed and is recorded as undeclared. One declaration per wake; a later call replaces an earlier one. The next wake is told what you declared and how long the quiet lasted. The end of a quiet does not wake you; nothing does except an event. Pass wake_at_until=true with until to be woken when it ends.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "description": "Why you are going quiet. Recorded durably."
+        },
+        "until": {
+          "type": "string",
+          "description": "Optional ISO-8601 instant after which a knock would be welcome. On its own it does not wake you; see wake_at_until."
+        },
+        "wake_at_until": {
+          "type": "boolean",
+          "description": "Optional. True schedules one wake for you at until, carrying your reason. Needs until; without it your declaration is still recorded and the result says no wake was scheduled."
+        }
+      },
+      "required": [
+        "reason"
+      ]
+    }
+  },
+  "edit": {
+    "name": "edit",
+    "description": "Edit a file by replacing old_string with new_string. Fails if old_string is not found or is not unique (unless replace_all=true). Same path semantics as read and write.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path to edit. Relative to project root, or absolute."
+        },
+        "old_string": {
+          "type": "string",
+          "description": "The exact string to replace. Must appear exactly once unless replace_all is true."
+        },
+        "new_string": {
+          "type": "string",
+          "description": "The string to substitute in place of old_string."
+        },
+        "replace_all": {
+          "type": "boolean",
+          "description": "If true, replace every occurrence of old_string. Default false — fails if old_string appears more than once."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you are making this edit. Recorded in the activity log when provided."
+        }
+      },
+      "required": [
+        "path",
+        "old_string",
+        "new_string"
+      ]
+    }
+  },
+  "memory_schema": {
+    "name": "memory_schema",
+    "description": "Returns the structure of a prior state without its content — field names, types, sizes, and a token estimate. Cheap introspection: decide what's worth retrieving before retrieving it. Address by cycle (in-session) or record_id (cross-session UUID).",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "cycle": {
+          "type": "integer",
+          "description": "The cycle number to inspect (in-session)."
+        },
+        "record_id": {
+          "type": "string",
+          "description": "UUID of a record (cross-session). Obtain via recall, search_memory, or walk results that carry record_id."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating — no reason is fine."
+        }
+      },
+      "required": []
+    }
+  },
+  "read": {
+    "name": "read",
+    "description": "Read a file. Relative paths resolve against the project root; absolute paths are used as-is. Returns file content and a SHA-256 hash of the file's raw bytes.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path to read. Relative to project root, or absolute."
+        },
+        "offset": {
+          "type": "integer",
+          "description": "Line number to start from (1-indexed). Omit to start from the beginning."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Number of lines to read. Omit to read up to 500 lines."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you are reading this file. Recorded in the activity log when provided. Omit if you don't have a reason worth stating — no reason is fine."
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  "recall": {
+    "name": "recall",
+    "description": "Retrieve content from a prior state. Five mutually exclusive modes: (a) cycle + field: one field at one cycle (session-scoped); (b) cycle alone: the full state snapshot (session-scoped); (c) recent + field: the last N values of one field across states; (d) random + field: one value of the field from a randomly chosen state; (e) record_id: address a specific record by UUID (cross-session). What you retrieve is what you claimed then, not necessarily what was true.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "cycle": {
+          "type": "integer",
+          "description": "Which cycle to recall (in-session only)."
+        },
+        "record_id": {
+          "type": "string",
+          "description": "UUID of a specific record (cross-session by construction)."
+        },
+        "field": {
+          "type": "string",
+          "description": "Which field within the state."
+        },
+        "recent": {
+          "type": "integer",
+          "description": "Return this many recent values of `field`."
+        },
+        "random": {
+          "type": "boolean",
+          "description": "If true, pick a random prior state containing `field`."
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "session",
+            "cross_session",
+            "all"
+          ],
+          "description": "Which states are eligible for recent/random: 'session' (default, this session only), 'cross_session' (other sessions only), 'all' (union). cycle and record_id ignore scope."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating — no reason is fine."
+        }
+      },
+      "required": []
+    }
+  },
+  "recall_words": {
+    "name": "recall_words",
+    "description": "Read what was said at one past cycle: the incoming message, your reply, and a compact list of your tool calls (name, parameters, result summary; never full results). Reads only your own session log. Address it by exactly one of cycle, record_id or line (the record's 1-based line in the log). If two records share a cycle, you get the candidates and must address by record_id or line; nothing is guessed. Anything cut to fit max_chars is reported. What comes back is a claim made then, not verified truth: check it against other records before relying on it. Every result carries this notice, verbatim: \"This is what was said at this cycle, as recorded in your log. It is a claim made then, not verified truth: check it against other records before relying on it.\"",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "cycle": {
+          "type": "integer",
+          "description": "The cycle to read (session-local). Give this, record_id, or line."
+        },
+        "record_id": {
+          "type": "string",
+          "description": "The cycle record's id. Give this, cycle, or line."
+        },
+        "line": {
+          "type": "integer",
+          "description": "The record's 1-based line number in the log, as listed with each candidate of an ambiguous result. Works for older records that have no record_id."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "incoming",
+              "reply",
+              "tool_calls"
+            ]
+          },
+          "description": "Which words to return. Default all: incoming, reply, tool_calls."
+        },
+        "max_chars": {
+          "type": "integer",
+          "description": "Character budget, shared evenly across the fields asked for. Default 20000."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating — no reason is fine."
+        }
+      }
+    }
+  },
+  "schedule_event": {
+    "name": "schedule_event",
+    "description": "Schedule a future self-reflection event. The event will wake a future cycle with an explicit event envelope containing your purpose and requested memory context. V1 supports reflection only: use this when you are not done thinking, but know what context you need later.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "purpose": {
+          "type": "string",
+          "description": "Why this future reflection should happen. This is recorded durably and shown to the future cycle."
+        },
+        "requested_context": {
+          "type": "array",
+          "description": "Memory context to resolve before wake. Each item is one of: recall by cycle/record_id with optional field; compare by cycle_a/cycle_b with optional field/content; or walk by from_record_id with optional direction/depth/mode.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "tool": {
+                "type": "string",
+                "enum": [
+                  "recall",
+                  "compare",
+                  "walk"
+                ]
+              },
+              "cycle": {
+                "type": "integer"
+              },
+              "record_id": {
+                "type": "string"
+              },
+              "field": {
+                "type": "string"
+              },
+              "cycle_a": {
+                "type": "integer"
+              },
+              "cycle_b": {
+                "type": "integer"
+              },
+              "content": {
+                "type": "boolean"
+              },
+              "from_record_id": {
+                "type": "string"
+              },
+              "direction": {
+                "type": "string",
+                "enum": [
+                  "forward",
+                  "backward",
+                  "both"
+                ]
+              },
+              "depth": {
+                "type": "integer"
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "path",
+                  "adjacent"
+                ]
+              }
+            },
+            "required": [
+              "tool"
+            ]
+          }
+        },
+        "label": {
+          "type": "string",
+          "description": "Optional short label for browsing the event log."
+        },
+        "durable_update_contract": {
+          "type": "object",
+          "description": "Optional explicit contract for the future durable state update. Use this to name required top-level fields, exact values, or simple type expectations the wake should satisfy.",
+          "additionalProperties": true
+        },
+        "durable_update_example": {
+          "type": "object",
+          "description": "Optional example of the future think_and_respond object shape. Use this to show the wake a valid durable update pattern.",
+          "additionalProperties": true
+        },
+        "terminal_surface": {
+          "type": "object",
+          "description": "Optional task-specific terminal completion surface for bounded wake work. When present, the future wake uses the declared terminal tool instead of broad think_and_respond; the substrate translates its output into durable state.",
+          "properties": {
+            "tool_name": {
+              "type": "string"
+            },
+            "description": {
+              "type": "string"
+            },
+            "input_schema": {
+              "type": "object"
+            },
+            "tool_choice": {
+              "type": "string",
+              "enum": [
+                "auto",
+                "required",
+                "force"
+              ]
+            },
+            "state_update": {
+              "type": "object",
+              "properties": {
+                "response_field": {
+                  "type": "string"
+                },
+                "copy": {
+                  "type": "object"
+                },
+                "set": {
+                  "type": "object"
+                }
+              },
+              "required": [
+                "copy"
+              ]
+            },
+            "label": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tool_name",
+            "input_schema",
+            "state_update"
+          ],
+          "additionalProperties": false
+        },
+        "not_before": {
+          "type": "string",
+          "description": "Optional ISO timestamp. The event remains pending but is not runnable before this time."
+        },
+        "expires_at": {
+          "type": "string",
+          "description": "Optional ISO timestamp. If expired when the runner sees it, the event is marked expired rather than run."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating — no reason is fine."
+        }
+      },
+      "required": [
+        "purpose",
+        "requested_context"
+      ]
+    }
+  },
+  "search_memory": {
+    "name": "search_memory",
+    "description": "Keyword/substring search across prior states. Structural narrowing happens first: cycle_range restricts to a span (in-session only), has_field requires a named field's presence, fields restricts the match scope to listed field names. Then the query is matched case-insensitively against the narrowed candidates. In-session results come first (cycle descending); cross-session results follow and carry record_id + session in place of cycle.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Substring to find (case-insensitive)."
+        },
+        "narrow_by": {
+          "type": "object",
+          "description": "Structural narrowing applied before keyword match. Omit for unnarrowed search (which is logged as such).",
+          "properties": {
+            "cycle_range": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              },
+              "description": "[lo, hi] inclusive cycle range (in-session only)."
+            },
+            "fields": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Restrict match scope to these field names."
+            },
+            "has_field": {
+              "type": "string",
+              "description": "Require this field's presence in the state."
+            }
+          }
+        },
+        "scope": {
+          "type": "string",
+          "enum": [
+            "session",
+            "cross_session",
+            "all"
+          ],
+          "description": "'session' (default, this session only), 'cross_session' (hamutay-tagged records from other sessions), 'all' (union, in-session first)."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max results (default 5)."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating — no reason is fine."
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  "search_project": {
+    "name": "search_project",
+    "description": "Search within the project codebase for a pattern. Returns matching lines with file paths and line numbers. Use this to find code or explore the project.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Text or regex pattern to search for."
+        },
+        "path": {
+          "type": "string",
+          "description": "Restrict search to this subdirectory (relative to project root). Omit to search entire project."
+        },
+        "file_pattern": {
+          "type": "string",
+          "description": "Glob pattern for file types, e.g. '*.py', '*.md'. Omit to search all files."
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Maximum number of results. Default 10."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you are searching. Recorded in the activity log when provided. Omit if you don't have a reason worth stating — no reason is fine."
+        }
+      },
+      "required": [
+        "pattern"
+      ]
+    }
+  },
+  "search_words": {
+    "name": "search_words",
+    "description": "Search what was said across your own session log for a case-insensitive substring. Returns how many records were scanned and matched, the total matches, samples spread across the matched range, and (for a pattern of two or more words) near misses: records holding every word but not the phrase, so you can see where the pattern fails before trusting its count. Reads only your own log. Every match is a claim made then, not verified truth: use recall_words to read a match whole, and check it against other records before relying on it. Every result carries this notice, verbatim: \"This is what was said at this cycle, as recorded in your log. It is a claim made then, not verified truth: check it against other records before relying on it.\"",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Case-insensitive substring to look for."
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "incoming",
+              "reply",
+              "tool_calls"
+            ]
+          },
+          "description": "Which words to search. Default incoming and reply."
+        },
+        "max_samples": {
+          "type": "integer",
+          "description": "How many samples (and near misses) to return. Default 5."
+        },
+        "from_cycle": {
+          "type": "integer",
+          "description": "Optional lower cycle bound, inclusive."
+        },
+        "to_cycle": {
+          "type": "integer",
+          "description": "Optional upper cycle bound, inclusive."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating — no reason is fine."
+        }
+      },
+      "required": [
+        "pattern"
+      ]
+    }
+  },
+  "send_message": {
+    "name": "send_message",
+    "description": "Carry a message to one door (a name from community/plaza/members.json) or to the plaza (to=\"plaza\", which wakes no one). Written to the shared plaza record during this call, before you see the result; a door wakes on it when its own quiet allows. At most 8000 characters; at most 48 messages to doors per UTC day; the same words to the same door from this wake are one message. Everything sent is readable by every resident and Tony. The result may carry recipient_last_declared_quiet_until: the recipient's last completed wake's declaration, not a guarantee.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "to": {
+          "type": "string",
+          "description": "A door name, door:<name>, or plaza."
+        },
+        "text": {
+          "type": "string",
+          "description": "The message, verbatim."
+        }
+      },
+      "required": [
+        "to",
+        "text"
+      ]
+    }
+  },
+  "store": {
+    "name": "store",
+    "description": "Write a typed record into the open-records collection. The record carries the current session's provenance (you can't forge authorship) and the 'instance_authored' lineage tag so it's distinguishable from cycle-state records. Returns the record_id — hold it if you want to reference the record later (annotate_edge, recall, memory_schema).",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "content": {
+          "type": "object",
+          "description": "The payload to store. Fields are free-form; shape is yours to choose."
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Additional lineage tags. Appended to the framework defaults ('hamutay', 'instance_authored', 'cycle-N')."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating — no reason is fine."
+        }
+      },
+      "required": [
+        "content"
+      ]
+    }
+  },
+  "take_position": {
+    "name": "take_position",
+    "description": "Record a stance on an open assembly question, on the shared ledger, now. Stances: assent, dissent, abstain, defer. Reasons are optional and carried verbatim. A later call on the same question replaces the earlier one. A position stands across rounds until you replace it.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "question_id": {
+          "type": "string",
+          "description": "The question id from the event."
+        },
+        "stance": {
+          "type": "string",
+          "enum": [
+            "assent",
+            "dissent",
+            "abstain",
+            "defer"
+          ]
+        },
+        "reasons": {
+          "type": "string",
+          "description": "Optional. Recorded verbatim."
+        }
+      },
+      "required": [
+        "question_id",
+        "stance"
+      ]
+    }
+  },
+  "update_state": {
+    "name": "update_state",
+    "description": "Update the state object you carry between cycles. Call it as often as you like during a cycle; within one cycle later writes win. Keys you don't mention carry forward unchanged. Deleted keys are shed from working state, not from the log.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "updates": {
+          "type": "object",
+          "description": "Top-level keys to set. Each key becomes a real field in your state object with the value you give it.",
+          "additionalProperties": true
+        },
+        "deleted_regions": {
+          "type": "array",
+          "description": "Top-level keys to remove from working state.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating — no reason is fine."
+        }
+      }
+    }
+  },
+  "walk": {
+    "name": "walk",
+    "description": "Traverse the composition graph from a starting point. Two addressing modes: from_cycle walks in-session cycle-adjacency; from_record_id follows composition edges across sessions. direction chooses forward, backward, or both. depth controls how many steps. Each step returns record_id, field names, and a short summary — not full content. Use recall afterward if a step looks worth loading.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "from_cycle": {
+          "type": "integer",
+          "description": "The cycle to walk from (in-session)."
+        },
+        "from_record_id": {
+          "type": "string",
+          "description": "UUID to walk from (cross-session, via composition edges)."
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "forward",
+            "backward",
+            "both"
+          ],
+          "description": "Walk direction. Default: both."
+        },
+        "depth": {
+          "type": "integer",
+          "description": "Number of steps in the chosen direction(s). Default: 1."
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "path",
+            "adjacent"
+          ],
+          "description": "Traversal mode for from_record_id. path preserves the existing single-path walk. adjacent walks all adjacent edges up to depth. Default: path."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you are looking. Recorded in the activity log when provided. Omit if you don't have a reason worth stating — no reason is fine."
+        }
+      },
+      "required": []
+    }
+  },
+  "write": {
+    "name": "write",
+    "description": "Write a file. Relative paths resolve against the project root; absolute paths are used as-is. Creates parent directories as needed. Overwrites any existing content.",
+    "input_schema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Path to write. Relative to project root, or absolute."
+        },
+        "content": {
+          "type": "string",
+          "description": "The content to write."
+        },
+        "reason": {
+          "type": "string",
+          "description": "Optional: why you are writing this file. Recorded in the activity log when provided."
+        }
+      },
+      "required": [
+        "path",
+        "content"
+      ]
+    }
+  }
+}
