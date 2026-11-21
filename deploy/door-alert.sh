@@ -8,6 +8,14 @@
 set -euo pipefail
 cd /home/tony/projects/hamutay
 unit="${1:-unknown}"; f="$(mktemp)"; trap 'rm -f "$f"' EXIT
+# Post only if the unit is still failed a few seconds later. A deliberate restart briefly enters
+# "failed" when the old process exits non-zero, then starts again at once; a door that has hit its
+# start limit stays failed. (Not NRestarts: manual starts count toward the limit too, so a real
+# crash loop can trip it after one automatic restart. Tested both ways through systemd, 2026-11-21.)
+if [ -z "${DOOR_ALERT_DRY_RUN:-}" ]; then   # a dry run exercises the post path even on a healthy unit
+  sleep "${DOOR_ALERT_SETTLE_S:-5}"
+  [ "$(systemctl --user show "$unit" -p ActiveState --value 2>/dev/null)" = failed ] || exit 0
+fi
 props="$(systemctl --user show "$unit" -p NRestarts,ExecMainStatus,ExecMainExitTimestamp --no-pager 2>/dev/null | tr '\n' ' ')"
 err="$(journalctl --user -u "$unit" -n 60 --no-pager -o cat 2>/dev/null \
   | grep -E 'Error|error:|No API key|Traceback|SystemExit|refus|not found' | grep -v '^hamutay-heartbeat' | tail -n 1 | cut -c1-240 || true)"

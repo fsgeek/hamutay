@@ -26,6 +26,10 @@ EnvironmentFile=%h/.config/hamutay/heartbeat.env
 ExecStart=/home/tony/.local/bin/uv run python -m hamutay.heartbeat --log-path community/%i/session.jsonl --project-root .
 Restart=always
 RestartSec=10
+# A stop (systemctl restart/stop) ends the process with status 143 (128+SIGTERM, reported by uv as an
+# exit code). Without this, systemd counts every deliberate restart as a failure and fires OnFailure:
+# five false door alerts on 2026-11-21 (plaza seq 271-275).
+SuccessExitStatus=143
 
 [Install]
 WantedBy=default.target
