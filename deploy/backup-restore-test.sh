@@ -7,7 +7,7 @@ set -euo pipefail
 LOCAL_ROOT="${LOCAL_ROOT:-/home/tony/backups/arango}"; REMOTE="${REMOTE:-wam-nuc}"; REMOTE_ROOT="${REMOTE_ROOT:-backups/arango}"
 TARGET="${TARGET:-arango-ayllu}"; TARGET_PORT="${TARGET_PORT:-8531}"; DB="${DB:-apacheta}"
 LOG="$LOCAL_ROOT/restore-log.jsonl"; STAGE=start; NOW="$(date -u +%Y%m%dT%H%M%SZ)"
-status() { local l="{\"test\":\"$NOW\",\"status\":\"$1\",\"stage\":\"$2\",\"finished\":\"$(date -u +%FT%TZ)\"${3:+,$3}}"; echo "$l" >> "$LOG"; echo "$l"; }
+status() { local l="{\"test\":\"$NOW\",\"db\":\"$DB\",\"status\":\"$1\",\"stage\":\"$2\",\"finished\":\"$(date -u +%FT%TZ)\"${3:+,$3}}"; echo "$l" >> "$LOG"; echo "$l"; }
 trap 'status failed "$STAGE"; exit 1' ERR
 STAGE=pick
 RUN="$(python3 -c "import json;print([json.loads(l)['run'] for l in open('$LOCAL_ROOT/backup-log.jsonl') if json.loads(l)['status']=='ok'][-1])")"
