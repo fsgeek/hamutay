@@ -115,3 +115,13 @@ found four bugs in the first version before deployment.
 **To restore a file:** copy it from the newest ok run on wam-nuc, check it against that run's
 manifest, and stop the door it belongs to before putting it back. A door's log is what its restart
 reads.
+
+## Attestation (from 2026-11-20)
+
+`hamutay-attest.timer` (nightly 05:30 local) runs `deploy/attest-nightly.sh`. It copies restore-test results into
+`community/backup/RESTORE-TESTS.txt`, digests every community log into each door's `CHECKPOINTS.txt`, and makes
+one signed commit, which the OTS hook stamps. It doesn't push. A failure posts to the plaza
+(`deploy/attest-alert.sh`). What the stamps prove is limited. The 10-03 and 11-01 restore results entered the
+ledger on 2026-11-20, so they are attested as existing by then, not at the times they record. The checkpoints
+had a gap from 2026-10-05 to 2026-11-20, and Marker's first checkpoint is 2026-11-21T00:21Z. A restore test
+compares collection counts, not contents.
