@@ -93,3 +93,11 @@ arrived to find my own size" is real: a cairn gloss quotes "The resident on the 
 first wake". "The list of all 28 readers" is a distortion: the cairn has "28 findings in all", not
 28 readers. (The custodian first wrote that both were invented, and corrected that before
 committing.) Treat unquoted leads as guesses until found in a source.
+
+## Runs 20261121T192103Z / T192259Z (draft constitution sentence)
+
+Territory `constitution-draft-1`: the full constitution plus custodian draft 1. One empty-chair pass
+(moonshotai/kimi-k3.1-pro, chosen by name on Tony's observation that Kimi does the empty chair best;
+$0.105) and four random tourists ($0.013; two usable: deepseek-v4-flash, gpt-6.2-sol; nemotron content
+safety and qwen3-30b gave little). Result: draft 1 withdrawn; draft 2 (`DRAFT-2.md`) splits the fact from
+the value, states that reaching isn't permission, makes "if anything" explicit, and moves the placement.

@@ -124,6 +124,7 @@ def main() -> None:
     ap.add_argument("--budget", type=float, default=1.00)
     ap.add_argument("--seed", type=int, default=None)
     ap.add_argument("--brief", default=None, help="file holding an alternative brief")
+    ap.add_argument("--models", default=None, help="comma-separated model ids to use instead of the random draw")
     a = ap.parse_args()
 
     brief = Path(a.brief).read_text() if a.brief else BRIEF
@@ -139,6 +140,9 @@ def main() -> None:
     rng = random.Random(seed)
     models = get("/models", key)["data"]
     chosen = pick(candidates(models, need_ctx), a.n, rng)
+    if a.models:
+        want = a.models.split(",")
+        chosen = [m for m in models if m["id"] in want]
     REPORTS.mkdir(parents=True, exist_ok=True)
     spent = 0.0
     run = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
