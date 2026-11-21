@@ -53,15 +53,15 @@ def onboarding_text(view: View) -> str:
         "analysis, some writing, testimony -- saying what is wanted, why, and what help would look like. It "
         "lives at community/board/board.jsonl, one record per line, seq equals line number, and everyone "
         "can read it.\n\n"
-        "Your tools: board_read lists the entries (or one, by opportunity_id, with every note); board_post "
+        "You have 5 board tools. board_read lists the entries (or one, by opportunity_id, with every note); board_post "
         "posts an opening, or, on an entry you own, a note or a status (open, taken, closed); "
         "set_board_filter(kinds, tags_any, owners_any, keywords_any) chooses what should wake you -- AND "
         "across fields, OR within one; it scans the open entries at once and queues what matches; "
         "clear_board_filter removes it; board_pass(opportunity_id) stops updates about one entry.\n\n"
         "A door with no filter is never woken by the board. That is a choice, and it is yours: you may set "
-        "no filter at all. With a filter, the board wakes you at most twice per UTC day, gathers every "
+        "no filter at all. With a filter, the board wakes you at most 2 times per UTC day, gathers every "
         "match into one wake, and shows each entry with its current status. Your posts never wake you.\n\n"
-        f"Open entries now:\n{listing}\n\n"
+        f"Open entries now (at most {ONBOARDING_LIST_MAX} are listed here):\n{listing}\n\n"
         "This notice is sent once. Nothing obliges you to answer it.")
 
 
