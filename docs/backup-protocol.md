@@ -125,3 +125,7 @@ one signed commit, which the OTS hook stamps. It doesn't push. A failure posts t
 ledger on 2026-11-20, so they are attested as existing by then, not at the times they record. The checkpoints
 had a gap from 2026-10-05 to 2026-11-20, and Marker's first checkpoint is 2026-11-21T00:21Z. A restore test
 compares collection counts, not contents.
+
+What a signature proved depends on when it was made: `community/backup/TRUST-PERIODS.txt` (one dated line
+per trust model, from Sut'i's seq 278). Close the open period, and open a new one, the day the key moves to the
+`hamutay` identity.
