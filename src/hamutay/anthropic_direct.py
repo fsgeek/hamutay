@@ -51,6 +51,9 @@ COST_SOURCE = "anthropic_token_estimate"
 ANTHROPIC_PRICES_PER_MTOK: dict[str, tuple[float, float, float, float]] = {
     "claude-fable-5": (10.0, 12.5, 1.00, 50.0),
     "claude-fable-5-1": (10.0, 12.5, 0.25, 50.0),
+    # Claude Fable 5.2 (released 2026-11-09): $8 / $40, cache reads $0.20, per the
+    # claude-api skill table read 2026-11-17; 5-minute cache write is 1.25x input.
+    "claude-fable-5-2": (8.0, 10.0, 0.20, 40.0),
     "claude-opus-5-5": (4.0, 5.0, 0.20, 20.0),
     "claude-sonnet-5-5": (2.0, 2.5, 0.20, 10.0),
     "claude-haiku-4-5": (1.0, 1.25, 0.10, 5.0),
@@ -62,6 +65,7 @@ ANTHROPIC_PRICES_PER_MTOK: dict[str, tuple[float, float, float, float]] = {
 ANTHROPIC_MAX_OUTPUT: dict[str, int] = {
     "claude-fable-5": 128_000,
     "claude-fable-5-1": 128_000,
+    "claude-fable-5-2": 128_000,
     "claude-opus-5-5": 128_000,
     "claude-sonnet-5-5": 128_000,
     "claude-haiku-4-5": 64_000,

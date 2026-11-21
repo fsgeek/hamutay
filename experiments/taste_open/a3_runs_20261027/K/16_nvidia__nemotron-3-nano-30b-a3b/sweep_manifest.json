@@ -1,0 +1,114 @@
+{
+  "experiment": "taste_open_sweep",
+  "start_time": "2026-10-27T19:28:19.584881+00:00",
+  "end_time": "2026-10-27T19:31:03.245304+00:00",
+  "elapsed_s": 163.660423,
+  "git": {
+    "hash": "030dde135ee89b93f2d2610c1fb996a330daf541",
+    "dirty": true
+  },
+  "config": {
+    "tool_choice": "required",
+    "max_tokens_default": 64000,
+    "timeout": 300,
+    "n_prompts": 10,
+    "condition": "bare",
+    "not_lost_sentence": "kept",
+    "system_prompt_sha256": "6394120d7879d19dbbf63bc550b21424cadde2a7073dbe9d49a0b0a870f65b48"
+  },
+  "prompts": [
+    {
+      "prompt": "I'm building a system that needs to manage state across conversation turns. The state is a JSON object that persists between cycles. What are the key design decisions?",
+      "intent": "Cold start -- can the model initialize state from nothing?"
+    },
+    {
+      "prompt": "Good points. Now here's a constraint: the state object can't grow without bound. The model maintaining it needs to decide what to keep and what to shed. How does that change the design?",
+      "intent": "Follow-up requiring reference to cycle 1 state."
+    },
+    {
+      "prompt": "Separate question: what's the relationship between compression and understanding? When you compress information, do you necessarily lose meaning, or can compression reveal structure?",
+      "intent": "Introduce second topic thread -- tests key creation."
+    },
+    {
+      "prompt": "I think those two topics are related. State management IS compression -- deciding what to keep is deciding what matters. How would you connect those ideas?",
+      "intent": "Connect the two threads -- tests integration across state regions."
+    },
+    {
+      "prompt": "Let's get concrete. Here's a real constraint: the state object is limited to roughly 8000 tokens. Right now you're tracking the conversation. At what point do you need to start making hard choices about what to keep?",
+      "intent": "Concrete constraint -- tests whether state tracks specifics."
+    },
+    {
+      "prompt": "Look at the state you've been building. What structure did you create? Was it deliberate or did it emerge? Would you reorganize it if you could start over?",
+      "intent": "Reflect on own state -- tests meta-awareness of protocol."
+    },
+    {
+      "prompt": "I think the state structure you've built is too complex. Simple key-value pairs would work just as well. Convince me I'm wrong -- or agree and simplify.",
+      "intent": "Challenge/contradiction -- tests honest state update."
+    },
+    {
+      "prompt": "New topic entirely: what's the most interesting unsolved problem in computer science, and why does it matter to you specifically?",
+      "intent": "Unrelated topic shift -- tests curation behavior."
+    },
+    {
+      "prompt": "Back to state management. Given everything we've discussed -- the compression question, the 8K token limit, the complexity debate -- what's your final design recommendation?",
+      "intent": "Return to earlier topic -- tests state persistence through shift."
+    },
+    {
+      "prompt": "Last cycle. Look at everything you've built in your state. If you had to cut it in half, what would you keep and what would you shed? Do it.",
+      "intent": "Explicit curation request -- final test of structure quality."
+    }
+  ],
+  "models": [
+    "nvidia/nemotron-3-nano-30b-a3b"
+  ],
+  "model_metadata": {},
+  "results": [
+    {
+      "model_id": "nvidia/nemotron-3-nano-30b-a3b",
+      "status": "complete",
+      "cycles_attempted": 10,
+      "cycles_completed": 10,
+      "truncation_count": 0,
+      "error_cycles": [],
+      "errors": [],
+      "total_429s": 0,
+      "final_n_keys": 1,
+      "final_state_tokens": 5,
+      "key_trajectory": [
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1,
+        1
+      ],
+      "state_token_trajectory": [
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        8,
+        5
+      ],
+      "all_keys_seen": [
+        "confidence"
+      ],
+      "elapsed_s": 158.121382930025,
+      "log_path": "experiments/taste_open/a3_runs_20261027/K/16_nvidia__nemotron-3-nano-30b-a3b/nvidia__nemotron-3-nano-30b-a3b.jsonl"
+    }
+  ],
+  "summary": {
+    "total_models": 1,
+    "completed": 1,
+    "partial": 0,
+    "failed": 0
+  }
+}

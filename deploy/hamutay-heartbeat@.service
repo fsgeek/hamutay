@@ -11,6 +11,13 @@
 [Unit]
 Description=Hamutay heartbeat — community resident %i
 After=network-online.target
+# 5 failed starts in 10 minutes -> failed -> OnFailure posts to the plaza (deploy/door-alert.sh).
+# Before 2026-11-20 systemd's default (5 in 10 s) could never trip with RestartSec=10, so a
+# persistent fault was retried forever, silently. Every failure on record is a config error
+# exiting ~2 s after launch; transient faults are handled inside the loop and never exit.
+StartLimitIntervalSec=600
+StartLimitBurst=5
+OnFailure=hamutay-door-alert@%n.service
 
 [Service]
 Type=simple

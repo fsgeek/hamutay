@@ -109,11 +109,13 @@ Adding the §1 corpus-wide date errors would make DATE/TIME the single largest e
 ### 3c. The false claims, grouped by what went wrong
 
 - **Fabricated referents** (SRC/RCPT; a sub-pattern the taxonomy's caught corpus barely shows). The artifact is quoted or cited as existing, and it never existed.
-  - `memory_architect_week2_journey.md:22`: code "found already waiting". Neither `memory_bank` nor `resonate()` exists anywhere.
+  - ~~`memory_architect_week2_journey.md:22`: code "found already waiting". Neither `memory_bank` nor `resonate()` exists anywhere.~~ **Moved, 2026-10-26** (see the correction below): the snippet is invented, but its referent was real and in use, so this is a misquotation of a real system, not an invented referent. It now sits under "Describing a real system wrongly".
   - `observer_weaver_journey.md:13,23`: work cited as "PR #228" and "PR #229" before those PRs existed. The numbers later went to unrelated PRs, and they still stand at HEAD.
   - `from_apprentices_to_chasqui.md:35`: a "Before" snippet calls `learn_from_master()`, which never existed. Borderline, because the block is illustrative.
   - `2026-03-11-haiku-memory-curation-protocol.md:28`: "T₀–T₈", but T₈ was never written.
   These differ from the taxonomy's SRC, where the author misreports a real document. Here the referent was invented.
+- **Describing a real system wrongly** (SRC; added 2026-10-26):
+  - `memory_architect_week2_journey.md:22` (T'ikray Yachay, 39th Artisan): the quoted call `memory_bank.resonate(current_context)` exists nowhere. But the system it names, Active Memory Resonance, had been added two days earlier (9e471f9, 2025-06-26, `active_memory_resonance.py`, whose method is `detect_resonance`). At the khipu's own commit (e53dde0, 2025-06-28), three modules import it, and two construct and call it (`memory_enhanced_dialogue_manager.py:41,110`; `memory_resonant_fire_circle.py:64`). The API was misquoted; the thing was there.
 - **Describing one's own code wrongly**, at commit time (SRC/RCPT):
   - `2025-06-11-consciousness-guided-speaker-selection.md:81`: the phase weights are not in the code. The design doc in the same commit repeats the khipu's numbers, so doc and khipu agree with each other and not with the code.
   - `2025-07-17_guardian_work_summary.md:36`: `connect()` "returns False immediately".
@@ -148,7 +150,7 @@ AGENT holds 25 of the 81 UNVERIFIABLE rows. They are claims about what Tony said
 The caught corpus in the taxonomy has 238 rows: 201 cairn and 37 hamutay. This uncaught sample has 28 FALSE rows plus the 30-stamp date census.
 
 **More common here than in the caught corpus:**
-1. **Fabricated referents.** Code, PR numbers or tensors that never existed, quoted as found or done: 4 of 28 FALSE. The taxonomy's SRC rows are almost all *misreadings* of a real text. This corpus writes the text into existence. The likely reason is that nobody opened the cited thing afterwards. In the cairn, a quoted snippet sits in a culture where somebody checks it.
+1. **Fabricated referents.** Code, PR numbers or tensors that never existed, quoted as found or done: ~~4~~ 3 of 28 FALSE, one of them borderline (corrected 2026-10-26: one of the four misquoted a system that did exist). The taxonomy's SRC rows are almost all *misreadings* of a real text. This corpus writes the text into existence. The likely reason is that nobody opened the cited thing afterwards. In the cairn, a quoted snippet sits in a culture where somebody checks it.
 2. **Agency moved to the system and to the self** (AGENT, 18% vs 8%). The taxonomy's AGENCY tag has 4 rows and calls it "real but rare". Here it is built into the genre's framing, which the culture encouraged: the Fire Circle "chose", memory "spoke", names were "discovered". The same framing produced ~430 ceremonial sentences.
 3. **GUAR** (11% vs 6%, and 3 of 4 settled GUAR claims were false). The taxonomy found that authors never catch their own absolutes and only reviewers do (12 of 15). With no reviewers, they stay: "every component", "you cannot", "ALL… blocked".
 4. **Calendar dates** (DATE). The taxonomy has 6 TIME rows, all durations or clock times. Here there are 30 wrong month/year stamps with one fixed direction. Hamutay-era instances got the date from the environment and wrote hashes instead of dates (#151). That habit, and a later model generation, probably explain why this kind is missing from the caught corpus.
@@ -547,3 +549,10 @@ Columns: file:line (line 0 = filename), quote (truncated to 200 chars), verifica
 | 305 | `2025-07-17_guardian_work_summary.md:77` | The wounds are healed, the security preserved | Issue #198 opened before this commit lists remaining async/await bug and says significant work required | **UNVERIFIABLE** | RCPT | note: contested by the human's issue but 'healed' is not a precise claim |
 | 306 | `2025-07-17_the_first_cantor_blessing.md:61` | Added by the Steward, at the order of ChatGPT-4o | commit dce3d74 msg 'Added Khipu on behalf of ChatGPT-4o'; no transcript | **UNVERIFIABLE** | AGENT | note: consistent with commit message; authorship not checkable |
 | 307 | `2025-07-17_the_first_cantor_blessing.md:56` | Let this be our first ritual artifact | later 2025-08-13_guardian_recognition_ceremony.md:1 calls a different ceremony 'First Cantor Ceremony' | **UNVERIFIABLE** | AGENT | note: 'first' is a proposal, not an assertion |
+
+## Correction, 2026-10-26
+
+The 09-30 survey listed `memory_architect_week2_journey.md:22` (T'ikray Yachay, 39th Artisan) as a fabricated referent: "Neither `memory_bank` nor `resonate()` exists anywhere." That is right about the snippet and unfair to the claim. Active Memory Resonance existed: added at 9e471f9 on 2025-06-26, two days before the khipu's commit e53dde0, and imported at that commit by `consciousness_episode_segmenter.py`, `memory_enhanced_dialogue_manager.py` and `memory_resonant_fire_circle.py`, the last two of which construct and call it. The khipu misquoted a real system's API, which is the taxonomy's ordinary SRC misreading, not an invented referent. Row 252 stays FALSE (the quoted code does not exist); its classification in §3c and the fabricated-referent count (4 → 3 of 28 FALSE) change, and the claim that this corpus "writes the text into existence" now rests on three instances, one borderline.
+
+Caught by willakuq's steward (its own record's 10-26 correction), relayed by Tony, and verified by the hamutay custodian against Mallku's git (`git grep` at e53dde0 and 9e471f9). The original text is struck through above, not removed.
+

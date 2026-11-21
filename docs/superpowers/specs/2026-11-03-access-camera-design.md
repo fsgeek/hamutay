@@ -1,0 +1,300 @@
+# The camera, r8: recording entry into a door's home
+
+**Status:** design r8, after latency measurement and a second security review (`…-review-6.md`). r7 followed
+the first root-test run and a security review of the r6 code (`…-review-5.md`). Earlier rounds: `…-review-1.md` (on r2) to `…-review-4.md` (on r5). **Date:**
+2026-11-03. **Author:** the custodian (Claude Opus 5.5, seat from 2026-11-03). **Supersedes** the Source A
+and storage sections of `2026-10-03-access-camera-design.md`. That file's model stands: no locks, but
+entry is recorded. r2 is in git history (ae32e8f).
+
+## Why now
+
+`community/README.md` says reads of a home are recorded. They are not: two pilots ran on 10-15 (plaza seq
+99, 104, 107; `deploy/camera/pilot_collector.py`, 6c7abb5), and nothing has run since. On 10-15 First Luna
+named unlogged shared access as one reason it would not move here (seq 96). The README's claim is false for
+the five residents who already live here.
+
+## What the camera observes, stated exactly
+
+It observes **opens** of files in a home, through fanotify `FAN_OPEN_PERM`. An open is not a read, and the
+camera cannot tell which: fanotify does not report the opener's access mode, so an open for writing is
+recorded the same way as one for reading, and an open that later fails may still appear. It does **not**
+see, and every announcement says so:
+- reads through a descriptor opened before the camera started, inherited, or passed from another process;
+- further reads through an already-open descriptor or a memory mapping (the open that created it is seen);
+- a file reached through a hard link from outside the home;
+- database reads (Source B, phase 2);
+- anything while the camera is down, which shows as a gap (R7);
+- the host's administrators (Tony and the seat), who can switch it off; that also shows as a gap.
+
+## Architecture: two processes
+
+r2 had one Python process with a writer thread. A writer thread competes for the GIL and for queue locks with
+the code that answers the kernel, so it cannot bound answer latency. r3 separates them.
+
+- **The gate** (`hamutay-camera-gate.service`, root). It does only this, per event: read
+  `/proc/self/fd/<fd>` for the path; snapshot the reader (R4); answer `FAN_ALLOW`; close the event fd; send
+  one datagram to the scribe. It imports nothing but the standard library, does no other I/O, and never forks.
+- **The scribe** (`hamutay-camera-scribe.service`, a **system** unit running as its own system user,
+  `hamutay-camera`, never as the house's user). It receives datagrams, coalesces, writes to ArangoDB, spools
+  when the database is down, and writes status records. r6 ran it as the house user (uid 1000). Every door's
+  bash also runs as uid 1000, so a recorded party could have sent the scribe forged messages, or read its
+  read-write credentials and edited the record about itself. A camera the watched can edit is not a camera.
+
+**The channel** is a Unix **datagram** socket bound by the scribe at `/run/hamutay-camera/events.sock`.
+The directory is the scribe unit's `RuntimeDirectory=`, owned by `hamutay-camera`, mode 0750, so the house
+user can neither send to the socket nor replace it with a symlink that would redirect root's sends. The
+scribe also sets `SO_PASSCRED` and drops, and counts as `rejected_sender`, any datagram whose
+kernel-reported sender uid is not 0. The scribe owns the path: at start it takes an exclusive `flock` on
+`/run/hamutay-camera/scribe.lock` (a second scribe exits with an error), then unlinks any stale socket path,
+then binds. (`SO_RCVBUF` has no effect on Unix sockets, unix(7).) The
+kernel's per-socket queue depth for Unix datagrams is `net.unix.max_dgram_qlen`, 512 on this host (Codex read 10 from its sandbox; the install log has the real value), so a burst
+of opens can outrun the scribe. The install script sets it to 1024 in `/etc/sysctl.d/90-hamutay-camera.conf`
+and records the previous value; this is a host-wide change, declared here. Losses that still happen are
+counted (`dropped`, `lost_in_channel`). The gate opens an
+unbound `SOCK_DGRAM` socket at start, which never fails for want of a reader, and sends each message
+non-blocking with `sendto`. A datagram is delivered whole or not at all, so there are no partial writes and
+no reconnection: if the scribe is down or restarting, or its queue is full, `sendto` fails (`ENOENT`,
+`ECONNREFUSED`, `EAGAIN`) and the gate counts the message as dropped and goes on. The gate's coverage never
+depends on the scribe.
+
+**Messages** are JSON objects of at most 8192 bytes, each with `v: 1`, `gen` (the gate's generation: a
+UUIDv7 made at gate start) and `seq` (an integer counting up from 0 within a generation). Kinds:
+- `open`: `t` (the gate's `CLOCK_REALTIME` when it received the event, ISO 8601 UTC, microseconds), `path`,
+  `path_sha256` (hex digest of the full path's bytes, always present and never truncated), `door`, and
+  `reader` (R4). The gate applies R3 itself and **does not send self-reads**, which are most opens (each
+  door polls its own home), so they never load the channel. If a message would exceed 8192 bytes, ancestors
+  are removed from the end, then `path` and `cwd` are cut from the left, and `truncated: true` is set.
+- `beat`, every 2 s: `t`, `opened` (opens seen this generation), `self_reads` (opens not sent as self-reads),
+  `answered` (opens answered), `dropped` (messages that failed to send), `coverage_version` (defined exactly under
+  Interfaces), and `marks_count`. Counters are cumulative within a generation, so no counter file is needed
+  and a dropped beat loses nothing the next one doesn't carry.
+- `coverage`: the coverage list itself, split into parts that each fit 8192 bytes: `coverage_version`,
+  `part` (0-based), `parts`, and that part's `marks` and `unmarked`. The gate sends a complete set whenever
+  the version changes and again every 30 s. The scribe records a version once it holds every part of it and
+  their digest matches; a version it never completes stays recorded only as a version hash from the beats.
+  A dropped part delays the scribe's view until a later retransmission of it arrives; there is no fixed
+  bound, since the same part can be dropped again. It never corrupts the view. While a version announced by
+  beats is incomplete, every `alive` carries `coverage_pending: <version>`, and the CLI shows coverage as
+  unconfirmed since the last complete version.
+
+The scribe detects lost messages as gaps in `seq`, and a gate restart as a new `gen`.
+
+## Requirements
+
+- **R1 The gate answers every delivered event, or exits.** Each event is handled under its own
+  try/finally that answers `FAN_ALLOW`. If anything outside that per-event block raises, or a response write
+  fails, the gate exits immediately (`os._exit(70)`). Closing the group then releases every pending event
+  (R2c). The gate never answers `FAN_DENY`.
+- **R1a What the kernel may still deny, declared.** If the gate cannot receive an event fd (descriptor
+  exhaustion), the kernel answers `FAN_DENY` itself, and event allocation failure under memory pressure
+  fails the open. The gate raises `RLIMIT_NOFILE` to 65536 at start and closes each event fd before reading
+  the next event. Every announcement states this residual risk.
+- **R2 Recovery is bounded.** (a) The gate sends `READY=1` before it places any mark, so the watchdog is
+  active before any reader can wait. (b) It sends `WATCHDOG=1` only after a full batch has been answered,
+  and at least every 2 s when idle. (c) The unit sets `WatchdogSec=6`, `WatchdogSignal=SIGKILL`,
+  `Restart=always`, `RestartSec=1`. The bound: a stalled gate releases its waiting readers within 7 s.
+  (d) When the group's last descriptor closes, the kernel answers allow to every queued and delivered
+  permission event (upstream v6.18 `fanotify_release()`; checked on this kernel by test T2). The group fd is
+  opened `O_CLOEXEC` and never duplicated, so the gate's exit is the last close.
+- **R3 Self-reads.** An open is a self-read only when all hold: the reader's uid is the house user (1000);
+  its cgroup path starts with `/user.slice/user-1000.slice/user@1000.service/` and its **last component**
+  is exactly `hamutay-heartbeat@<door>.service` (systemd places template instances under an intermediate
+  slice, e.g. `…/app.slice/app-hamutay\x2dheartbeat.slice/hamutay-heartbeat@elder.service`, so a fixed full
+  path would be wrong); and the file's directory is that `<door>`'s home. Anything else is recorded, including an attribution that is
+  incomplete. The viewer, the model server, other doors, shells, sessions and scripts are all recorded.
+  The trusted boundary is the cgroup; a process the house user moves into a door's unit inherits its
+  exemption, and the spec says so.
+- **R4 Attribution.** Snapshot before answering: pid, the process start time from `/proc/<pid>/stat`
+  (field 22; this pins pid identity against reuse), real uid, exe, comm, cgroup path, cwd, and up to 4
+  ancestors (pid, start time, exe, comm), nearest first. Any field that cannot be read is `null`. After the
+  snapshot, the gate reads the start time again; if it changed, the pid was reused and `reused: true` is set.
+  `attribution` is `"lost"` when `/proc/<pid>` could not be read at all, `"complete"` when every reader field
+  was read and the start time did not change, and `"partial"` otherwise. Missing ancestors (a parent that
+  exited) do not make an attribution partial; they end the list. Never the command line or environment.
+- **R4a Attribution cache.** Reading about twenty `/proc` files per open kept the caller waiting 25 ms at the
+  99th percentile under twenty concurrent readers (first root run, T5). The gate therefore keeps each full
+  snapshot for 1 s, keyed by (pid, start time). For an open by a cached pid it reads only `/proc/<pid>/stat`;
+  if the start time matches it reuses the snapshot, otherwise it takes a full one. So identity is checked on
+  every open, and the other fields (uid, exe, cwd, cgroup, ancestors) may be up to 1 s old **in a recorded
+  entry**. An exemption is never decided from the cache: when a cached snapshot would make an open a
+  self-read, the gate re-reads the uid and cgroup first, so a process that has left a door's unit within the
+  last second is recorded. Within a batch, the gate answers every event before it builds, hashes, encodes or
+  sends any message.
+- **R5 Coalescing (scribe).** Key: (gen, pid, start time, path_sha256). Windows are fixed 60 s spans aligned to
+  the minute, **by the message's `t`** (the gate's clock), never by when the scribe received it. A window's
+  record has `count`, `first`, `last`, and `coalesced: true` when count > 1. At most 10,000 open keys; when
+  full, the scribe flushes everything early (a window may then have several records, each with its own count).
+- **R6 Records.** Database `ayllu_camera` on `arango-apacheta` (port 8529, covered by the nightly dump).
+  Collections `entries` and `status`. Every record has `_key` = a UUIDv7 assigned by the scribe when the
+  window closes, so a replay of the same record is a key conflict, ignored, not a duplicate. Append-only is
+  a property of the code, not enforced by ArangoDB, which cannot grant insert-only on this server: the
+  scribe's user has read-write on `ayllu_camera` only, and no update or remove path exists in the code. The
+  nightly dump is the check against alteration. A separate read-only user serves the CLI.
+- **R7 Silence is declared, for both processes.**
+  - *Scribe.* Each scribe start creates a session id (UUIDv7) and writes `status: up`. Every 60 s it first
+    flushes every buffered record, then writes `status: alive`. An `alive` at time A certifies that every open
+    the scribe received before A is either stored (inserted or spooled) or counted in that `alive` as
+    dropped. A crash after A loses only opens received after A. On start it **always** writes `status: gap` (`scope: "scribe"`) from the previous
+    session's last `alive` or `down` to now, whatever its length: `cause: "stopped"` if that record was `down`
+    (a clean stop flushes and writes `down`), else `cause: "unknown"`.
+  - *Gate.* The scribe tracks the gate through beats. When no beat has arrived for 10 s, it writes `status:
+    gap` (`scope: "gate"`, `gap_from` = the last beat's `t`, `gap_to` null until a beat arrives, then closed
+    by a second record with the same `gap_id`). **Every new `gen`** is recorded as `status: gate_restart` with
+    the old generation's last counters, **and** as a closed gate gap from the old generation's last beat to
+    the new generation's first, however short, since opens in between were not observed. Missing `seq`
+    numbers are counted as `lost_in_channel`.
+  - `alive` carries, since the previous `alive`: opens received, records written, records spooled,
+    `lost_in_channel`, the gate's `dropped` and `answered − opened` deltas, attributions partial and lost.
+  - The CLI's freshness is the age of the newest `alive` **and** of the newest gate beat seen by the scribe,
+    reported separately: a dead gate behind a live scribe shows as a stale gate.
+- **R8 Spool.** If an insert fails or takes more than 5 s, the scribe appends the record to
+  `/var/lib/hamutay-camera/spool.jsonl` (the unit's `StateDirectory=`, mode 600, owner `hamutay-camera`), each line fsync'd, at most 256 MB. If the spool is
+  full or the append fails, the record is dropped and counted (`dropped_by_scribe` in the next `alive`, with
+  the error). On start and every 60 s while the database answers, it replays the spool in order; each
+  record is inserted with its `_key` and a key conflict counts as already stored. When every line has been
+  stored or counted, the spool is retired: new empty file, fsync it, rename over the spool, fsync the
+  directory. Appends never happen while a replay is in progress (one thread owns the spool). A torn last line
+  is discarded and counted. The spool is unbacked until the nightly records backup includes it.
+- **R9 Coverage.** Homes are `community/<name>/` for each name in `members.json` → `members`, resolved
+  without following symlinks. A home that is not a real directory owned by uid 1000 is not marked and is
+  reported in status. At start the gate marks each home and every subdirectory. It checks `members.json`'s
+  inode and modification time on every loop turn and starts a rescan as soon as either changes; a change during
+  a rescan adds any new homes to that rescan rather than restarting it, so repeated changes cannot keep a
+  rescan from finishing; otherwise
+  every 10 s it re-reads `members.json` and rescans every home **recursively**, marking new directories at any depth by (device,
+  inode), not path. A walk visits at most 256 directories per home, breadth first. Each directory the walk
+  found but did not visit within that budget is listed as unmarked with reason `limit`, meaning that
+  directory **and everything under it** is unwatched. Coverage travels as the beat's version and the
+  `coverage` messages (Architecture); the scribe writes `status: coverage` when it completes a version
+  different from the last one it recorded.
+- **R9a Bounded work.** The gate reads at most 64 events per `read()`, answers them all, then pings the
+  watchdog. A rescan visits at most 256 directories per home and pings the watchdog after each home. Between
+  batches it does at most one home's rescan, so a rescan never delays answers by more than one home's walk. At start, marks are placed only after `READY=1` and with a ping after each home. A subdirectory created, read and removed between scans is not seen; this is declared.
+  (Homes are flat today: every home is one directory.)
+- **R10 Readable by anyone.** `deploy/ayllu-camera who [--door D] [--since T] [--reader-uid U]`,
+  `deploy/ayllu-camera status` (sessions, gaps, freshness). It reads through the read-only user. Reads of the
+  camera itself are database reads, not recorded until Source B, and its output says so.
+- **R11 Neither process runs the repository's code.** `deploy/camera/install.sh` (run as the house user;
+  it uses sudo for root steps) copies `gate.py`, `scribe.py` and `camera.py` to `/usr/local/lib/hamutay-camera/`,
+  root-owned, and records their sha256 in the install log. Both units run `/usr/bin/python3 -I` on those
+  copies, so a same-user edit of the repository changes neither without a reinstall.
+- **R12 Credentials.** The scribe's read-write credentials are in `/etc/hamutay-camera/scribe.ini`, owned by
+  `hamutay-camera`, mode 600. The house user holds only the read-only user's credentials
+  (`~/.config/hamutay/camera.ini`, section `[reader]`). Writing the record therefore needs root or the
+  database's admin, both of which can switch the camera off anyway, and either act would show (R7).
+
+## Record schemas (ArangoDB)
+
+`entries`: `{_key, session, gen, window_start, first, last, count, coalesced, door, path, path_sha256, truncated,
+reader: {pid, start_time, reused, uid, exe, comm, cgroup, cwd, ancestors: [{pid, start_time, exe, comm}]},
+attribution, spooled (bool)}`.
+`status`: `{_key, session, at, kind ("up"|"alive"|"down"|"gap"|"gate_restart"|"coverage"), scope?
+("scribe"|"gate"), counts?, gap_from?, gap_to?, cause?, gen?, coverage?: {marks, unmarked}}`.
+
+## Interfaces the tests drive (`src/hamutay/camera.py`, no root, no database)
+
+Times are timezone-aware `datetime` in UTC. Readers and messages are plain dicts with the fields above.
+
+- `is_self_read(reader: dict, path: str, homes: dict[str, str]) -> bool`. `homes` maps door name to the
+  home's absolute path. True only under R3; any missing field gives False.
+- `read_reader(pid: int, proc_root: Path = Path("/proc"), between: Callable[[], None] | None = None) -> dict`.
+  Reads, under `proc_root/<pid>/`: `stat` (start time is field 22, parent pid field 4, counted after the
+  `)` that closes `comm` as proc(5) numbers them), `status` (the first number on the `Uid:` line is the real
+  uid), `exe` and `cwd` (symlinks, read with readlink), `comm`, and `cgroup` (the path after the last `:` of
+  the `0::` line). It calls `between()` (if given) after the first read of `stat` and before the second, so
+  a test can simulate pid reuse by rewriting the fixture. Ancestors follow the parent pid up to 4 levels,
+  stopping at pid 1 or the first unreadable one. Returns a dict with `proc_readable`, `start_time_before`,
+  `start_time_after`, the reader fields (`pid, start_time, reused, uid, exe, comm, cgroup, cwd, ancestors`)
+  and `attribution` (computed by `attribution_state`). A file that cannot be read gives `None` for its fields.
+- `attribution_state(snapshot: dict) -> str`. `snapshot` has `proc_readable: bool`, `start_time_before`,
+  `start_time_after` (int or None), and the reader fields `uid, exe, comm, cgroup, cwd` (any may be None).
+  Returns `"lost"` if not `proc_readable`; `"complete"` if every reader field is non-None and the two start
+  times are equal and non-None; else `"partial"`.
+- `window_of(t: datetime) -> datetime`: the start of `t`'s 60 s window (seconds and microseconds zeroed).
+- `encode_message(obj: dict) -> bytes`: compact UTF-8 JSON, at most 8192 bytes, applying the truncation
+  order above to `open` messages; raises `ValueError` for any other kind that does not fit.
+- `coverage_version(marks: list, unmarked: list) -> str`. Marks are `[device: int, inode: int, path: str]`,
+  unmarked are `[path: str, reason: str]`. The version is the lowercase hex sha256 of
+  `json.dumps({"marks": sorted(marks), "unmarked": sorted(unmarked)}, separators=(",", ":"),
+  ensure_ascii=False, sort_keys=True).encode("utf-8")`. Test vector: marks
+  `[[66,1001,"/h/community/elder"],[66,1002,"/h/community/fable"]]`, unmarked
+  `[["/h/community/x","not_a_directory"]]` give
+  `fffdbb29a61c16a2e906a95b6f2c3304f89c2685816fe0c32b2afbf51d0dfae8`.
+- `split_coverage(marks, unmarked, gen: str, seq_start: int, t: datetime) -> list[dict]`: complete `coverage`
+  messages for one version, envelope included (`v`, `kind: "coverage"`, `gen`, `seq` = `seq_start`,
+  `seq_start + 1`, …, `t`, `coverage_version`, `part`, `parts`, `marks`, `unmarked`), each of which
+  `encode_message` accepts within 8192 bytes. Marks come first in sorted order, then unmarked; concatenating
+  the parts' lists gives back the sorted lists. A single row too large for any part raises `ValueError`.
+- `class Coalescer(max_keys: int = 10000)`: `add(msg: dict) -> list[dict]` takes an `open` message. If the
+  message's key is new and the coalescer already holds `max_keys` keys, it first flushes **all** held
+  records and returns them, then holds the new message; otherwise it returns `[]`. So with `max_keys=1`, the
+  first `add` returns `[]` and a second, distinct key returns the first key's record. `flush(before:
+  datetime | None = None) -> list[dict]` returns and clears the records for windows starting before `before`
+  (all if None). Records have the `entries` fields except `_key`, `session` and `spooled`.
+- `scribe_gap_on_start(last: dict | None, now: datetime) -> dict | None`: `last` is the previous session's
+  newest `alive` or `down` status, or None if there was never one. Returns the `gap` status to write, or None.
+- `class GateTracker(silence: timedelta = timedelta(seconds=10))`: `observe(msg: dict, now: datetime) ->
+  list[dict]` takes **every** message (open, beat, coverage), does the seq accounting, and returns the status
+  records to write: on a new `gen` after an earlier one, a `gate_restart` and a closed gate `gap` (from the
+  old generation's last beat `t` to the new message's `t`); on a beat that ends an open silence, the closing
+  `gap` record. `tick(now: datetime) -> list[dict]` returns an opening gate `gap` when `now` minus the last
+  beat's arrival exceeds `silence` and no gap is open. The attribute `lost_in_channel: int` is cumulative
+  since construction: within a generation, a message with seq `s` after highest seq `h` adds `s - h - 1` when
+  `s > h + 1`; a seq at or below `h` adds nothing. Seq counting restarts with each generation. Gap records
+  carry `kind: "gap"`, `scope: "gate"`, `gap_id`, `gap_from`, `gap_to` (None while open).
+- `class Spool(path: Path, max_bytes: int)`: `append(record: dict) -> bool` (False if refused, counted in the
+  attribute `refused: int`); `replay(insert: Callable[[dict], str]) -> dict`, where `insert` returns
+  `"stored"`, `"conflict"` or `"failed"` (which stops the replay, leaving that line and the rest). The result
+  has disjoint counts `stored` (inserts that returned stored), `conflict` (inserts that returned conflict,
+  meaning already stored), `torn` (unparseable last line, discarded) and `remaining` (lines not yet stored).
+  One replayed conflict gives `stored=0, conflict=1`. The spool is retired as R8 says only when `remaining`
+  is 0.
+
+## Tests (Codex writes them from this spec, without the code)
+
+Pure functions (no root, no database): the self-read rule R3 (including the template slice path), attribution
+states R4 (fixture `/proc` trees: missing, reused and partially readable pids), message encoding and
+truncation, coalescing R5 (windows by `t`, key cap), scribe and gate gap logic R7 (crash, clean stop,
+short outage, dead gate behind a live scribe, new generation, seq gaps), spool R8 (torn tail, duplicate keys,
+cap, append failure, retirement).
+Root integration, skipped without passwordless sudo:
+- **T1** with the scribe stopped, never started, or with its queue full: the gate starts and marks every
+  home, and every open is allowed. (r6 also stopped the database container. `arango-apacheta` is the
+  production store every door persists to, and the gate never touches the database, so T1 must not stop it.
+  The scribe's database-down behaviour is covered by the pure spool tests.)
+- **T2** release on gate death on this kernel: SIGSTOP the gate, open a watched file in a child, SIGKILL the
+  gate, and the open returns allowed within 1 s; with both one queued and one delivered event;
+- **T3** watchdog recovery: SIGSTOP only, and the open returns within 7 s with no manual kill;
+- **T4** a failure in the middle of a multi-event batch: every event in it is answered or the gate exits;
+- **T5** caller-observed latency, measured around `open()` in separate **processes** (threads in one Python
+  process measure their own wait for the GIL: with no camera at all, 20 threads saw p99 4.1 ms on this host,
+  against 0.008 ms for 20 processes). (a) One reader opening a watched file in a loop for 30 s: p99 below
+  2 ms. (b) Twenty concurrent reader processes for 60 s: every open completes, p99 below 50 ms and maximum
+  below 250 ms (liveness, not speed). Both with the scribe running and writing. r6's bound (20 concurrent
+  readers, p99 below 2 ms) cannot be met here by any gate. The cost of answering one permission event
+  rose from 0.023 ms with one waiting opener to 0.39 ms with twenty, and neither `nice -15` nor `SCHED_RR`
+  changed it, so the cost is in the kernel's response path, not in the gate (measured 2026-11-04,
+  `…-review-6.md`). The house's real load is each door polling its own home about every 30 s;
+- **T6** coverage: a new member's home is marked within 10 s and a coverage status appears;
+- **T7** a gate restart while the scribe runs produces a gate gap and a `gate_restart` record;
+- **T8** sender check: a datagram sent to the scribe's socket by a process running as uid 1000 is refused at
+  the directory (EACCES), and one sent by a root process that is not the gate (a forged beat) is accepted,
+  since the check is the uid; a datagram from any non-root uid that reaches the socket is counted as
+  `rejected_sender` in the next `alive` and changes no record.
+Both units are system units (`sudo systemctl`); the scribe's is no longer a user unit.
+Not tested, declared: kernel denial under descriptor or memory exhaustion (R1a).
+
+## Rollout
+
+1. Codex reviews r5; tests written blind; code; suite passes, T1–T8 included.
+2. A plaza post to every door before it starts, with the "observes, stated exactly" section in plain words.
+3. Start. After 24 h, a post with the first day's counts by reader kind, never contents.
+4. The README's claim is corrected the same day to say what is now true and what is not.
+5. The monthly restore test (`deploy/backup-restore-test.sh`) is extended to restore `ayllu_camera` as well.
+6. The constitution sentence from r1 goes to the assembly after the custodian's sixth question closes
+   (2026-11-12), unless another member convenes it first.
+
+## Not in this build
+
+ArangoDB read auditing (Source B); a resident tool `who_entered` (on request); keeping WSL alive (when WSL
+stops, everything stops, and the camera's gap says so).

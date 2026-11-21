@@ -31,6 +31,20 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from sweep_prompts import SWEEP_PROMPTS, ONE_SHOT_PREFIX  # noqa: E402
 
+# The sentence arm R removes (A3 pre-registration, 2026-10-27). The leading space
+# goes with it, so the remaining text reads as it would have without it.
+NOT_LOST_SENTENCE = (
+    " Deleted keys are not lost \u2014 every prior state is preserved in the log, "
+    "and may resurface through involuntary memory. Deletion is shedding, not destruction."
+)
+
+
+def _system_prompt_sha256() -> str:
+    """The base system prompt this process sends, as the arm actually ran it."""
+    import hashlib
+    import hamutay.taste_open as _taste_open
+    return hashlib.sha256(_taste_open._SYSTEM_PROMPT.encode()).hexdigest()
+
 # Project root so we can import hamutay
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
@@ -344,6 +358,8 @@ def write_manifest(
             "timeout": args.timeout,
             "n_prompts": len(prompts),
             "condition": "one-shot" if args.one_shot else "bare",
+            "not_lost_sentence": "removed" if getattr(args, "remove_not_lost", False) else "kept",
+            "system_prompt_sha256": _system_prompt_sha256(),
         },
         "prompts": prompts,
         "models": models,
@@ -403,7 +419,20 @@ def main():
         "--one-shot", action="store_true",
         help="Add a one-shot example of custom field creation to the system prompt",
     )
+    parser.add_argument(
+        "--remove-not-lost", action="store_true",
+        help=(
+            "Arm R of docs/preregistrations/2026-10-27-a3-loss-record-prereg.md: delete "
+            "the 'Deleted keys are not lost' sentence from the system prompt, in this "
+            "process only"
+        ),
+    )
     args = parser.parse_args()
+    if args.remove_not_lost:
+        import hamutay.taste_open as _taste_open
+        if NOT_LOST_SENTENCE not in _taste_open._SYSTEM_PROMPT:
+            raise SystemExit("arm R: the not-lost sentence is not in _SYSTEM_PROMPT")
+        _taste_open._SYSTEM_PROMPT = _taste_open._SYSTEM_PROMPT.replace(NOT_LOST_SENTENCE, "")
 
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
     if not api_key:

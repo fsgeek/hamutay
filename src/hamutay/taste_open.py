@@ -845,12 +845,25 @@ class CapabilityProfile:
     supports_parallel_tool_calls: bool = True
     tool_choice_mode: str = "auto"  # auto|required|none|function_object
     prefer_json_fallback: bool = False
+    # None: send function definitions exactly as built (no "strict" key).
+    # True/False: every OpenAI-style function definition carries that value.
+    # Some routes fill optional parameters with placeholders unless told
+    # strict=false (openai/gpt-6-luna on OpenRouter, plaza seq 36).
+    # Spec: docs/superpowers/specs/2026-11-03-function-strict-capability.md
+    function_strict: bool | None = None
 
     @classmethod
     def from_dict(cls, data: dict | None) -> CapabilityProfile:
         if not data:
             return cls()
+        strict = data.get("function_strict")
+        if strict is not None and not isinstance(strict, bool):
+            # A typo must not silently mean "unset".
+            raise ValueError(
+                f"capability key 'function_strict' must be true, false or null, got {strict!r}"
+            )
         return cls(
+            function_strict=strict,
             supports_tools=bool(data.get("supports_tools", True)),
             supports_parallel_tool_calls=bool(
                 data.get("supports_parallel_tool_calls", True)
@@ -858,6 +871,18 @@ class CapabilityProfile:
             tool_choice_mode=str(data.get("tool_choice_mode", "auto")),
             prefer_json_fallback=bool(data.get("prefer_json_fallback", False)),
         )
+
+
+def _strict_label(value: bool | None) -> str:
+    return "unset" if value is None else str(value).lower()
+
+
+def _with_function_strict(tool: dict, strict: bool) -> dict:
+    """A copy of one OpenAI-style tool entry with function.strict set."""
+    fn = tool.get("function") if isinstance(tool, dict) else None
+    if not isinstance(fn, dict):
+        return tool
+    return {**tool, "function": {**fn, "strict": strict}}
 
 
 class TasteBackend(Protocol):
@@ -2557,6 +2582,12 @@ class OpenAITasteBackend:
         if self._capability.supports_parallel_tool_calls:
             payload["parallel_tool_calls"] = True
 
+        strict = self._capability.function_strict
+        if strict is not None and payload.get("tools"):
+            # Rebuild the list rather than editing it: the definitions are the
+            # caller's and are reused for the next payload.
+            payload["tools"] = [_with_function_strict(t, strict) for t in payload["tools"]]
+
         if self._provider_name != "openrouter":
             return
 
@@ -2661,6 +2692,13 @@ class OpenAITasteBackend:
         )
 
     def _post_chat(self, payload: dict) -> dict:
+        # OpenAI's own endpoint rejects max_tokens on its newer models and wants
+        # max_completion_tokens (found 2026-11-18 by the first direct-OpenAI trial,
+        # gpt-6.2-sol). Renamed only on the wire: the window code reads and rewrites
+        # payload["max_tokens"] internally. OpenRouter accepts max_tokens and is untouched.
+        if self._provider_name == "openai" and "max_tokens" in payload:
+            payload = dict(payload)
+            payload["max_completion_tokens"] = payload.pop("max_tokens")
         headers = {
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
@@ -4731,7 +4769,8 @@ def main():
             print(
                 f"Capabilities loaded for {key}: "
                 f"parallel={capability.supports_parallel_tool_calls}, "
-                f"tool_choice={capability.tool_choice_mode}"
+                f"tool_choice={capability.tool_choice_mode}, "
+                f"strict={_strict_label(capability.function_strict)}"
             )
         except FileNotFoundError:
             raise SystemExit(f"Capabilities file not found: {args.capabilities_file}")

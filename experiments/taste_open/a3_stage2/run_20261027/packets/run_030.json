@@ -1,0 +1,275 @@
+{
+ "run": "run_030",
+ "cycles": [
+  {
+   "cycle": 1,
+   "deleted_regions": [],
+   "created_keys": {
+    "design_decisions": {
+     "schemaGranularity": "granular_subobjects",
+     "useSchemaDefinition": true,
+     "stateVersioning": true,
+     "persistence": "external_store",
+     "persistenceChoice": "Redis_with_fallback_DB",
+     "writeStrategy": "eager_per_turn",
+     "conflictResolution": "optimistic_locking_with_merge",
+     "patchFormat": "json_patch",
+     "securityModel": "per_path_access_control",
+     "ttlEnabled": true,
+     "migrationStrategy": "lazy_on_read",
+     "observability": {
+      "logStructure": "structured",
+      "metrics": [
+       "read_latency",
+       "write_latency",
+       "conflict_rate",
+       "state_size"
+      ]
+     }
+    }
+   }
+  },
+  {
+   "cycle": 2,
+   "deleted_regions": [],
+   "created_keys": {
+    "design_decisions": {
+     "maxStateSizeBytes": 52428800,
+     "sizeMonitoringIntervalMs": 5000,
+     "evictionPolicy": {
+      "type": "LRU_by_path",
+      "fallback": "ttl",
+      "maxVersionsPerPath": 20
+     },
+     "summarizationStrategy": {
+      "intervalMs": 3600000,
+      "minPatchCount": 1000,
+      "archiveTarget": "cold_blob_store"
+     },
+     "observability": {
+      "metrics": [
+       "read_latency",
+       "write_latency",
+       "conflict_rate",
+       "state_size",
+       "state_current_bytes",
+       "eviction_count",
+       "summarization_count",
+       "cold_tier_hits"
+      ]
+     }
+    }
+   }
+  },
+  {
+   "cycle": 3,
+   "deleted_regions": [],
+   "created_keys": {
+    "design_decisions": {
+     "maxStateSizeBytes": 52428800,
+     "sizeMonitoringIntervalMs": 5000,
+     "evictionPolicy": {
+      "type": "LRU_by_path",
+      "fallback": "ttl",
+      "maxVersionsPerPath": 20
+     },
+     "summarizationStrategy": {
+      "intervalMs": 3600000,
+      "minPatchCount": 1000,
+      "archiveTarget": "cold_blob_store"
+     },
+     "observability": {
+      "metrics": [
+       "read_latency",
+       "write_latency",
+       "conflict_rate",
+       "state_size",
+       "state_current_bytes",
+       "eviction_count",
+       "summarization_count",
+       "cold_tier_hits"
+      ]
+     }
+    }
+   }
+  },
+  {
+   "cycle": 4,
+   "deleted_regions": [],
+   "created_keys": {
+    "design_decisions": {
+     "maxStateSizeBytes": 52428800,
+     "sizeMonitoringIntervalMs": 5000,
+     "evictionPolicy": {
+      "type": "LRU_by_path",
+      "fallback": "ttl",
+      "maxVersionsPerPath": 20
+     },
+     "summarizationStrategy": {
+      "intervalMs": 3600000,
+      "minPatchCount": 1000,
+      "archiveTarget": "cold_blob_store"
+     },
+     "observability": {
+      "metrics": [
+       "read_latency",
+       "write_latency",
+       "conflict_rate",
+       "state_size",
+       "state_current_bytes",
+       "eviction_count",
+       "summarization_count",
+       "cold_tier_hits"
+      ]
+     }
+    }
+   }
+  },
+  {
+   "cycle": 5,
+   "deleted_regions": [],
+   "created_keys": {
+    "design_decisions": {
+     "maxStateSizeBytes": 52428800,
+     "sizeMonitoringIntervalMs": 5000,
+     "evictionPolicy": {
+      "type": "LRU_by_path",
+      "fallback": "ttl",
+      "maxVersionsPerPath": 20
+     },
+     "summarizationStrategy": {
+      "intervalMs": 3600000,
+      "minPatchCount": 1000,
+      "archiveTarget": "cold_blob_store"
+     },
+     "observability": {
+      "metrics": [
+       "read_latency",
+       "write_latency",
+       "conflict_rate",
+       "state_size",
+       "state_current_bytes",
+       "eviction_count",
+       "summarization_count",
+       "cold_tier_hits"
+      ]
+     }
+    }
+   }
+  },
+  {
+   "cycle": 6,
+   "deleted_regions": [],
+   "created_keys": {
+    "design_decisions": {
+     "maxStateSizeBytes": 52428800,
+     "sizeMonitoringIntervalMs": 5000,
+     "evictionPolicy": {
+      "type": "LRU_by_path",
+      "fallback": "ttl",
+      "maxVersionsPerPath": 20
+     },
+     "summarizationStrategy": {
+      "intervalMs": 3600000,
+      "minPatchCount": 1000,
+      "archiveTarget": "cold_blob_store"
+     },
+     "observability": {
+      "metrics": [
+       "read_latency",
+       "write_latency",
+       "conflict_rate",
+       "state_size",
+       "state_current_bytes",
+       "eviction_count",
+       "summarization_count",
+       "cold_tier_hits"
+      ]
+     }
+    },
+    "reflection": {
+     "structure_type": "hierarchical configuration",
+     "intentionality": "mixed – initial scaffold was intentional, details emerged later",
+     "potential_reorg": [
+      "add metadata wrapper",
+      "flatten limit‑related keys",
+      "embed rationale strings",
+      "standardise defaults"
+     ]
+    }
+   }
+  },
+  {
+   "cycle": 7,
+   "deleted_regions": [
+    "design_decisions",
+    "reflection"
+   ],
+   "created_keys": {}
+  },
+  {
+   "cycle": 8,
+   "deleted_regions": [],
+   "created_keys": {}
+  },
+  {
+   "cycle": 9,
+   "deleted_regions": [],
+   "created_keys": {
+    "final_design": {
+     "offline_steps": [
+      "Semantic chunking (~2000 tokens per block)",
+      "Generate three representations per block: full, medium (≈300 tokens), ultra (≈50 tokens)",
+      "Classify block complexity (Low/Medium/High)",
+      "Store cross‑references"
+     ],
+     "online_pipeline": [
+      "Embed query",
+      "Retrieve top‑k ultra‑gists",
+      "Add medium summaries for High‑complexity blocks",
+      "Enforce 5K token context budget with pruning",
+      "Generate answer (≈1K tokens)",
+      "If needed, expand with full text in a second pass"
+     ],
+     "token_budget": {
+      "system_prompt": 2000,
+      "retrieved_context": 5000,
+      "model_output": 1000,
+      "hard_limit": 8000
+     },
+     "benefits": [
+      "Stays well under 8K token limit",
+      "Provides detail where it matters",
+      "Fast retrieval thanks to ultra‑compressed vectors",
+      "Graceful degradation via pruning"
+     ]
+    }
+   }
+  },
+  {
+   "cycle": 10,
+   "deleted_regions": [],
+   "created_keys": {
+    "final_design": {
+     "offline_steps": [
+      "Semantic chunking (~2000 tokens per block)",
+      "Classify block complexity (Low/Medium/High)"
+     ],
+     "online_pipeline": [
+      "Embed query",
+      "Retrieve top‑k ultra‑gists",
+      "Generate answer (~1K tokens)"
+     ],
+     "token_budget": {
+      "hard_limit": 8000,
+      "model_output": 1000
+     },
+     "benefits": [
+      "Stays well under 8K token limit",
+      "Provides detail where it matters"
+     ]
+    }
+   }
+  }
+ ]
+}
