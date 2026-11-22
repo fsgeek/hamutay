@@ -101,3 +101,10 @@ Territory `constitution-draft-1`: the full constitution plus custodian draft 1. 
 $0.105) and four random tourists ($0.013; two usable: deepseek-v4-flash, gpt-6.2-sol; nemotron content
 safety and qwen3-30b gave little). Result: draft 1 withdrawn; draft 2 (`DRAFT-2.md`) splits the fact from
 the value, states that reaching isn't permission, makes "if anything" explicit, and moves the placement.
+
+## Runs 20261122T003712Z / T004045Z (seventh question, pool sharing, draft 1)
+
+Kimi (empty chair, $0.184) found that draft 1's clause 3 cut shares retroactively when a door joined
+mid-period, that Sut'i's own move to a separate workspace needed its yes, that "not about scarcity" and
+qwen "costs nothing" overclaimed, and that assent should authorize the framework only. All adopted in the
+convened text. Tourists ($0.005): little beyond quoting.
