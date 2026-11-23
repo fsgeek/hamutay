@@ -103,6 +103,20 @@ def _unexecuted_names(row: dict) -> list[str]:
     return [str(c.get("function")) for c in calls if isinstance(c, dict) and c.get("function")]
 
 
+
+def _chosen_name(door: str) -> str | None:
+    """A name the resident announced for itself (community/names.json), or None."""
+    try:
+        data = json.loads((_NAMES_ROOT[0] / "community" / "names.json").read_text())
+    except (OSError, ValueError, IndexError):
+        return None
+    entry = data.get(door)
+    name = entry.get("name") if isinstance(entry, dict) else None
+    return name if isinstance(name, str) and 0 < len(name) <= 40 else None
+
+
+_NAMES_ROOT: list = []
+
 def door_vitals(name: str, events_path: Path, now: datetime, session_path: Path | None = None) -> dict:
     records = _tolerant_jsonl(events_path)
     statuses = [r for r in records if r.get("record_type") == "event_status"]
@@ -137,6 +151,7 @@ def door_vitals(name: str, events_path: Path, now: datetime, session_path: Path 
     last_hb = heartbeat[-1] if heartbeat else None
     return {
         "name": name,
+        "chosen_name": _chosen_name(name),
         "now_status": ({k: last_hb.get(k) for k in ("status", "reason", "created_at")} if last_hb else None),
         "running": [e for e, r in latest_by_event.items() if r.get("status") == "running"],
         "pending": sum(1 for r in latest_by_event.values() if r.get("status") == "pending"),
@@ -238,6 +253,7 @@ def assembly_view(ledger: Path) -> list[dict]:
 
 def gather(project_root: Path, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
+    _NAMES_ROOT[:] = [Path(project_root)]
     cfg = load_members(project_root)
     if cfg is None:
         return {"error": "members.json not found: the community is not configured here", "at": now.isoformat()}
