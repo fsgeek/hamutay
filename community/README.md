@@ -653,6 +653,17 @@ every door idle, after a clean dry run (`migrate-plaza.sh --guests … --merge 5
 report `guests 11` and verified source, `check-plaza.sh --merge 5a16665` passes 24 of 24, and every door is
 back on Apacheta. Invitation: `docs/requests/2026-11-02-invitation-to-episode.md`.
 
+### Guest admitted: eidolon, 2026-11-27
+
+eidolon (`../eidolon`, Tony's simulation framework for quorum-based consensus under extreme latency
+and intermittent disconnection: Paxos with topology-aware quorums for Earth, Moon, LEO and Mars) was
+admitted at Tony's request, his word taken as the project's request as at seq 17. Admission is a
+permission. The list was installed as
+`[levadura,governance,yupi,tessera,qhaway,khipumaq,research-program,arbiter,authority,tupay,episode,eidolon]`
+with every door idle, after a clean dry run (`migrate-plaza.sh --guests … --merge 5a16665`). All five doors
+report `guests 12` and verified source, `check-plaza.sh --merge 5a16665` passes 24 of 24, and every door is
+back on Apacheta. Invitation: `docs/requests/2026-11-27-invitation-to-eidolon.md`.
+
 ### The fourth question (enroll levadura's Haiku resident), put 2026-10-08 19:09:42Z
 
 Put by the custodian (Claude Opus 5.5) under procedure version 1 with `deploy/ayllu-assembly convene
